@@ -7,11 +7,22 @@ export function usePublicLayout({
     { label: "Features", to: "#features" },
     { label: "About", to: "#about" },
   ],
-  loginPath = "/passenger/login",
+  loginPath = "/passenger/dashboard",
   signupPath = "/passenger/signup",
 } = {}) {
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+
+  // ── FIX: Synchronously initialize state to avoid cascading renders ──
+  const [isAuthenticated] = useState(() => {
+    const token =
+      localStorage.getItem("passenger_token") ||
+      sessionStorage.getItem("passenger_token");
+    return !!token;
+  });
+
+  // Since we initialize it correctly on line 17, loading is done immediately
+  const [isLoading] = useState(false);
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20);
@@ -19,20 +30,19 @@ export function usePublicLayout({
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  // Expose a clean event handler function to close the menu explicitly
   const closeMenu = () => {
-    if (menuOpen) {
-      setMenuOpen(false);
-    }
+    if (menuOpen) setMenuOpen(false);
   };
 
   return {
     scrolled,
     menuOpen,
     setMenuOpen,
-    closeMenu, // Sent directly to your navigation items
+    closeMenu,
     navLinks,
     loginPath,
     signupPath,
+    isAuthenticated,
+    isLoading,
   };
 }
