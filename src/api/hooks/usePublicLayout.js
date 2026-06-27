@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useAuthRole } from "./useAuth";
 
 export function usePublicLayout({
   navLinks = [
@@ -13,16 +14,7 @@ export function usePublicLayout({
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
 
-  // ── FIX: Synchronously initialize state to avoid cascading renders ──
-  const [isAuthenticated] = useState(() => {
-    const token =
-      localStorage.getItem("passenger_token") ||
-      sessionStorage.getItem("passenger_token");
-    return !!token;
-  });
-
-  // Since we initialize it correctly on line 17, loading is done immediately
-  const [isLoading] = useState(false);
+  const { isAuthenticated, isLoading } = useAuthRole();
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20);

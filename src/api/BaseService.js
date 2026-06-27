@@ -1,6 +1,5 @@
 import api from "../services/api.js";
 
-// 1. Centralized HTTP Status Error Dictionary Configuration
 const HTTP_ERROR_MESSAGES = {
   400: "Bad Request. Please check your input parameters.",
   401: "Unauthorized. Please log in again.",
@@ -12,30 +11,31 @@ const HTTP_ERROR_MESSAGES = {
 
 const DEFAULT_ERROR_MESSAGE = "Something went wrong. Please try again.";
 
-/**
- * Custom error handler that maps statuses and preserves the original root error context.
- */
 function handleApiError(error) {
   const status = error?.response?.status;
   const backendMessage = error?.response?.data?.message || error?.message;
-
-  // Resolve the best message fallback strategy
   const baselineMessage = HTTP_ERROR_MESSAGES[status] || DEFAULT_ERROR_MESSAGE;
   const finalMessage = backendMessage || baselineMessage;
-
-  // FIX: Passing the original error object inside { cause: error } satisfies the linter!
   throw new Error(finalMessage, { cause: error });
 }
 
-// 2. Pure Core Base Service Class Implementation
 export class BaseService {
-  async request(url, method, params = {}) {
-    // FIX: Dynamically read the active token from storage instead of forcing 'null'
-    const token =
-      localStorage.getItem("passenger_token") ||
-      sessionStorage.getItem("passenger_token");
-    const headers = {};
+  /**
+   * @param {string} tokenKey - storage key for this service's auth token,
+   *   e.g. "passenger_token", "employee_token", "admin_token".
+   *   Defaults to "passenger_token" only so any legacy direct subclass
+   *   doesn't silently break — every new role service should pass its own.
+   */
+  constructor(tokenKey = "passenger_token") {
+    this.tokenKey = tokenKey;
+  }
 
+  async request(url, method, params = {}) {
+    const token =
+      localStorage.getItem(this.tokenKey) ||
+      sessionStorage.getItem(this.tokenKey);
+
+    const headers = {};
     if (token) {
       headers.Authorization = `Bearer ${token}`;
     }
@@ -53,7 +53,7 @@ export class BaseService {
     }
 
     try {
-      const response = await api(config); // Uses your custom port 8000 configured instance
+      const response = await api(config);
       return response.data;
     } catch (error) {
       handleApiError(error);

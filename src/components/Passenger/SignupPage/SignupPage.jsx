@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { useSignUp } from './signup';
+import { useSignUp } from '../../../api/hooks/Passenger/signup';
 import '../styles/AuthPages.css';
 
 export default function SignUpPage() {

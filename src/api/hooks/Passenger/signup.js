@@ -118,10 +118,7 @@ export function useSignUp() {
       setSuccess("Account created! Redirecting to login…");
       setTimeout(() => navigate("/passenger/login"), 2000);
     } catch (err) {
-      setError(
-        err?.response?.data?.message ||
-          "Registration failed. Please try again.",
-      );
+      setError(err?.message || "Registration failed. Please try again.");
     } finally {
       setIsLoading(false);
     }

@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { useLogin } from './login';
+import { useLogin } from '../../../api/hooks/Passenger/login';
 import '../styles/AuthPages.css';
 
 export default function LoginPage() {
