@@ -1,0 +1,234 @@
+.seat-page {
+  min-height: 100vh;
+  background: var(--color-bg);
+}
+
+.seat-page__body {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr;
+  gap: 24px;
+  align-items: start;
+  padding: 32px 24px 60px;
+}
+
+.seat-page__main {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.route-card,
+.seat-card,
+.booking-summary-card {
+  background: var(--color-white);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 24px;
+}
+
+.route-card__top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.route-card__label {
+  font-size: 13px;
+  color: var(--color-ink-muted);
+}
+
+.route-card__badge {
+  background: rgba(30, 79, 161, 0.1);
+  color: var(--color-blue);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: 20px;
+}
+
+.route-card__origin {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 18px;
+  margin-bottom: 20px;
+}
+
+.route-card__grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  padding-top: 20px;
+  border-top: 1px solid var(--color-border);
+}
+
+.route-card__grid > div {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--color-ink-muted);
+}
+
+.route-card__grid svg {
+  color: var(--color-blue);
+}
+
+.route-card__grid strong {
+  font-family: var(--font-display);
+  font-size: 15px;
+  color: var(--color-ink);
+}
+
+.seat-card h2 {
+  font-size: 17px;
+  margin-bottom: 16px;
+}
+
+.seat-legend {
+  display: flex;
+  gap: 20px;
+  font-size: 13px;
+  color: var(--color-ink-muted);
+  margin-bottom: 20px;
+}
+
+.seat-legend span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.seat-legend__swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  display: inline-block;
+}
+
+.seat-legend__swatch--available {
+  border: 1px solid var(--color-border);
+}
+
+.seat-legend__swatch--taken {
+  background: var(--color-ink-muted);
+}
+
+.seat-legend__swatch--selected {
+  background: var(--color-blue);
+}
+
+.seat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 48px);
+  gap: 12px;
+  justify-content: center;
+}
+
+.seat {
+  width: 48px;
+  height: 40px;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  background: var(--color-white);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-ink);
+}
+
+.seat:not(:disabled):hover {
+  border-color: var(--color-blue);
+}
+
+.seat--taken {
+  background: var(--color-ink-muted);
+  color: var(--color-white);
+  border-color: var(--color-ink-muted);
+  cursor: not-allowed;
+}
+
+.seat--selected {
+  background: var(--color-blue);
+  color: var(--color-white);
+  border-color: var(--color-blue);
+}
+
+.seat-card__selection {
+  margin-top: 18px;
+  font-family: var(--font-display);
+  font-weight: 600;
+  color: var(--color-blue);
+  font-size: 14px;
+}
+
+.booking-summary-card {
+  position: sticky;
+  top: 24px;
+}
+
+.booking-summary-card h2 {
+  font-size: 16px;
+  margin-bottom: 16px;
+}
+
+.booking-summary-card dl {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.booking-summary-card dl > div {
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+}
+
+.booking-summary-card dt {
+  color: var(--color-ink-muted);
+}
+
+.booking-summary-card dd {
+  font-weight: 600;
+  text-align: right;
+}
+
+.booking-summary-card__total {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  border-top: 1px solid var(--color-border);
+  padding-top: 16px;
+  margin-bottom: 20px;
+  font-family: var(--font-display);
+}
+
+.booking-summary-card__total strong {
+  font-size: 20px;
+  color: var(--color-blue);
+}
+
+.booking-summary-card__cta {
+  width: 100%;
+  background: var(--color-blue);
+  color: var(--color-white);
+  border-radius: var(--radius-sm);
+  padding: 14px;
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.booking-summary-card__cta:disabled {
+  background: var(--color-ink-muted);
+  cursor: not-allowed;
+}
+
+@media (max-width: 900px) {
+  .seat-page__body {
+    grid-template-columns: 1fr;
+  }
+
+  .route-card__grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

@@ -1,0 +1,130 @@
+.trip-history-page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.trip-history-page__header h1 {
+  font-size: 22px;
+  margin-bottom: 4px;
+}
+
+.trip-history-page__header p {
+  color: var(--color-ink-muted);
+  font-size: 14px;
+}
+
+.trip-history-table {
+  background: var(--color-white);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.trip-history-table__head {
+  display: grid;
+  grid-template-columns: 1fr 1.6fr 1.2fr 0.7fr 0.8fr 0.9fr 1fr;
+  gap: 12px;
+  padding: 14px 24px;
+  background: var(--color-bg);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--color-ink-muted);
+}
+
+.trip-history-row {
+  border-top: 1px solid var(--color-border);
+}
+
+.trip-history-row__main {
+  display: grid;
+  grid-template-columns: 1fr 1.6fr 1.2fr 0.7fr 0.8fr 0.9fr 1fr;
+  gap: 12px;
+  align-items: center;
+  padding: 16px 24px;
+  font-size: 14px;
+}
+
+.trip-history-row__payment {
+  color: #1b8a5a;
+  font-weight: 600;
+}
+
+.trip-history-row__status {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 5px 12px;
+  border-radius: 20px;
+  width: fit-content;
+}
+
+.trip-history-row__status--completed {
+  background: rgba(27, 138, 90, 0.1);
+  color: #1b8a5a;
+}
+
+.trip-history-row__status--cancelled {
+  background: rgba(192, 57, 43, 0.1);
+  color: #c0392b;
+}
+
+.trip-history-row__toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  justify-self: end;
+  background: transparent;
+  color: var(--color-blue);
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.trip-history-row__chevron--open {
+  transform: rotate(180deg);
+}
+
+.trip-history-row__details {
+  display: flex;
+  gap: 40px;
+  padding: 0 24px 20px 24px;
+  background: var(--color-white);
+}
+
+.trip-history-row__details > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.trip-history-row__details span {
+  font-size: 12px;
+  color: var(--color-ink-muted);
+}
+
+.trip-history-row__details strong {
+  font-family: var(--font-display);
+  font-size: 14px;
+}
+
+@media (max-width: 1000px) {
+  .trip-history-table__head {
+    display: none;
+  }
+
+  .trip-history-row__main {
+    grid-template-columns: 1fr 1fr;
+    row-gap: 8px;
+  }
+
+  .trip-history-row__main span::before {
+    content: attr(data-label) ": ";
+    font-weight: 600;
+    color: var(--color-ink-muted);
+  }
+
+  .trip-history-row__toggle {
+    grid-column: span 2;
+    justify-self: start;
+  }
+}

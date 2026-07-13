@@ -1,0 +1,32 @@
+/* -----------------------------------------------------------
+   Design tokens
+   These colors and fonts were pulled directly from the Figma
+   file so every page we build afterwards stays consistent.
+------------------------------------------------------------ */
+
+@import url("https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap");
+
+:root {
+  /* Colors */
+  --color-navy: #153a6b; /* header / footer / dark backgrounds */
+  --color-blue: #1e4fa1; /* primary buttons, feature cards */
+  --color-teal: #6ac1b8; /* accent band behind the search widget */
+  --color-cyan: #41fdfe; /* highlight text, Log In button */
+  --color-text-blue: #07588a; /* eyebrow text / muted headings on white */
+  --color-ink: #101418; /* body text on white */
+  --color-ink-muted: rgba(0, 0, 0, 0.7);
+  --color-border: rgba(0, 0, 0, 0.15);
+  --color-white: #ffffff;
+  --color-bg: #f7f9fc;
+
+  /* Typography */
+  --font-display: "Poppins", sans-serif;
+  --font-body: "Inter", sans-serif;
+
+  /* Layout */
+  --max-width: 1280px;
+  --radius-sm: 5px;
+  --radius-md: 10px;
+  --radius-lg: 15px;
+  --radius-xl: 70px;
+}

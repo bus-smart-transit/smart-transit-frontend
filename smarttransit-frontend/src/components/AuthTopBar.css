@@ -1,0 +1,32 @@
+.auth-topbar {
+  background: var(--color-navy);
+  padding: 18px 0;
+}
+
+.auth-topbar__inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.auth-topbar__brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--color-white);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 18px;
+}
+
+.auth-topbar__links {
+  display: flex;
+  gap: 28px;
+}
+
+.auth-topbar__links a {
+  color: var(--color-white);
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 15px;
+}
