@@ -16,6 +16,18 @@ class PassengerService extends RoleAuthServiceBase {
       payload,
     );
   }
+
+  async getTickets() {
+    return await this.request(`/${this.endpointBase}/tickets`, "GET");
+  }
+
+  async getTicketQR(ticketId) {
+    return await this.request(`/${this.endpointBase}/tickets/${ticketId}/qr`, "GET");
+  }
+
+  async getRewardsHistory() {
+    return await this.request(`/${this.endpointBase}/rewards/history`, "GET");
+  }
 }
 
 export default new PassengerService();

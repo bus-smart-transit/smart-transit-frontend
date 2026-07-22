@@ -13,18 +13,24 @@ const DEFAULT_ERROR_MESSAGE = "Something went wrong. Please try again.";
 
 function handleApiError(error) {
   const status = error?.response?.status;
-  const backendMessage = error?.response?.data?.message || error?.message;
+  const responseData = error?.response?.data;
+
+  if (status === 422 && responseData?.errors) {
+    const firstErrors = Object.values(responseData.errors)[0];
+    const fieldMessage = Array.isArray(firstErrors) ? firstErrors[0] : firstErrors;
+    throw new Error(fieldMessage, { cause: error });
+  }
+
+  const backendMessage = responseData?.message || error?.message;
   const baselineMessage = HTTP_ERROR_MESSAGES[status] || DEFAULT_ERROR_MESSAGE;
   const finalMessage = backendMessage || baselineMessage;
+
   throw new Error(finalMessage, { cause: error });
 }
 
 export class BaseService {
   /**
-   * @param {string} tokenKey - storage key for this service's auth token,
-   *   e.g. "passenger_token", "employee_token", "admin_token".
-   *   Defaults to "passenger_token" only so any legacy direct subclass
-   *   doesn't silently break — every new role service should pass its own.
+   * @param {string} tokenKey - storage key for this service's auth token.
    */
   constructor(tokenKey = "passenger_token") {
     this.tokenKey = tokenKey;
