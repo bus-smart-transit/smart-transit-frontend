@@ -66,6 +66,33 @@ const HOW_IT_WORKS = [
   },
 ];
 
+const OBJECTIVES = [
+  {
+    title: 'Passenger Data Validation',
+    endpoint: '/passengers/profile, /passengers/tickets, /passengers/rewards/history',
+    action: 'Open Passenger Dashboard',
+    to: '/passenger/login',
+  },
+  {
+    title: 'Driver Trip Operations',
+    endpoint: '/driver/current-trip, /driver/current-trip/stops, /driver/daily-pin',
+    action: 'Open Staff Login (Driver)',
+    to: '/employee/login',
+  },
+  {
+    title: 'Conductor Scan and Occupancy',
+    endpoint: '/conductor/scan-ticket, /conductor/trip-occupancy, /conductor/current-passengers',
+    action: 'Open Staff Login (Conductor)',
+    to: '/employee/login',
+  },
+  {
+    title: 'Operator Resource Accuracy',
+    endpoint: '/operator/fleets, /operator/drivers, /operator/conductors',
+    action: 'Open Staff Login (Operator)',
+    to: '/employee/login',
+  },
+];
+
 export default function LandingPage() {
   return (
     <div className="landing">
@@ -181,6 +208,37 @@ export default function LandingPage() {
                 <span className="hv-info-value hv-info-green">Low</span>
               </div>
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Objective Testing Section ── */}
+      <section className="objective-section" id="testing">
+        <div className="container">
+          <div className="section-header">
+            <span className="badge badge-primary">Backend Objectives</span>
+            <h2 className="section-title">Test Every Role With <span className="gradient-text">Clear Entry Points</span></h2>
+            <p className="section-subtitle">
+              This workspace is configured for endpoint validation, data accuracy checks, and role-specific smoke testing.
+            </p>
+          </div>
+
+          <div className="objectives-grid">
+            {OBJECTIVES.map(({ title, endpoint, action, to }) => (
+              <div key={title} className="objective-card glass-card">
+                <h3 className="objective-title">{title}</h3>
+                <p className="objective-endpoint">{endpoint}</p>
+                <Link to={to} className="btn btn-outline objective-link">{action}</Link>
+              </div>
+            ))}
+          </div>
+
+          <div className="credentials-card glass-card">
+            <h3>Quick Test Credentials</h3>
+            <p>Passenger: passenger@test.com / password123</p>
+            <p>Driver: driver@smarttransit.com / password123</p>
+            <p>Conductor: conductor@smarttransit.com / password123</p>
+            <p>Operator: operator@smarttransit.com / password123</p>
           </div>
         </div>
       </section>

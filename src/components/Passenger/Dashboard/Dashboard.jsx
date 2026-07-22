@@ -1,54 +1,48 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Map, Ticket, User, LogOut, Activity, Gift, RefreshCw } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Bell, Map, Ticket, User, LogOut, Gift, History, ShoppingCart, Menu } from 'lucide-react';
 import MapView from '../../Map/MapView.web';
-import Profile from '../Profile/Profile';
 import { useAuth } from '../../../api/hooks/useAuth';
 import PassengerService from '../../../api/PassengerService/PassengerService';
+import BuyTicket from '../BuyTicket/BuyTicket';
+import './PassengerPortal.css';
 
 const NAV_ITEMS = [
-    { key: 'overview', label: 'Overview', icon: Activity },
-    { key: 'map', label: 'Live Map', icon: Map },
-    { key: 'tickets', label: 'Tickets', icon: Ticket },
-    { key: 'rewards', label: 'Rewards', icon: Gift },
-    { key: 'profile', label: 'Profile', icon: User },
+    { key: 'buy', label: 'Home', icon: ShoppingCart, protected: false },
+    { key: 'rewards', label: 'Rewards', icon: Gift, protected: true },
+    { key: 'tickets', label: 'My Ticket', icon: Ticket, protected: true },
+    { key: 'transactions', label: 'Transaction History', icon: History, protected: true },
+    { key: 'profile', label: 'My Profile', icon: User, protected: true },
+    { key: 'map', label: 'Live Map', icon: Map, protected: false },
 ];
 
-function PageHeader({ title, subtitle }) {
-    const [time, setTime] = useState(() => new Date());
-
-    useEffect(() => {
-        const id = setInterval(() => setTime(new Date()), 1000);
-        return () => clearInterval(id);
-    }, []);
-
-    return (
-        <div className="mb-5 flex items-center justify-between border-b border-slate-800 pb-4">
-            <div>
-                <h1 className="text-lg font-semibold text-white">{title}</h1>
-                {subtitle && <p className="mt-0.5 text-sm text-slate-500">{subtitle}</p>}
-            </div>
-            <div className="font-data rounded-full border border-slate-800 bg-slate-900 px-3 py-1.5 text-xs text-slate-400">
-                {time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-            </div>
-        </div>
-    );
-}
+const PROTECTED_TABS = new Set(['tickets', 'rewards', 'transactions', 'profile']);
 
 export default function Dashboard() {
     const navigate = useNavigate();
-    const { logout, user } = useAuth();
-    const [activeTab, setActiveTab] = useState('overview');
+    const [searchParams, setSearchParams] = useSearchParams();
+    const { logout, user, isAuthenticated } = useAuth();
+    const [activeTab, setActiveTab] = useState('buy');
+    const [menuOpen, setMenuOpen] = useState(false);
     const [profile, setProfile] = useState(null);
     const [tickets, setTickets] = useState([]);
     const [rewards, setRewards] = useState([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState('');
+    const [isLoadingPrivate, setIsLoadingPrivate] = useState(false);
+    const [privateError, setPrivateError] = useState('');
     const [lastSync, setLastSync] = useState(null);
+    const [paymentNotice, setPaymentNotice] = useState('');
 
-    const loadObjectiveData = useCallback(async () => {
-        setIsLoading(true);
-        setError('');
+    const loadPrivateData = useCallback(async () => {
+        if (!isAuthenticated) {
+            setProfile(null);
+            setTickets([]);
+            setRewards([]);
+            setLastSync(null);
+            return;
+        }
+
+        setIsLoadingPrivate(true);
+        setPrivateError('');
 
         const [profileRes, ticketsRes, rewardsRes] = await Promise.allSettled([
             PassengerService.getProfile(),
@@ -82,238 +76,261 @@ export default function Dashboard() {
         }
 
         if (failures.length > 0) {
-            setError(failures.join(' | '));
+            setPrivateError(failures.join(' | '));
         }
 
         setLastSync(new Date());
-        setIsLoading(false);
-    }, []);
+        setIsLoadingPrivate(false);
+    }, [isAuthenticated]);
 
     useEffect(() => {
-        const timer = setTimeout(() => {
-            loadObjectiveData();
-        }, 0);
-        return () => clearTimeout(timer);
-    }, [loadObjectiveData]);
+        if (isAuthenticated) {
+            void loadPrivateData();
+        } else {
+            setIsLoadingPrivate(false);
+            setPrivateError('');
+            setProfile(null);
+            setTickets([]);
+            setRewards([]);
+            setLastSync(null);
+        }
+    }, [isAuthenticated, loadPrivateData]);
+
+    useEffect(() => {
+        if (!isAuthenticated && PROTECTED_TABS.has(activeTab)) {
+            setActiveTab('overview');
+        }
+    }, [isAuthenticated, activeTab]);
+
+    useEffect(() => {
+        const paymentStatus = searchParams.get('payment');
+        if (!paymentStatus) {
+            return;
+        }
+
+        if (paymentStatus === 'success') {
+            setPaymentNotice('Payment successful. You have been redirected back.');
+            if (isAuthenticated) {
+                void loadPrivateData();
+            }
+        } else if (paymentStatus === 'cancel') {
+            setPaymentNotice('Payment was cancelled. You can try checkout again.');
+        }
+
+        const nextParams = new URLSearchParams(searchParams);
+        nextParams.delete('payment');
+        setSearchParams(nextParams, { replace: true });
+    }, [isAuthenticated, loadPrivateData, searchParams, setSearchParams]);
 
     const handleLogout = async () => {
         await logout();
         navigate('/', { replace: true });
     };
 
-    const hasTickets = tickets.length > 0;
-    const hasRewards = rewards.length > 0;
-    const profileReady = !!(profile || user);
+    const handleTabChange = (item) => {
+        if (item.protected && !isAuthenticated) {
+            navigate('/passenger/login');
+            return;
+        }
+        setActiveTab(item.key);
+        setMenuOpen(false);
+    };
 
-    return (
-        <div className="flex min-h-screen bg-slate-950">
-            {/* ── Sidebar: rendered as a metro line, nav items as stations ── */}
-            <aside className="flex w-72 flex-col justify-between border-r border-slate-800 bg-slate-950 p-5">
-                <div>
-                    <h2 className="px-2 text-xl font-bold text-white">SmartTransit</h2>
+    const points = Number(profile?.reward_points ?? user?.reward_points ?? 0).toFixed(2);
 
-                    <nav className="relative mt-10 flex flex-col gap-1 pl-3">
-                        <div
-                            className="absolute bottom-2 left-2 top-2 w-px bg-slate-800"
-                            aria-hidden="true"
-                        />
+    const renderContent = () => {
+        if (activeTab === 'buy') {
+            return (
+                <BuyTicket onTicketPurchased={() => {
+                    if (isAuthenticated) {
+                        void loadPrivateData();
+                    }
+                }} />
+            );
+        }
 
-                        {NAV_ITEMS.map(({ key, label, icon: Icon }) => {
-                            const isActive = activeTab === key;
-                            return (
-                                <button
-                                    key={key}
-                                    type="button"
-                                    onClick={() => setActiveTab(key)}
-                                    className="group relative flex items-center gap-3 rounded-lg py-2.5 pl-5 pr-3 text-left text-sm font-medium transition"
-                                >
-                                    <span
-                                        className={[
-                                            "absolute left-0 top-1/2 h-2.5 w-2.5 -translate-y-1/2 rounded-full border transition",
-                                            isActive
-                                                ? "border-sky-400 bg-sky-400 shadow-[0_0_0_3px_rgba(56,189,248,0.25)]"
-                                                : "border-slate-600 bg-slate-950 group-hover:border-slate-400",
-                                        ].join(" ")}
-                                        aria-hidden="true"
-                                    />
-                                    <Icon
-                                        className={[
-                                            "h-4 w-4",
-                                            isActive ? "text-sky-400" : "text-slate-500 group-hover:text-slate-300",
-                                        ].join(" ")}
-                                    />
-                                    <span className={isActive ? "text-white" : "text-slate-400 group-hover:text-slate-200"}>
-                                        {label}
-                                    </span>
-                                </button>
-                            );
-                        })}
-                    </nav>
+        if (activeTab === 'map') {
+            return (
+                <div className="passenger-map-wrap">
+                    <MapView role="passenger" />
                 </div>
+            );
+        }
 
-                <div>
-                    <div className="mb-3 border-t border-dashed border-slate-800" aria-hidden="true" />
-                    <button
-                        type="button"
-                        onClick={handleLogout}
-                        className="flex w-full items-center gap-3 rounded-xl border border-red-900/40 bg-red-950/30 px-4 py-3 text-sm font-medium text-red-400 transition hover:bg-red-950/50 hover:text-red-300"
-                    >
-                        <LogOut className="h-4 w-4" />
-                        Log Out
-                    </button>
-                </div>
-            </aside>
+        if (!isAuthenticated && PROTECTED_TABS.has(activeTab)) {
+            return (
+                <section className="passenger-card">
+                    <h2>Authentication Required</h2>
+                    <p>Sign in to access this section.</p>
+                    <button className="passenger-primary-btn" onClick={() => navigate('/passenger/login')}>Sign In</button>
+                </section>
+            );
+        }
 
-            {/* ── Main Workspace ── */}
-            <main className="flex-1">
-                {activeTab === 'overview' && (
-                    <div className="p-6">
-                        <PageHeader title="Backend Objective Console" subtitle="Passenger API validation surface" />
-
-                        <div className="mb-4 flex flex-wrap items-center gap-3">
-                            <button
-                                type="button"
-                                onClick={loadObjectiveData}
-                                className="inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-200 transition hover:border-slate-600"
-                            >
-                                <RefreshCw className="h-4 w-4" />
-                                Refresh Objective Data
-                            </button>
-                            {lastSync && (
-                                <span className="text-xs text-slate-500">
-                                    Last sync: {lastSync.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                                </span>
-                            )}
+        if (activeTab === 'tickets') {
+            return (
+                <section className="passenger-panel">
+                    <div className="passenger-panel-head">
+                        <h2>My Tickets</h2>
+                    </div>
+                    {isLoadingPrivate ? (
+                        <p className="passenger-muted">Loading tickets...</p>
+                    ) : tickets.length === 0 ? (
+                        <p className="passenger-muted">No tickets found yet.</p>
+                    ) : (
+                        <div className="passenger-ticket-list">
+                            {tickets.map((ticket, idx) => (
+                                <div key={ticket.ticket_id ?? ticket.ticket_uuid ?? idx} className="passenger-ticket-item">
+                                    <span>{idx + 1}.</span>
+                                    <strong>{ticket.origin_stop?.stop_name || ticket.origin || 'Origin'} to {ticket.destination_stop?.stop_name || ticket.destination || 'Destination'}</strong>
+                                    <em>{ticket.status || 'issued'}</em>
+                                </div>
+                            ))}
                         </div>
+                    )}
+                </section>
+            );
+        }
 
-                        {error && (
-                            <div className="mb-4 rounded-xl border border-red-900/50 bg-red-950/30 p-3 text-sm text-red-300">
-                                {error}
-                            </div>
-                        )}
-
-                        {isLoading ? (
-                            <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-6 text-sm text-slate-400">
-                                Loading objective metrics...
-                            </div>
-                        ) : (
-                            <>
-                                <div className="grid gap-4 md:grid-cols-3">
-                                    <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
-                                        <p className="text-xs uppercase tracking-wide text-slate-500">Objective 1</p>
-                                        <h3 className="mt-1 text-sm font-semibold text-white">Profile Accuracy</h3>
-                                        <p className="mt-2 text-sm text-slate-400">Endpoint: /passengers/profile</p>
-                                        <p className="mt-2 text-sm text-slate-300">Status: {profileReady ? 'Available' : 'Unavailable'}</p>
-                                    </div>
-
-                                    <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
-                                        <p className="text-xs uppercase tracking-wide text-slate-500">Objective 2</p>
-                                        <h3 className="mt-1 text-sm font-semibold text-white">Ticket Retrieval</h3>
-                                        <p className="mt-2 text-sm text-slate-400">Endpoint: /passengers/tickets</p>
-                                        <p className="mt-2 text-sm text-slate-300">Records: {tickets.length}</p>
-                                        <p className="mt-1 text-sm text-slate-300">Status: {hasTickets ? 'Data returned' : 'No records yet'}</p>
-                                    </div>
-
-                                    <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
-                                        <p className="text-xs uppercase tracking-wide text-slate-500">Objective 3</p>
-                                        <h3 className="mt-1 text-sm font-semibold text-white">Rewards History</h3>
-                                        <p className="mt-2 text-sm text-slate-400">Endpoint: /passengers/rewards/history</p>
-                                        <p className="mt-2 text-sm text-slate-300">Records: {rewards.length}</p>
-                                        <p className="mt-1 text-sm text-slate-300">Status: {hasRewards ? 'Data returned' : 'No records yet'}</p>
-                                    </div>
-                                </div>
-
-                                <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-900/40 p-4">
-                                    <h4 className="text-sm font-semibold text-white">Testing Notes</h4>
-                                    <ul className="mt-2 space-y-1 text-sm text-slate-400">
-                                        <li>Use this screen to verify API data presence before UI workflow testing.</li>
-                                        <li>Move to Tickets tab to validate ticket fields and status values.</li>
-                                        <li>Move to Rewards tab to verify chronological reward transactions.</li>
-                                    </ul>
-                                </div>
-                            </>
-                        )}
+        if (activeTab === 'transactions') {
+            return (
+                <section className="passenger-panel">
+                    <div className="passenger-panel-head">
+                        <h2>Transaction History</h2>
                     </div>
-                )}
+                    <table className="passenger-table">
+                        <thead>
+                            <tr>
+                                <th>Route</th>
+                                <th>Departure</th>
+                                <th>Reservation No.</th>
+                                <th>Total Amount</th>
+                                <th>Payment Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {tickets.length === 0 ? (
+                                <tr>
+                                    <td colSpan={5}>No transaction records yet.</td>
+                                </tr>
+                            ) : (
+                                tickets.map((ticket, idx) => (
+                                    <tr key={ticket.ticket_id ?? ticket.ticket_uuid ?? idx}>
+                                        <td>{ticket.origin_stop?.stop_name || ticket.origin || '-'} to {ticket.destination_stop?.stop_name || ticket.destination || '-'}</td>
+                                        <td>{ticket.created_at ? new Date(ticket.created_at).toLocaleDateString() : '-'}</td>
+                                        <td>{ticket.ticket_uuid || ticket.uuid || '-'}</td>
+                                        <td>PHP {Number(ticket.final_amount ?? ticket.amount ?? 0).toFixed(2)}</td>
+                                        <td>{ticket.status || '-'}</td>
+                                    </tr>
+                                ))
+                            )}
+                        </tbody>
+                    </table>
+                </section>
+            );
+        }
 
-                {activeTab === 'map' && (
-                    <div className="h-screen overflow-hidden">
-                        <MapView role="passenger" />
-                    </div>
-                )}
-
-                {activeTab === 'tickets' && (
-                    <div className="p-6">
-                        <PageHeader title="Ticket Validation" subtitle="Dataset from /passengers/tickets" />
-                        {isLoading ? (
-                            <div className="rounded-2xl border border-slate-800 bg-slate-900/40 px-6 py-10 text-sm text-slate-400">Loading tickets...</div>
-                        ) : tickets.length === 0 ? (
-                            <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-800 bg-slate-900/40 px-6 py-16 text-center">
-                                <Ticket className="h-8 w-8 text-slate-600" />
-                                <p className="mt-3 text-sm font-medium text-slate-300">No tickets yet</p>
-                                <p className="mt-1 text-sm text-slate-500">Backend is reachable but no ticket records were returned for this passenger.</p>
-                            </div>
+        if (activeTab === 'rewards') {
+            return (
+                <section className="passenger-grid-two">
+                    <article className="passenger-highlight">
+                        <h3>{profile?.name || user?.name || 'Passenger'}</h3>
+                        <p>{profile?.user?.email || user?.email || ''}</p>
+                    </article>
+                    <article className="passenger-highlight">
+                        <h3>Rewards Points</h3>
+                        <p>{points}</p>
+                    </article>
+                    <article className="passenger-panel span-two">
+                        <div className="passenger-panel-head">
+                            <h2>Rewards Activity</h2>
+                        </div>
+                        {rewards.length === 0 ? (
+                            <p className="passenger-muted">No reward transactions found.</p>
                         ) : (
-                            <div className="overflow-x-auto rounded-2xl border border-slate-800 bg-slate-900/50">
-                                <table className="min-w-full divide-y divide-slate-800 text-sm">
-                                    <thead className="bg-slate-900/80 text-left text-xs uppercase tracking-wide text-slate-500">
-                                        <tr>
-                                            <th className="px-4 py-3">Ticket UUID</th>
-                                            <th className="px-4 py-3">Seat Type</th>
-                                            <th className="px-4 py-3">Amount</th>
-                                            <th className="px-4 py-3">Status</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-slate-800 text-slate-300">
-                                        {tickets.map((ticket, idx) => (
-                                            <tr key={ticket.ticket_id ?? ticket.ticket_uuid ?? idx}>
-                                                <td className="px-4 py-3 font-mono text-xs">{ticket.ticket_uuid ?? ticket.uuid ?? 'n/a'}</td>
-                                                <td className="px-4 py-3">{ticket.seat_type ?? 'n/a'}</td>
-                                                <td className="px-4 py-3">{ticket.final_amount ?? ticket.amount ?? 'n/a'}</td>
-                                                <td className="px-4 py-3">{ticket.status ?? 'n/a'}</td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        )}
-                    </div>
-                )}
-
-                {activeTab === 'rewards' && (
-                    <div className="p-6">
-                        <PageHeader title="Rewards Verification" subtitle="Dataset from /passengers/rewards/history" />
-                        {isLoading ? (
-                            <div className="rounded-2xl border border-slate-800 bg-slate-900/40 px-6 py-10 text-sm text-slate-400">Loading rewards...</div>
-                        ) : rewards.length === 0 ? (
-                            <div className="rounded-2xl border border-dashed border-slate-800 bg-slate-900/40 px-6 py-12 text-sm text-slate-400">
-                                No reward transactions returned for this account.
-                            </div>
-                        ) : (
-                            <div className="space-y-3">
+                            <div className="passenger-reward-list">
                                 {rewards.map((reward, idx) => (
-                                    <div key={reward.reward_transaction_id ?? idx} className="rounded-xl border border-slate-800 bg-slate-900/50 p-4">
-                                        <div className="flex items-center justify-between gap-3">
-                                            <p className="text-sm font-semibold text-white">{reward.transaction_type ?? 'Reward Transaction'}</p>
-                                            <span className="text-xs text-slate-400">{reward.created_at ?? reward.transaction_date ?? 'date unavailable'}</span>
-                                        </div>
-                                        <div className="mt-2 grid gap-1 text-sm text-slate-300">
-                                            <p>Points: {reward.points ?? reward.points_amount ?? 'n/a'}</p>
-                                            {reward.description && <p>Notes: {reward.description}</p>}
-                                        </div>
+                                    <div key={reward.reward_transaction_id ?? idx} className="passenger-reward-item">
+                                        <strong>{reward.transaction_type ?? 'Reward transaction'}</strong>
+                                        <span>{reward.points ?? reward.points_amount ?? 0} points</span>
+                                        <em>{reward.created_at ?? reward.transaction_date ?? '-'}</em>
                                     </div>
                                 ))}
                             </div>
                         )}
-                    </div>
-                )}
+                    </article>
+                </section>
+            );
+        }
 
-                {activeTab === 'profile' && (
-                    <div className="max-w-xl p-6">
-                        <PageHeader title="Profile" subtitle="Your account details" />
-                        <Profile />
+        if (activeTab === 'profile') {
+            return (
+                <section className="passenger-panel">
+                    <div className="passenger-panel-head">
+                        <h2>My Profile</h2>
                     </div>
-                )}
+                    <div className="passenger-profile-grid">
+                        <div><span>Name</span><strong>{profile?.name || user?.name || '-'}</strong></div>
+                        <div><span>Email</span><strong>{profile?.user?.email || user?.email || '-'}</strong></div>
+                        <div><span>Contact Number</span><strong>{profile?.phone_num || '-'}</strong></div>
+                        <div><span>Address</span><strong>{profile?.address || '-'}</strong></div>
+                        <div><span>Rewards Points</span><strong>{points}</strong></div>
+                    </div>
+                </section>
+            );
+        }
+
+        return null;
+    };
+
+    return (
+        <div className="passenger-shell">
+            <aside className={`passenger-sidebar ${menuOpen ? 'open' : ''}`}>
+                <button className="passenger-close" onClick={() => setMenuOpen(false)}>Close</button>
+                <nav>
+                    {NAV_ITEMS.map(({ key, label, icon: Icon, protected: needsAuth }) => (
+                        <button
+                            key={key}
+                            className={`passenger-nav-item ${activeTab === key ? 'active' : ''}`}
+                            onClick={() => handleTabChange({ key, protected: needsAuth })}
+                        >
+                            <Icon size={16} />
+                            <span>{label}</span>
+                        </button>
+                    ))}
+                </nav>
+                <div className="passenger-sidebar-bottom">
+                    {isAuthenticated ? (
+                        <button className="passenger-nav-item" onClick={handleLogout}>
+                            <LogOut size={16} />
+                            <span>Logout</span>
+                        </button>
+                    ) : (
+                        <button className="passenger-nav-item" onClick={() => navigate('/passenger/login')}>
+                            <User size={16} />
+                            <span>Sign In</span>
+                        </button>
+                    )}
+                </div>
+            </aside>
+
+            <main className="passenger-main">
+                <header className="passenger-topbar">
+                    <button className="passenger-menu-btn" onClick={() => setMenuOpen(!menuOpen)}>
+                        <Menu size={16} />
+                    </button>
+                    <div className="passenger-logo">SmartTransit</div>
+                    <div className="passenger-top-actions">
+                        <Bell size={14} />
+                        <span>{points} points</span>
+                    </div>
+                </header>
+
+                {paymentNotice && <div className="passenger-notice">{paymentNotice}</div>}
+                {privateError && <div className="passenger-error">{privateError}</div>}
+                {lastSync && isAuthenticated && <p className="passenger-last-sync">Last sync: {lastSync.toLocaleTimeString()}</p>}
+
+                {renderContent()}
             </main>
         </div>
     );

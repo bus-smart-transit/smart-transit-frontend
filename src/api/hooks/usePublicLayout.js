@@ -8,13 +8,13 @@ export function usePublicLayout({
     { label: "Features", to: "#features" },
     { label: "About", to: "#about" },
   ],
-  loginPath = "/passenger/dashboard",
+  loginPath = "/passenger/login",
   signupPath = "/passenger/signup",
 } = {}) {
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
 
-  const { isAuthenticated, isLoading } = useAuthRole();
+  const { isAuthenticated, isLoading } = useAuthRole("passenger");
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20);

@@ -243,6 +243,59 @@
   color: #4ade80;
 }
 
+/* ─── Objective Testing ─────────────────────────────────────── */
+.objective-section {
+  padding: 90px 0 70px;
+  background: linear-gradient(180deg, rgba(2, 6, 23, 0.2), rgba(2, 6, 23, 0.45));
+}
+
+.objectives-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 18px;
+}
+
+.objective-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 24px;
+  border-radius: 16px;
+}
+
+.objective-title {
+  font-size: 1.05rem;
+  color: var(--text-heading);
+}
+
+.objective-endpoint {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+
+.objective-link {
+  margin-top: 6px;
+  align-self: flex-start;
+}
+
+.credentials-card {
+  margin-top: 20px;
+  padding: 22px;
+  border-radius: 16px;
+}
+
+.credentials-card h3 {
+  font-size: 1.1rem;
+  margin-bottom: 10px;
+}
+
+.credentials-card p {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  margin: 4px 0;
+}
+
 /* ─── Stats ──────────────────────────────────────────────────── */
 .stats-section {
   padding: 56px 0;
@@ -489,6 +542,7 @@
   .features-grid { grid-template-columns: repeat(2, 1fr); }
   .stats-grid    { grid-template-columns: repeat(2, 1fr); }
   .steps-grid    { grid-template-columns: 1fr; }
+  .objectives-grid { grid-template-columns: 1fr; }
   .step-connector { display: none; }
 }
 
