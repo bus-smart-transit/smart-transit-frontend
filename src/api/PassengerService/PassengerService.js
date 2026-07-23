@@ -21,8 +21,12 @@ class PassengerService extends RoleAuthServiceBase {
     return await this.request(`/${this.endpointBase}/tickets`, "GET");
   }
 
-  async getTicketQR(ticketId) {
-    return await this.request(`/${this.endpointBase}/tickets/${ticketId}/qr`, "GET");
+  async getPaymentHistory() {
+    return await this.request(`/${this.endpointBase}/payments`, "GET");
+  }
+
+  async getTicketQR(ticketUuid) {
+    return await this.request(`/${this.endpointBase}/tickets/${ticketUuid}/qr`, "GET");
   }
 
   async getRewardsHistory() {
@@ -53,7 +57,7 @@ class PassengerService extends RoleAuthServiceBase {
   }
 
   async getNearestFleet(payload) {
-    return await this.request(`/fleet/nearest`, "POST", payload);
+    return await this.request(`/fleet/nearest`, "GET", payload);
   }
 
   async getRouteFares(routeId) {

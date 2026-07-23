@@ -1,21 +1,74 @@
 import { useCallback, useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import StaffService from '../../api/StaffService/StaffService';
-import { Plus, Loader, AlertCircle, CheckCircle, LogOut } from 'lucide-react';
+import {
+  Activity,
+  AlertCircle,
+  BarChart3,
+  Bus,
+  Calendar,
+  CheckCircle,
+  CreditCard,
+  DollarSign,
+  Loader,
+  LogOut,
+  Plus,
+  RefreshCw,
+  ShieldCheck,
+  Target,
+  TrendingUp,
+  UserRound,
+  Users,
+} from 'lucide-react';
 
 const NAV_ITEMS = [
-  { id: 'overview', label: 'Overview', icon: '📊' },
-  { id: 'fleets', label: 'Fleet Management', icon: '🚌' },
-  { id: 'employees', label: 'Employees', icon: '👥' },
-  { id: 'trips', label: 'Schedule Trips', icon: '📅' },
-  { id: 'trip-mgmt', label: 'Trip Management', icon: '🎯' },
-  { id: 'reports', label: 'Advanced Reports', icon: '📈' },
+  { id: 'overview', label: 'Overview', icon: BarChart3 },
+  { id: 'fleets', label: 'Fleet Management', icon: Bus },
+  { id: 'employees', label: 'Employees', icon: Users },
+  { id: 'trips', label: 'Schedule Trips', icon: Calendar },
+  { id: 'trip-mgmt', label: 'Trip Management', icon: Target },
+  { id: 'reports', label: 'Advanced Reports', icon: TrendingUp },
 ];
+
+const REPORT_ACTIONS = [
+  { id: 'financial', label: 'Financial Report', icon: DollarSign, color: 'text-emerald-400' },
+  { id: 'revenue', label: 'Revenue by Route', icon: BarChart3, color: 'text-sky-400' },
+  { id: 'adherence', label: 'Route Adherence', icon: ShieldCheck, color: 'text-emerald-400' },
+  { id: 'occupancy', label: 'Occupancy Trends', icon: Activity, color: 'text-amber-400' },
+  { id: 'daily', label: 'Daily Summary', icon: Calendar, color: 'text-indigo-400' },
+  { id: 'channels', label: 'Payment Channels', icon: CreditCard, color: 'text-cyan-400' },
+];
+
+const asCurrency = (value) => `P${Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+const formatDateTime = (value) => {
+  if (!value) return '-';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '-';
+  const yyyy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const dd = String(date.getDate()).padStart(2, '0');
+  const hh = String(date.getHours()).padStart(2, '0');
+  const min = String(date.getMinutes()).padStart(2, '0');
+  return `${yyyy}/${mm}/${dd} - ${hh}:${min}`;
+};
+
+const toRows = (data) => {
+  if (Array.isArray(data)) return data;
+  if (!data || typeof data !== 'object') return [];
+  if (Array.isArray(data.data)) return data.data;
+  if (Array.isArray(data.items)) return data.items;
+  if (Array.isArray(data.routes)) return data.routes;
+  if (Array.isArray(data.records)) return data.records;
+  return [];
+};
 
 export default function OperatorDashboard() {
   const navigate = useNavigate();
   const didBootstrap = useRef(false);
-  const reportDateMax = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  const [reportDateMax] = useState(() => {
+    return new Date().toISOString().split('T')[0];
+  });
   
   const [activeTab, setActiveTab] = useState('overview');
   const [profile, setProfile] = useState(null);
@@ -52,23 +105,20 @@ export default function OperatorDashboard() {
   const [tripForm, setTripForm] = useState({ fleet_route_id: '', trip_date: '', driver_id: '', conductor_id: '' });
   const [creatingTrip, setCreatingTrip] = useState(false);
   const [routeAssignForm, setRouteAssignForm] = useState({ fleet_id: '', route_id: '', start_time: '', end_time: '' });
+  const [routeForm, setRouteForm] = useState({ route_name: '', origin: '', destination: '' });
   const [fareRuleForm, setFareRuleForm] = useState({ fleet_id: '', seat_type: 'seated', base_fare: '', fare_per_km: '' });
   const [stopForm, setStopForm] = useState({ stop_name: '', latitude: '', longitude: '' });
   const [routeStopForm, setRouteStopForm] = useState({ route_id: '', stop_id: '', stop_order: '', distance_from_origin_km: '' });
   const [assigningRoute, setAssigningRoute] = useState(false);
+  const [creatingRoute, setCreatingRoute] = useState(false);
   const [creatingFareRule, setCreatingFareRule] = useState(false);
   const [creatingStop, setCreatingStop] = useState(false);
   const [addingStopToRoute, setAddingStopToRoute] = useState(false);
 
   const [selectedFleet, setSelectedFleet] = useState('');
-  const [financialData, setFinancialData] = useState(null);
   const [loadingReport, setLoadingReport] = useState(false);
   const [reportType, setReportType] = useState('financial');
   const [advancedReports, setAdvancedReports] = useState({});
-  const [tripManagementList, setTripManagementList] = useState([]);
-  const [assigningTrip, setAssigningTrip] = useState(null);
-  const [selectedDriver, setSelectedDriver] = useState('');
-  const [selectedConductor, setSelectedConductor] = useState('');
   const [reportRange, setReportRange] = useState(() => {
     const now = new Date();
     const end = new Date(now.getTime() - 24 * 60 * 60 * 1000);
@@ -292,6 +342,30 @@ export default function OperatorDashboard() {
     }
   };
 
+  const handleCreateRoute = async () => {
+    if (!routeForm.route_name || !routeForm.origin || !routeForm.destination) {
+      showMessage('Please complete route name, origin, and destination', false);
+      return;
+    }
+
+    setCreatingRoute(true);
+    try {
+      const res = await StaffService.createOperatorRoute({
+        route_name: routeForm.route_name,
+        origin: routeForm.origin,
+        destination: routeForm.destination,
+      });
+
+      setRoutes((prev) => [res?.data, ...prev]);
+      setRouteForm({ route_name: '', origin: '', destination: '' });
+      showMessage('Route created successfully!', true);
+    } catch (err) {
+      showMessage(err?.message || 'Failed to create route', false);
+    } finally {
+      setCreatingRoute(false);
+    }
+  };
+
   const handleAddStopToRoute = async () => {
     if (!routeStopForm.route_id || !routeStopForm.stop_id || !routeStopForm.stop_order || !routeStopForm.distance_from_origin_km) {
       showMessage('Please complete route-stop fields', false);
@@ -327,54 +401,13 @@ export default function OperatorDashboard() {
         start_date: reportRange.start_date,
         end_date: reportRange.end_date,
       });
-      setFinancialData(res.data);
+      setAdvancedReports((prev) => ({ ...prev, financial: res.data }));
+      setReportType('financial');
       showMessage('Report loaded successfully', true);
     } catch (err) {
       showMessage(err?.message || 'Failed to load financial report', false);
     } finally {
       setLoadingReport(false);
-    }
-  };
-
-  const loadTripManagement = useCallback(async () => {
-    try {
-      const res = await StaffService.getOperatorTrips();
-      setTripManagementList(res.data || []);
-    } catch (err) {
-      showMessage('Failed to load trips', false);
-    }
-  }, []);
-
-  const handleAssignDriver = async (tripId, driverId) => {
-    try {
-      await StaffService.assignDriver(tripId, driverId);
-      showMessage('Driver assigned successfully!', true);
-      loadTripManagement();
-    } catch (err) {
-      showMessage(err?.message || 'Failed to assign driver', false);
-    }
-  };
-
-  const handleAssignConductor = async (tripId, conductorId) => {
-    try {
-      await StaffService.assignConductor(tripId, conductorId);
-      showMessage('Conductor assigned successfully!', true);
-      loadTripManagement();
-    } catch (err) {
-      showMessage(err?.message || 'Failed to assign conductor', false);
-    }
-  };
-
-  const handleUpdateTripStatus = async (tripId, action) => {
-    try {
-      if (action === 'boarding') await StaffService.startBoarding(tripId);
-      else if (action === 'depart') await StaffService.operatorDepartTrip(tripId);
-      else if (action === 'complete') await StaffService.operatorCompleteTrip(tripId);
-      
-      showMessage(`Trip status updated to ${action}!`, true);
-      loadTripManagement();
-    } catch (err) {
-      showMessage(err?.message || `Failed to update trip status`, false);
     }
   };
 
@@ -399,7 +432,7 @@ export default function OperatorDashboard() {
       else if (type === 'daily') res = await StaffService.getDailySummary(selectedFleet, { date: reportRange.date });
       else if (type === 'channels') res = await StaffService.getPaymentChannels(selectedFleet, rangeParams);
       
-      setAdvancedReports({ ...advancedReports, [type]: res.data });
+      setAdvancedReports((prev) => ({ ...prev, [type]: res.data }));
       setReportType(type);
       showMessage('Report loaded successfully', true);
     } catch (err) {
@@ -414,18 +447,349 @@ export default function OperatorDashboard() {
     navigate('/employee/login', { replace: true });
   };
 
+  const printReportsPdf = () => {
+    const report = advancedReports[reportType];
+    if (!report) {
+      showMessage('Generate a report first before printing.', false);
+      return;
+    }
+
+    const popup = window.open('', '_blank', 'width=1100,height=800');
+    if (!popup) {
+      showMessage('Unable to open print window. Please allow popups.', false);
+      return;
+    }
+
+    const toRows = (value, prefix = '') => {
+      if (Array.isArray(value)) {
+        return value.flatMap((item, idx) => toRows(item, `${prefix}[${idx}]`));
+      }
+
+      if (value && typeof value === 'object') {
+        return Object.entries(value).flatMap(([key, val]) => {
+          const nextPrefix = prefix ? `${prefix}.${key}` : key;
+          return toRows(val, nextPrefix);
+        });
+      }
+
+      return [[prefix || 'value', value == null ? '-' : String(value)]];
+    };
+
+    const sections = Object.entries(report || {}).map(([key, value]) => {
+      const rows = toRows(value);
+      const body = rows.map(([label, val]) => `
+        <tr>
+          <td>${label}</td>
+          <td>${val}</td>
+        </tr>
+      `).join('');
+
+      return `
+        <section class="report-section">
+          <h2>${key.replaceAll('_', ' ')}</h2>
+          <table>
+            <thead>
+              <tr><th>Field</th><th>Value</th></tr>
+            </thead>
+            <tbody>${body || '<tr><td colspan="2">No data</td></tr>'}</tbody>
+          </table>
+        </section>
+      `;
+    }).join('');
+
+    popup.document.write(`
+      <html>
+        <head>
+          <title>Operator Report - ${reportType}</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 20px; color: #0f172a; }
+            h1 { margin: 0 0 4px; font-size: 22px; }
+            p { margin: 0 0 12px; color: #475569; }
+            .report-section { margin-top: 16px; }
+            .report-section h2 { margin: 0 0 8px; font-size: 16px; text-transform: capitalize; }
+            table { width: 100%; border-collapse: collapse; border: 1px solid #cbd5e1; }
+            th, td { border: 1px solid #cbd5e1; padding: 8px; text-align: left; font-size: 12px; vertical-align: top; }
+            th { background: #f1f5f9; font-weight: 700; }
+          </style>
+        </head>
+        <body>
+          <h1>Smart Transit Operator Report</h1>
+          <p>Type: ${reportType} | Generated: ${formatDateTime(new Date().toISOString())}</p>
+          ${sections || '<p>No report data available.</p>'}
+          <script>window.onload = function () { window.print(); };</script>
+        </body>
+      </html>
+    `);
+    popup.document.close();
+  };
+
+  const renderReportBody = () => {
+    const report = advancedReports[reportType];
+    if (!report) return null;
+
+    if (reportType === 'financial') {
+      const revenue = report.revenue || {};
+      const tickets = report.tickets || {};
+      const trips = report.trips || {};
+
+      return (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <div className="rounded-xl border border-slate-700 bg-slate-950 p-4">
+            <div className="text-xs uppercase text-slate-500">Total Revenue</div>
+            <div className="mt-2 text-2xl font-bold text-emerald-400">{asCurrency(revenue.total)}</div>
+          </div>
+          <div className="rounded-xl border border-slate-700 bg-slate-950 p-4">
+            <div className="text-xs uppercase text-slate-500">Online Payments</div>
+            <div className="mt-2 text-2xl font-bold text-sky-400">{asCurrency(revenue.online)}</div>
+          </div>
+          <div className="rounded-xl border border-slate-700 bg-slate-950 p-4">
+            <div className="text-xs uppercase text-slate-500">Cash Payments</div>
+            <div className="mt-2 text-2xl font-bold text-amber-400">{asCurrency(revenue.onsite_cash)}</div>
+          </div>
+          <div className="rounded-xl border border-slate-700 bg-slate-950 p-4">
+            <div className="text-xs uppercase text-slate-500">Completed Trips</div>
+            <div className="mt-2 text-2xl font-bold text-indigo-400">{Number(trips.completed || 0)}</div>
+          </div>
+          <div className="rounded-xl border border-slate-700 bg-slate-950 p-4 md:col-span-2 xl:col-span-2">
+            <div className="text-xs uppercase text-slate-500">Tickets Issued</div>
+            <div className="mt-2 text-xl font-bold text-slate-100">{Number(tickets.total || 0)}</div>
+            <p className="mt-1 text-xs text-slate-500">Avg per completed trip: {Number(tickets.average_per_trip || 0).toFixed(2)}</p>
+          </div>
+          <div className="rounded-xl border border-slate-700 bg-slate-950 p-4 md:col-span-2 xl:col-span-2">
+            <div className="text-xs uppercase text-slate-500">Average Revenue / Trip</div>
+            <div className="mt-2 text-xl font-bold text-slate-100">{asCurrency(trips.average_revenue_per_trip)}</div>
+            <p className="mt-1 text-xs text-slate-500">Period: {report.period?.start_date || '-'} to {report.period?.end_date || '-'}</p>
+          </div>
+        </div>
+      );
+    }
+
+    if (reportType === 'daily') {
+      const summary = report.summary || {};
+      const entries = Object.entries(summary);
+      return (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <div className="rounded-xl border border-slate-700 bg-slate-950 p-4 md:col-span-2 xl:col-span-3">
+            <div className="text-xs uppercase text-slate-500">Report Date</div>
+            <div className="mt-2 text-lg font-semibold text-slate-100">{report.date || 'N/A'}</div>
+          </div>
+          {entries.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-slate-700 bg-slate-950 p-6 text-sm text-slate-400">No daily summary data yet.</div>
+          ) : (
+            entries.map(([key, val]) => (
+              <div key={key} className="rounded-xl border border-slate-700 bg-slate-950 p-4">
+                <div className="text-xs uppercase text-slate-500">{key.replaceAll('_', ' ')}</div>
+                <div className="mt-2 text-lg font-semibold text-slate-100">{typeof val === 'number' ? val.toLocaleString() : String(val)}</div>
+              </div>
+            ))
+          )}
+        </div>
+      );
+    }
+
+    if (reportType === 'revenue') {
+      const rows = report.routes || [];
+      return (
+        <div className="overflow-x-auto rounded-xl border border-slate-700">
+          <table className="min-w-full divide-y divide-slate-700 bg-slate-950 text-sm">
+            <thead className="bg-slate-900/80 text-slate-300">
+              <tr>
+                <th className="px-4 py-3 text-left font-semibold">Route</th>
+                <th className="px-4 py-3 text-left font-semibold">Total Revenue</th>
+                <th className="px-4 py-3 text-left font-semibold">Online</th>
+                <th className="px-4 py-3 text-left font-semibold">Cash</th>
+                <th className="px-4 py-3 text-left font-semibold">Trips</th>
+                <th className="px-4 py-3 text-left font-semibold">Tickets</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-800 text-slate-200">
+              {rows.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-4 py-6 text-center text-slate-400">No route revenue data in this date range.</td>
+                </tr>
+              ) : (
+                rows.map((row) => (
+                  <tr key={row.route_id || row.route_name} className="hover:bg-slate-900/70">
+                    <td className="px-4 py-3 font-medium text-slate-100">{row.route_name || `Route ${row.route_id}`}</td>
+                    <td className="px-4 py-3">{asCurrency(row.total_revenue)}</td>
+                    <td className="px-4 py-3">{asCurrency(row.online_revenue)}</td>
+                    <td className="px-4 py-3">{asCurrency(row.onsite_revenue)}</td>
+                    <td className="px-4 py-3">{Number(row.total_trips || 0)}</td>
+                    <td className="px-4 py-3">{Number(row.total_tickets || 0)}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      );
+    }
+
+    if (reportType === 'adherence') {
+      const otp = report.on_time_performance || {};
+      return (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <div className="rounded-xl border border-slate-700 bg-slate-950 p-4">
+            <div className="text-xs uppercase text-slate-500">On-time %</div>
+            <div className="mt-2 text-2xl font-bold text-emerald-400">{Number(otp.on_time_percentage || 0).toFixed(2)}%</div>
+          </div>
+          <div className="rounded-xl border border-slate-700 bg-slate-950 p-4">
+            <div className="text-xs uppercase text-slate-500">Total Trips</div>
+            <div className="mt-2 text-2xl font-bold text-slate-100">{Number(otp.total_trips || 0)}</div>
+          </div>
+          <div className="rounded-xl border border-slate-700 bg-slate-950 p-4">
+            <div className="text-xs uppercase text-slate-500">On-time Trips</div>
+            <div className="mt-2 text-2xl font-bold text-sky-400">{Number(otp.on_time_trips || 0)}</div>
+          </div>
+          <div className="rounded-xl border border-slate-700 bg-slate-950 p-4">
+            <div className="text-xs uppercase text-slate-500">Delayed Trips</div>
+            <div className="mt-2 text-2xl font-bold text-amber-400">{Number(otp.delayed_trips || 0)}</div>
+          </div>
+        </div>
+      );
+    }
+
+    if (reportType === 'occupancy') {
+      const occ = report.occupancy || {};
+      const peakHours = Object.entries(report.peak_hours || {});
+      return (
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <div className="rounded-xl border border-slate-700 bg-slate-950 p-4">
+              <div className="text-xs uppercase text-slate-500">Average Occupancy</div>
+              <div className="mt-2 text-2xl font-bold text-slate-100">{Number(occ.average || 0).toFixed(2)}</div>
+            </div>
+            <div className="rounded-xl border border-slate-700 bg-slate-950 p-4">
+              <div className="text-xs uppercase text-slate-500">Peak Occupancy</div>
+              <div className="mt-2 text-2xl font-bold text-amber-400">{Number(occ.peak || 0)}</div>
+            </div>
+            <div className="rounded-xl border border-slate-700 bg-slate-950 p-4">
+              <div className="text-xs uppercase text-slate-500">Average Utilization</div>
+              <div className="mt-2 text-2xl font-bold text-cyan-400">{Number(occ.average_utilization_percentage || 0).toFixed(2)}%</div>
+            </div>
+            <div className="rounded-xl border border-slate-700 bg-slate-950 p-4">
+              <div className="text-xs uppercase text-slate-500">Capacity</div>
+              <div className="mt-2 text-2xl font-bold text-indigo-400">{Number(report.capacity || 0)}</div>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto rounded-xl border border-slate-700">
+            <table className="min-w-full divide-y divide-slate-700 bg-slate-950 text-sm">
+              <thead className="bg-slate-900/80 text-slate-300">
+                <tr>
+                  <th className="px-4 py-3 text-left font-semibold">Hour</th>
+                  <th className="px-4 py-3 text-left font-semibold">Avg Occupancy</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800 text-slate-200">
+                {peakHours.length === 0 ? (
+                  <tr>
+                    <td colSpan={2} className="px-4 py-6 text-center text-slate-400">No peak-hour occupancy data available.</td>
+                  </tr>
+                ) : (
+                  peakHours.map(([hour, avg]) => (
+                    <tr key={hour} className="hover:bg-slate-900/70">
+                      <td className="px-4 py-3 font-medium text-slate-100">{hour}:00</td>
+                      <td className="px-4 py-3">{Number(avg).toFixed(2)}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      );
+    }
+
+    if (reportType === 'channels') {
+      const rows = report.channels || [];
+      return (
+        <div className="overflow-x-auto rounded-xl border border-slate-700">
+          <table className="min-w-full divide-y divide-slate-700 bg-slate-950 text-sm">
+            <thead className="bg-slate-900/80 text-slate-300">
+              <tr>
+                <th className="px-4 py-3 text-left font-semibold">Channel</th>
+                <th className="px-4 py-3 text-left font-semibold">Total Amount</th>
+                <th className="px-4 py-3 text-left font-semibold">Transactions</th>
+                <th className="px-4 py-3 text-left font-semibold">Average Ticket</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-800 text-slate-200">
+              {rows.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="px-4 py-6 text-center text-slate-400">No payment channel activity for this period.</td>
+                </tr>
+              ) : (
+                rows.map((row) => (
+                  <tr key={row.channel || 'unknown'} className="hover:bg-slate-900/70">
+                    <td className="px-4 py-3 font-medium text-slate-100">{String(row.channel || 'unknown').replaceAll('_', ' ')}</td>
+                    <td className="px-4 py-3">{asCurrency(row.total_amount)}</td>
+                    <td className="px-4 py-3">{Number(row.transaction_count || 0)}</td>
+                    <td className="px-4 py-3">{asCurrency(row.average_transaction)}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      );
+    }
+
+    const rows = toRows(report);
+    return (
+      <div className="overflow-x-auto rounded-xl border border-slate-700">
+        <table className="min-w-full divide-y divide-slate-700 bg-slate-950 text-sm">
+          <thead className="bg-slate-900/80 text-slate-300">
+            <tr>
+              <th className="px-4 py-3 text-left font-semibold">Label</th>
+              <th className="px-4 py-3 text-left font-semibold">Metric A</th>
+              <th className="px-4 py-3 text-left font-semibold">Metric B</th>
+              <th className="px-4 py-3 text-left font-semibold">Metric C</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-800 text-slate-200">
+            {rows.length === 0 ? (
+              <tr>
+                <td colSpan={4} className="px-4 py-6 text-center text-slate-400">No report rows available for this range.</td>
+              </tr>
+            ) : (
+              rows.map((row, idx) => {
+                const label = row.route_name || row.name || row.channel || row.label || row.date || `Row ${idx + 1}`;
+                const a = row.revenue ?? row.value ?? row.total ?? row.amount ?? row.count ?? '-';
+                const b = row.trips ?? row.rate ?? row.percentage ?? row.volume ?? '-';
+                const c = row.occupancy ?? row.status ?? row.share ?? row.change ?? '-';
+
+                return (
+                  <tr key={`${label}-${idx}`} className="hover:bg-slate-900/70">
+                    <td className="px-4 py-3 font-medium text-slate-100">{String(label)}</td>
+                    <td className="px-4 py-3">{typeof a === 'number' && reportType !== 'adherence' ? asCurrency(a) : String(a)}</td>
+                    <td className="px-4 py-3">{String(b)}</td>
+                    <td className="px-4 py-3">{String(c)}</td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
   return (
-    <div className="flex h-screen bg-gradient-to-br from-slate-900 to-slate-800 text-slate-200">
+    <div className="flex h-screen bg-linear-to-br from-slate-900 to-slate-800 text-slate-200">
       {/* Sidebar */}
       <aside className="w-80 bg-slate-950 border-r border-slate-700 p-6 flex flex-col overflow-y-auto">
         <div className="mb-8">
-          <div className="text-2xl font-bold text-blue-400 mb-2">🚌 Smart Transit</div>
+          <div className="mb-2 inline-flex items-center gap-2 text-2xl font-bold text-blue-400">
+            <Bus className="h-6 w-6" />
+            Smart Transit
+          </div>
           <div className="text-xs uppercase tracking-wider text-slate-500">Operator</div>
         </div>
 
         {profile && (
           <div className="flex gap-3 p-4 bg-slate-900 rounded-lg mb-8">
-            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center font-bold text-lg flex-shrink-0">
+            <div className="w-12 h-12 rounded-full bg-linear-to-br from-blue-500 to-blue-600 flex items-center justify-center font-bold text-lg shrink-0">
               {(profile.name || 'O')[0].toUpperCase()}
             </div>
             <div className="flex-1 min-w-0">
@@ -435,25 +799,35 @@ export default function OperatorDashboard() {
           </div>
         )}
 
-        <nav className="flex-1 flex flex-col gap-1 mb-8">
-          {NAV_ITEMS.map(item => (
-            <button
-              key={item.id}
-              className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition ${
-                activeTab === item.id
-                  ? 'bg-blue-500/20 text-blue-400 border-l-4 border-blue-500 pl-3'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
-              }`}
-              onClick={() => {
-                setActiveTab(item.id);
-                setError('');
-                setSuccessMsg('');
-              }}
-            >
-              <span className="text-xl">{item.icon}</span>
-              <span>{item.label}</span>
-            </button>
-          ))}
+        <nav className="relative mb-8 mt-2 flex flex-1 flex-col gap-1 pl-3">
+          <div className="absolute bottom-2 left-1.75 top-2 w-px bg-slate-800" aria-hidden="true" />
+          {NAV_ITEMS.map((item) => {
+            const Icon = item.icon;
+            const isActive = activeTab === item.id;
+            return (
+              <button
+                key={item.id}
+                className="group relative flex items-center gap-3 rounded-lg py-2.5 pl-5 pr-3 text-sm font-medium"
+                onClick={() => {
+                  setActiveTab(item.id);
+                  setError('');
+                  setSuccessMsg('');
+                }}
+              >
+                <span
+                  className={[
+                    'absolute left-0 top-1/2 h-2.5 w-2.5 -translate-y-1/2 rounded-full border transition',
+                    isActive
+                      ? 'border-sky-400 bg-sky-400 shadow-[0_0_0_3px_rgba(56,189,248,0.25)]'
+                      : 'border-slate-600 bg-slate-950 group-hover:border-slate-400',
+                  ].join(' ')}
+                  aria-hidden="true"
+                />
+                <Icon className={isActive ? 'h-4 w-4 text-sky-400' : 'h-4 w-4 text-slate-500 group-hover:text-slate-300'} />
+                <span className={isActive ? 'text-white' : 'text-slate-400 group-hover:text-slate-200'}>{item.label}</span>
+              </button>
+            );
+          })}
         </nav>
 
         <button
@@ -472,19 +846,19 @@ export default function OperatorDashboard() {
             className="px-4 py-2 bg-blue-500/10 border border-blue-500/30 text-blue-400 hover:bg-blue-500/20 rounded-lg transition"
             onClick={loadDashboardData}
           >
-            🔄 Refresh
+            <span className="inline-flex items-center gap-2"><RefreshCw size={14} />Refresh</span>
           </button>
         </div>
 
         {error && (
           <div className="mx-8 mt-6 flex items-center gap-3 rounded-lg border border-red-900/50 bg-red-950/30 px-4 py-3 text-red-300">
-            <AlertCircle size={18} className="flex-shrink-0" />
+            <AlertCircle size={18} className="shrink-0" />
             <span>{error}</span>
           </div>
         )}
         {successMsg && (
           <div className="mx-8 mt-6 flex items-center gap-3 rounded-lg border border-green-900/50 bg-green-950/30 px-4 py-3 text-green-300">
-            <CheckCircle size={18} className="flex-shrink-0" />
+            <CheckCircle size={18} className="shrink-0" />
             <span>{successMsg}</span>
           </div>
         )}
@@ -501,28 +875,28 @@ export default function OperatorDashboard() {
               {activeTab === 'overview' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                   <div className="flex gap-4 p-6 bg-slate-900 border border-slate-700 rounded-lg hover:border-slate-600 transition">
-                    <div className="text-4xl">🚌</div>
+                    <div className="inline-flex h-12 w-12 items-center justify-center rounded-xl border border-slate-700 bg-slate-950 text-sky-400"><Bus className="h-6 w-6" /></div>
                     <div className="flex-1">
                       <div className="text-xs uppercase text-slate-500 mb-1">Active Fleets</div>
                       <div className="text-3xl font-bold text-blue-400">{fleets.length}</div>
                     </div>
                   </div>
                   <div className="flex gap-4 p-6 bg-slate-900 border border-slate-700 rounded-lg hover:border-slate-600 transition">
-                    <div className="text-4xl">👨‍✈️</div>
+                    <div className="inline-flex h-12 w-12 items-center justify-center rounded-xl border border-slate-700 bg-slate-950 text-sky-400"><UserRound className="h-6 w-6" /></div>
                     <div className="flex-1">
                       <div className="text-xs uppercase text-slate-500 mb-1">Drivers</div>
                       <div className="text-3xl font-bold text-blue-400">{drivers.length}</div>
                     </div>
                   </div>
                   <div className="flex gap-4 p-6 bg-slate-900 border border-slate-700 rounded-lg hover:border-slate-600 transition">
-                    <div className="text-4xl">👔</div>
+                    <div className="inline-flex h-12 w-12 items-center justify-center rounded-xl border border-slate-700 bg-slate-950 text-sky-400"><Users className="h-6 w-6" /></div>
                     <div className="flex-1">
                       <div className="text-xs uppercase text-slate-500 mb-1">Conductors</div>
                       <div className="text-3xl font-bold text-blue-400">{conductors.length}</div>
                     </div>
                   </div>
                   <div className="flex gap-4 p-6 bg-slate-900 border border-slate-700 rounded-lg hover:border-slate-600 transition">
-                    <div className="text-4xl">📅</div>
+                    <div className="inline-flex h-12 w-12 items-center justify-center rounded-xl border border-slate-700 bg-slate-950 text-sky-400"><Calendar className="h-6 w-6" /></div>
                     <div className="flex-1">
                       <div className="text-xs uppercase text-slate-500 mb-1">Scheduled Trips</div>
                       <div className="text-3xl font-bold text-blue-400">{trips.length}</div>
@@ -534,39 +908,39 @@ export default function OperatorDashboard() {
               {/* FLEETS */}
               {activeTab === 'fleets' && (
                 <div className="space-y-6">
-                  <div className="bg-slate-900 border border-slate-700 rounded-lg p-6">
+                  <div className="rounded-2xl border border-slate-700 bg-slate-900/70 p-6">
                     <h2 className="text-xl font-bold mb-4">Add New Fleet</h2>
                     <div className="space-y-4">
-                      <input type="text" placeholder="Plate Number *" value={fleetForm.plate_number} onChange={(e) => setFleetForm({ ...fleetForm, plate_number: e.target.value })} className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none" />
-                      <select value={fleetForm.fleet_type} onChange={(e) => setFleetForm({ ...fleetForm, fleet_type: e.target.value })} className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:border-blue-500 focus:outline-none">
+                      <input type="text" placeholder="Plate Number *" value={fleetForm.plate_number} onChange={(e) => setFleetForm({ ...fleetForm, plate_number: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white placeholder-slate-500 outline-none transition focus:border-sky-500" />
+                      <select value={fleetForm.fleet_type} onChange={(e) => setFleetForm({ ...fleetForm, fleet_type: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white outline-none transition focus:border-sky-500">
                         <option value="public">Public</option>
                         <option value="private">Private</option>
                       </select>
                       <div className="grid grid-cols-2 gap-4">
-                        <input type="number" placeholder="Seated Capacity *" value={fleetForm.seated_capacity} onChange={(e) => setFleetForm({ ...fleetForm, seated_capacity: e.target.value })} className="px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none" />
-                        <input type="number" placeholder="Standing Capacity *" value={fleetForm.standing_capacity} onChange={(e) => setFleetForm({ ...fleetForm, standing_capacity: e.target.value })} className="px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none" />
+                        <input type="number" placeholder="Seated Capacity *" value={fleetForm.seated_capacity} onChange={(e) => setFleetForm({ ...fleetForm, seated_capacity: e.target.value })} className="rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white placeholder-slate-500 outline-none transition focus:border-sky-500" />
+                        <input type="number" placeholder="Standing Capacity *" value={fleetForm.standing_capacity} onChange={(e) => setFleetForm({ ...fleetForm, standing_capacity: e.target.value })} className="rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white placeholder-slate-500 outline-none transition focus:border-sky-500" />
                       </div>
-                      <button className="w-full px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition flex items-center justify-center gap-2" onClick={handleAddFleet} disabled={addingFleet}>
+                      <button className="flex w-full items-center justify-center gap-2 rounded-xl bg-sky-600 px-4 py-2 text-white font-semibold transition hover:bg-sky-500 disabled:cursor-not-allowed disabled:opacity-50" onClick={handleAddFleet} disabled={addingFleet}>
                         {addingFleet ? <Loader size={18} className="animate-spin" /> : <Plus size={18} />}
                         Add Fleet
                       </button>
                     </div>
                   </div>
 
-                  <div className="bg-slate-900 border border-slate-700 rounded-lg p-6">
+                  <div className="rounded-2xl border border-slate-700 bg-slate-900/70 p-6">
                     <h2 className="text-xl font-bold mb-4">Your Fleets ({fleets.length})</h2>
                     <div className="space-y-3">
-                      {fleets.length === 0 ? <p className="text-slate-500 text-center py-8">No fleets yet</p> : fleets.map(fleet => <div key={fleet.fleet_id} className="p-4 bg-slate-800 border border-slate-700 rounded-lg"><h3 className="font-semibold text-white">{fleet.plate_number}</h3><p className="text-sm text-slate-400 mt-1">Type: {fleet.fleet_type}</p><p className="text-sm text-slate-400">Seated: {fleet.seated_capacity} | Standing: {fleet.standing_capacity}</p></div>)}
+                      {fleets.length === 0 ? <p className="text-slate-500 text-center py-8">No fleets yet. Add your first vehicle above to start route assignments.</p> : fleets.map(fleet => <div key={fleet.fleet_id} className="p-4 bg-slate-800 border border-slate-700 rounded-lg"><h3 className="font-semibold text-white">{fleet.plate_number}</h3><p className="text-sm text-slate-400 mt-1">Type: {fleet.fleet_type}</p><p className="text-sm text-slate-400">Seated: {fleet.seated_capacity} | Standing: {fleet.standing_capacity}</p></div>)}
                     </div>
                   </div>
 
-                  <div className="bg-slate-900 border border-slate-700 rounded-lg p-6">
+                  <div className="rounded-2xl border border-slate-700 bg-slate-900/70 p-6">
                     <h2 className="text-xl font-bold mb-4">Assign Route To Fleet</h2>
                     <div className="space-y-4">
                       <select
                         value={routeAssignForm.fleet_id}
                         onChange={(e) => setRouteAssignForm({ ...routeAssignForm, fleet_id: e.target.value })}
-                        className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:border-blue-500 focus:outline-none"
+                        className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white outline-none transition focus:border-sky-500"
                       >
                         <option value="">Select fleet *</option>
                         {fleets.map((fleet) => (
@@ -576,7 +950,7 @@ export default function OperatorDashboard() {
                       <select
                         value={routeAssignForm.route_id}
                         onChange={(e) => setRouteAssignForm({ ...routeAssignForm, route_id: e.target.value })}
-                        className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:border-blue-500 focus:outline-none"
+                        className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white outline-none transition focus:border-sky-500"
                       >
                         <option value="">Select route *</option>
                         {routes.map((route) => (
@@ -588,17 +962,17 @@ export default function OperatorDashboard() {
                           type="time"
                           value={routeAssignForm.start_time}
                           onChange={(e) => setRouteAssignForm({ ...routeAssignForm, start_time: e.target.value })}
-                          className="px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:border-blue-500 focus:outline-none"
+                          className="rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white outline-none transition focus:border-sky-500"
                         />
                         <input
                           type="time"
                           value={routeAssignForm.end_time}
                           onChange={(e) => setRouteAssignForm({ ...routeAssignForm, end_time: e.target.value })}
-                          className="px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:border-blue-500 focus:outline-none"
+                          className="rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white outline-none transition focus:border-sky-500"
                         />
                       </div>
                       <button
-                        className="w-full px-4 py-2 bg-gradient-to-r from-cyan-600 to-cyan-700 hover:from-cyan-700 hover:to-cyan-800 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition flex items-center justify-center gap-2"
+                        className="w-full px-4 py-2 bg-linear-to-r from-cyan-600 to-cyan-700 hover:from-cyan-700 hover:to-cyan-800 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition flex items-center justify-center gap-2"
                         onClick={handleAssignRouteToFleet}
                         disabled={assigningRoute}
                       >
@@ -608,13 +982,50 @@ export default function OperatorDashboard() {
                     </div>
                   </div>
 
-                  <div className="bg-slate-900 border border-slate-700 rounded-lg p-6">
+                  <div className="rounded-2xl border border-slate-700 bg-slate-900/70 p-6">
+                    <h2 className="text-xl font-bold mb-4">Create Route</h2>
+                    <div className="space-y-4">
+                      <input
+                        type="text"
+                        placeholder="Route Name *"
+                        value={routeForm.route_name}
+                        onChange={(e) => setRouteForm({ ...routeForm, route_name: e.target.value })}
+                        className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white placeholder-slate-500 outline-none transition focus:border-sky-500"
+                      />
+                      <div className="grid grid-cols-2 gap-4">
+                        <input
+                          type="text"
+                          placeholder="Origin *"
+                          value={routeForm.origin}
+                          onChange={(e) => setRouteForm({ ...routeForm, origin: e.target.value })}
+                          className="rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white placeholder-slate-500 outline-none transition focus:border-sky-500"
+                        />
+                        <input
+                          type="text"
+                          placeholder="Destination *"
+                          value={routeForm.destination}
+                          onChange={(e) => setRouteForm({ ...routeForm, destination: e.target.value })}
+                          className="rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white placeholder-slate-500 outline-none transition focus:border-sky-500"
+                        />
+                      </div>
+                      <button
+                        className="w-full px-4 py-2 bg-linear-to-r from-violet-600 to-violet-700 hover:from-violet-700 hover:to-violet-800 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition flex items-center justify-center gap-2"
+                        onClick={handleCreateRoute}
+                        disabled={creatingRoute}
+                      >
+                        {creatingRoute ? <Loader size={18} className="animate-spin" /> : <Plus size={18} />}
+                        Create Route
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-700 bg-slate-900/70 p-6">
                     <h2 className="text-xl font-bold mb-4">Create Fare Rule</h2>
                     <div className="space-y-4">
                       <select
                         value={fareRuleForm.fleet_id}
                         onChange={(e) => setFareRuleForm({ ...fareRuleForm, fleet_id: e.target.value })}
-                        className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:border-blue-500 focus:outline-none"
+                        className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white outline-none transition focus:border-sky-500"
                       >
                         <option value="">Select fleet *</option>
                         {fleets.map((fleet) => (
@@ -624,7 +1035,7 @@ export default function OperatorDashboard() {
                       <select
                         value={fareRuleForm.seat_type}
                         onChange={(e) => setFareRuleForm({ ...fareRuleForm, seat_type: e.target.value })}
-                        className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:border-blue-500 focus:outline-none"
+                        className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white outline-none transition focus:border-sky-500"
                       >
                         <option value="seated">Seated</option>
                         <option value="standing">Standing</option>
@@ -636,7 +1047,7 @@ export default function OperatorDashboard() {
                           placeholder="Base Fare *"
                           value={fareRuleForm.base_fare}
                           onChange={(e) => setFareRuleForm({ ...fareRuleForm, base_fare: e.target.value })}
-                          className="px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                          className="rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white placeholder-slate-500 outline-none transition focus:border-sky-500"
                         />
                         <input
                           type="number"
@@ -644,11 +1055,11 @@ export default function OperatorDashboard() {
                           placeholder="Fare Per KM *"
                           value={fareRuleForm.fare_per_km}
                           onChange={(e) => setFareRuleForm({ ...fareRuleForm, fare_per_km: e.target.value })}
-                          className="px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                          className="rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white placeholder-slate-500 outline-none transition focus:border-sky-500"
                         />
                       </div>
                       <button
-                        className="w-full px-4 py-2 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition flex items-center justify-center gap-2"
+                        className="w-full px-4 py-2 bg-linear-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition flex items-center justify-center gap-2"
                         onClick={handleCreateFareRule}
                         disabled={creatingFareRule}
                       >
@@ -658,7 +1069,7 @@ export default function OperatorDashboard() {
                     </div>
                   </div>
 
-                  <div className="bg-slate-900 border border-slate-700 rounded-lg p-6">
+                  <div className="rounded-2xl border border-slate-700 bg-slate-900/70 p-6">
                     <h2 className="text-xl font-bold mb-4">Create Stop</h2>
                     <div className="space-y-4">
                       <input
@@ -666,7 +1077,7 @@ export default function OperatorDashboard() {
                         placeholder="Stop Name *"
                         value={stopForm.stop_name}
                         onChange={(e) => setStopForm({ ...stopForm, stop_name: e.target.value })}
-                        className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                        className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white placeholder-slate-500 outline-none transition focus:border-sky-500"
                       />
                       <div className="grid grid-cols-2 gap-4">
                         <input
@@ -675,7 +1086,7 @@ export default function OperatorDashboard() {
                           placeholder="Latitude *"
                           value={stopForm.latitude}
                           onChange={(e) => setStopForm({ ...stopForm, latitude: e.target.value })}
-                          className="px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                          className="rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white placeholder-slate-500 outline-none transition focus:border-sky-500"
                         />
                         <input
                           type="number"
@@ -683,11 +1094,11 @@ export default function OperatorDashboard() {
                           placeholder="Longitude *"
                           value={stopForm.longitude}
                           onChange={(e) => setStopForm({ ...stopForm, longitude: e.target.value })}
-                          className="px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                          className="rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white placeholder-slate-500 outline-none transition focus:border-sky-500"
                         />
                       </div>
                       <button
-                        className="w-full px-4 py-2 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition flex items-center justify-center gap-2"
+                        className="w-full px-4 py-2 bg-linear-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition flex items-center justify-center gap-2"
                         onClick={handleCreateStop}
                         disabled={creatingStop}
                       >
@@ -697,13 +1108,13 @@ export default function OperatorDashboard() {
                     </div>
                   </div>
 
-                  <div className="bg-slate-900 border border-slate-700 rounded-lg p-6">
+                  <div className="rounded-2xl border border-slate-700 bg-slate-900/70 p-6">
                     <h2 className="text-xl font-bold mb-4">Apply Stop To Route</h2>
                     <div className="space-y-4">
                       <select
                         value={routeStopForm.route_id}
                         onChange={(e) => setRouteStopForm({ ...routeStopForm, route_id: e.target.value })}
-                        className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:border-blue-500 focus:outline-none"
+                        className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white outline-none transition focus:border-sky-500"
                       >
                         <option value="">Select route *</option>
                         {routes.map((route) => (
@@ -713,7 +1124,7 @@ export default function OperatorDashboard() {
                       <select
                         value={routeStopForm.stop_id}
                         onChange={(e) => setRouteStopForm({ ...routeStopForm, stop_id: e.target.value })}
-                        className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:border-blue-500 focus:outline-none"
+                        className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white outline-none transition focus:border-sky-500"
                       >
                         <option value="">Select stop *</option>
                         {stops.map((stop) => (
@@ -727,7 +1138,7 @@ export default function OperatorDashboard() {
                           placeholder="Stop Order *"
                           value={routeStopForm.stop_order}
                           onChange={(e) => setRouteStopForm({ ...routeStopForm, stop_order: e.target.value })}
-                          className="px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                          className="rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white placeholder-slate-500 outline-none transition focus:border-sky-500"
                         />
                         <input
                           type="number"
@@ -736,11 +1147,11 @@ export default function OperatorDashboard() {
                           placeholder="Distance from Origin (km) *"
                           value={routeStopForm.distance_from_origin_km}
                           onChange={(e) => setRouteStopForm({ ...routeStopForm, distance_from_origin_km: e.target.value })}
-                          className="px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+                          className="rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white placeholder-slate-500 outline-none transition focus:border-sky-500"
                         />
                       </div>
                       <button
-                        className="w-full px-4 py-2 bg-gradient-to-r from-teal-600 to-teal-700 hover:from-teal-700 hover:to-teal-800 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition flex items-center justify-center gap-2"
+                        className="w-full px-4 py-2 bg-linear-to-r from-teal-600 to-teal-700 hover:from-teal-700 hover:to-teal-800 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition flex items-center justify-center gap-2"
                         onClick={handleAddStopToRoute}
                         disabled={addingStopToRoute}
                       >
@@ -750,10 +1161,10 @@ export default function OperatorDashboard() {
                     </div>
                   </div>
 
-                  <div className="bg-slate-900 border border-slate-700 rounded-lg p-6">
+                  <div className="rounded-2xl border border-slate-700 bg-slate-900/70 p-6">
                     <h2 className="text-xl font-bold mb-4">Stops ({stops.length})</h2>
                     <div className="space-y-3">
-                      {stops.length === 0 ? <p className="text-slate-500 text-center py-8">No stops yet</p> : stops.map(stop => <div key={stop.stop_id} className="p-4 bg-slate-800 border border-slate-700 rounded-lg"><h3 className="font-semibold text-white">{stop.stop_name}</h3><p className="text-sm text-slate-400 mt-1">Lat: {stop.latitude} | Lng: {stop.longitude}</p></div>)}
+                      {stops.length === 0 ? <p className="text-slate-500 text-center py-8">No stops yet. Create a stop, then attach it to a route segment.</p> : stops.map(stop => <div key={stop.stop_id} className="p-4 bg-slate-800 border border-slate-700 rounded-lg"><h3 className="font-semibold text-white">{stop.stop_name}</h3><p className="text-sm text-slate-400 mt-1">Lat: {stop.latitude} | Lng: {stop.longitude}</p></div>)}
                     </div>
                   </div>
                 </div>
@@ -762,35 +1173,35 @@ export default function OperatorDashboard() {
               {/* EMPLOYEES */}
               {activeTab === 'employees' && (
                 <div className="space-y-6">
-                  <div className="bg-slate-900 border border-slate-700 rounded-lg p-6">
+                  <div className="rounded-2xl border border-slate-700 bg-slate-900/70 p-6">
                     <h2 className="text-xl font-bold mb-4">Add Employee Account</h2>
                     <div className="space-y-4">
-                      <input type="text" placeholder="Full Name *" value={empForm.name} onChange={(e) => setEmpForm({ ...empForm, name: e.target.value })} className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none" />
-                      <input type="email" placeholder="Email *" value={empForm.email} onChange={(e) => setEmpForm({ ...empForm, email: e.target.value })} className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none" />
-                      <input type="tel" placeholder="Phone *" value={empForm.phone_num} onChange={(e) => setEmpForm({ ...empForm, phone_num: e.target.value })} className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none" />
-                      <input type="password" placeholder="Password *" value={empForm.password} onChange={(e) => setEmpForm({ ...empForm, password: e.target.value })} className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none" />
-                      <select value={empForm.role} onChange={(e) => setEmpForm({ ...empForm, role: e.target.value })} className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:border-blue-500 focus:outline-none">
+                      <input type="text" placeholder="Full Name *" value={empForm.name} onChange={(e) => setEmpForm({ ...empForm, name: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white placeholder-slate-500 outline-none transition focus:border-sky-500" />
+                      <input type="email" placeholder="Email *" value={empForm.email} onChange={(e) => setEmpForm({ ...empForm, email: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white placeholder-slate-500 outline-none transition focus:border-sky-500" />
+                      <input type="tel" placeholder="Phone *" value={empForm.phone_num} onChange={(e) => setEmpForm({ ...empForm, phone_num: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white placeholder-slate-500 outline-none transition focus:border-sky-500" />
+                      <input type="password" placeholder="Password *" value={empForm.password} onChange={(e) => setEmpForm({ ...empForm, password: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white placeholder-slate-500 outline-none transition focus:border-sky-500" />
+                      <select value={empForm.role} onChange={(e) => setEmpForm({ ...empForm, role: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white outline-none transition focus:border-sky-500">
                         <option value="driver">Driver</option>
                         <option value="conductor">Conductor</option>
                       </select>
-                      <button className="w-full px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition flex items-center justify-center gap-2" onClick={handleCreateEmployee} disabled={creatingEmp}>
+                      <button className="flex w-full items-center justify-center gap-2 rounded-xl bg-sky-600 px-4 py-2 text-white font-semibold transition hover:bg-sky-500 disabled:cursor-not-allowed disabled:opacity-50" onClick={handleCreateEmployee} disabled={creatingEmp}>
                         {creatingEmp ? <Loader size={18} className="animate-spin" /> : <Plus size={18} />}
                         Create Account
                       </button>
                     </div>
                   </div>
 
-                  <div className="bg-slate-900 border border-slate-700 rounded-lg p-6">
+                  <div className="rounded-2xl border border-slate-700 bg-slate-900/70 p-6">
                     <h2 className="text-xl font-bold mb-4">Drivers ({drivers.length})</h2>
                     <div className="space-y-3">
-                      {drivers.length === 0 ? <p className="text-slate-500 text-center py-8">No drivers yet</p> : drivers.map(d => <div key={d.company_user_id} className="p-4 bg-slate-800 border border-slate-700 rounded-lg"><h3 className="font-semibold text-white">{d.name}</h3><p className="text-sm text-slate-400 mt-1">{d.email}</p><p className="text-sm text-slate-400">{d.phone_num}</p></div>)}
+                      {drivers.length === 0 ? <p className="text-slate-500 text-center py-8">No drivers yet. Create a driver account to allow trip assignment.</p> : drivers.map(d => <div key={d.company_user_id} className="p-4 bg-slate-800 border border-slate-700 rounded-lg"><h3 className="font-semibold text-white">{d.name}</h3><p className="text-sm text-slate-400 mt-1">{d.email}</p><p className="text-sm text-slate-400">{d.phone_num}</p></div>)}
                     </div>
                   </div>
 
-                  <div className="bg-slate-900 border border-slate-700 rounded-lg p-6">
+                  <div className="rounded-2xl border border-slate-700 bg-slate-900/70 p-6">
                     <h2 className="text-xl font-bold mb-4">Conductors ({conductors.length})</h2>
                     <div className="space-y-3">
-                      {conductors.length === 0 ? <p className="text-slate-500 text-center py-8">No conductors yet</p> : conductors.map(c => <div key={c.company_user_id} className="p-4 bg-slate-800 border border-slate-700 rounded-lg"><h3 className="font-semibold text-white">{c.name}</h3><p className="text-sm text-slate-400 mt-1">{c.email}</p><p className="text-sm text-slate-400">{c.phone_num}</p></div>)}
+                      {conductors.length === 0 ? <p className="text-slate-500 text-center py-8">No conductors yet. Create a conductor account for fare collection staffing.</p> : conductors.map(c => <div key={c.company_user_id} className="p-4 bg-slate-800 border border-slate-700 rounded-lg"><h3 className="font-semibold text-white">{c.name}</h3><p className="text-sm text-slate-400 mt-1">{c.email}</p><p className="text-sm text-slate-400">{c.phone_num}</p></div>)}
                     </div>
                   </div>
                 </div>
@@ -799,10 +1210,10 @@ export default function OperatorDashboard() {
               {/* TRIPS */}
               {activeTab === 'trips' && (
                 <div className="space-y-6">
-                  <div className="bg-slate-900 border border-slate-700 rounded-lg p-6">
+                  <div className="rounded-2xl border border-slate-700 bg-slate-900/70 p-6">
                     <h2 className="text-xl font-bold mb-4">Schedule New Trip</h2>
                     <div className="space-y-4">
-                      <select value={tripForm.fleet_route_id} onChange={(e) => setTripForm({ ...tripForm, fleet_route_id: e.target.value })} className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:border-blue-500 focus:outline-none">
+                      <select value={tripForm.fleet_route_id} onChange={(e) => setTripForm({ ...tripForm, fleet_route_id: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white outline-none transition focus:border-sky-500">
                         <option value="">Select fleet route *</option>
                         {fleetRouteOptions.map((fr) => (
                           <option key={fr.fleet_route_id} value={fr.fleet_route_id}>
@@ -810,26 +1221,26 @@ export default function OperatorDashboard() {
                           </option>
                         ))}
                       </select>
-                      <input type="date" value={tripForm.trip_date} onChange={(e) => setTripForm({ ...tripForm, trip_date: e.target.value })} min={new Date().toISOString().split('T')[0]} className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:border-blue-500 focus:outline-none" />
-                      <select value={tripForm.driver_id} onChange={(e) => setTripForm({ ...tripForm, driver_id: e.target.value })} className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:border-blue-500 focus:outline-none">
+                      <input type="date" value={tripForm.trip_date} onChange={(e) => setTripForm({ ...tripForm, trip_date: e.target.value })} min={new Date().toISOString().split('T')[0]} className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white outline-none transition focus:border-sky-500" />
+                      <select value={tripForm.driver_id} onChange={(e) => setTripForm({ ...tripForm, driver_id: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white outline-none transition focus:border-sky-500">
                         <option value="">Select driver *</option>
                         {drivers.map(d => <option key={d.company_user_id} value={d.company_user_id}>{d.name}</option>)}
                       </select>
-                      <select value={tripForm.conductor_id} onChange={(e) => setTripForm({ ...tripForm, conductor_id: e.target.value })} className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:border-blue-500 focus:outline-none">
+                      <select value={tripForm.conductor_id} onChange={(e) => setTripForm({ ...tripForm, conductor_id: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white outline-none transition focus:border-sky-500">
                         <option value="">Select conductor *</option>
                         {conductors.map(c => <option key={c.company_user_id} value={c.company_user_id}>{c.name}</option>)}
                       </select>
-                      <button className="w-full px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition flex items-center justify-center gap-2" onClick={handleScheduleTrip} disabled={creatingTrip}>
+                      <button className="flex w-full items-center justify-center gap-2 rounded-xl bg-sky-600 px-4 py-2 text-white font-semibold transition hover:bg-sky-500 disabled:cursor-not-allowed disabled:opacity-50" onClick={handleScheduleTrip} disabled={creatingTrip}>
                         {creatingTrip ? <Loader size={18} className="animate-spin" /> : <Plus size={18} />}
                         Schedule Trip
                       </button>
                     </div>
                   </div>
 
-                  <div className="bg-slate-900 border border-slate-700 rounded-lg p-6">
+                  <div className="rounded-2xl border border-slate-700 bg-slate-900/70 p-6">
                     <h2 className="text-xl font-bold mb-4">Upcoming Trips ({trips.length})</h2>
                     <div className="space-y-3">
-                      {trips.length === 0 ? <p className="text-slate-500 text-center py-8">No trips scheduled</p> : trips.map(trip => <div key={trip.trip_id} className="p-4 bg-slate-800 border border-slate-700 rounded-lg"><h3 className="font-semibold text-white">{trip.trip_date} • {trip.fleet_route?.route?.route_name || `Route ${trip.fleet_route?.route_id || '-'}`}</h3><p className="text-sm text-slate-400 mt-1">Fleet: {trip.fleet_route?.fleet?.plate_number || `Fleet ${trip.fleet_route?.fleet_id || '-'}`}</p><p className="text-sm text-slate-400">Status: {trip.status}</p></div>)}
+                      {trips.length === 0 ? <p className="text-slate-500 text-center py-8">No trips scheduled. Pick a fleet route, date, and crew to publish the first trip.</p> : trips.map(trip => <div key={trip.trip_id} className="p-4 bg-slate-800 border border-slate-700 rounded-lg"><h3 className="font-semibold text-white">{formatDateTime(trip.trip_date)} • {trip.fleet_route?.route?.route_name || `Route ${trip.fleet_route?.route_id || '-'}`}</h3><p className="text-sm text-slate-400 mt-1">Fleet: {trip.fleet_route?.fleet?.plate_number || `Fleet ${trip.fleet_route?.fleet_id || '-'}`}</p><p className="text-sm text-slate-400">Status: {trip.status}</p></div>)}
                     </div>
                   </div>
                 </div>
@@ -838,59 +1249,7 @@ export default function OperatorDashboard() {
               {/* REPORTS */}
               {activeTab === 'reports' && (
                 <div className="space-y-6">
-                  <div className="bg-slate-900 border border-slate-700 rounded-lg p-6">
-                    <h2 className="text-xl font-bold mb-4">Generate Financial Report</h2>
-                    <div className="space-y-4">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-xs uppercase text-slate-500 mb-2">Start Date</label>
-                          <input
-                            type="date"
-                            value={reportRange.start_date}
-                            onChange={(e) => setReportRange(prev => ({ ...prev, start_date: e.target.value }))}
-                            max={reportDateMax}
-                            className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:border-blue-500 focus:outline-none"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs uppercase text-slate-500 mb-2">End Date</label>
-                          <input
-                            type="date"
-                            value={reportRange.end_date}
-                            onChange={(e) => setReportRange(prev => ({ ...prev, end_date: e.target.value, date: e.target.value }))}
-                            max={reportDateMax}
-                            className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:border-blue-500 focus:outline-none"
-                          />
-                        </div>
-                      </div>
-                      <select value={selectedFleet} onChange={(e) => setSelectedFleet(e.target.value)} className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:border-blue-500 focus:outline-none">
-                        <option value="">Choose a fleet</option>
-                        {fleets.map(f => <option key={f.fleet_id} value={f.fleet_id}>{f.plate_number}</option>)}
-                      </select>
-                      <button className="w-full px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition flex items-center justify-center gap-2" onClick={loadFinancialReport} disabled={loadingReport || !selectedFleet}>
-                        {loadingReport ? <Loader size={18} className="animate-spin" /> : <>📊 Load Report</>}
-                      </button>
-                    </div>
-                  </div>
-
-                  {financialData && (
-                    <div className="bg-slate-900 border border-slate-700 rounded-lg p-6">
-                      <h2 className="text-xl font-bold mb-4">Financial Report</h2>
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                        <div className="p-4 bg-slate-800 border border-slate-700 rounded-lg"><div className="text-xs uppercase text-slate-500 mb-2">Total Revenue</div><div className="text-2xl font-bold text-green-400">₱{financialData.total_revenue || '0'}</div></div>
-                        <div className="p-4 bg-slate-800 border border-slate-700 rounded-lg"><div className="text-xs uppercase text-slate-500 mb-2">Online Payments</div><div className="text-2xl font-bold text-blue-400">₱{financialData.online_payment_total || '0'}</div></div>
-                        <div className="p-4 bg-slate-800 border border-slate-700 rounded-lg"><div className="text-xs uppercase text-slate-500 mb-2">Cash Payments</div><div className="text-2xl font-bold text-amber-400">₱{financialData.cash_payment_total || '0'}</div></div>
-                        <div className="p-4 bg-slate-800 border border-slate-700 rounded-lg"><div className="text-xs uppercase text-slate-500 mb-2">Total Trips</div><div className="text-2xl font-bold text-purple-400">{financialData.total_trips || '0'}</div></div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* TRIP MANAGEMENT */}
-              {activeTab === 'trip-mgmt' && (
-                <div className="space-y-6">
-                  <div className="bg-slate-900 border border-slate-700 rounded-lg p-6">
+                  <div className="rounded-2xl border border-slate-700 bg-slate-900/70 p-6">
                     <h2 className="text-xl font-bold mb-4">Advanced Report Filters</h2>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <div>
@@ -900,7 +1259,7 @@ export default function OperatorDashboard() {
                           value={reportRange.start_date}
                           onChange={(e) => setReportRange(prev => ({ ...prev, start_date: e.target.value }))}
                           max={reportDateMax}
-                          className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:border-blue-500 focus:outline-none"
+                          className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white outline-none transition focus:border-sky-500"
                         />
                       </div>
                       <div>
@@ -910,7 +1269,7 @@ export default function OperatorDashboard() {
                           value={reportRange.end_date}
                           onChange={(e) => setReportRange(prev => ({ ...prev, end_date: e.target.value, date: e.target.value }))}
                           max={reportDateMax}
-                          className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:border-blue-500 focus:outline-none"
+                          className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white outline-none transition focus:border-sky-500"
                         />
                       </div>
                       <div>
@@ -918,50 +1277,84 @@ export default function OperatorDashboard() {
                         <select
                           value={selectedFleet}
                           onChange={(e) => setSelectedFleet(e.target.value)}
-                          className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:border-blue-500 focus:outline-none"
+                          className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white outline-none transition focus:border-sky-500"
                         >
                           <option value="">Choose a fleet</option>
-                          {fleets.map(f => <option key={f.fleet_id} value={f.fleet_id}>{f.plate_number}</option>)}
+                          {fleets.map((f) => <option key={f.fleet_id} value={f.fleet_id}>{f.plate_number}</option>)}
                         </select>
                       </div>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                    <button onClick={() => loadAdvancedReport('financial')} className="p-4 bg-slate-900 border border-slate-700 rounded-lg hover:border-blue-500 transition">
-                      <div className="text-2xl mb-2">💰</div>
-                      <div className="font-semibold">Financial Report</div>
-                    </button>
-                    <button onClick={() => loadAdvancedReport('revenue')} className="p-4 bg-slate-900 border border-slate-700 rounded-lg hover:border-blue-500 transition">
-                      <div className="text-2xl mb-2">📊</div>
-                      <div className="font-semibold">Revenue by Route</div>
-                    </button>
-                    <button onClick={() => loadAdvancedReport('adherence')} className="p-4 bg-slate-900 border border-slate-700 rounded-lg hover:border-blue-500 transition">
-                      <div className="text-2xl mb-2">✅</div>
-                      <div className="font-semibold">Route Adherence</div>
-                    </button>
-                    <button onClick={() => loadAdvancedReport('occupancy')} className="p-4 bg-slate-900 border border-slate-700 rounded-lg hover:border-blue-500 transition">
-                      <div className="text-2xl mb-2">📈</div>
-                      <div className="font-semibold">Occupancy Trends</div>
-                    </button>
-                    <button onClick={() => loadAdvancedReport('daily')} className="p-4 bg-slate-900 border border-slate-700 rounded-lg hover:border-blue-500 transition">
-                      <div className="text-2xl mb-2">📅</div>
-                      <div className="font-semibold">Daily Summary</div>
-                    </button>
-                    <button onClick={() => loadAdvancedReport('channels')} className="p-4 bg-slate-900 border border-slate-700 rounded-lg hover:border-blue-500 transition">
-                      <div className="text-2xl mb-2">💳</div>
-                      <div className="font-semibold">Payment Channels</div>
-                    </button>
+                  <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+                    {REPORT_ACTIONS.map((action) => {
+                      const Icon = action.icon;
+                      const isActive = reportType === action.id;
+                      return (
+                        <button
+                          key={action.id}
+                          onClick={() => loadAdvancedReport(action.id)}
+                          className={[
+                            'group relative overflow-hidden rounded-xl border bg-slate-900 p-4 text-left transition',
+                            isActive
+                              ? 'border-sky-500 shadow-[0_0_0_1px_rgba(56,189,248,0.25)]'
+                              : 'border-slate-700 hover:border-slate-500',
+                          ].join(' ')}
+                        >
+                          <span className="absolute inset-x-0 top-0 h-1 bg-linear-to-r from-sky-500 via-cyan-400 to-transparent" aria-hidden="true" />
+                          <div className="mb-2 inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-700 bg-slate-950">
+                            <Icon className={`h-5 w-5 ${action.color}`} />
+                          </div>
+                          <div className="font-semibold text-slate-100">{action.label}</div>
+                          <div className="mt-1 text-xs text-slate-500">Generate and render this report in table/cards below.</div>
+                        </button>
+                      );
+                    })}
                   </div>
 
                   {Object.keys(advancedReports).length > 0 && (
-                    <div className="bg-slate-900 border border-slate-700 rounded-lg p-6">
-                      <h2 className="text-xl font-bold mb-4">{reportType.charAt(0).toUpperCase() + reportType.slice(1)} Report</h2>
-                      <pre className="bg-slate-800 p-4 rounded-lg text-sm overflow-x-auto text-slate-300">
-                        {JSON.stringify(advancedReports[reportType], null, 2)}
-                      </pre>
+                    <div className="rounded-2xl border border-slate-700 bg-slate-900/70 p-6">
+                      <div className="mb-4 flex items-center justify-between gap-3">
+                        <div>
+                          <h2 className="mb-1 text-xl font-bold">{reportType.charAt(0).toUpperCase() + reportType.slice(1)} Report</h2>
+                          <p className="text-sm text-slate-500">Latest generated payload for this metric group.</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={printReportsPdf}
+                          className="rounded-xl border border-slate-600 bg-slate-950 px-3 py-2 text-xs font-semibold text-slate-200 transition hover:border-slate-400"
+                        >
+                          Print PDF
+                        </button>
+                      </div>
+                      {renderReportBody()}
                     </div>
                   )}
+                </div>
+              )}
+
+              {/* TRIP MANAGEMENT */}
+              {activeTab === 'trip-mgmt' && (
+                <div className="space-y-6">
+                  <div className="rounded-2xl border border-slate-700 bg-slate-900/70 p-6">
+                    <h2 className="text-xl font-bold mb-3">Trip Management</h2>
+                    <p className="text-sm text-slate-400">Use the Schedule Trips tab to create trips and assign crews. Use Advanced Reports for analytics.</p>
+                  </div>
+                  <div className="rounded-2xl border border-slate-700 bg-slate-900/70 p-6">
+                    <h3 className="text-lg font-semibold mb-3">Recent Trips</h3>
+                    <div className="space-y-3">
+                      {trips.length === 0 ? (
+                        <p className="text-slate-500 text-center py-8">No trips available.</p>
+                      ) : (
+                        trips.slice(0, 8).map((item) => (
+                          <div key={item.trip_id} className="rounded-lg border border-slate-700 bg-slate-800 p-3">
+                            <div className="font-semibold text-white">Trip #{item.trip_id} • {item.fleet_route?.route?.route_name || `Route ${item.fleet_route?.route_id || '-'}`}</div>
+                            <div className="mt-1 text-sm text-slate-400">Date: {formatDateTime(item.trip_date)} • Status: {item.status}</div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
@@ -971,3 +1364,4 @@ export default function OperatorDashboard() {
     </div>
   );
 }
+

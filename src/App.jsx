@@ -1,26 +1,38 @@
+import { Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import DefaultLayout from './layouts/default';
-import PassengerBaseRouter from './pages/passenger';
-import EmployeeBaseRouter from './pages/employee';
-import LandingPage from './components/Passenger/LandingPage/LandingPage';
-import CheckoutReturn from './components/Passenger/CheckoutReturn/CheckoutReturn';
+
+const DefaultLayout = lazy(() => import('./layouts/default'));
+const PassengerBaseRouter = lazy(() => import('./pages/passenger'));
+const EmployeeBaseRouter = lazy(() => import('./pages/employee'));
+const LandingPage = lazy(() => import('./components/Passenger/LandingPage/LandingPage'));
+const CheckoutReturn = lazy(() => import('./components/Passenger/CheckoutReturn/CheckoutReturn'));
+
+function RouteFallback() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-slate-950 px-4 text-slate-300">
+      <div className="rounded-xl border border-slate-800 bg-slate-900/70 px-4 py-3 text-sm">Loading transit view...</div>
+    </div>
+  );
+}
 
 export default function App() {
   return (
     <BrowserRouter>
-      <Routes>
-        <Route element={<DefaultLayout />}>
-          <Route path="/" element={<LandingPage />} />
-        </Route>
+      <Suspense fallback={<RouteFallback />}>
+        <Routes>
+          <Route element={<DefaultLayout />}>
+            <Route path="/" element={<LandingPage />} />
+          </Route>
 
-        <Route path="/passenger/*" element={<PassengerBaseRouter />} />
-        <Route path="/checkout/success" element={<CheckoutReturn />} />
-        <Route path="/checkout/cancel" element={<CheckoutReturn />} />
-        <Route path="/employee/*" element={<EmployeeBaseRouter />} />
-        <Route path="/staff/*" element={<Navigate to="/employee/login" replace />} />
+          <Route path="/passenger/*" element={<PassengerBaseRouter />} />
+          <Route path="/checkout/success" element={<CheckoutReturn />} />
+          <Route path="/checkout/cancel" element={<CheckoutReturn />} />
+          <Route path="/employee/*" element={<EmployeeBaseRouter />} />
+          <Route path="/staff/*" element={<Navigate to="/employee/login" replace />} />
 
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Suspense>
     </BrowserRouter>
   );
 }

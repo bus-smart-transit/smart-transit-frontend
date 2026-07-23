@@ -248,6 +248,82 @@
   margin-right: 5px;
 }
 
+.buy-custom-dropoff-tools {
+  display: grid;
+  gap: 8px;
+}
+
+.buy-inline-location-btn {
+  border: 1px solid #bfd8f4;
+  border-radius: 8px;
+  min-height: 36px;
+  padding: 8px 10px;
+  font-size: 0.78rem;
+  background: #eef5ff;
+  color: #104372;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.buy-inline-location-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.buy-dropoff-map-wrap {
+  border: 1px solid #d2e4f8;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #f8fbff;
+}
+
+.buy-dropoff-map-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 10px;
+  border-bottom: 1px solid #d9e8f8;
+}
+
+.buy-dropoff-map-head strong {
+  font-size: 0.74rem;
+  color: #103a61;
+}
+
+.buy-dropoff-map-head span {
+  font-size: 0.7rem;
+  color: #5e7d98;
+}
+
+.buy-dropoff-map {
+  width: 100%;
+  height: 210px;
+}
+
+.buy-pinned-location-display {
+  border: 1px solid #d2e4f8;
+  border-radius: 8px;
+  padding: 9px 10px;
+  background: #f8fbff;
+  display: grid;
+  gap: 3px;
+}
+
+.buy-pinned-location-display span {
+  font-size: 0.72rem;
+  color: #5e7d98;
+  font-weight: 700;
+}
+
+.buy-pinned-location-display strong {
+  font-size: 0.8rem;
+  color: #113558;
+}
+
 .buy-summary-grid {
   display: grid;
   gap: 7px;

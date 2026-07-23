@@ -52,17 +52,16 @@ export function AuthProvider({ role = "passenger", children }) {
   );
 
   const logout = useCallback(async () => {
-    if (activeService) {
-      try {
-        await activeService.logout();
-      } catch (err) {
-        console.error(`Logout failed for role: ${role}`, err);
-      }
-    }
     localStorage.removeItem(tokenKey);
     sessionStorage.removeItem(tokenKey);
     setUser(null);
     setIsAuthenticated(false);
+
+    if (activeService) {
+      activeService.logout().catch((err) => {
+        console.error(`Logout failed for role: ${role}`, err);
+      });
+    }
   }, [activeService, tokenKey, role]);
 
   return (

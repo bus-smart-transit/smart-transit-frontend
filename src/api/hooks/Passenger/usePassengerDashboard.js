@@ -1,0 +1,332 @@
+import { useCallback, useEffect, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useAuth } from '../useAuth';
+import PassengerService from '../../PassengerService/PassengerService';
+
+const PROTECTED_TABS = new Set(['tickets', 'rewards', 'transactions', 'profile']);
+
+const toDate = (value) => {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const pickStopName = (stopLike) => {
+  if (!stopLike) return null;
+  if (typeof stopLike === 'string') return stopLike;
+  return stopLike.stop_name || stopLike.name || null;
+};
+
+const getRouteOriginFallback = (ticket) => (
+  ticket?.trip?.fleet_route?.route?.origin ||
+  ticket?.trip?.fleetRoute?.route?.origin ||
+  null
+);
+
+const getRouteDestinationFallback = (ticket) => (
+  ticket?.trip?.fleet_route?.route?.destination ||
+  ticket?.trip?.fleetRoute?.route?.destination ||
+  null
+);
+
+export default function usePassengerDashboard({ preloadMapView }) {
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { logout, user, isAuthenticated } = useAuth();
+
+  const [activeTab, setActiveTab] = useState('buy');
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [profile, setProfile] = useState(null);
+  const [tickets, setTickets] = useState([]);
+  const [transactions, setTransactions] = useState([]);
+  const [rewards, setRewards] = useState([]);
+  const [isLoadingPrivate, setIsLoadingPrivate] = useState(false);
+  const [privateError, setPrivateError] = useState('');
+  const [lastSync, setLastSync] = useState(null);
+  const [paymentNotice, setPaymentNotice] = useState('');
+  const [ticketModalOpen, setTicketModalOpen] = useState(false);
+  const [selectedTicket, setSelectedTicket] = useState(null);
+  const [selectedTicketQr, setSelectedTicketQr] = useState(null);
+  const [loadingTicketQr, setLoadingTicketQr] = useState(false);
+
+  const formatDateTime = useCallback((value) => {
+    const date = toDate(value);
+    if (!date) return '-';
+    const yyyy = date.getFullYear();
+    const mm = String(date.getMonth() + 1).padStart(2, '0');
+    const dd = String(date.getDate()).padStart(2, '0');
+    const hh = String(date.getHours()).padStart(2, '0');
+    const min = String(date.getMinutes()).padStart(2, '0');
+    return `${yyyy}/${mm}/${dd} - ${hh}:${min}`;
+  }, []);
+
+  const getOriginLabel = useCallback((ticket) => (
+    pickStopName(ticket?.origin_stop) ||
+    pickStopName(ticket?.originStop) ||
+    ticket?.origin ||
+    getRouteOriginFallback(ticket) ||
+    'Route unavailable'
+  ), []);
+
+  const getDestinationLabel = useCallback((ticket) => (
+    pickStopName(ticket?.destination_stop) ||
+    pickStopName(ticket?.destinationStop) ||
+    ticket?.destination ||
+    getRouteDestinationFallback(ticket) ||
+    'Route unavailable'
+  ), []);
+
+  const clearPrivateData = useCallback(() => {
+    setIsLoadingPrivate(false);
+    setPrivateError('');
+    setProfile(null);
+    setTickets([]);
+    setTransactions([]);
+    setRewards([]);
+    setLastSync(null);
+    setTicketModalOpen(false);
+    setSelectedTicket(null);
+    setSelectedTicketQr(null);
+  }, []);
+
+  const loadPrivateData = useCallback(async () => {
+    if (!isAuthenticated) {
+      setProfile(null);
+      setTickets([]);
+      setTransactions([]);
+      setRewards([]);
+      setLastSync(null);
+      return;
+    }
+
+    setIsLoadingPrivate(true);
+    setPrivateError('');
+
+    const [profileRes, ticketsRes, rewardsRes, paymentsRes] = await Promise.allSettled([
+      PassengerService.getProfile(),
+      PassengerService.getTickets(),
+      PassengerService.getRewardsHistory(),
+      PassengerService.getPaymentHistory(),
+    ]);
+
+    const failures = [];
+
+    if (profileRes.status === 'fulfilled') {
+      setProfile(profileRes.value?.data ?? profileRes.value ?? null);
+    } else {
+      setProfile(null);
+      failures.push('Profile endpoint failed');
+    }
+
+    if (ticketsRes.status === 'fulfilled') {
+      const ticketList = ticketsRes.value?.data ?? ticketsRes.value ?? [];
+      setTickets(Array.isArray(ticketList) ? ticketList : []);
+    } else {
+      setTickets([]);
+      failures.push('Tickets endpoint failed');
+    }
+
+    if (rewardsRes.status === 'fulfilled') {
+      const rewardList = rewardsRes.value?.data ?? rewardsRes.value ?? [];
+      setRewards(Array.isArray(rewardList) ? rewardList : []);
+    } else {
+      setRewards([]);
+      failures.push('Rewards endpoint failed');
+    }
+
+    if (paymentsRes.status === 'fulfilled') {
+      const paymentList = paymentsRes.value?.data ?? paymentsRes.value ?? [];
+      setTransactions(Array.isArray(paymentList) ? paymentList : []);
+    } else {
+      setTransactions([]);
+      failures.push('Payments endpoint failed');
+    }
+
+    if (failures.length > 0) {
+      setPrivateError(failures.join(' | '));
+    }
+
+    setLastSync(new Date());
+    setIsLoadingPrivate(false);
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (isAuthenticated) {
+        void loadPrivateData();
+      } else {
+        clearPrivateData();
+      }
+    }, 0);
+
+    return () => clearTimeout(timer);
+  }, [isAuthenticated, loadPrivateData, clearPrivateData]);
+
+  useEffect(() => {
+    const paymentStatus = searchParams.get('payment');
+    if (!paymentStatus) {
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      if (paymentStatus === 'success') {
+        setPaymentNotice('Payment successful. You have been redirected back.');
+        if (isAuthenticated) {
+          void loadPrivateData();
+        }
+      } else if (paymentStatus === 'cancel') {
+        setPaymentNotice('Payment was cancelled. You can try checkout again.');
+      }
+
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.delete('payment');
+      setSearchParams(nextParams, { replace: true });
+    }, 0);
+
+    return () => clearTimeout(timer);
+  }, [isAuthenticated, loadPrivateData, searchParams, setSearchParams]);
+
+  const handleLogout = useCallback(async () => {
+    void logout();
+    navigate('/', { replace: true });
+  }, [logout, navigate]);
+
+  const closeTicketModal = useCallback(() => {
+    setTicketModalOpen(false);
+    setSelectedTicket(null);
+    setSelectedTicketQr(null);
+  }, []);
+
+  const openTicketModal = useCallback(async (ticket) => {
+    setSelectedTicket(ticket);
+    setSelectedTicketQr(null);
+    setTicketModalOpen(true);
+
+    if (!ticket?.ticket_uuid) {
+      return;
+    }
+
+    setLoadingTicketQr(true);
+    try {
+      const qrRes = await PassengerService.getTicketQR(ticket.ticket_uuid);
+      setSelectedTicketQr(qrRes?.data ?? qrRes ?? null);
+    } catch {
+      setSelectedTicketQr(null);
+    } finally {
+      setLoadingTicketQr(false);
+    }
+  }, []);
+
+  const printSelectedTicket = useCallback(() => {
+    if (!selectedTicket) return;
+
+    const qrUrl = selectedTicketQr?.qr_url || '';
+    const popup = window.open('', '_blank', 'width=900,height=700');
+    if (!popup) return;
+
+    popup.document.write(`
+      <html>
+        <head>
+          <title>Smart Transit Ticket</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 18px; color: #0f172a; background: #f8fafc; }
+            .ticket { max-width: 760px; border: 1px solid #d6dbe5; border-radius: 12px; overflow: hidden; background: #fff; }
+            .head { background: linear-gradient(145deg, #2ab557, #31c964); color: #fff; padding: 18px; }
+            .head h1 { margin: 0; font-size: 20px; }
+            .head h2 { margin: 4px 0 0; font-size: 32px; line-height: 1.05; }
+            .strip { margin-top: 14px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+            .strip span { display: block; font-size: 10px; text-transform: uppercase; opacity: 0.85; }
+            .strip strong { display: block; margin-top: 2px; font-size: 13px; }
+            .body { padding: 14px; display: grid; grid-template-columns: 160px 1fr; gap: 14px; border-top: 2px dashed #d6dbe5; }
+            .qr-wrap { width: 160px; height: 160px; border: 1px solid #d7dee8; border-radius: 10px; display: grid; place-items: center; background: #fff; }
+            img { width: 146px; height: 146px; object-fit: contain; }
+            .meta { display: grid; gap: 8px; }
+            .meta div { display: flex; justify-content: space-between; border-bottom: 1px solid #ebeff5; padding-bottom: 6px; }
+            .meta .k { color: #64748b; font-size: 12px; }
+            .meta .v { color: #0f172a; font-size: 13px; font-weight: 700; }
+            .foot { margin: 0 14px 14px; border: 1px solid #9dd7af; background: #eaf9f0; color: #166534; border-radius: 10px; padding: 9px 10px; font-size: 12px; text-align: center; font-weight: 700; }
+          </style>
+        </head>
+        <body>
+          <article class="ticket">
+            <header class="head">
+              <h1>${getOriginLabel(selectedTicket)}</h1>
+              <h2>${getDestinationLabel(selectedTicket)}</h2>
+              <div class="strip">
+                <div><span>Departure</span><strong>${formatDateTime(selectedTicket.valid_from ?? selectedTicketQr?.valid_from)}</strong></div>
+                <div><span>Seat</span><strong>${selectedTicket.seat_type || '-'}</strong></div>
+                <div><span>Route</span><strong>${getOriginLabel(selectedTicket)} to ${getDestinationLabel(selectedTicket)}</strong></div>
+              </div>
+            </header>
+            <div class="body">
+              <div class="qr-wrap">${qrUrl ? `<img src="${qrUrl}" alt="Ticket QR" />` : '<span>QR unavailable</span>'}</div>
+              <div class="meta">
+                <div><span class="k">Valid</span><span class="v">${formatDateTime(selectedTicket.valid_from ?? selectedTicketQr?.valid_from)}</span></div>
+                <div><span class="k">Expires</span><span class="v">${formatDateTime(selectedTicket.expires_at ?? selectedTicketQr?.expires_at)}</span></div>
+                <div><span class="k">Status</span><span class="v">${selectedTicket.status || '-'}</span></div>
+                <div><span class="k">Fare Paid</span><span class="v">PHP ${Number(selectedTicket.amount ?? selectedTicket.final_amount ?? 0).toFixed(2)}</span></div>
+              </div>
+            </div>
+            <div class="foot">Valid Ticket — Present QR code to board</div>
+          </article>
+          </div>
+          <script>window.onload = function () { window.print(); };</script>
+        </body>
+      </html>
+    `);
+    popup.document.close();
+  }, [formatDateTime, getDestinationLabel, getOriginLabel, selectedTicket, selectedTicketQr]);
+
+  const handleTabChange = useCallback((item) => {
+    if (item.key === 'map') {
+      void preloadMapView();
+    }
+
+    if (item.protected && !isAuthenticated) {
+      navigate('/passenger/login');
+      return;
+    }
+
+    if (item.key === 'transactions' && isAuthenticated) {
+      void loadPrivateData();
+    }
+
+    setActiveTab(item.key);
+    setMenuOpen(false);
+  }, [isAuthenticated, loadPrivateData, navigate, preloadMapView]);
+
+  const points = Number(profile?.reward_points ?? user?.reward_points ?? 0).toFixed(2);
+  const visibleTab = !isAuthenticated && PROTECTED_TABS.has(activeTab) ? 'buy' : activeTab;
+
+  return {
+    activeTab,
+    closeTicketModal,
+    formatDateTime,
+    getDestinationLabel,
+    getOriginLabel,
+    handleLogout,
+    handleTabChange,
+    isAuthenticated,
+    isLoadingPrivate,
+    lastSync,
+    loadPrivateData,
+    loadingTicketQr,
+    menuOpen,
+    navigate,
+    paymentNotice,
+    points,
+    privateError,
+    profile,
+    rewards,
+    selectedTicket,
+    selectedTicketQr,
+    setMenuOpen,
+    ticketModalOpen,
+    tickets,
+    transactions,
+    user,
+    visibleTab,
+    openTicketModal,
+    printSelectedTicket,
+  };
+}

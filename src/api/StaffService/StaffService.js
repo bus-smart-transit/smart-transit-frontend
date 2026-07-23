@@ -116,6 +116,10 @@ class StaffService extends BaseService {
     return await this.request('/operator/routes', 'GET');
   }
 
+  async createOperatorRoute(routeData) {
+    return await this.request('/operator/routes', 'POST', routeData);
+  }
+
   async getOperatorRoute(routeId) {
     return await this.request(`/operator/routes/${routeId}`, 'GET');
   }

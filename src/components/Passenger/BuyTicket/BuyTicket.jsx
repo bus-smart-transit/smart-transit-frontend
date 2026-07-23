@@ -1,217 +1,59 @@
-import { useState, useEffect, useCallback } from 'react';
-import { ShoppingCart, MapPin, Clock, Smartphone, CreditCard, AlertCircle, CheckCircle, Loader } from 'lucide-react';
-import PassengerService from '../../../api/PassengerService/PassengerService';
+import { MapPin, Clock, Smartphone, CreditCard, AlertCircle, CheckCircle, Loader, LocateFixed } from 'lucide-react';
+import useBuyTicket from '../../../api/hooks/Passenger/useBuyTicket';
+import TicketCard from '../Ticket/TicketCard';
 import './BuyTicketPortal.css';
 
 export default function BuyTicket({ onTicketPurchased }) {
-  const [trips, setTrips] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [fare, setFare] = useState(null);
-  const [fareQuoteKey, setFareQuoteKey] = useState('');
-  const [locatingOrigin, setLocatingOrigin] = useState(false);
-  const [destinationQuery, setDestinationQuery] = useState('');
-  const [isGuestCheckout] = useState(() => !(localStorage.getItem('passenger_token') || sessionStorage.getItem('passenger_token')));
-
-  const [form, setForm] = useState({
-    trip_id: '',
-    seat_type: 'seated',
-    payment_method: 'online',
-    payment_channel: 'gcash',
-    guest_email: '',
-    origin_stop_id: '',
-    destination_stop_id: '',
-  });
-
-  const loadTrips = useCallback(async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const res = await PassengerService.getAvailableTrips();
-      setTrips(res?.data ?? []);
-    } catch (err) {
-      setError(err.message || 'Failed to load available trips');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      void loadTrips();
-    }, 0);
-
-    return () => clearTimeout(timer);
-  }, [loadTrips]);
-
-  const handleChange = (field, value) => {
-    setForm(p => ({ ...p, [field]: value }));
-    setError('');
-    setSuccess('');
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError('');
-    setSuccess('');
-    setIsSubmitting(true);
-
-    try {
-      if (!form.trip_id) {
-        throw new Error('Please select a trip');
-      }
-      if (!form.origin_stop_id || !form.destination_stop_id) {
-        throw new Error('Please select origin and destination stops');
-      }
-      if (form.payment_method === 'online' && !canProceedToOnlinePayment) {
-        throw new Error('Please get a valid fare quote first before proceeding to online payment');
-      }
-
-      const payload = {
-        items: [
-          {
-            trip_id: parseInt(form.trip_id),
-            seat_type: form.seat_type,
-            origin_stop_id: parseInt(form.origin_stop_id),
-            destination_stop_id: parseInt(form.destination_stop_id),
-          },
-        ],
-      };
-
-      if (form.payment_method === 'online') {
-        if (isGuestCheckout && !form.guest_email) {
-          throw new Error('Guest email is required for checkout');
-        }
-        payload.payment_channel = form.payment_channel;
-        if (isGuestCheckout) payload.guest_email = form.guest_email;
-        const res = await PassengerService.checkoutOnline(payload);
-        const checkoutUrl =
-          res?.data?.checkout_url ||
-          res?.checkout_url ||
-          null;
-
-        if (!checkoutUrl) {
-          throw new Error('Checkout URL was not returned by the payment gateway. Please try again.');
-        }
-
-        setSuccess('Redirecting to secure checkout...');
-        onTicketPurchased?.();
-        window.location.assign(checkoutUrl);
-        return;
-      } else {
-        setError('Onsite checkout is only available at the terminal with a conductor');
-      }
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const selectedTrip = trips.find(t => t.trip_id === parseInt(form.trip_id));
-  const selectedRoute = selectedTrip?.fleet_route?.route || null;
-  const selectedStops = selectedRoute?.routeStops || selectedRoute?.route_stops || [];
-  const currentFareQuoteKey = [
-    form.trip_id,
-    selectedRoute?.route_id || '',
-    selectedTrip?.fleet_route?.fleet_id || '',
-    form.origin_stop_id,
-    form.destination_stop_id,
-    form.seat_type,
-  ].join('|');
-  const canProceedToOnlinePayment = fare != null && fareQuoteKey === currentFareQuoteKey;
-
-  const stopLabel = (stop) => stop?.stop?.stop_name || stop?.stop_name || `Stop ${stop?.stop_id}`;
-
-  const findNearestStop = (lat, lng, stops) => {
-    const withCoords = stops
-      .map((s) => {
-        const sLat = Number(s?.stop?.latitude ?? s?.latitude);
-        const sLng = Number(s?.stop?.longitude ?? s?.longitude);
-        return Number.isFinite(sLat) && Number.isFinite(sLng)
-          ? { stop: s, lat: sLat, lng: sLng }
-          : null;
-      })
-      .filter(Boolean);
-
-    if (withCoords.length === 0) return null;
-
-    let nearest = withCoords[0];
-    let minDist = Number.POSITIVE_INFINITY;
-
-    for (const item of withCoords) {
-      const dLat = lat - item.lat;
-      const dLng = lng - item.lng;
-      const dist = dLat * dLat + dLng * dLng;
-      if (dist < minDist) {
-        minDist = dist;
-        nearest = item;
-      }
-    }
-
-    return nearest.stop;
-  };
-
-  const useCurrentLocationAsOrigin = () => {
-    if (!selectedStops.length || !navigator.geolocation) {
-      setError('Current location is unavailable on this device/browser');
-      return;
-    }
-
-    setLocatingOrigin(true);
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const nearest = findNearestStop(pos.coords.latitude, pos.coords.longitude, selectedStops);
-        if (!nearest) {
-          setError('Stops have no GPS coordinates. Please select origin manually.');
-          setLocatingOrigin(false);
-          return;
-        }
-        handleChange('origin_stop_id', String(nearest.stop_id));
-        setLocatingOrigin(false);
-      },
-      () => {
-        setError('Unable to get your current location. Please allow location access.');
-        setLocatingOrigin(false);
-      },
-      { enableHighAccuracy: true, timeout: 12000 }
-    );
-  };
-
-  // Calculate fare when stops are selected
-  useEffect(() => {
-    const calculateFare = async () => {
-      if (form.origin_stop_id && form.destination_stop_id && form.trip_id) {
-        try {
-          const routeId = selectedRoute?.route_id;
-          const fleetId = selectedTrip?.fleet_route?.fleet_id;
-
-          if (!routeId || !fleetId) {
-            setFare(null);
-            return;
-          }
-
-          const res = await PassengerService.quoteFare({
-            route_id: routeId,
-            fleet_id: fleetId,
-            origin_stop_id: parseInt(form.origin_stop_id),
-            destination_stop_id: parseInt(form.destination_stop_id),
-            seat_type: form.seat_type,
-          });
-          const amount = res?.data?.amount ?? null;
-          setFare(amount);
-          setFareQuoteKey(amount != null ? currentFareQuoteKey : '');
-        } catch (err) {
-          setFare(null);
-          setFareQuoteKey('');
-          setError(err?.message || 'Failed to compute fare');
-        }
-      }
-    };
-    calculateFare();
-  }, [form.origin_stop_id, form.destination_stop_id, form.trip_id, form.seat_type, selectedRoute, selectedTrip, currentFareQuoteKey]);
+  const {
+    availableRewardPoints,
+    canProceedToOnlinePayment,
+    checkoutStatus,
+    destinationPinnedLabel,
+    destinationQuery,
+    dropoffMode,
+    error,
+    fare,
+    form,
+    formErrors,
+    formatDateTime,
+    grossTotal,
+    handleChange,
+    handleDestinationStopChange,
+    handleDropoffModeChange,
+    handleSubmit,
+    handleTripSelect,
+    hasRewardPoints,
+    hasBookNowOption,
+    isRewardRequestInsufficient,
+    isGuestCheckout,
+    isSubmitting,
+    loading,
+    loadingQr,
+    loadingRewards,
+    locatingDropoff,
+    locatingOrigin,
+    mapContainerRef,
+    maxRedeemableRewardPoints,
+    minBookingDate,
+    netTotal,
+    originPinnedLabel,
+    pinCurrentLocationAsOrigin,
+    printQrTicket,
+    qrTickets,
+    routeWarning,
+    rewardPointsToApply,
+    selectedRoute,
+    selectedStops,
+    selectedTrip,
+    setDestinationQuery,
+    stopLabel,
+    success,
+    showingSuggestedTrips,
+    totalTickets,
+    trips,
+    unitFare,
+    useCurrentLocationAsOrigin,
+  } = useBuyTicket({ onTicketPurchased });
 
   return (
     <div className="buy-portal">
@@ -237,34 +79,101 @@ export default function BuyTicket({ onTicketPurchased }) {
         </div>
       )}
 
+      {checkoutStatus === 'pending' && (
+        <section className="buy-panel" style={{ marginBottom: '16px' }}>
+          <div className="buy-panel-head">
+            <h2>Checkout in Progress</h2>
+          </div>
+          <p style={{ color: '#94a3b8', fontSize: '0.9rem' }}>
+            Complete the payment in the newly opened tab. This page will update with success or failure automatically.
+          </p>
+        </section>
+      )}
+
+      {checkoutStatus === 'success' && (
+        <section className="buy-panel" style={{ marginBottom: '16px' }}>
+          <div className="buy-panel-head">
+            <h2>Your Ticket QR</h2>
+          </div>
+
+          {loadingQr ? (
+            <div className="buy-loading"><Loader size={16} /> Loading ticket QR...</div>
+          ) : qrTickets.length === 0 ? (
+            <p className="buy-empty">Payment succeeded. Ticket QR will appear on your scheduled trip date.</p>
+          ) : (
+            <div className="buy-trip-list">
+              {qrTickets.map((ticket, idx) => (
+                <div key={ticket.ticket_uuid || idx}>
+                  <TicketCard
+                    fromLabel={selectedRoute?.origin || 'Ecoland Terminal'}
+                    toLabel={selectedRoute?.destination || ticket.destination || 'Tagum Terminal'}
+                    departureLabel={formatDateTime(ticket.valid_from)}
+                    seatLabel={ticket.seat_type || '-'}
+                    routeLabel={`${selectedRoute?.origin || '-'} to ${selectedRoute?.destination || ticket.destination || '-'}`}
+                    qrUrl={ticket.qr_url}
+                    statusLabel="Valid"
+                    amountLabel={`PHP ${Number(ticket.amount || 0).toFixed(2)}`}
+                    validLabel={formatDateTime(ticket.valid_from)}
+                    expiresLabel={formatDateTime(ticket.expires_at)}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => printQrTicket(ticket, idx)}
+                    disabled={!ticket.qr_url}
+                    style={{
+                      marginTop: '8px',
+                      border: '1px solid rgba(148,163,184,0.4)',
+                      borderRadius: '8px',
+                      padding: '6px 10px',
+                      fontSize: '0.75rem',
+                      color: ticket.qr_url ? '#e2e8f0' : '#64748b',
+                      background: ticket.qr_url ? 'rgba(15,23,42,0.5)' : 'rgba(30,41,59,0.3)',
+                      cursor: ticket.qr_url ? 'pointer' : 'not-allowed',
+                    }}
+                  >
+                    Print QR (PDF)
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
       <form onSubmit={handleSubmit} className="buy-form">
         <section className="buy-search-card">
           <h3>Book a Seat</h3>
           <p>Sign in is required only for history and rewards.</p>
           <div className="buy-fields-row">
-            <select
-              value={form.origin_stop_id}
-              onChange={e => handleChange('origin_stop_id', e.target.value)}
-              disabled={!selectedStops.length}
-            >
-              <option value="">From</option>
-              {selectedStops.map((stop) => (
-                <option key={`origin-${stop.stop_id}`} value={stop.stop_id}>{stopLabel(stop)}</option>
-              ))}
-            </select>
+            <input
+              type="text"
+              value={form.search_from || ''}
+              onChange={(e) => handleChange('search_from', e.target.value)}
+              placeholder="From"
+            />
 
             <input
               type="text"
               list="destination-stop-list"
-              value={destinationQuery}
+              value={form.search_to || (dropoffMode === 'custom' ? (destinationPinnedLabel || '') : destinationQuery)}
               onChange={(e) => {
+                handleChange('search_to', e.target.value);
+                if (dropoffMode === 'custom') return;
                 const value = e.target.value;
                 setDestinationQuery(value);
-                const matched = selectedStops.find((s) => stopLabel(s).toLowerCase() === value.toLowerCase());
-                if (matched) handleChange('destination_stop_id', String(matched.stop_id));
+                if (dropoffMode === 'stop') {
+                  const matched = selectedStops.find((stop) => stopLabel(stop).toLowerCase() === value.toLowerCase());
+                  if (matched) handleChange('destination_stop_id', String(matched.stop_id));
+                }
               }}
-              placeholder="To"
-              disabled={!selectedStops.length}
+              readOnly={dropoffMode === 'custom'}
+              placeholder={dropoffMode === 'stop' ? 'To' : 'Pin destination on map below'}
+            />
+
+            <input
+              type="date"
+              value={form.search_date || ''}
+              onChange={(e) => handleChange('search_date', e.target.value)}
             />
 
             <datalist id="destination-stop-list">
@@ -275,25 +184,22 @@ export default function BuyTicket({ onTicketPurchased }) {
 
             <select
               value={form.trip_id}
-              onChange={e => {
-                handleChange('trip_id', e.target.value);
-                setDestinationQuery('');
-                handleChange('origin_stop_id', '');
-                handleChange('destination_stop_id', '');
-              }}
+              onChange={(e) => handleTripSelect(e.target.value)}
             >
               <option value="">Select Trip</option>
               {trips.map((trip) => (
                 <option key={trip.trip_id} value={trip.trip_id}>
-                  {(trip.fleet_route?.route?.route_name || `Trip ${trip.trip_id}`)}
+                  {(trip.fleet_route?.fleet?.plate_number ? `Fleet ${trip.fleet_route.fleet.plate_number}` : `Fleet ${trip.fleet_route?.fleet_id || '-'}`)}
+                  {` • ${trip.fleet_route?.route?.origin || '-'} to ${trip.fleet_route?.route?.destination || '-'}`}
                 </option>
               ))}
             </select>
 
-            <button type="button" onClick={useCurrentLocationAsOrigin} disabled={!selectedStops.length || locatingOrigin}>
+            <button type="button" onClick={useCurrentLocationAsOrigin} disabled={locatingOrigin || !selectedStops.length}>
               {locatingOrigin ? 'Locating...' : 'Use Current'}
             </button>
           </div>
+          {formErrors.trip_id && <p style={{ color: '#fca5a5', marginTop: '8px', fontSize: '0.8rem' }}>{formErrors.trip_id}</p>}
         </section>
 
         <section className="buy-panel">
@@ -307,9 +213,18 @@ export default function BuyTicket({ onTicketPurchased }) {
           ) : trips.length === 0 ? (
             <p className="buy-empty">No active trips available right now.</p>
           ) : (
-            <div className="buy-trip-list">
-              {trips.map((trip, idx) => {
+            <>
+              {showingSuggestedTrips && (
+                <p className="buy-empty" style={{ marginBottom: '8px' }}>
+                  No exact trips found for the selected date. Showing the next available matching trips.
+                </p>
+              )}
+              <div className="buy-trip-list">
+                {trips.map((trip, idx) => {
                 const checked = form.trip_id === String(trip.trip_id);
+                const fleetLabel = trip.fleet_route?.fleet?.plate_number
+                  ? `Fleet ${trip.fleet_route.fleet.plate_number}`
+                  : `Fleet ${trip.fleet_route?.fleet_id || '-'}`;
                 return (
                   <label key={trip.trip_id} className={`buy-trip-card ${checked ? 'active' : ''}`}>
                     <input
@@ -317,16 +232,11 @@ export default function BuyTicket({ onTicketPurchased }) {
                       name="trip"
                       value={trip.trip_id}
                       checked={checked}
-                      onChange={e => {
-                        handleChange('trip_id', e.target.value);
-                        setDestinationQuery('');
-                        handleChange('origin_stop_id', '');
-                        handleChange('destination_stop_id', '');
-                      }}
+                      onChange={(e) => handleTripSelect(e.target.value)}
                     />
                     <div className="buy-trip-main">
-                      <h4>{idx + 1}. {trip.fleet_route?.route?.origin || '-'} to {trip.fleet_route?.route?.destination || '-'}</h4>
-                      <p><Clock size={13} /> {trip.trip_date || 'Today'} • Status: {trip.status}</p>
+                      <h4>{idx + 1}. {fleetLabel}</h4>
+                      <p><Clock size={13} /> {formatDateTime(trip.trip_date)} • {trip.fleet_route?.route?.origin || '-'} to {trip.fleet_route?.route?.destination || '-'} • Status: {trip.status}</p>
                     </div>
                     <div className="buy-trip-side">
                       <strong>PHP {fare ? fare.toFixed(2) : '50.00'}</strong>
@@ -334,8 +244,9 @@ export default function BuyTicket({ onTicketPurchased }) {
                     </div>
                   </label>
                 );
-              })}
-            </div>
+                })}
+              </div>
+            </>
           )}
         </section>
 
@@ -349,19 +260,74 @@ export default function BuyTicket({ onTicketPurchased }) {
               <div className="buy-inline-group">
                 <label>Seat Type</label>
                 <div className="buy-toggle-row">
-                  {['seated', 'standing'].map(type => (
+                  {['seated', 'standing'].map((type) => (
                     <label key={type}>
                       <input
                         type="radio"
                         name="seat_type"
                         value={type}
                         checked={form.seat_type === type}
-                        onChange={e => handleChange('seat_type', e.target.value)}
+                        onChange={(e) => handleChange('seat_type', e.target.value)}
                       />
                       <span>{type}</span>
                     </label>
                   ))}
                 </div>
+              </div>
+
+              <div className="buy-inline-group">
+                <label>Ticket Quantity</label>
+                <input
+                  type="number"
+                  min="1"
+                  max="20"
+                  step="1"
+                  value={form.ticket_quantity}
+                  onChange={(e) => handleChange('ticket_quantity', e.target.value)}
+                  placeholder="Number of tickets"
+                />
+                {formErrors.ticket_quantity && <p style={{ color: '#fca5a5', marginTop: '6px', fontSize: '0.78rem' }}>{formErrors.ticket_quantity}</p>}
+              </div>
+
+              <div className="buy-inline-group">
+                <label>Booking Option</label>
+                <div className="buy-toggle-row">
+                  <label>
+                    <input
+                      type="radio"
+                      name="booking_option"
+                      value="now"
+                      checked={form.booking_option === 'now'}
+                      onChange={(e) => handleChange('booking_option', e.target.value)}
+                      disabled={!hasBookNowOption}
+                    />
+                    <span>Book Now</span>
+                  </label>
+                  <label>
+                    <input
+                      type="radio"
+                      name="booking_option"
+                      value="later"
+                      checked={form.booking_option === 'later'}
+                      onChange={(e) => handleChange('booking_option', e.target.value)}
+                    />
+                    <span>Book Later</span>
+                  </label>
+                </div>
+                {!hasBookNowOption && (
+                  <p style={{ color: '#f59e0b', marginTop: '6px', fontSize: '0.78rem' }}>
+                    Book Now is unavailable because current trips are all future schedules.
+                  </p>
+                )}
+                {form.booking_option === 'later' && (
+                  <input
+                    type="date"
+                    value={form.booking_date}
+                    onChange={(e) => handleChange('booking_date', e.target.value)}
+                    min={minBookingDate}
+                  />
+                )}
+                {formErrors.booking_date && <p style={{ color: '#fca5a5', marginTop: '6px', fontSize: '0.78rem' }}>{formErrors.booking_date}</p>}
               </div>
 
               <div className="buy-inline-group">
@@ -373,7 +339,7 @@ export default function BuyTicket({ onTicketPurchased }) {
                       name="payment_method"
                       value="online"
                       checked={form.payment_method === 'online'}
-                      onChange={e => handleChange('payment_method', e.target.value)}
+                      onChange={(e) => handleChange('payment_method', e.target.value)}
                     />
                     <span>Online</span>
                   </label>
@@ -388,14 +354,14 @@ export default function BuyTicket({ onTicketPurchased }) {
                 <div className="buy-inline-group">
                   <label>Payment Channel</label>
                   <div className="buy-toggle-row">
-                    {['gcash', 'maya', 'card'].map(channel => (
+                    {['gcash', 'maya', 'card'].map((channel) => (
                       <label key={channel}>
                         <input
                           type="radio"
                           name="payment_channel"
                           value={channel}
                           checked={form.payment_channel === channel}
-                          onChange={e => handleChange('payment_channel', e.target.value)}
+                          onChange={(e) => handleChange('payment_channel', e.target.value)}
                         />
                         <span>{channel}</span>
                       </label>
@@ -405,19 +371,69 @@ export default function BuyTicket({ onTicketPurchased }) {
                     <input
                       type="email"
                       value={form.guest_email}
-                      onChange={e => handleChange('guest_email', e.target.value)}
-                      placeholder="Email for guest receipt"
+                      onChange={(e) => handleChange('guest_email', e.target.value)}
+                      placeholder="Email for receipt (optional)"
                     />
+                  )}
+                  {!isGuestCheckout && (
+                    <>
+                      <div style={{ color: '#94a3b8', fontSize: '0.82rem', marginTop: '6px' }}>
+                        {loadingRewards
+                          ? 'Loading reward balance...'
+                          : `Available Rewards: ${Number(availableRewardPoints || 0).toFixed(0)} RP`}
+                      </div>
+
+                      <label style={{ marginTop: '8px' }}>
+                        <input
+                          type="checkbox"
+                          checked={Boolean(form.use_rewards)}
+                          onChange={(e) => handleChange('use_rewards', e.target.checked)}
+                          disabled={!hasRewardPoints}
+                        />
+                        <span> Use reward points</span>
+                      </label>
+
+                      {form.use_rewards && (
+                        <>
+                          <input
+                            type="number"
+                            min="0"
+                            step="1"
+                            value={form.reward_points_to_use}
+                            onChange={(e) => handleChange('reward_points_to_use', e.target.value)}
+                            placeholder="Reward points to use"
+                          />
+                          <div style={{ color: isRewardRequestInsufficient ? '#fca5a5' : '#93c5fd', fontSize: '0.78rem' }}>
+                            Max usable now: {Number(maxRedeemableRewardPoints || 0).toFixed(0)} RP
+                            {isRewardRequestInsufficient ? ' (insufficient for requested amount)' : ''}
+                          </div>
+                          {formErrors.reward_points_to_use && (
+                            <div style={{ color: '#fca5a5', fontSize: '0.78rem' }}>{formErrors.reward_points_to_use}</div>
+                          )}
+                        </>
+                      )}
+                    </>
                   )}
                 </div>
               )}
 
               <div className="buy-stop-selectors">
                 <label>
+                  Drop-off Mode
+                  <select
+                    value={dropoffMode}
+                    onChange={(e) => handleDropoffModeChange(e.target.value)}
+                  >
+                    <option value="stop">Route Stop</option>
+                    <option value="custom">Custom Drop-off (Coordinates)</option>
+                  </select>
+                </label>
+
+                <label>
                   <MapPin size={14} /> Origin Stop
                   <select
                     value={form.origin_stop_id}
-                    onChange={e => handleChange('origin_stop_id', e.target.value)}
+                    onChange={(e) => handleChange('origin_stop_id', e.target.value)}
                   >
                     <option value="">Select origin stop...</option>
                     {selectedStops.map((stop) => (
@@ -426,22 +442,57 @@ export default function BuyTicket({ onTicketPurchased }) {
                   </select>
                 </label>
 
-                <label>
-                  <MapPin size={14} /> Destination Stop
-                  <select
-                    value={form.destination_stop_id}
-                    onChange={e => {
-                      handleChange('destination_stop_id', e.target.value);
-                      const matched = selectedStops.find((s) => String(s.stop_id) === String(e.target.value));
-                      setDestinationQuery(matched ? stopLabel(matched) : '');
-                    }}
-                  >
-                    <option value="">Select destination stop...</option>
-                    {selectedStops.map((stop) => (
-                      <option key={`dest-select-${stop.stop_id}`} value={stop.stop_id}>{stopLabel(stop)}</option>
-                    ))}
-                  </select>
-                </label>
+                {dropoffMode === 'stop' ? (
+                  <label>
+                    <MapPin size={14} /> Destination Stop
+                    <select
+                      value={form.destination_stop_id}
+                      onChange={(e) => handleDestinationStopChange(e.target.value)}
+                    >
+                      <option value="">Select destination stop...</option>
+                      {selectedStops.map((stop) => (
+                        <option key={`dest-select-${stop.stop_id}`} value={stop.stop_id}>{stopLabel(stop)}</option>
+                      ))}
+                    </select>
+                    {formErrors.destination_stop_id && <p style={{ color: '#fca5a5', marginTop: '6px', fontSize: '0.78rem' }}>{formErrors.destination_stop_id}</p>}
+                  </label>
+                ) : (
+                  <>
+                    <div className="buy-pinned-location-display">
+                      <span>Pinned Origin</span>
+                      <strong>{originPinnedLabel || 'Origin pin will appear once stop is selected or located'}</strong>
+                    </div>
+
+                    <div className="buy-pinned-location-display">
+                      <span>Pinned Destination</span>
+                      <strong>{destinationPinnedLabel || 'No location pinned yet'}</strong>
+                    </div>
+
+                    <div className="buy-custom-dropoff-tools">
+                      <button
+                        type="button"
+                        className="buy-inline-location-btn"
+                        onClick={pinCurrentLocationAsOrigin}
+                        disabled={locatingDropoff}
+                      >
+                        <LocateFixed size={14} />
+                        {locatingDropoff ? 'Locating Origin...' : 'Pin My Current Location as Origin'}
+                      </button>
+
+                      <div className="buy-dropoff-map-wrap">
+                        <div className="buy-dropoff-map-head">
+                          <strong>Pin Drop-off on Map</strong>
+                          <span>Click map to fill coordinates</span>
+                        </div>
+                        <div ref={mapContainerRef} className="buy-dropoff-map" />
+                        {formErrors.destination_lat && <p style={{ color: '#fca5a5', marginTop: '6px', fontSize: '0.78rem' }}>{formErrors.destination_lat}</p>}
+                      </div>
+                    </div>
+                  </>
+                )}
+                {formErrors.origin_stop_id && <p style={{ color: '#fca5a5', marginTop: '8px', fontSize: '0.78rem' }}>{formErrors.origin_stop_id}</p>}
+                {routeWarning && <p style={{ color: '#f59e0b', marginTop: '8px', fontSize: '0.78rem' }}>{routeWarning}</p>}
+                {formErrors.payment && <p style={{ color: '#fca5a5', marginTop: '8px', fontSize: '0.78rem' }}>{formErrors.payment}</p>}
               </div>
             </article>
 
@@ -453,11 +504,25 @@ export default function BuyTicket({ onTicketPurchased }) {
                 <div><span>Route</span><strong>{selectedRoute?.origin || '-'} to {selectedRoute?.destination || '-'}</strong></div>
                 <div><span>Seat Type</span><strong>{form.seat_type}</strong></div>
                 <div><span>Payment</span><strong>{form.payment_channel}</strong></div>
-                <div><span>Total</span><strong>PHP {fare ? fare.toFixed(2) : '0.00'}</strong></div>
+                <div><span>Unit Fare</span><strong>PHP {fare ? Number(unitFare).toFixed(2) : '0.00'}</strong></div>
+                <div><span>Quantity</span><strong>{totalTickets}</strong></div>
+                <div><span>Booking</span><strong>{form.booking_option === 'later' ? `Later (${form.booking_date || '-'})` : 'Now (Today)'}</strong></div>
+                <div><span>Gross Total</span><strong>PHP {Number(grossTotal || 0).toFixed(2)}</strong></div>
+                <div><span>Rewards Applied</span><strong>{Number(rewardPointsToApply || 0).toFixed(0)} RP</strong></div>
+                <div><span>Net Total</span><strong>PHP {Number(netTotal || 0).toFixed(2)}</strong></div>
               </div>
               <button
                 type="submit"
-                disabled={isSubmitting || !form.origin_stop_id || !form.destination_stop_id || (form.payment_method === 'online' && !canProceedToOnlinePayment)}
+                disabled={
+                  isSubmitting ||
+                  !form.origin_stop_id ||
+                  !form.ticket_quantity ||
+                  (dropoffMode === 'stop'
+                    ? !form.destination_stop_id
+                    : (!form.destination_lat || !form.destination_lng)) ||
+                  (form.payment_method === 'online' && !canProceedToOnlinePayment) ||
+                  isRewardRequestInsufficient
+                }
                 className="buy-submit"
               >
                 {isSubmitting ? (

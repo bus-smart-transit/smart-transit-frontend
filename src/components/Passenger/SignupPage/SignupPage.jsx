@@ -1,6 +1,21 @@
 import { Link } from 'react-router-dom';
+import {
+  ArrowLeft,
+  ArrowRight,
+  Calendar,
+  Check,
+  Eye,
+  EyeOff,
+  Lock,
+  Mail,
+  MapPin,
+  Phone,
+  Shield,
+  TrainFront,
+  TriangleAlert,
+  UserRound,
+} from 'lucide-react';
 import { useSignUp } from '../../../api/hooks/Passenger/signup';
-import '../styles/AuthPages.css';
 
 export default function SignUpPage() {
   const {
@@ -22,251 +37,213 @@ export default function SignUpPage() {
     si,
   } = useSignUp();
 
-  return (
-    <div className="auth-page">
-      {/* Background */}
-      <div className="auth-bg" aria-hidden="true">
-        <div className="auth-orb auth-orb-1" />
-        <div className="auth-orb auth-orb-2" />
-      </div>
+  const passwordHints = [
+    { check: form.password.length >= 8, label: 'At least 8 characters' },
+    { check: /[A-Z]/.test(form.password), label: 'One uppercase letter' },
+    { check: /[a-z]/.test(form.password), label: 'One lowercase letter' },
+    { check: /\d/.test(form.password), label: 'One number' },
+  ];
 
-      <div className="auth-container">
-        {/* Left Panel */}
-        <div className="auth-panel auth-info-panel">
-          <Link to="/" className="navbar-logo" style={{ marginBottom: 'auto' }}>
-            <div className="logo-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M8 6v6m0 0v6m0-6h8M8 12H4" strokeLinecap="round" strokeLinejoin="round" />
-                <rect x="2" y="3" width="20" height="18" rx="3" strokeWidth="1.5" />
-              </svg>
-            </div>
-            <span className="logo-text">Smart<span className="logo-accent">Transit</span></span>
+  return (
+    <div className="relative min-h-screen overflow-hidden bg-slate-950 px-4 py-8 text-slate-200 sm:px-6 lg:px-10">
+      <div className="pointer-events-none absolute -left-24 top-0 h-72 w-72 rounded-full bg-blue-500/15 blur-3xl" aria-hidden="true" />
+      <div className="pointer-events-none absolute -right-20 bottom-0 h-72 w-72 rounded-full bg-cyan-500/10 blur-3xl" aria-hidden="true" />
+
+      <div className="relative mx-auto grid w-full max-w-6xl overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 lg:grid-cols-[1.1fr_1fr]">
+        <section className="flex flex-col border-b border-slate-800 bg-slate-950/70 p-6 sm:p-8 lg:border-b-0 lg:border-r">
+          <Link to="/" className="inline-flex items-center gap-2 text-base font-semibold text-slate-100">
+            <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-700 bg-slate-900 text-sky-300">
+              <TrainFront className="h-5 w-5" />
+            </span>
+            SMARTTRANSIT
           </Link>
 
-          <div className="info-panel-content">
-            <h2 className="info-title">Join thousands of commuters</h2>
-            <p className="info-subtitle">Get real-time tracking, smart routing, and seamless ticketing — all in one place.</p>
+          <div className="my-auto py-8">
+            <span className="inline-flex items-center gap-2 rounded-full border border-sky-500/30 bg-sky-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-sky-300">
+              <Shield className="h-3.5 w-3.5" />
+              Passenger Registration
+            </span>
+            <h2 className="mt-4 text-3xl font-bold text-slate-100">Create your account</h2>
+            <p className="mt-3 text-sm text-slate-400">
+              Register once to unlock real-time trip tracking, e-tickets, and travel history.
+            </p>
 
-            <ul className="info-perks">
-              {[
-                'Free account, forever',
-                'Live GPS tracking',
-                'Smart route suggestions',
-                'Instant delay notifications',
-              ].map(perk => (
-                <li key={perk}>
-                  <span className="perk-check">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                      <path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
+            <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-900 p-5">
+              <div className="relative flex items-center gap-4 pl-3">
+                <div className="absolute left-4 top-1/2 h-px w-24 -translate-y-1/2 bg-slate-800" aria-hidden="true" />
+                <div className="relative z-10 flex items-center gap-2 rounded-full bg-slate-900 pr-2">
+                  <span
+                    className={`inline-flex h-7 w-7 items-center justify-center rounded-full border text-xs font-semibold ${step >= 1 ? 'border-sky-400 bg-sky-400 text-slate-950' : 'border-slate-700 text-slate-500'}`}
+                  >
+                    1
                   </span>
-                  {perk}
-                </li>
-              ))}
-            </ul>
+                  <span className="text-xs text-slate-400">Info</span>
+                </div>
+                <div className="relative z-10 flex items-center gap-2 rounded-full bg-slate-900 pr-2">
+                  <span
+                    className={`inline-flex h-7 w-7 items-center justify-center rounded-full border text-xs font-semibold ${step >= 2 ? 'border-sky-400 bg-sky-400 text-slate-950' : 'border-slate-700 text-slate-500'}`}
+                  >
+                    2
+                  </span>
+                  <span className="text-xs text-slate-400">Security</span>
+                </div>
+              </div>
+            </div>
           </div>
+        </section>
 
-          {/* Step indicator */}
-          <div className="step-indicator">
-            <div className={`step-dot ${step >= 1 ? 'active' : ''}`}><span>1</span><label>Info</label></div>
-            <div className="step-line" />
-            <div className={`step-dot ${step >= 2 ? 'active' : ''}`}><span>2</span><label>Security</label></div>
-          </div>
-        </div>
-
-        {/* Right Panel – Form */}
-        <div className="auth-panel auth-form-panel">
-          <div className="auth-form-header">
-            <h1 className="auth-title">
-              {step === 1 ? 'Create Your Account' : 'Secure Your Account'}
+        <section className="p-6 sm:p-8">
+          <div className="mb-6">
+            <h1 className="text-2xl font-bold text-slate-100">
+              {step === 1 ? 'Personal Information' : 'Account Security'}
             </h1>
-            <p className="auth-subtitle">
+            <p className="mt-1 text-sm text-slate-500">
               {step === 1
-                ? 'Enter your personal information to get started.'
-                : 'Set a strong password to protect your account.'}
+                ? 'Fill in your passenger details to continue.'
+                : 'Set a strong password and complete registration.'}
             </p>
           </div>
 
-          {/* Error / Success banners */}
           {error && (
-            <div className="alert alert-error" role="alert">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="12" cy="12" r="10" /><path d="M12 8v4m0 4h.01" />
-              </svg>
+            <div className="mb-4 inline-flex w-full items-center gap-2 rounded-xl border border-red-900 bg-red-950/40 px-3 py-2 text-sm text-red-300" role="alert">
+              <TriangleAlert className="h-4 w-4" />
               {error}
             </div>
           )}
           {success && (
-            <div className="alert alert-success" role="alert">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
+            <div className="mb-4 inline-flex w-full items-center gap-2 rounded-xl border border-emerald-900 bg-emerald-950/40 px-3 py-2 text-sm text-emerald-300" role="status">
+              <Check className="h-4 w-4" />
               {success}
             </div>
           )}
 
-          {/* ── Step 1: Personal Info ── */}
           {step === 1 && (
-            <form className="auth-form" onSubmit={handleStep1} noValidate id="signup-step1-form">
-              <div className="form-row">
-                <div className="form-group">
-                  <label className="form-label" htmlFor="signup-firstName">First Name</label>
-                  <div className="input-wrapper">
-                    <span className="input-icon">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" strokeLinecap="round" />
-                        <circle cx="12" cy="7" r="4" />
-                      </svg>
-                    </span>
+            <form className="space-y-4" onSubmit={handleStep1} noValidate id="signup-step1-form">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="block text-sm font-medium text-slate-300" htmlFor="signup-firstName">
+                  First Name
+                  <div className="mt-1 flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-950 px-3 focus-within:border-sky-400">
+                    <UserRound className="h-4 w-4 text-slate-500" />
                     <input
                       id="signup-firstName"
                       type="text"
-                      className={`form-input input-with-icon ${errors.firstName ? 'error' : ''}`}
+                      className="h-11 w-full bg-transparent text-sm text-slate-100 outline-none placeholder:text-slate-500"
                       placeholder="Juan"
                       value={form.firstName}
                       onChange={e => update('firstName', e.target.value)}
                       autoComplete="given-name"
                     />
                   </div>
-                  {errors.firstName && <span className="form-error">{errors.firstName}</span>}
-                </div>
+                  {errors.firstName && <span className="mt-1 block text-xs text-red-400">{errors.firstName}</span>}
+                </label>
 
-                <div className="form-group">
-                  <label className="form-label" htmlFor="signup-lastName">Last Name</label>
-                  <div className="input-wrapper">
-                    <span className="input-icon">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" strokeLinecap="round" />
-                        <circle cx="12" cy="7" r="4" />
-                      </svg>
-                    </span>
+                <label className="block text-sm font-medium text-slate-300" htmlFor="signup-lastName">
+                  Last Name
+                  <div className="mt-1 flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-950 px-3 focus-within:border-sky-400">
+                    <UserRound className="h-4 w-4 text-slate-500" />
                     <input
                       id="signup-lastName"
                       type="text"
-                      className={`form-input input-with-icon ${errors.lastName ? 'error' : ''}`}
-                      placeholder="dela Cruz"
+                      className="h-11 w-full bg-transparent text-sm text-slate-100 outline-none placeholder:text-slate-500"
+                      placeholder="Dela Cruz"
                       value={form.lastName}
                       onChange={e => update('lastName', e.target.value)}
                       autoComplete="family-name"
                     />
                   </div>
-                  {errors.lastName && <span className="form-error">{errors.lastName}</span>}
-                </div>
+                  {errors.lastName && <span className="mt-1 block text-xs text-red-400">{errors.lastName}</span>}
+                </label>
               </div>
 
-              <div className="form-group">
-                <label className="form-label" htmlFor="signup-email">Email Address</label>
-                <div className="input-wrapper">
-                  <span className="input-icon">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" strokeLinecap="round" />
-                    </svg>
-                  </span>
+              <label className="block text-sm font-medium text-slate-300" htmlFor="signup-email">
+                Email Address
+                <div className="mt-1 flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-950 px-3 focus-within:border-sky-400">
+                  <Mail className="h-4 w-4 text-slate-500" />
                   <input
                     id="signup-email"
                     type="email"
-                    className={`form-input input-with-icon ${errors.email ? 'error' : ''}`}
+                    className="h-11 w-full bg-transparent text-sm text-slate-100 outline-none placeholder:text-slate-500"
                     placeholder="juan@example.com"
                     value={form.email}
                     onChange={e => update('email', e.target.value)}
                     autoComplete="email"
                   />
                 </div>
-                {errors.email && <span className="form-error">{errors.email}</span>}
-              </div>
+                {errors.email && <span className="mt-1 block text-xs text-red-400">{errors.email}</span>}
+              </label>
 
-              <div className="form-row">
-                <div className="form-group">
-                  <label className="form-label" htmlFor="signup-phone">Phone Number</label>
-                  <div className="input-wrapper">
-                    <span className="input-icon">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" strokeLinecap="round" />
-                      </svg>
-                    </span>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="block text-sm font-medium text-slate-300" htmlFor="signup-phone">
+                  Phone
+                  <div className="mt-1 flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-950 px-3 focus-within:border-sky-400">
+                    <Phone className="h-4 w-4 text-slate-500" />
                     <input
                       id="signup-phone"
                       type="tel"
-                      className={`form-input input-with-icon ${errors.phone ? 'error' : ''}`}
+                      className="font-data h-11 w-full bg-transparent text-sm text-slate-100 outline-none placeholder:text-slate-500"
                       placeholder="+63 9XX XXX XXXX"
                       value={form.phone}
                       onChange={e => update('phone', e.target.value)}
                       autoComplete="tel"
                     />
                   </div>
-                  {errors.phone && <span className="form-error">{errors.phone}</span>}
-                </div>
+                  {errors.phone && <span className="mt-1 block text-xs text-red-400">{errors.phone}</span>}
+                </label>
 
-                <div className="form-group">
-                  <label className="form-label" htmlFor="signup-dob">Date of Birth</label>
-                  <div className="input-wrapper">
-                    <span className="input-icon">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                        <line x1="16" y1="2" x2="16" y2="6" />
-                        <line x1="8" y1="2" x2="8" y2="6" />
-                        <line x1="3" y1="10" x2="21" y2="10" />
-                      </svg>
-                    </span>
+                <label className="block text-sm font-medium text-slate-300" htmlFor="signup-dob">
+                  Date of Birth
+                  <div className="mt-1 flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-950 px-3 focus-within:border-sky-400">
+                    <Calendar className="h-4 w-4 text-slate-500" />
                     <input
                       id="signup-dob"
                       type="date"
-                      className={`form-input input-with-icon ${errors.dateOfBirth ? 'error' : ''}`}
+                      className="font-data h-11 w-full bg-transparent text-sm text-slate-100 outline-none"
                       value={form.dateOfBirth}
                       onChange={e => update('dateOfBirth', e.target.value)}
                       max={new Date().toISOString().split('T')[0]}
                     />
                   </div>
-                  {errors.dateOfBirth && <span className="form-error">{errors.dateOfBirth}</span>}
-                </div>
+                  {errors.dateOfBirth && <span className="mt-1 block text-xs text-red-400">{errors.dateOfBirth}</span>}
+                </label>
               </div>
 
-              <div className="form-group">
-                <label className="form-label" htmlFor="signup-address">Address <span className="form-label-optional">(Optional)</span></label>
-                <div className="input-wrapper">
-                  <span className="input-icon">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" strokeLinecap="round" />
-                      <path d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" strokeLinecap="round" />
-                    </svg>
-                  </span>
+              <label className="block text-sm font-medium text-slate-300" htmlFor="signup-address">
+                Address <span className="text-xs text-slate-500">(optional)</span>
+                <div className="mt-1 flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-950 px-3 focus-within:border-sky-400">
+                  <MapPin className="h-4 w-4 text-slate-500" />
                   <input
                     id="signup-address"
                     type="text"
-                    className="form-input input-with-icon"
-                    placeholder="123 Rizal St, Manila"
+                    className="h-11 w-full bg-transparent text-sm text-slate-100 outline-none placeholder:text-slate-500"
+                    placeholder="123 Rizal St, Davao City"
                     value={form.address}
                     onChange={e => update('address', e.target.value)}
                     autoComplete="street-address"
                   />
                 </div>
-              </div>
+              </label>
 
-              <button type="submit" className="btn btn-primary btn-full" id="signup-next-btn">
+              <button
+                type="submit"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-500"
+                id="signup-next-btn"
+              >
                 Continue to Security
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
+                <ArrowRight className="h-4 w-4" />
               </button>
             </form>
           )}
 
-          {/* ── Step 2: Password & Terms ── */}
           {step === 2 && (
-            <form className="auth-form" onSubmit={handleSubmit} noValidate id="signup-step2-form">
-              <div className="form-group">
-                <label className="form-label" htmlFor="signup-password">Password</label>
-                <div className="input-wrapper">
-                  <span className="input-icon">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                      <path d="M7 11V7a5 5 0 0110 0v4" />
-                    </svg>
-                  </span>
+            <form className="space-y-4" onSubmit={handleSubmit} noValidate id="signup-step2-form">
+              <label className="block text-sm font-medium text-slate-300" htmlFor="signup-password">
+                Password
+                <div className="mt-1 flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-950 px-3 focus-within:border-sky-400">
+                  <Lock className="h-4 w-4 text-slate-500" />
                   <input
                     id="signup-password"
                     type={showPassword ? 'text' : 'password'}
-                    className={`form-input input-with-icon input-with-icon-right ${errors.password ? 'error' : ''}`}
+                    className="h-11 w-full bg-transparent text-sm text-slate-100 outline-none placeholder:text-slate-500"
                     placeholder="Create a strong password"
                     value={form.password}
                     onChange={e => update('password', e.target.value)}
@@ -274,46 +251,37 @@ export default function SignUpPage() {
                   />
                   <button
                     type="button"
-                    className="input-icon-right"
+                    className="text-slate-500 transition hover:text-slate-300"
                     onClick={() => setShowPassword(!showPassword)}
                     aria-label={showPassword ? 'Hide password' : 'Show password'}
                   >
-                    {showPassword
-                      ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24" strokeLinecap="round" /><line x1="1" y1="1" x2="23" y2="23" strokeLinecap="round" /></svg>
-                      : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>
-                    }
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
-                {/* Strength bar */}
                 {form.password && (
-                  <div className="strength-bar-wrapper">
-                    <div className="strength-bar">
-                      {[1, 2, 3, 4, 5].map(i => (
-                        <div
-                          key={i}
-                          className="strength-segment"
-                          style={{ background: i <= strength ? si.color : 'rgba(255,255,255,0.08)' }}
-                        />
+                  <div className="mt-2">
+                    <div className="mb-1 flex items-center justify-between text-xs">
+                      <span className="text-slate-500">Strength</span>
+                      <span style={{ color: si.color }}>{si.label}</span>
+                    </div>
+                    <div className="grid grid-cols-5 gap-1">
+                      {[1, 2, 3, 4, 5].map((i) => (
+                        <div key={i} className="h-1.5 rounded" style={{ background: i <= strength ? si.color : '#1e293b' }} />
                       ))}
                     </div>
-                    <span className="strength-label" style={{ color: si.color }}>{si.label}</span>
                   </div>
                 )}
-                {errors.password && <span className="form-error">{errors.password}</span>}
-              </div>
+                {errors.password && <span className="mt-1 block text-xs text-red-400">{errors.password}</span>}
+              </label>
 
-              <div className="form-group">
-                <label className="form-label" htmlFor="signup-confirm">Confirm Password</label>
-                <div className="input-wrapper">
-                  <span className="input-icon">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                    </svg>
-                  </span>
+              <label className="block text-sm font-medium text-slate-300" htmlFor="signup-confirm">
+                Confirm Password
+                <div className="mt-1 flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-950 px-3 focus-within:border-sky-400">
+                  <Lock className="h-4 w-4 text-slate-500" />
                   <input
                     id="signup-confirm"
                     type={showConfirm ? 'text' : 'password'}
-                    className={`form-input input-with-icon input-with-icon-right ${errors.confirmPassword ? 'error' : ''}`}
+                    className="h-11 w-full bg-transparent text-sm text-slate-100 outline-none placeholder:text-slate-500"
                     placeholder="Repeat your password"
                     value={form.confirmPassword}
                     onChange={e => update('confirmPassword', e.target.value)}
@@ -321,91 +289,74 @@ export default function SignUpPage() {
                   />
                   <button
                     type="button"
-                    className="input-icon-right"
+                    className="text-slate-500 transition hover:text-slate-300"
                     onClick={() => setShowConfirm(!showConfirm)}
                     aria-label={showConfirm ? 'Hide confirm password' : 'Show confirm password'}
                   >
-                    {showConfirm
-                      ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24" strokeLinecap="round" /><line x1="1" y1="1" x2="23" y2="23" strokeLinecap="round" /></svg>
-                      : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>
-                    }
+                    {showConfirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
-                {errors.confirmPassword && <span className="form-error">{errors.confirmPassword}</span>}
-              </div>
+                {errors.confirmPassword && <span className="mt-1 block text-xs text-red-400">{errors.confirmPassword}</span>}
+              </label>
 
-              {/* Password hints */}
-              <div className="password-hints">
-                {[
-                  { check: form.password.length >= 8, label: 'At least 8 characters' },
-                  { check: /[A-Z]/.test(form.password), label: 'One uppercase letter' },
-                  { check: /[a-z]/.test(form.password), label: 'One lowercase letter' },
-                  { check: /\d/.test(form.password), label: 'One number' },
-                ].map(({ check, label }) => (
-                  <div key={label} className={`hint-item ${check ? 'met' : ''}`}>
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                      <path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                    {label}
+              <div className="grid gap-2 sm:grid-cols-2">
+                {passwordHints.map((hint) => (
+                  <div key={hint.label} className={`inline-flex items-center gap-2 text-xs ${hint.check ? 'text-emerald-400' : 'text-slate-500'}`}>
+                    <Check className="h-3.5 w-3.5" />
+                    {hint.label}
                   </div>
                 ))}
               </div>
 
-              {/* Terms checkbox */}
-              <div className="form-group">
-                <label className={`checkbox-label ${errors.agreeTerms ? 'checkbox-error' : ''}`} htmlFor="signup-terms">
-                  <input
-                    id="signup-terms"
-                    type="checkbox"
-                    className="checkbox-input"
-                    checked={form.agreeTerms}
-                    onChange={e => update('agreeTerms', e.target.checked)}
-                  />
-                  <span className="checkbox-custom" />
-                  <span>
-                    I agree to the{' '}
-                    <a href="#" className="auth-link">Terms of Service</a>
-                    {' '}and{' '}
-                    <a href="#" className="auth-link">Privacy Policy</a>
-                  </span>
-                </label>
-                {errors.agreeTerms && <span className="form-error" style={{ marginTop: '4px' }}>{errors.agreeTerms}</span>}
-              </div>
+              <label className="inline-flex cursor-pointer items-start gap-2 text-sm text-slate-400" htmlFor="signup-terms">
+                <input
+                  id="signup-terms"
+                  type="checkbox"
+                  className="mt-0.5 h-4 w-4 rounded border-slate-700 bg-slate-900 text-sky-500"
+                  checked={form.agreeTerms}
+                  onChange={e => update('agreeTerms', e.target.checked)}
+                />
+                <span>
+                  I agree to the <a href="#" className="text-sky-400 hover:text-sky-300">Terms of Service</a> and{' '}
+                  <a href="#" className="text-sky-400 hover:text-sky-300">Privacy Policy</a>.
+                </span>
+              </label>
+              {errors.agreeTerms && <span className="-mt-2 block text-xs text-red-400">{errors.agreeTerms}</span>}
 
-              <div className="form-row-buttons">
+              <div className="flex gap-3">
                 <button
                   type="button"
-                  className="btn btn-ghost"
+                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm font-semibold text-slate-200 transition hover:border-slate-500"
                   onClick={() => setStep(1)}
                   id="signup-back-btn"
                 >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                    <path d="M15 18l-6-6 6-6" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
+                  <ArrowLeft className="h-4 w-4" />
                   Back
                 </button>
                 <button
                   type="submit"
-                  className="btn btn-primary"
+                  className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
                   disabled={isLoading}
                   id="signup-submit-btn"
-                  style={{ flex: 1 }}
                 >
                   {isLoading ? (
-                    <><span className="spinner" aria-hidden="true" /> Creating account…</>
+                    <>
+                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" aria-hidden="true" />
+                      Creating account...
+                    </>
                   ) : (
-                    <>Create Account</>
+                    'Create Account'
                   )}
                 </button>
               </div>
             </form>
           )}
 
-          <p className="auth-switch">
+          <p className="mt-6 text-center text-sm text-slate-500">
             Already have an account?{' '}
-            <Link to="/passenger/login" className="auth-link" id="switch-to-login">Sign in</Link>
+            <Link to="/passenger/login" className="font-medium text-sky-400 hover:text-sky-300" id="switch-to-login">Sign in</Link>
           </p>
-        </div>
+        </section>
       </div>
     </div>
   );
