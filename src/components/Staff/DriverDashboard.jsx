@@ -48,6 +48,40 @@ const formatDateTime = (value) => {
   return `${yyyy}/${mm}/${dd} - ${hh}:${min}`;
 };
 
+const isSameDay = (value) => {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return false;
+
+  const today = new Date();
+  return (
+    date.getFullYear() === today.getFullYear()
+    && date.getMonth() === today.getMonth()
+    && date.getDate() === today.getDate()
+  );
+};
+
+const isCurrentOrSameDayTrip = (tripLike) => {
+  if (!tripLike?.trip_id) return false;
+  if (!isSameDay(tripLike?.trip_date)) return false;
+
+  const status = String(tripLike?.status || '').toLowerCase();
+  return status !== 'completed' && status !== 'cancelled';
+};
+
+const getUpcomingTrip = (trips) => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  return (trips || [])
+    .filter((item) => {
+      const date = new Date(item?.trip_date);
+      if (Number.isNaN(date.getTime())) return false;
+      const status = String(item?.status || '').toLowerCase();
+      return date >= today && status !== 'completed' && status !== 'cancelled';
+    })
+    .sort((a, b) => new Date(a.trip_date).getTime() - new Date(b.trip_date).getTime())[0] || null;
+};
+
 export default function DriverDashboard() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -61,8 +95,10 @@ export default function DriverDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [actionMsg, setActionMsg] = useState('');
-  const hasActiveTrip = !!trip?.trip_id;
+  const hasActiveTrip = isCurrentOrSameDayTrip(trip);
   const didBootstrap = useRef(false);
+  const upcomingTrip = getUpcomingTrip(assignedTrips);
+  const showNoCurrentTripState = !loading && !hasActiveTrip && ['dashboard', 'journey', 'navigation', 'trip'].includes(activeTab);
 
   const currentRoute = trip?.fleet_route?.route;
   const currentFleet = trip?.fleet_route?.fleet;
@@ -330,7 +366,31 @@ export default function DriverDashboard() {
           </div>
         )}
 
-        {!loading && activeTab === 'dashboard' && (
+        {showNoCurrentTripState && (
+          <section className="rounded-2xl border border-dashed border-slate-800 bg-slate-900 p-6">
+            <h3 className="text-lg font-semibold text-slate-100">No Current Trip Available</h3>
+            <p className="mt-2 text-sm text-slate-400">
+              You currently do not have an active or same-day trip to operate.
+            </p>
+            {upcomingTrip ? (
+              <p className="mt-3 text-sm text-sky-300">
+                Upcoming trip: {upcomingTrip?.fleet_route?.route?.origin || '-'} to {upcomingTrip?.fleet_route?.route?.destination || '-'} on {formatDateTime(upcomingTrip?.trip_date)}.
+              </p>
+            ) : (
+              <p className="mt-3 text-sm text-slate-500">
+                No upcoming trip is assigned yet. Please check again later.
+              </p>
+            )}
+            <button
+              className="mt-4 rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-xs font-semibold text-slate-300 transition hover:border-slate-500"
+              onClick={() => setActiveTab('assigned')}
+            >
+              View Assigned Trips
+            </button>
+          </section>
+        )}
+
+        {!loading && activeTab === 'dashboard' && !showNoCurrentTripState && (
           <section className="grid gap-4 xl:grid-cols-4 md:grid-cols-2">
             <article className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
               <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Today's Trip</p>
@@ -433,7 +493,7 @@ export default function DriverDashboard() {
           </section>
         )}
 
-        {!loading && activeTab === 'journey' && (
+        {!loading && activeTab === 'journey' && !showNoCurrentTripState && (
           <section className="grid gap-4 lg:grid-cols-2">
             <article className="rounded-2xl border border-slate-800 bg-slate-900 p-4 sm:p-6">
               <h4 className="mb-3 text-base font-semibold text-slate-100">Journey Stops</h4>
@@ -472,7 +532,7 @@ export default function DriverDashboard() {
           </section>
         )}
 
-        {!loading && activeTab === 'navigation' && (
+        {!loading && activeTab === 'navigation' && !showNoCurrentTripState && (
           <section className="grid gap-4 lg:grid-cols-2">
             <article className="rounded-2xl border border-slate-800 bg-slate-900 p-4 sm:p-6">
               <h4 className="mb-3 text-base font-semibold text-slate-100">Route Navigation</h4>
@@ -527,7 +587,7 @@ export default function DriverDashboard() {
           </section>
         )}
 
-        {!loading && activeTab === 'trip' && (
+        {!loading && activeTab === 'trip' && !showNoCurrentTripState && (
           <section className="grid gap-4 lg:grid-cols-2">
             <article className="rounded-2xl border border-slate-800 bg-slate-900 p-4 sm:p-6">
               <div className="mb-3 flex items-center justify-between">

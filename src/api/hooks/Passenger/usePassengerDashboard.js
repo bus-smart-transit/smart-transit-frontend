@@ -1,9 +1,31 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../useAuth';
 import PassengerService from '../../PassengerService/PassengerService';
 
 const PROTECTED_TABS = new Set(['tickets', 'rewards', 'transactions', 'profile']);
+const TICKET_QR_CACHE_KEY = 'smart_transit_ticket_qr_cache_v1';
+const QR_SUCCESS_TTL_MS = 5 * 60 * 1000;
+const QR_FAILURE_TTL_MS = 45 * 1000;
+
+const readSessionCache = (key) => {
+  try {
+    const raw = sessionStorage.getItem(key);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+};
+
+const writeSessionCache = (key, value) => {
+  try {
+    sessionStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // Ignore cache persistence failures.
+  }
+};
 
 const toDate = (value) => {
   if (!value) return null;
@@ -48,6 +70,7 @@ export default function usePassengerDashboard({ preloadMapView }) {
   const [selectedTicket, setSelectedTicket] = useState(null);
   const [selectedTicketQr, setSelectedTicketQr] = useState(null);
   const [loadingTicketQr, setLoadingTicketQr] = useState(false);
+  const qrCacheRef = useRef(readSessionCache(TICKET_QR_CACHE_KEY));
 
   const formatDateTime = useCallback((value) => {
     const date = toDate(value);
@@ -206,12 +229,36 @@ export default function usePassengerDashboard({ preloadMapView }) {
       return;
     }
 
+    const ticketUuid = ticket.ticket_uuid;
+    const cached = qrCacheRef.current[ticketUuid];
+    if (cached && typeof cached === 'object') {
+      const ageMs = Date.now() - Number(cached.ts || 0);
+      const ttlMs = cached.ok ? QR_SUCCESS_TTL_MS : QR_FAILURE_TTL_MS;
+      if (ageMs <= ttlMs) {
+        setSelectedTicketQr(cached.ok ? cached.value : null);
+        return;
+      }
+    }
+
     setLoadingTicketQr(true);
     try {
-      const qrRes = await PassengerService.getTicketQR(ticket.ticket_uuid);
-      setSelectedTicketQr(qrRes?.data ?? qrRes ?? null);
+      const qrRes = await PassengerService.getTicketQR(ticketUuid);
+      const qrPayload = qrRes?.data ?? qrRes ?? null;
+      setSelectedTicketQr(qrPayload);
+      qrCacheRef.current[ticketUuid] = {
+        ts: Date.now(),
+        ok: true,
+        value: qrPayload,
+      };
+      writeSessionCache(TICKET_QR_CACHE_KEY, qrCacheRef.current);
     } catch {
       setSelectedTicketQr(null);
+      qrCacheRef.current[ticketUuid] = {
+        ts: Date.now(),
+        ok: false,
+        value: null,
+      };
+      writeSessionCache(TICKET_QR_CACHE_KEY, qrCacheRef.current);
     } finally {
       setLoadingTicketQr(false);
     }

@@ -40,6 +40,40 @@ const formatDateTime = (value) => {
   return `${yyyy}/${mm}/${dd} - ${hh}:${min}`;
 };
 
+const isSameDay = (value) => {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return false;
+
+  const today = new Date();
+  return (
+    date.getFullYear() === today.getFullYear()
+    && date.getMonth() === today.getMonth()
+    && date.getDate() === today.getDate()
+  );
+};
+
+const isCurrentOrSameDayTrip = (tripLike) => {
+  if (!tripLike?.trip_id) return false;
+  if (!isSameDay(tripLike?.trip_date)) return false;
+
+  const status = String(tripLike?.status || '').toLowerCase();
+  return status !== 'completed' && status !== 'cancelled';
+};
+
+const getUpcomingTrip = (trips) => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  return (trips || [])
+    .filter((item) => {
+      const date = new Date(item?.trip_date);
+      if (Number.isNaN(date.getTime())) return false;
+      const status = String(item?.status || '').toLowerCase();
+      return date >= today && status !== 'completed' && status !== 'cancelled';
+    })
+    .sort((a, b) => new Date(a.trip_date).getTime() - new Date(b.trip_date).getTime())[0] || null;
+};
+
 export default function ConductorDashboard() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('trip');
@@ -63,8 +97,10 @@ export default function ConductorDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [actionMsg, setActionMsg] = useState('');
-  const hasActiveTrip = !!trip?.trip_id;
+  const hasActiveTrip = isCurrentOrSameDayTrip(trip);
   const didBootstrap = useRef(false);
+  const upcomingTrip = getUpcomingTrip(assignedTrips);
+  const showNoCurrentTripState = !loading && !hasActiveTrip && ['trip', 'occupancy', 'scan', 'passengers', 'pin'].includes(activeTab);
   const routeStops = trip?.fleet_route?.route?.route_stops || trip?.fleet_route?.route?.routeStops || [];
   const groupedPassengers = usePassengersByTrip(passengers, trip);
   const { printOnsiteReceipt } = useOnsiteReceiptPrinter();
@@ -368,7 +404,31 @@ export default function ConductorDashboard() {
           </div>
         )}
 
-        {!loading && activeTab === 'trip' && (
+        {showNoCurrentTripState && (
+          <section className="rounded-2xl border border-dashed border-slate-800 bg-slate-900 p-6">
+            <h3 className="text-lg font-semibold text-slate-100">No Current Trip Available</h3>
+            <p className="mt-2 text-sm text-slate-400">
+              You currently do not have an active or same-day trip assignment.
+            </p>
+            {upcomingTrip ? (
+              <p className="mt-3 text-sm text-sky-300">
+                Upcoming trip: {upcomingTrip?.fleet_route?.route?.origin || '-'} to {upcomingTrip?.fleet_route?.route?.destination || '-'} on {formatDateTime(upcomingTrip?.trip_date)}.
+              </p>
+            ) : (
+              <p className="mt-3 text-sm text-slate-500">
+                No upcoming trip is assigned yet. Please check again later.
+              </p>
+            )}
+            <button
+              className="mt-4 rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-xs font-semibold text-slate-300 transition hover:border-slate-500"
+              onClick={() => setActiveTab('assigned')}
+            >
+              View Assigned Trips
+            </button>
+          </section>
+        )}
+
+        {!loading && activeTab === 'trip' && !showNoCurrentTripState && (
           <section className="grid gap-4 md:grid-cols-2">
             {!trip ? (
               <article className="rounded-2xl border border-dashed border-slate-800 bg-slate-900 p-6">
@@ -417,7 +477,7 @@ export default function ConductorDashboard() {
           </section>
         )}
 
-        {!loading && activeTab === 'occupancy' && (
+        {!loading && activeTab === 'occupancy' && !showNoCurrentTripState && (
           <section className="max-w-2xl">
             {!occupancy ? (
               <article className="rounded-2xl border border-dashed border-slate-800 bg-slate-900 p-6">
@@ -452,7 +512,7 @@ export default function ConductorDashboard() {
           </section>
         )}
 
-        {!loading && activeTab === 'scan' && (
+        {!loading && activeTab === 'scan' && !showNoCurrentTripState && (
           <section className="grid gap-4 lg:grid-cols-2">
             <article className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
               <h3 className="text-lg font-semibold text-slate-100">Scan QR Ticket</h3>
@@ -587,7 +647,7 @@ export default function ConductorDashboard() {
           </section>
         )}
 
-        {!loading && activeTab === 'passengers' && (
+        {!loading && activeTab === 'passengers' && !showNoCurrentTripState && (
           <section className="rounded-2xl border border-slate-800 bg-slate-900 p-4 sm:p-6">
             {groupedPassengers.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-slate-800 bg-slate-950 p-6">
@@ -654,7 +714,7 @@ export default function ConductorDashboard() {
           </section>
         )}
 
-        {!loading && activeTab === 'pin' && (
+        {!loading && activeTab === 'pin' && !showNoCurrentTripState && (
           <section className="grid max-w-3xl gap-4 md:grid-cols-2">
             {pin && (
               <article className="rounded-2xl border border-slate-800 bg-slate-900 p-6">

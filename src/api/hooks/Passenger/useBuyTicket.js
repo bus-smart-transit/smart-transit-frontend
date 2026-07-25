@@ -4,6 +4,10 @@ import useDropoffPicker from './useDropoffPicker';
 
 const CHECKOUT_EVENT_KEY = 'smart_transit_checkout_event';
 const CHECKOUT_PENDING_KEY = 'smart_transit_checkout_pending';
+const CHECKOUT_LOOKUP_CACHE_KEY = 'smart_transit_checkout_lookup_cache_v1';
+const TICKET_QR_CACHE_KEY = 'smart_transit_ticket_qr_cache_v1';
+const LOOKUP_CACHE_TTL_MS = 60 * 1000;
+const QR_CACHE_TTL_MS = 5 * 60 * 1000;
 
 const toDateInputValue = (value = new Date()) => {
   const yyyy = value.getFullYear();
@@ -40,6 +44,39 @@ const pickStopName = (value) => {
 };
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const readSessionCache = (key) => {
+  try {
+    const raw = sessionStorage.getItem(key);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+};
+
+const writeSessionCache = (key, value) => {
+  try {
+    sessionStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // Ignore storage write failures (private mode/quota).
+  }
+};
+
+const getCachedEntry = (cache, key, ttlMs) => {
+  const entry = cache[key];
+  if (!entry || typeof entry !== 'object') return null;
+  if ((Date.now() - Number(entry.ts || 0)) > ttlMs) return null;
+  return entry.value;
+};
+
+const setCachedEntry = (cache, key, value) => {
+  cache[key] = {
+    ts: Date.now(),
+    value,
+  };
+};
 
 const formatDateTime = (value) => {
   if (!value) return '-';
@@ -113,6 +150,11 @@ export default function useBuyTicket({ onTicketPurchased }) {
   const [availableRewardPoints, setAvailableRewardPoints] = useState(0);
   const [loadingRewards, setLoadingRewards] = useState(false);
   const checkoutStartCounterRef = useRef(1);
+  const lookupCacheRef = useRef(readSessionCache(CHECKOUT_LOOKUP_CACHE_KEY));
+  const qrCacheRef = useRef(readSessionCache(TICKET_QR_CACHE_KEY));
+  const inFlightLookupRef = useRef(new Set());
+  const processedCheckoutRef = useRef(new Set());
+  const lastCheckoutEventTsRef = useRef(0);
 
   const [form, setForm] = useState({
     trip_id: '',
@@ -375,11 +417,91 @@ export default function useBuyTicket({ onTicketPurchased }) {
     localStorage.removeItem(CHECKOUT_PENDING_KEY);
   }, []);
 
+  const persistLookupCache = useCallback(() => {
+    writeSessionCache(CHECKOUT_LOOKUP_CACHE_KEY, lookupCacheRef.current);
+  }, []);
+
+  const persistQrCache = useCallback(() => {
+    writeSessionCache(TICKET_QR_CACHE_KEY, qrCacheRef.current);
+  }, []);
+
+  const applyQrTicketData = useCallback(async (matchedTickets) => {
+    if (!Array.isArray(matchedTickets) || matchedTickets.length === 0) {
+      setQrTickets([]);
+      return;
+    }
+
+    if (isGuestCheckout) {
+      setQrTickets(matchedTickets.map(toGuestQrTicket));
+      return;
+    }
+
+    const qrResponses = await Promise.all(
+      matchedTickets.slice(0, 5).map(async (ticket) => {
+        const ticketUuid = ticket?.ticket_uuid;
+        if (!ticketUuid) return null;
+
+        const cachedQr = getCachedEntry(qrCacheRef.current, ticketUuid, QR_CACHE_TTL_MS);
+        if (cachedQr) {
+          return cachedQr;
+        }
+
+        try {
+          const qrRes = await PassengerService.getTicketQR(ticketUuid);
+          const resolved = qrRes?.data ?? qrRes ?? null;
+          if (resolved) {
+            setCachedEntry(qrCacheRef.current, ticketUuid, resolved);
+            persistQrCache();
+          }
+          return resolved;
+        } catch {
+          return null;
+        }
+      }),
+    );
+
+    const resolvedQr = qrResponses.filter(Boolean);
+    if (resolvedQr.length > 0) {
+      setQrTickets(resolvedQr);
+    } else {
+      // Ticket exists but QR may be inactive until trip date.
+      setQrTickets(matchedTickets.map(toPassengerTicketCardData));
+    }
+  }, [isGuestCheckout, persistQrCache, toGuestQrTicket, toPassengerTicketCardData]);
+
   const loadPurchasedQrTickets = useCallback(async (checkoutMeta) => {
-    if (!checkoutMeta) return;
+    if (!checkoutMeta?.transactionReference) return;
+
+    const lookupKey = [
+      String(checkoutMeta.transactionReference || ''),
+      String(checkoutMeta.paymentId || ''),
+      String(checkoutMeta.guestEmail || ''),
+      isGuestCheckout ? 'guest' : 'auth',
+    ].join('|');
+
+    if (processedCheckoutRef.current.has(lookupKey)) {
+      const cachedTickets = getCachedEntry(lookupCacheRef.current, lookupKey, LOOKUP_CACHE_TTL_MS);
+      if (cachedTickets) {
+        await applyQrTicketData(cachedTickets);
+      }
+      return;
+    }
+
+    if (inFlightLookupRef.current.has(lookupKey)) {
+      return;
+    }
+
+    inFlightLookupRef.current.add(lookupKey);
 
     setLoadingQr(true);
     try {
+      const cachedTickets = getCachedEntry(lookupCacheRef.current, lookupKey, LOOKUP_CACHE_TTL_MS);
+      if (cachedTickets && cachedTickets.length > 0) {
+        await applyQrTicketData(cachedTickets);
+        processedCheckoutRef.current.add(lookupKey);
+        return;
+      }
+
       const maxAttempts = 6;
       const retryDelayMs = 1500;
 
@@ -405,30 +527,10 @@ export default function useBuyTicket({ onTicketPurchased }) {
         }
 
         if (matchedTickets.length > 0) {
-          if (isGuestCheckout) {
-            setQrTickets(matchedTickets.map(toGuestQrTicket));
-            return;
-          }
-
-          const qrResponses = await Promise.all(
-            matchedTickets.slice(0, 5).map(async (ticket) => {
-              try {
-                const qrRes = await PassengerService.getTicketQR(ticket.ticket_uuid);
-                return qrRes?.data ?? qrRes ?? null;
-              } catch {
-                return null;
-              }
-            }),
-          );
-
-          const resolvedQr = qrResponses.filter(Boolean);
-          if (resolvedQr.length > 0) {
-            setQrTickets(resolvedQr);
-          } else {
-            // Ticket already exists but QR may be inactive until trip date.
-            setQrTickets(matchedTickets.map(toPassengerTicketCardData));
-          }
-
+          setCachedEntry(lookupCacheRef.current, lookupKey, matchedTickets);
+          persistLookupCache();
+          await applyQrTicketData(matchedTickets);
+          processedCheckoutRef.current.add(lookupKey);
           return;
         }
 
@@ -442,11 +544,18 @@ export default function useBuyTicket({ onTicketPurchased }) {
     } catch (err) {
       setError(err?.message || 'Payment succeeded but we could not load your ticket QR yet.');
     } finally {
+      inFlightLookupRef.current.delete(lookupKey);
       setLoadingQr(false);
     }
-  }, [isGuestCheckout, toGuestQrTicket, toPassengerTicketCardData]);
+  }, [applyQrTicketData, isGuestCheckout, persistLookupCache]);
 
-  const handleCheckoutResult = useCallback((status) => {
+  const handleCheckoutResult = useCallback((status, eventTs = Date.now()) => {
+    const normalizedTs = Number(eventTs || Date.now());
+    if (normalizedTs <= lastCheckoutEventTsRef.current) {
+      return;
+    }
+    lastCheckoutEventTsRef.current = normalizedTs;
+
     const normalized = status === 'success' ? 'success' : 'cancel';
     setCheckoutStatus(normalized);
 
@@ -454,10 +563,16 @@ export default function useBuyTicket({ onTicketPurchased }) {
       setSuccess('Payment successful. We will show your ticket QR once it becomes active.');
       setError('');
 
+      if (!pendingCheckout) {
+        localStorage.removeItem(CHECKOUT_EVENT_KEY);
+        return;
+      }
+
       void (async () => {
         await loadPurchasedQrTickets(pendingCheckout);
         onTicketPurchased?.();
         clearPendingCheckout();
+        localStorage.removeItem(CHECKOUT_EVENT_KEY);
       })();
 
       return;
@@ -467,6 +582,7 @@ export default function useBuyTicket({ onTicketPurchased }) {
     setQrTickets([]);
     setError('Payment was cancelled or failed. You may retry payment.');
     clearPendingCheckout();
+    localStorage.removeItem(CHECKOUT_EVENT_KEY);
   }, [pendingCheckout, onTicketPurchased, loadPurchasedQrTickets, clearPendingCheckout]);
 
   useEffect(() => {
@@ -554,7 +670,7 @@ export default function useBuyTicket({ onTicketPurchased }) {
         const eventPayload = JSON.parse(storedEvent);
         if ((eventPayload?.timestamp ?? 0) >= (parsedPending?.startedAt ?? 0) && eventPayload?.status) {
           setTimeout(() => {
-            handleCheckoutResult(eventPayload.status);
+            handleCheckoutResult(eventPayload.status, eventPayload.timestamp);
           }, 0);
         }
       }
@@ -570,7 +686,7 @@ export default function useBuyTicket({ onTicketPurchased }) {
       try {
         const payload = JSON.parse(event.newValue);
         if (payload?.status) {
-          handleCheckoutResult(payload.status);
+          handleCheckoutResult(payload.status, payload.timestamp);
         }
       } catch {
         // Ignore malformed events.
