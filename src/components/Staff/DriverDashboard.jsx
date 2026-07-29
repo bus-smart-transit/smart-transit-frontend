@@ -95,9 +95,13 @@ export default function DriverDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [actionMsg, setActionMsg] = useState('');
+  const [gpsActive, setGpsActive] = useState(false);
   const hasActiveTrip = isCurrentOrSameDayTrip(trip);
   const didBootstrap = useRef(false);
   const upcomingTrip = getUpcomingTrip(assignedTrips);
+  const gpsIntervalRef = useRef(null);
+  const gpsWatchRef = useRef(null);
+  const lastGpsRef = useRef(null);
   const showNoCurrentTripState = !loading && !hasActiveTrip && ['dashboard', 'journey', 'navigation', 'trip'].includes(activeTab);
 
   const currentRoute = trip?.fleet_route?.route;
@@ -166,6 +170,62 @@ export default function DriverDashboard() {
     void loadData();
   }, [loadData]);
 
+  // ── GPS push: runs only while driver has an active same-day trip ────────────
+  useEffect(() => {
+    if (!hasActiveTrip) {
+      // Clean up any running watcher/interval when trip becomes inactive
+      if (gpsWatchRef.current !== null) {
+        navigator.geolocation?.clearWatch(gpsWatchRef.current);
+        gpsWatchRef.current = null;
+      }
+      clearInterval(gpsIntervalRef.current);
+      gpsIntervalRef.current = null;
+      lastGpsRef.current = null;
+      return;
+    }
+
+    if (!navigator.geolocation) return;
+
+    const pushLocation = (position) => {
+      const { latitude, longitude, heading, speed } = position.coords;
+      lastGpsRef.current = {
+        latitude,
+        longitude,
+        heading: Number.isFinite(heading) ? heading : undefined,
+        speed_kmh: Number.isFinite(speed) ? Number((speed * 3.6).toFixed(1)) : undefined,
+      };
+      setGpsActive(true);
+    };
+
+    // Watch position continuously so lastGpsRef stays fresh
+    gpsWatchRef.current = navigator.geolocation.watchPosition(
+      pushLocation,
+      () => {}, // silent failure — no permission prompt spam
+      { enableHighAccuracy: true, maximumAge: 10000 }
+    );
+
+    // Push to backend every 10 seconds
+    const sendPing = async () => {
+      if (!lastGpsRef.current) return;
+      try {
+        await StaffService.updateLocation(
+          lastGpsRef.current.latitude,
+          lastGpsRef.current.longitude,
+        );
+      } catch {
+        // Ignore — network hiccups should not surface as errors during a trip
+      }
+    };
+
+    gpsIntervalRef.current = setInterval(() => { void sendPing(); }, 10000);
+    return () => {
+      navigator.geolocation?.clearWatch(gpsWatchRef.current);
+      gpsWatchRef.current = null;
+      clearInterval(gpsIntervalRef.current);
+      gpsIntervalRef.current = null;
+    };
+  }, [hasActiveTrip]);
+
   useEffect(() => {
     const timer = setTimeout(() => {
       if (['journey', 'navigation', 'trip', 'dashboard'].includes(activeTab) && hasActiveTrip) {
@@ -199,10 +259,28 @@ export default function DriverDashboard() {
     }
   };
 
+  // Immediately flush current GPS to backend — called on stop acknowledge so
+  // passengers see the updated bus position right away rather than waiting
+  // for the next 10-second scheduled ping.
+  const pushLocationNow = useCallback(async () => {
+    if (!lastGpsRef.current) return;
+    try {
+      await StaffService.updateLocation(
+        lastGpsRef.current.latitude,
+        lastGpsRef.current.longitude,
+      );
+    } catch {
+      // Silent — don't surface network errors on stop acknowledge
+    }
+  }, []);
+
   const handleAcknowledgeStop = async (stopId) => {
     try {
       await StaffService.acknowledgeStop(stopId);
-      setActionMsg('Stop acknowledged.');
+      // Relay current GPS position immediately so passenger map
+      // reflects the bus at this stop without waiting for the next ping.
+      void pushLocationNow();
+      setActionMsg('Stop acknowledged. Location sent to passengers.');
       void loadStops();
     } catch (err) {
       setActionMsg(err.message);
@@ -343,13 +421,30 @@ export default function DriverDashboard() {
               {new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
             </p>
           </div>
-          <button
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-semibold text-slate-300 transition hover:border-slate-500"
-            onClick={loadData}
-          >
-            <RefreshCw className="h-3.5 w-3.5" />
-            Refresh
-          </button>
+          <div className="flex items-center gap-2">
+            {hasActiveTrip && (
+              <span
+                title={gpsActive ? 'GPS active — location is being sent to passengers' : 'Waiting for GPS fix…'}
+                className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${
+                  gpsActive
+                    ? 'border-emerald-700 bg-emerald-950/40 text-emerald-300'
+                    : 'border-slate-700 bg-slate-900 text-slate-500'
+                }`}
+              >
+                <span
+                  className={`h-2 w-2 rounded-full ${gpsActive ? 'bg-emerald-400 animate-pulse' : 'bg-slate-600'}`}
+                />
+                {gpsActive ? 'GPS Live' : 'GPS…'}
+              </span>
+            )}
+            <button
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-semibold text-slate-300 transition hover:border-slate-500"
+              onClick={loadData}
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+              Refresh
+            </button>
+          </div>
         </header>
 
         {loading && <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 text-sm text-slate-400">Loading driver workspace...</div>}

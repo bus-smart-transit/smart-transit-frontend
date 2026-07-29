@@ -64,19 +64,45 @@ export default function MapView({ role = "passenger" }) {
       setFleetLocations(locations);
 
       clearFleetMarkers();
+
+      const makeBusMarkerEl = (status) => {
+        const el = document.createElement('div');
+        const isActive = ['departed', 'in-progress'].includes(status);
+        const bg = isActive ? '#0ea5e9' : '#64748b';
+        el.innerHTML = `
+          <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 36 36">
+            <circle cx="18" cy="18" r="17" fill="${bg}" stroke="#fff" stroke-width="2"/>
+            <text x="18" y="24" text-anchor="middle" font-size="18" fill="#fff">🚌</text>
+          </svg>`;
+        el.style.cursor = 'pointer';
+        el.style.width = '36px';
+        el.style.height = '36px';
+        return el;
+      };
+
       fleetMarkersRef.current = locations
         .filter((row) => Number.isFinite(Number(row?.longitude)) && Number.isFinite(Number(row?.latitude)))
-        .map((row) => new maplibregl.Marker({ color: '#0ea5e9' })
-          .setLngLat([Number(row.longitude), Number(row.latitude)])
-          .setPopup(
-            new maplibregl.Popup({ offset: 20 }).setHTML(
-              `<div style="color:#0f172a;font-family:sans-serif;padding:4px;">
-                <p style="margin:0;font-weight:700;">Fleet ${row?.plate_number || row?.fleet_id || '-'}</p>
-                <p style="margin:4px 0 0;font-size:11px;color:#64748b;">Status: ${row?.trip_status || 'active'}</p>
-              </div>`
+        .map((row) => {
+          const el = makeBusMarkerEl(row?.trip_status);
+          const speedLabel = Number.isFinite(Number(row?.speed_kmh))
+            ? `${Number(row.speed_kmh).toFixed(0)} km/h`
+            : 'Speed N/A';
+          const headingLabel = Number.isFinite(Number(row?.heading))
+            ? `Heading ${Number(row.heading).toFixed(0)}°`
+            : '';
+          return new maplibregl.Marker({ element: el })
+            .setLngLat([Number(row.longitude), Number(row.latitude)])
+            .setPopup(
+              new maplibregl.Popup({ offset: 20 }).setHTML(
+                `<div style="color:#0f172a;font-family:sans-serif;padding:6px;min-width:130px;">
+                  <p style="margin:0;font-weight:700;font-size:13px;">🚌 ${row?.plate_number || 'Bus ' + row?.fleet_id || '-'}</p>
+                  <p style="margin:4px 0 0;font-size:11px;color:#64748b;text-transform:capitalize;">Status: ${row?.trip_status || 'active'}</p>
+                  <p style="margin:2px 0 0;font-size:11px;color:#64748b;">${speedLabel}${headingLabel ? ' · ' + headingLabel : ''}</p>
+                </div>`
+              )
             )
-          )
-          .addTo(map.current));
+            .addTo(map.current);
+        });
     } catch {
       // Ignore polling failures to avoid breaking map interactions.
     }
@@ -95,7 +121,7 @@ export default function MapView({ role = "passenger" }) {
     void tick();
     const id = setInterval(() => {
       void tick();
-    }, 12000);
+    }, 6000);
 
     return () => {
       cancelled = true;
