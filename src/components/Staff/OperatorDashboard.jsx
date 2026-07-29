@@ -108,7 +108,15 @@ export default function OperatorDashboard() {
   const [routeForm, setRouteForm] = useState({ route_name: '', origin: '', destination: '' });
   const [fareRuleForm, setFareRuleForm] = useState({ fleet_id: '', seat_type: 'seated', base_fare: '', fare_per_km: '' });
   const [stopForm, setStopForm] = useState({ stop_name: '', latitude: '', longitude: '' });
+  const [stopLocationQuery, setStopLocationQuery] = useState('');
+  const [stopLocationResults, setStopLocationResults] = useState([]);
+  const [searchingStopLocation, setSearchingStopLocation] = useState(false);
+  const [stopLocationConfirm, setStopLocationConfirm] = useState(null);
+  const [stopLocationSearched, setStopLocationSearched] = useState(false);
+  const [stopMapPin, setStopMapPin] = useState(null); // { lat, lon } — controls map pin
   const [routeStopForm, setRouteStopForm] = useState({ route_id: '', stop_id: '', stop_order: '', distance_from_origin_km: '' });
+  const [selectedRouteStops, setSelectedRouteStops] = useState([]);
+  const [loadingRouteStops, setLoadingRouteStops] = useState(false);
   const [assigningRoute, setAssigningRoute] = useState(false);
   const [creatingRoute, setCreatingRoute] = useState(false);
   const [creatingFareRule, setCreatingFareRule] = useState(false);
@@ -318,6 +326,56 @@ export default function OperatorDashboard() {
     }
   };
 
+  const handleSearchStopLocation = async () => {
+    if (!stopLocationQuery.trim()) return;
+    setSearchingStopLocation(true);
+    setStopLocationResults([]);
+    setStopLocationSearched(false);
+    try {
+      const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(stopLocationQuery)}&limit=5`;
+      const res = await fetch(url, { headers: { 'Accept-Language': 'en' } });
+      const data = await res.json();
+      setStopLocationResults(data ?? []);
+      setStopLocationSearched(true);
+    } catch {
+      showMessage('Location search failed. Please check your connection and try again.', false);
+    } finally {
+      setSearchingStopLocation(false);
+    }
+  };
+
+  const handlePickStopLocation = (result) => {
+    const lat = parseFloat(result.lat).toFixed(6);
+    const lon = parseFloat(result.lon).toFixed(6);
+    setStopLocationConfirm({
+      display_name: result.display_name,
+      short_name: result.display_name.split(',')[0].trim(),
+      lat,
+      lon,
+    });
+    setStopMapPin({ lat: Number(lat), lon: Number(lon) });
+    setStopLocationResults([]);
+    setStopLocationQuery('');
+    setStopLocationSearched(false);
+  };
+
+  const handleConfirmStopLocation = () => {
+    if (!stopLocationConfirm) return;
+    setStopForm((prev) => ({
+      ...prev,
+      stop_name: prev.stop_name || stopLocationConfirm.short_name,
+      latitude: Number(stopLocationConfirm.lat),
+      longitude: Number(stopLocationConfirm.lon),
+    }));
+    setStopLocationConfirm(null);
+    // Keep the pin on the map after confirming
+  };
+
+  const handleRejectStopLocation = () => {
+    setStopLocationConfirm(null);
+    setStopMapPin(null);
+  };
+
   const handleCreateStop = async () => {
     if (!stopForm.stop_name || !stopForm.latitude || !stopForm.longitude) {
       showMessage('Please complete all stop fields', false);
@@ -334,6 +392,7 @@ export default function OperatorDashboard() {
 
       setStops((prev) => [res.data, ...prev]);
       setStopForm({ stop_name: '', latitude: '', longitude: '' });
+      setStopMapPin(null);
       showMessage('Stop created successfully!', true);
     } catch (err) {
       showMessage(err?.message || 'Failed to create stop', false);
@@ -367,8 +426,8 @@ export default function OperatorDashboard() {
   };
 
   const handleAddStopToRoute = async () => {
-    if (!routeStopForm.route_id || !routeStopForm.stop_id || !routeStopForm.stop_order || !routeStopForm.distance_from_origin_km) {
-      showMessage('Please complete route-stop fields', false);
+    if (!routeStopForm.route_id || !routeStopForm.stop_id || !routeStopForm.stop_order) {
+      showMessage('Please select a route, stop, and stop order', false);
       return;
     }
 
@@ -377,16 +436,93 @@ export default function OperatorDashboard() {
       await StaffService.addOperatorStopToRoute(parseInt(routeStopForm.route_id), {
         stop_id: parseInt(routeStopForm.stop_id),
         stop_order: parseInt(routeStopForm.stop_order),
-        distance_from_origin_km: Number(routeStopForm.distance_from_origin_km),
+        distance_from_origin_km: Number(routeStopForm.distance_from_origin_km) || 0,
       });
 
       setRouteStopForm({ route_id: '', stop_id: '', stop_order: '', distance_from_origin_km: '' });
-      showMessage('Stop applied to route successfully (saved in route_stop).', true);
+      setSelectedRouteStops([]);
+      showMessage('Stop applied to route successfully.', true);
     } catch (err) {
       showMessage(err?.message || 'Failed to apply stop to route', false);
     } finally {
       setAddingStopToRoute(false);
     }
+  };
+
+  // Haversine straight-line distance in km between two lat/lng points
+  const haversineKm = (lat1, lng1, lat2, lng2) => {
+    const toRad = (deg) => (deg * Math.PI) / 180;
+    const R = 6371;
+    const dLat = toRad(lat2 - lat1);
+    const dLng = toRad(lng2 - lng1);
+    const a =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+    return R * 2 * Math.asin(Math.sqrt(a));
+  };
+
+  const handleRouteStopRouteChange = async (routeId) => {
+    setRouteStopForm({ route_id: routeId, stop_id: '', stop_order: '', distance_from_origin_km: '' });
+    setSelectedRouteStops([]);
+    if (!routeId) return;
+
+    setLoadingRouteStops(true);
+    try {
+      const res = await StaffService.getOperatorRoute(parseInt(routeId));
+      const routeData = res?.data ?? res ?? {};
+      const rawStops = routeData?.routeStops ?? routeData?.route_stops ?? [];
+      const sorted = [...rawStops].sort((a, b) => (a.stop_order ?? 0) - (b.stop_order ?? 0));
+      setSelectedRouteStops(sorted);
+      setRouteStopForm((prev) => ({ ...prev, stop_order: String(sorted.length + 1) }));
+    } catch {
+      setSelectedRouteStops([]);
+    } finally {
+      setLoadingRouteStops(false);
+    }
+  };
+
+  const handleRouteStopStopChange = (stopId) => {
+    if (!stopId) {
+      setRouteStopForm((prev) => ({ ...prev, stop_id: '', distance_from_origin_km: '' }));
+      return;
+    }
+
+    // Find the selected stop's coordinates from the local stops list
+    const selectedStop = stops.find((s) => String(s.stop_id) === String(stopId));
+    const newLat = Number(selectedStop?.latitude ?? 0);
+    const newLng = Number(selectedStop?.longitude ?? 0);
+
+    if (!selectedRouteStops.length || !Number.isFinite(newLat) || !Number.isFinite(newLng)) {
+      // First stop on this route, or no coordinates — distance from origin is 0
+      setRouteStopForm((prev) => ({ ...prev, stop_id: stopId, distance_from_origin_km: '0' }));
+      return;
+    }
+
+    // Build coordinate chain through existing route stops in order
+    const chain = selectedRouteStops
+      .map((rs) => {
+        const s = rs.stop ?? stops.find((x) => x.stop_id === rs.stop_id) ?? null;
+        return s ? { lat: Number(s.latitude), lng: Number(s.longitude) } : null;
+      })
+      .filter((c) => c && Number.isFinite(c.lat) && Number.isFinite(c.lng));
+
+    // Cumulative distance along the chain
+    let total = 0;
+    for (let i = 1; i < chain.length; i++) {
+      total += haversineKm(chain[i - 1].lat, chain[i - 1].lng, chain[i].lat, chain[i].lng);
+    }
+
+    // Add leg from last existing stop to the new stop
+    if (chain.length > 0) {
+      const last = chain[chain.length - 1];
+      total += haversineKm(last.lat, last.lng, newLat, newLng);
+    }
+
+    setRouteStopForm((prev) => ({
+      ...prev,
+      stop_id: stopId,
+      distance_from_origin_km: total.toFixed(2),
+    }));
   };
 
   const loadFinancialReport = async () => {
@@ -1072,6 +1208,120 @@ export default function OperatorDashboard() {
                   <div className="rounded-2xl border border-slate-700 bg-slate-900/70 p-6">
                     <h2 className="text-xl font-bold mb-4">Create Stop</h2>
                     <div className="space-y-4">
+
+                      {/* ── Always-visible map ────────────────────────────── */}
+                      <div className="overflow-hidden rounded-xl border border-slate-700">
+                        <iframe
+                          key={stopMapPin ? `${stopMapPin.lat},${stopMapPin.lon}` : 'default'}
+                          title="Stop location map"
+                          width="100%"
+                          height="260"
+                          loading="lazy"
+                          className="w-full block"
+                          src={
+                            stopMapPin
+                              ? `https://www.openstreetmap.org/export/embed.html?bbox=${stopMapPin.lon - 0.005},${stopMapPin.lat - 0.005},${stopMapPin.lon + 0.005},${stopMapPin.lat + 0.005}&layer=mapnik&marker=${stopMapPin.lat},${stopMapPin.lon}`
+                              : `https://www.openstreetmap.org/export/embed.html?bbox=125.5047,7.0207,125.7047,7.1207&layer=mapnik`
+                          }
+                        />
+                        {!stopMapPin && (
+                          <p className="bg-slate-800 px-4 py-2 text-xs text-slate-500 text-center">
+                            Search a location above to pin it on the map
+                          </p>
+                        )}
+                        {stopMapPin && !stopLocationConfirm && (
+                          <p className="bg-emerald-950/60 px-4 py-2 text-xs text-emerald-300 text-center">
+                            📍 {stopForm.latitude}, {stopForm.longitude} — location confirmed
+                          </p>
+                        )}
+                      </div>
+
+                      {/* ── Confirmation banner (appears when result is picked) */}
+                      {stopLocationConfirm && (
+                        <div className="rounded-xl border border-sky-700 bg-sky-950/30 px-4 py-3">
+                          <p className="text-xs font-semibold uppercase tracking-widest text-sky-400 mb-1">
+                            Confirm Location
+                          </p>
+                          <p className="text-sm font-bold text-slate-100">{stopLocationConfirm.short_name}</p>
+                          <p className="text-xs text-slate-400 mt-0.5 truncate">{stopLocationConfirm.display_name}</p>
+                          <p className="font-mono text-xs text-sky-300 mt-1">
+                            {stopLocationConfirm.lat}, {stopLocationConfirm.lon}
+                          </p>
+                          <div className="flex gap-2 mt-3">
+                            <button
+                              type="button"
+                              onClick={handleConfirmStopLocation}
+                              className="flex-1 rounded-xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400"
+                            >
+                              ✓ Yes, use this location
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleRejectStopLocation}
+                              className="flex-1 rounded-xl border border-slate-600 bg-slate-800 px-4 py-2 text-sm font-semibold text-slate-300 transition hover:border-slate-400"
+                            >
+                              ← Search again
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* ── Search (hidden while confirming) ──────────────── */}
+                      {!stopLocationConfirm && (
+                        <div>
+                          <label className="block text-xs font-semibold uppercase tracking-widest text-slate-500 mb-1">
+                            Search Location
+                          </label>
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              placeholder="Type address or landmark…"
+                              value={stopLocationQuery}
+                              onChange={(e) => setStopLocationQuery(e.target.value)}
+                              onKeyDown={(e) => e.key === 'Enter' && handleSearchStopLocation()}
+                              className="flex-1 rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white placeholder-slate-500 outline-none transition focus:border-sky-500"
+                            />
+                            <button
+                              type="button"
+                              onClick={handleSearchStopLocation}
+                              disabled={searchingStopLocation || !stopLocationQuery.trim()}
+                              className="rounded-xl bg-sky-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-sky-400 disabled:opacity-50"
+                            >
+                              {searchingStopLocation ? '…' : 'Search'}
+                            </button>
+                          </div>
+
+                          {stopLocationResults.length > 0 && (
+                            <ul className="mt-2 max-h-52 overflow-y-auto rounded-xl border border-slate-700 bg-slate-800 divide-y divide-slate-700">
+                              {stopLocationResults.map((result) => (
+                                <li key={result.place_id}>
+                                  <button
+                                    type="button"
+                                    onClick={() => handlePickStopLocation(result)}
+                                    className="w-full px-4 py-3 text-left hover:bg-slate-700 transition"
+                                  >
+                                    <p className="text-sm font-semibold text-slate-100 truncate">
+                                      {result.display_name.split(',')[0].trim()}
+                                    </p>
+                                    <p className="text-xs text-slate-500 truncate">{result.display_name}</p>
+                                    <p className="font-mono text-xs text-sky-400 mt-0.5">
+                                      {parseFloat(result.lat).toFixed(6)}, {parseFloat(result.lon).toFixed(6)}
+                                    </p>
+                                  </button>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+
+                          {stopLocationSearched && stopLocationResults.length === 0 && !searchingStopLocation && (
+                            <p className="mt-2 rounded-xl border border-amber-800 bg-amber-950/30 px-4 py-3 text-sm text-amber-300">
+                              No results found for <strong>"{stopLocationQuery || 'that query'}"</strong>. Try a different spelling or nearby landmark.
+                            </p>
+                          )}
+                        </div>
+                      )}
+
+                      {/* ── Stop Name only (lat/lng stored internally) ────── */}
                       <input
                         type="text"
                         placeholder="Stop Name *"
@@ -1079,31 +1329,14 @@ export default function OperatorDashboard() {
                         onChange={(e) => setStopForm({ ...stopForm, stop_name: e.target.value })}
                         className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white placeholder-slate-500 outline-none transition focus:border-sky-500"
                       />
-                      <div className="grid grid-cols-2 gap-4">
-                        <input
-                          type="number"
-                          step="0.000001"
-                          placeholder="Latitude *"
-                          value={stopForm.latitude}
-                          onChange={(e) => setStopForm({ ...stopForm, latitude: e.target.value })}
-                          className="rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white placeholder-slate-500 outline-none transition focus:border-sky-500"
-                        />
-                        <input
-                          type="number"
-                          step="0.000001"
-                          placeholder="Longitude *"
-                          value={stopForm.longitude}
-                          onChange={(e) => setStopForm({ ...stopForm, longitude: e.target.value })}
-                          className="rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white placeholder-slate-500 outline-none transition focus:border-sky-500"
-                        />
-                      </div>
+
                       <button
                         className="w-full px-4 py-2 bg-linear-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition flex items-center justify-center gap-2"
                         onClick={handleCreateStop}
-                        disabled={creatingStop}
+                        disabled={creatingStop || !!stopLocationConfirm || !stopForm.latitude || !stopForm.longitude}
                       >
                         {creatingStop ? <Loader size={18} className="animate-spin" /> : <Plus size={18} />}
-                        Create Stop
+                        {!stopForm.latitude ? 'Search and confirm a location first' : 'Create Stop'}
                       </button>
                     </div>
                   </div>
@@ -1111,9 +1344,10 @@ export default function OperatorDashboard() {
                   <div className="rounded-2xl border border-slate-700 bg-slate-900/70 p-6">
                     <h2 className="text-xl font-bold mb-4">Apply Stop To Route</h2>
                     <div className="space-y-4">
+
                       <select
                         value={routeStopForm.route_id}
-                        onChange={(e) => setRouteStopForm({ ...routeStopForm, route_id: e.target.value })}
+                        onChange={(e) => handleRouteStopRouteChange(e.target.value)}
                         className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white outline-none transition focus:border-sky-500"
                       >
                         <option value="">Select route *</option>
@@ -1121,39 +1355,83 @@ export default function OperatorDashboard() {
                           <option key={route.route_id} value={route.route_id}>{route.route_name || `Route ${route.route_id}`}</option>
                         ))}
                       </select>
+
+                      {loadingRouteStops && (
+                        <p className="text-xs text-slate-500 animate-pulse">Loading existing stops for this route…</p>
+                      )}
+
+                      {selectedRouteStops.length > 0 && (
+                        <div className="rounded-xl border border-slate-700 bg-slate-800/60 px-4 py-3">
+                          <p className="text-xs font-semibold uppercase tracking-widest text-slate-500 mb-2">
+                            Existing stops on this route
+                          </p>
+                          <ol className="space-y-1">
+                            {selectedRouteStops.map((rs) => {
+                              const name = rs.stop?.stop_name ?? `Stop ${rs.stop_id}`;
+                              return (
+                                <li key={rs.id ?? rs.stop_id} className="flex items-center gap-2 text-sm text-slate-300">
+                                  <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-slate-700 text-xs font-semibold text-slate-200">
+                                    {rs.stop_order}
+                                  </span>
+                                  {name}
+                                  <span className="font-mono text-xs text-slate-500 ml-auto">
+                                    {rs.distance_from_origin_km != null ? `${rs.distance_from_origin_km} km` : ''}
+                                  </span>
+                                </li>
+                              );
+                            })}
+                          </ol>
+                        </div>
+                      )}
+
                       <select
                         value={routeStopForm.stop_id}
-                        onChange={(e) => setRouteStopForm({ ...routeStopForm, stop_id: e.target.value })}
+                        onChange={(e) => handleRouteStopStopChange(e.target.value)}
                         className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white outline-none transition focus:border-sky-500"
+                        disabled={!routeStopForm.route_id}
                       >
-                        <option value="">Select stop *</option>
-                        {stops.map((stop) => (
-                          <option key={stop.stop_id} value={stop.stop_id}>{stop.stop_name}</option>
-                        ))}
+                        <option value="">Select stop to add *</option>
+                        {stops
+                          .filter((stop) =>
+                            !selectedRouteStops.some((rs) => rs.stop_id === stop.stop_id)
+                          )
+                          .map((stop) => (
+                            <option key={stop.stop_id} value={stop.stop_id}>{stop.stop_name}</option>
+                          ))
+                        }
                       </select>
-                      <div className="grid grid-cols-2 gap-4">
-                        <input
-                          type="number"
-                          min="1"
-                          placeholder="Stop Order *"
-                          value={routeStopForm.stop_order}
-                          onChange={(e) => setRouteStopForm({ ...routeStopForm, stop_order: e.target.value })}
-                          className="rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white placeholder-slate-500 outline-none transition focus:border-sky-500"
-                        />
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          placeholder="Distance from Origin (km) *"
-                          value={routeStopForm.distance_from_origin_km}
-                          onChange={(e) => setRouteStopForm({ ...routeStopForm, distance_from_origin_km: e.target.value })}
-                          className="rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white placeholder-slate-500 outline-none transition focus:border-sky-500"
-                        />
-                      </div>
+
+                      <input
+                        type="number"
+                        min="1"
+                        placeholder="Stop Order / Sequence *"
+                        value={routeStopForm.stop_order}
+                        onChange={(e) => setRouteStopForm({ ...routeStopForm, stop_order: e.target.value })}
+                        className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white placeholder-slate-500 outline-none transition focus:border-sky-500"
+                      />
+
+                      {routeStopForm.stop_id && (
+                        <div className={`rounded-xl border px-4 py-3 text-sm ${
+                          routeStopForm.distance_from_origin_km === '0' || routeStopForm.distance_from_origin_km === ''
+                            ? 'border-slate-700 bg-slate-800/60 text-slate-400'
+                            : 'border-sky-800 bg-sky-950/30 text-sky-300'
+                        }`}>
+                          <span className="text-xs uppercase tracking-widest font-semibold block mb-0.5 opacity-70">
+                            Auto-calculated distance from origin
+                          </span>
+                          <span className="font-mono font-bold text-base">
+                            {routeStopForm.distance_from_origin_km || '0'} km
+                          </span>
+                          {routeStopForm.distance_from_origin_km === '0' && (
+                            <span className="ml-2 text-xs text-slate-500">(origin stop)</span>
+                          )}
+                        </div>
+                      )}
+
                       <button
                         className="w-full px-4 py-2 bg-linear-to-r from-teal-600 to-teal-700 hover:from-teal-700 hover:to-teal-800 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition flex items-center justify-center gap-2"
                         onClick={handleAddStopToRoute}
-                        disabled={addingStopToRoute}
+                        disabled={addingStopToRoute || !routeStopForm.route_id || !routeStopForm.stop_id || !routeStopForm.stop_order}
                       >
                         {addingStopToRoute ? <Loader size={18} className="animate-spin" /> : <Plus size={18} />}
                         Apply Stop To Route
