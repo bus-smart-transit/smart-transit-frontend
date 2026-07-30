@@ -102,6 +102,23 @@ export default function BuyTicket({ onTicketPurchased }) {
             <p className="buy-empty">Payment succeeded. Ticket QR will appear on your scheduled trip date.</p>
           ) : (
             <div className="buy-trip-list">
+              {/* Group QR — shown once when the order has more than one ticket */}
+              {qrTickets.length > 1 && qrTickets[0]?.group_qr_url && (
+                <div style={{ marginBottom: '16px', padding: '12px', border: '1px solid rgba(99,179,237,0.3)', borderRadius: '12px', background: 'rgba(14,165,233,0.06)' }}>
+                  <p style={{ margin: '0 0 8px', fontSize: '0.8rem', fontWeight: 600, color: '#7dd3fc' }}>
+                    Group Boarding QR — scan once to board all {qrTickets.length} tickets
+                  </p>
+                  <img
+                    src={qrTickets[0].group_qr_url}
+                    alt="Group boarding QR"
+                    style={{ width: '160px', height: '160px', borderRadius: '8px', display: 'block' }}
+                  />
+                  <p style={{ margin: '8px 0 0', fontSize: '0.7rem', color: '#94a3b8' }}>
+                    The conductor scans this QR to board all passengers in your order at once.
+                  </p>
+                </div>
+              )}
+
               {qrTickets.map((ticket, idx) => (
                 <div key={ticket.ticket_uuid || idx}>
                   <TicketCard

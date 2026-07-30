@@ -1,5 +1,13 @@
 import './TicketCard.css';
 
+const STATUS_FOOTER = {
+  issued:    { text: 'Valid Ticket — Present QR code to board', mod: '' },
+  boarded:   { text: 'Boarded — You are currently on this trip', mod: 'st-ticket-foot--boarded' },
+  alighted:  { text: 'Trip Completed — Thank you for riding!', mod: 'st-ticket-foot--alighted' },
+  expired:   { text: 'Ticket Expired — This ticket is no longer valid', mod: 'st-ticket-foot--expired' },
+  cancelled: { text: 'Ticket Cancelled', mod: 'st-ticket-foot--cancelled' },
+};
+
 export default function TicketCard({
   fromLabel,
   toLabel,
@@ -12,6 +20,8 @@ export default function TicketCard({
   validLabel,
   expiresLabel,
 }) {
+  const footer = STATUS_FOOTER[String(statusLabel).toLowerCase()] ?? STATUS_FOOTER.issued;
+
   return (
     <article className="st-ticket-card">
       <header className="st-ticket-head">
@@ -51,7 +61,7 @@ export default function TicketCard({
         </dl>
       </div>
 
-      <footer className="st-ticket-foot">Valid Ticket — Present QR code to board</footer>
+      <footer className={`st-ticket-foot ${footer.mod}`}>{footer.text}</footer>
     </article>
   );
 }

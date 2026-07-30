@@ -116,6 +116,30 @@
   font-weight: 700;
 }
 
+.st-ticket-foot--boarded {
+  border-color: #7dd3fc;
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.st-ticket-foot--alighted {
+  border-color: #94a3b8;
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.st-ticket-foot--expired {
+  border-color: #fca5a5;
+  background: #fef2f2;
+  color: #991b1b;
+}
+
+.st-ticket-foot--cancelled {
+  border-color: #fca5a5;
+  background: #fef2f2;
+  color: #7f1d1d;
+}
+
 @media (max-width: 640px) {
   .st-ticket-head h4 {
     font-size: 1.35rem;

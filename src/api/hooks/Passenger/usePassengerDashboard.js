@@ -268,6 +268,21 @@ export default function usePassengerDashboard({ preloadMapView }) {
     if (!selectedTicket) return;
 
     const qrUrl = selectedTicketQr?.qr_url || '';
+    const ticketStatus = String(selectedTicket.status || 'issued').toLowerCase();
+    const footerMessages = {
+      boarded:   'Boarded — You are currently on this trip',
+      alighted:  'Trip Completed — Thank you for riding!',
+      expired:   'Ticket Expired — This ticket is no longer valid',
+      cancelled: 'Ticket Cancelled',
+    };
+    const footerText = footerMessages[ticketStatus] ?? 'Valid Ticket — Present QR code to board';
+    const footerStyles = {
+      boarded:   'border:1px solid #7dd3fc;background:#e0f2fe;color:#0369a1;',
+      alighted:  'border:1px solid #94a3b8;background:#f1f5f9;color:#475569;',
+      expired:   'border:1px solid #fca5a5;background:#fef2f2;color:#991b1b;',
+      cancelled: 'border:1px solid #fca5a5;background:#fef2f2;color:#7f1d1d;',
+    };
+    const footerStyle = footerStyles[ticketStatus] ?? 'border:1px solid #9dd7af;background:#eaf9f0;color:#166534;';
     const popup = window.open('', '_blank', 'width=900,height=700');
     if (!popup) return;
 
@@ -314,7 +329,7 @@ export default function usePassengerDashboard({ preloadMapView }) {
                 <div><span class="k">Fare Paid</span><span class="v">PHP ${Number(selectedTicket.amount ?? selectedTicket.final_amount ?? 0).toFixed(2)}</span></div>
               </div>
             </div>
-            <div class="foot">Valid Ticket — Present QR code to board</div>
+            <div class="foot" style="${footerStyle}">${footerText}</div>
           </article>
           </div>
           <script>window.onload = function () { window.print(); };</script>

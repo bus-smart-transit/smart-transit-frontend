@@ -1,4 +1,4 @@
-import { Suspense, lazy } from 'react';
+import { Suspense, lazy, useState } from 'react';
 import { Bell, Map, Ticket, User, LogOut, Gift, History, ShoppingCart, Menu } from 'lucide-react';
 import usePassengerDashboard from '../../../api/hooks/Passenger/usePassengerDashboard';
 import TicketCard from '../Ticket/TicketCard';
@@ -23,6 +23,337 @@ const NAV_ITEMS = [
 ];
 
 const PROTECTED_TABS = new Set(['tickets', 'rewards', 'transactions', 'profile']);
+
+// ─── Group order card ────────────────────────────────────────────────────────
+function GroupOrderCard({ tickets, onCardClick, openTicketModal, getOriginLabel, getDestinationLabel, formatDateTime }) {
+  const transRef = tickets[0]?.payment?.transaction_reference ?? '';
+  const groupQrUrl = transRef
+    ? `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(`grp:${transRef}`)}`
+    : null;
+  const totalAmount = tickets.reduce((sum, t) => sum + Number(t.amount ?? 0), 0);
+  const allBoarded = tickets.every((t) => t.status === 'boarded');
+  const anyBoarded = tickets.some((t) => t.status === 'boarded');
+  const groupStatus = allBoarded ? 'boarded' : anyBoarded ? 'partial' : 'issued';
+  const statusColors = {
+    boarded: { bg: 'rgba(14,165,233,0.1)', border: 'rgba(56,189,248,0.3)', color: '#38bdf8', label: 'All Boarded' },
+    partial: { bg: 'rgba(251,191,36,0.1)', border: 'rgba(251,191,36,0.3)', color: '#fbbf24', label: 'Partially Boarded' },
+    issued:  { bg: 'rgba(52,211,153,0.1)', border: 'rgba(52,211,153,0.3)', color: '#34d399', label: 'Ready to Board' },
+  };
+  const sc = statusColors[groupStatus];
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onCardClick}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onCardClick(); }}
+      style={{ border: '1px solid rgba(148,163,184,0.2)', borderRadius: '12px', background: 'rgba(15,23,42,0.6)', overflow: 'hidden', marginBottom: '12px', cursor: 'pointer', transition: 'border-color 0.15s' }}
+      onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'rgba(56,189,248,0.4)'; }}
+      onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'rgba(148,163,184,0.2)'; }}
+    >
+      {/* Card header */}
+      <div style={{ padding: '12px 14px', borderBottom: '1px solid rgba(148,163,184,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+        <div>
+          <p style={{ margin: 0, fontSize: '0.78rem', fontWeight: 700, color: '#e2e8f0' }}>
+            Group Order — {tickets.length} Ticket{tickets.length > 1 ? 's' : ''}
+          </p>
+          <p style={{ margin: '2px 0 0', fontSize: '0.68rem', color: '#64748b', fontFamily: 'monospace' }}>
+            {transRef ? transRef.slice(0, 20) + (transRef.length > 20 ? '…' : '') : 'No ref'}
+          </p>
+        </div>
+        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+          <span style={{ fontSize: '0.7rem', padding: '2px 8px', borderRadius: '10px', background: sc.bg, border: `1px solid ${sc.border}`, color: sc.color, fontWeight: 700 }}>
+            {sc.label}
+          </span>
+          <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#e2e8f0' }}>
+            PHP {totalAmount.toFixed(2)}
+          </span>
+        </div>
+      </div>
+
+      {/* Body: QR + ticket list */}
+      <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '0' }}>
+        {/* Group QR */}
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '12px', borderRight: '1px solid rgba(148,163,184,0.1)', background: 'rgba(255,255,255,0.03)' }}>
+          {groupQrUrl ? (
+            <>
+              <img src={groupQrUrl} alt="Group QR" style={{ width: '96px', height: '96px', borderRadius: '6px', background: '#fff' }} />
+              <p style={{ margin: '4px 0 0', fontSize: '0.6rem', color: '#64748b', textAlign: 'center' }}>Group QR</p>
+            </>
+          ) : (
+            <p style={{ fontSize: '0.68rem', color: '#64748b', textAlign: 'center' }}>QR unavailable</p>
+          )}
+        </div>
+
+        {/* Ticket rows */}
+        <div style={{ padding: '8px' }}>
+          {tickets.map((ticket, i) => (
+            <button
+              key={ticket.ticket_id ?? ticket.ticket_uuid ?? i}
+              type="button"
+              onClick={(e) => { e.stopPropagation(); void openTicketModal(ticket); }}
+              style={{ display: 'flex', width: '100%', alignItems: 'center', justifyContent: 'space-between', gap: '6px', padding: '6px 8px', borderRadius: '8px', border: 'none', background: 'transparent', cursor: 'pointer', textAlign: 'left', marginBottom: i < tickets.length - 1 ? '4px' : '0' }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(148,163,184,0.08)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+            >
+              <div>
+                <p style={{ margin: 0, fontSize: '0.78rem', fontWeight: 600, color: '#e2e8f0' }}>
+                  {getOriginLabel(ticket)} → {getDestinationLabel(ticket)}
+                </p>
+                <p style={{ margin: '1px 0 0', fontSize: '0.68rem', color: '#64748b' }}>
+                  {ticket.seat_type || 'seated'} · {formatDateTime(ticket.valid_from)}
+                </p>
+              </div>
+              <span style={{
+                fontSize: '0.68rem', padding: '2px 7px', borderRadius: '8px', whiteSpace: 'nowrap', fontWeight: 600,
+                background: ticket.status === 'boarded' ? 'rgba(14,165,233,0.12)' : ticket.status === 'alighted' ? 'rgba(148,163,184,0.12)' : 'rgba(52,211,153,0.12)',
+                color: ticket.status === 'boarded' ? '#38bdf8' : ticket.status === 'alighted' ? '#94a3b8' : '#34d399',
+                border: ticket.status === 'boarded' ? '1px solid rgba(56,189,248,0.25)' : ticket.status === 'alighted' ? '1px solid rgba(148,163,184,0.25)' : '1px solid rgba(52,211,153,0.25)',
+              }}>
+                {ticket.status || 'issued'}
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Ticket tab with filters ──────────────────────────────────────────────────
+function TicketTabWithFilter({
+  tickets,
+  isLoadingPrivate,
+  refCounts,
+  hasGroupTickets,
+  openTicketModal,
+  getOriginLabel,
+  getDestinationLabel,
+  formatDateTime,
+}) {
+  const [filter, setFilter] = useState('all');
+  const [groupModal, setGroupModal] = useState(null); // null | ticket[]
+
+  // Build group orders map for the 'group' view
+  const groupOrders = {};
+  tickets.forEach((t) => {
+    const ref = t?.payment?.transaction_reference;
+    if (ref && (refCounts[ref] ?? 1) > 1) {
+      if (!groupOrders[ref]) groupOrders[ref] = [];
+      groupOrders[ref].push(t);
+    }
+  });
+
+  const FILTERS = [
+    { id: 'all',     label: 'All' },
+    { id: 'single',  label: 'Single QR' },
+    ...(hasGroupTickets ? [{ id: 'group', label: 'Group QR' }] : []),
+    { id: 'issued',  label: 'Issued' },
+    { id: 'boarded', label: 'Boarded' },
+  ];
+
+  // For non-group filters: list of individual tickets
+  const individualTickets = tickets.filter((t) => {
+    if (filter === 'all') return true;
+    if (filter === 'single') {
+      const ref = t?.payment?.transaction_reference;
+      return !ref || (refCounts[ref] ?? 1) === 1;
+    }
+    if (filter === 'issued')  return (t.status || 'issued') === 'issued';
+    if (filter === 'boarded') return t.status === 'boarded';
+    return false;
+  });
+
+  const isGroupView = filter === 'group';
+  const groupList = Object.values(groupOrders);
+  const noResults = isGroupView ? groupList.length === 0 : individualTickets.length === 0;
+
+  const emptyMsg = tickets.length === 0
+    ? 'No tickets available yet.'
+    : `No ${filter === 'boarded' ? 'boarded' : filter === 'issued' ? 'issued' : filter === 'single' ? 'single QR' : filter === 'group' ? 'group' : ''} tickets found.`;
+
+  // Derive group modal display values
+  const modalTransRef   = groupModal?.[0]?.payment?.transaction_reference ?? '';
+  const modalGroupQrUrl = modalTransRef
+    ? `https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=${encodeURIComponent(`grp:${modalTransRef}`)}`
+    : null;
+  const modalTotal      = groupModal?.reduce((s, t) => s + Number(t.amount ?? 0), 0) ?? 0;
+
+  return (
+    <section className="passenger-panel">
+      <div className="passenger-panel-head">
+        <h2>My Tickets</h2>
+      </div>
+
+      {/* Filter pills */}
+      {tickets.length > 0 && (
+        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '14px' }}>
+          {FILTERS.map((f) => (
+            <button
+              key={f.id}
+              type="button"
+              onClick={() => setFilter(f.id)}
+              style={{
+                padding: '4px 14px',
+                borderRadius: '20px',
+                border: filter === f.id ? '1px solid #38bdf8' : '1px solid rgba(148,163,184,0.3)',
+                background: filter === f.id ? 'rgba(56,189,248,0.12)' : 'transparent',
+                color: filter === f.id ? '#38bdf8' : '#94a3b8',
+                fontSize: '0.78rem',
+                fontWeight: filter === f.id ? 700 : 400,
+                cursor: 'pointer',
+                transition: 'all 0.15s',
+              }}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {isLoadingPrivate ? (
+        <p className="passenger-muted">Loading tickets...</p>
+      ) : noResults ? (
+        <p className="passenger-muted">{emptyMsg}</p>
+      ) : isGroupView ? (
+        // ── Group QR view ────────────────────────────────────────────────────
+        <div>
+          {groupList.map((groupTickets, idx) => (
+            <GroupOrderCard
+              key={groupTickets[0]?.payment?.transaction_reference ?? idx}
+              tickets={groupTickets}
+              refCounts={refCounts}
+              onCardClick={() => setGroupModal(groupTickets)}
+              openTicketModal={openTicketModal}
+              getOriginLabel={getOriginLabel}
+              getDestinationLabel={getDestinationLabel}
+              formatDateTime={formatDateTime}
+            />
+          ))}
+        </div>
+      ) : (
+        // ── Individual ticket list ────────────────────────────────────────────
+        <div className="passenger-ticket-list">
+          {individualTickets.map((ticket, idx) => {
+            const ref = ticket?.payment?.transaction_reference;
+            const isPartOfGroup = ref && (refCounts[ref] ?? 1) > 1;
+            return (
+              <button
+                key={ticket.ticket_id ?? ticket.ticket_uuid ?? idx}
+                type="button"
+                className="passenger-ticket-item passenger-ticket-button"
+                onClick={() => { void openTicketModal(ticket); }}
+              >
+                <span>{idx + 1}.</span>
+                <div>
+                  <strong>{getOriginLabel(ticket)} to {getDestinationLabel(ticket)}</strong>
+                  <p className="passenger-ticket-meta">Booked: {formatDateTime(ticket?.created_at)}</p>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+                  <em>{ticket.status || 'issued'}</em>
+                  {isPartOfGroup && (
+                    <span style={{ fontSize: '0.68rem', padding: '2px 7px', borderRadius: '10px', background: 'rgba(56,189,248,0.12)', color: '#38bdf8', border: '1px solid rgba(56,189,248,0.25)', whiteSpace: 'nowrap' }}>
+                      Group order
+                    </span>
+                  )}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* ── Group order modal ─────────────────────────────────────────────── */}
+      {groupModal && (
+        <div
+          className="passenger-modal-backdrop"
+          role="presentation"
+          onClick={() => setGroupModal(null)}
+        >
+          <section
+            className="passenger-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Group order details"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}
+          >
+            <header className="passenger-modal-head">
+              <h3>Group Order — {groupModal.length} Ticket{groupModal.length > 1 ? 's' : ''}</h3>
+              <button
+                type="button"
+                className="passenger-modal-close"
+                onClick={() => setGroupModal(null)}
+              >
+                Close
+              </button>
+            </header>
+
+            <div className="passenger-modal-body" style={{ overflowY: 'auto' }}>
+              {/* Group QR */}
+              {modalGroupQrUrl && (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', padding: '8px 0' }}>
+                  <img
+                    src={modalGroupQrUrl}
+                    alt="Group QR code"
+                    className="passenger-modal-qr"
+                    style={{ width: '200px', height: '200px' }}
+                  />
+                  <p style={{ margin: 0, fontSize: '0.75rem', color: '#5a7896', textAlign: 'center' }}>
+                    Scan this QR to board all {groupModal.length} tickets at once
+                  </p>
+                  <p style={{ margin: 0, fontSize: '0.68rem', color: '#94a3b8', fontFamily: 'monospace' }}>
+                    {modalTransRef}
+                  </p>
+                </div>
+              )}
+
+              {/* Divider */}
+              <div style={{ borderTop: '1px solid #e0ebf8', margin: '4px 0' }} />
+
+              {/* Ticket rows */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {groupModal.map((ticket, i) => (
+                  <button
+                    key={ticket.ticket_id ?? ticket.ticket_uuid ?? i}
+                    type="button"
+                    onClick={() => { setGroupModal(null); void openTicketModal(ticket); }}
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', padding: '10px 12px', borderRadius: '8px', border: '1px solid #dbe8f6', background: '#f7fbff', cursor: 'pointer', textAlign: 'left' }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = '#eaf3fd'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = '#f7fbff'; }}
+                  >
+                    <div>
+                      <p style={{ margin: 0, fontSize: '0.82rem', fontWeight: 700, color: '#12365a' }}>
+                        {getOriginLabel(ticket)} → {getDestinationLabel(ticket)}
+                      </p>
+                      <p style={{ margin: '2px 0 0', fontSize: '0.72rem', color: '#5a7896' }}>
+                        {ticket.seat_type || 'seated'} · {formatDateTime(ticket.valid_from)} · PHP {Number(ticket.amount ?? 0).toFixed(2)}
+                      </p>
+                    </div>
+                    <span style={{
+                      fontSize: '0.72rem', padding: '3px 9px', borderRadius: '8px', whiteSpace: 'nowrap', fontWeight: 700,
+                      background: ticket.status === 'boarded' ? '#e0f2fe' : ticket.status === 'alighted' ? '#f1f5f9' : '#eaf9f0',
+                      color: ticket.status === 'boarded' ? '#0369a1' : ticket.status === 'alighted' ? '#475569' : '#166534',
+                      border: ticket.status === 'boarded' ? '1px solid #7dd3fc' : ticket.status === 'alighted' ? '1px solid #94a3b8' : '1px solid #9dd7af',
+                    }}>
+                      {ticket.status || 'issued'}
+                    </span>
+                  </button>
+                ))}
+              </div>
+
+              {/* Total */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 12px', borderTop: '1px solid #e0ebf8', marginTop: '4px' }}>
+                <span style={{ fontSize: '0.82rem', color: '#5a7896', fontWeight: 600 }}>Total Paid</span>
+                <span style={{ fontSize: '0.88rem', fontWeight: 700, color: '#12365a' }}>PHP {modalTotal.toFixed(2)}</span>
+              </div>
+            </div>
+          </section>
+        </div>
+      )}
+    </section>
+  );
+}
 
 export default function Dashboard() {
   const {
@@ -98,37 +429,24 @@ export default function Dashboard() {
     }
 
     if (visibleTab === 'tickets') {
+      const refCounts = {};
+      tickets.forEach((t) => {
+        const ref = t?.payment?.transaction_reference;
+        if (ref) refCounts[ref] = (refCounts[ref] ?? 0) + 1;
+      });
+      const hasGroupTickets = Object.values(refCounts).some((c) => c > 1);
+
       return (
-        <section className="passenger-panel">
-          <div className="passenger-panel-head">
-            <h2>My Tickets</h2>
-          </div>
-          {isLoadingPrivate ? (
-            <p className="passenger-muted">Loading tickets...</p>
-          ) : tickets.length === 0 ? (
-            <p className="passenger-muted">No active tickets available yet.</p>
-          ) : (
-            <div className="passenger-ticket-list">
-              {tickets.map((ticket, idx) => (
-                <button
-                  key={ticket.ticket_id ?? ticket.ticket_uuid ?? idx}
-                  type="button"
-                  className="passenger-ticket-item passenger-ticket-button"
-                  onClick={() => {
-                    void openTicketModal(ticket);
-                  }}
-                >
-                  <span>{idx + 1}.</span>
-                  <div>
-                    <strong>{getOriginLabel(ticket)} to {getDestinationLabel(ticket)}</strong>
-                    <p className="passenger-ticket-meta">Booked: {formatDateTime(ticket?.created_at)}</p>
-                  </div>
-                  <em>{ticket.status || 'issued'}</em>
-                </button>
-              ))}
-            </div>
-          )}
-        </section>
+        <TicketTabWithFilter
+          tickets={tickets}
+          isLoadingPrivate={isLoadingPrivate}
+          refCounts={refCounts}
+          hasGroupTickets={hasGroupTickets}
+          openTicketModal={openTicketModal}
+          getOriginLabel={getOriginLabel}
+          getDestinationLabel={getDestinationLabel}
+          formatDateTime={formatDateTime}
+        />
       );
     }
 

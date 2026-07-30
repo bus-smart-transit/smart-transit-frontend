@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import PassengerService from '../../PassengerService/PassengerService';
 import useDropoffPicker from './useDropoffPicker';
 
@@ -178,9 +178,13 @@ export default function useBuyTicket({ onTicketPurchased }) {
 
   const selectedTrip = trips.find((trip) => trip.trip_id === parseInt(form.trip_id, 10));
   const selectedRoute = selectedTrip?.fleet_route?.route || null;
-  const selectedStops = selectedRoute?.routeStops || selectedRoute?.route_stops || [];
+  const selectedStops = useMemo(
+    () => selectedRoute?.routeStops || selectedRoute?.route_stops || [],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [selectedRoute?.route_id],
+  );
   const selectedOriginStop = selectedStops.find((stop) => String(stop.stop_id) === String(form.origin_stop_id));
-  const stopLabel = (stop) => stop?.stop?.stop_name || stop?.stop_name || `Stop ${stop?.stop_id}`;
+  const stopLabel = useCallback((stop) => stop?.stop?.stop_name || stop?.stop_name || `Stop ${stop?.stop_id}`, []);
 
   const quantity = Math.max(1, parseInt(form.ticket_quantity, 10) || 1);
   const unitFare = Number(fare ?? 0);
@@ -284,7 +288,6 @@ export default function useBuyTicket({ onTicketPurchased }) {
     destinationPinnedLabel,
     originPinnedLabel,
     clearDestinationPinnedLabel,
-    pinCurrentLocationAsOrigin,
   } = useDropoffPicker({
     dropoffMode,
     selectedOriginStop,
@@ -379,10 +382,17 @@ export default function useBuyTicket({ onTicketPurchased }) {
       ticket?.trip?.fleetRoute?.route?.destination ||
       null;
 
+    const transactionRef = ticket?.payment?.transaction_reference ?? null;
+    const groupQrContent = transactionRef ? `grp:${transactionRef}` : null;
+
     return {
       ticket_uuid: ticket.ticket_uuid,
       qr_content: qrContent,
       qr_url: `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qrContent)}`,
+      group_qr_url: groupQrContent
+        ? `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(groupQrContent)}`
+        : null,
+      transaction_reference: transactionRef,
       destination: destinationName || 'Not specified',
       seat_type: ticket?.seat_type,
       amount: ticket?.amount,

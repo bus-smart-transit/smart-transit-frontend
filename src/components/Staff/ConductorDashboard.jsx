@@ -4,6 +4,7 @@ import {
   AlertCircle,
   BarChart3,
   Bus,
+  Camera,
   Calendar,
   CheckCircle2,
   KeyRound,
@@ -27,6 +28,8 @@ const NAV_ITEMS = [
   { key: 'passengers', label: 'Passengers', icon: Users },
   { key: 'pin', label: 'Daily PIN', icon: KeyRound },
 ];
+
+const UUID_PATTERN = /[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i;
 
 const formatDateTime = (value) => {
   if (!value) return '-';
@@ -87,6 +90,10 @@ export default function ConductorDashboard() {
   const [pinStatus, setPinStatus] = useState('');
   const [scanUuid, setScanUuid] = useState('');
   const [scanResult, setScanResult] = useState(null);
+  const [groupScanResult, setGroupScanResult] = useState(null);
+  const [scannerRunning, setScannerRunning] = useState(false);
+  const [scannerError, setScannerError] = useState('');
+  const [scannerStatus, setScannerStatus] = useState('');
   const [onsiteReceipt, setOnsiteReceipt] = useState(null);
   const [onsiteForm, setOnsiteForm] = useState({
     origin_stop_id: '',
@@ -99,11 +106,60 @@ export default function ConductorDashboard() {
   const [actionMsg, setActionMsg] = useState('');
   const hasActiveTrip = isCurrentOrSameDayTrip(trip);
   const didBootstrap = useRef(false);
+  const videoRef = useRef(null);
+  const scannerStreamRef = useRef(null);
+  const scannerTimerRef = useRef(null);
+  const scannerBusyRef = useRef(false);
+  const lastDetectedRef = useRef({ value: '', at: 0 });
   const upcomingTrip = getUpcomingTrip(assignedTrips);
   const showNoCurrentTripState = !loading && !hasActiveTrip && ['trip', 'occupancy', 'scan', 'passengers', 'pin'].includes(activeTab);
   const routeStops = trip?.fleet_route?.route?.route_stops || trip?.fleet_route?.route?.routeStops || [];
   const groupedPassengers = usePassengersByTrip(passengers, trip);
   const { printOnsiteReceipt } = useOnsiteReceiptPrinter();
+
+  const stopScanner = useCallback(() => {
+    if (scannerTimerRef.current) {
+      clearInterval(scannerTimerRef.current);
+      scannerTimerRef.current = null;
+    }
+
+    if (scannerStreamRef.current) {
+      scannerStreamRef.current.getTracks().forEach((track) => track.stop());
+      scannerStreamRef.current = null;
+    }
+
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+
+    scannerBusyRef.current = false;
+    setScannerRunning(false);
+  }, []);
+
+  const extractTicketUuid = useCallback((rawValue) => {
+    if (!rawValue) return '';
+
+    const trimmed = String(rawValue).trim();
+    const directMatch = trimmed.match(UUID_PATTERN);
+    if (directMatch?.[0]) return directMatch[0];
+
+    try {
+      const url = new URL(trimmed);
+      const fromQuery =
+        url.searchParams.get('ticket_uuid') ||
+        url.searchParams.get('uuid') ||
+        url.searchParams.get('ticket');
+
+      if (fromQuery && UUID_PATTERN.test(fromQuery)) {
+        const queryMatch = fromQuery.match(UUID_PATTERN);
+        return queryMatch?.[0] || '';
+      }
+    } catch {
+      return '';
+    }
+
+    return '';
+  }, []);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -196,21 +252,149 @@ export default function ConductorDashboard() {
     return () => clearTimeout(timer);
   }, [activeTab, hasActiveTrip, loadPin]);
 
-  const handleScan = async () => {
+  useEffect(() => {
+    if (activeTab !== 'scan') {
+      stopScanner();
+    }
+  }, [activeTab, stopScanner]);
+
+  useEffect(() => () => stopScanner(), [stopScanner]);
+
+  const handleScan = useCallback(async (scannedUuid = scanUuid) => {
+    const ticketUuid = String(scannedUuid || '').trim();
+
     if (!trip?.trip_id) {
       setScanResult({ success: false, msg: 'No active trip assigned. Ticket scanning is unavailable.' });
       return;
     }
+
+    if (!ticketUuid) {
+      setScanResult({ success: false, msg: 'Please provide a ticket UUID before scanning.' });
+      return;
+    }
+
+    setGroupScanResult(null);
     setScanResult(null);
     try {
-      const res = await StaffService.scanTicket(scanUuid);
+      const res = await StaffService.scanTicket(ticketUuid);
       setScanResult({ success: true, data: res?.data, msg: res?.message });
       setActionMsg('Ticket scanned successfully.');
+      setScanUuid(ticketUuid);
       void loadOccupancy();
     } catch (err) {
       setScanResult({ success: false, msg: err.message });
     }
-  };
+  }, [loadOccupancy, scanUuid, trip?.trip_id]);
+
+  const handleGroupScan = useCallback(async (transactionRef) => {
+    if (!trip?.trip_id) {
+      setGroupScanResult({ success: false, msg: 'No active trip assigned. Group scanning is unavailable.' });
+      return;
+    }
+
+    setScanResult(null);
+    setGroupScanResult(null);
+    try {
+      const res = await StaffService.scanGroupTickets(transactionRef);
+      setGroupScanResult({ success: true, data: res?.data, msg: res?.message });
+      setActionMsg(`${res?.data?.boarded_count ?? 0} ticket(s) boarded.`);
+      void loadOccupancy();
+    } catch (err) {
+      setGroupScanResult({ success: false, msg: err.message });
+    }
+  }, [loadOccupancy, trip?.trip_id]);
+
+  const startScanner = useCallback(async () => {
+    setScannerError('');
+    setScannerStatus('');
+    setScanResult(null);
+
+    if (!trip?.trip_id) {
+      setScannerError('No active trip assigned. Camera scanning is unavailable.');
+      return;
+    }
+
+    if (!window.isSecureContext) {
+      setScannerError('Camera access requires HTTPS (or localhost).');
+      return;
+    }
+
+    if (!('BarcodeDetector' in window)) {
+      setScannerError('This browser does not support built-in QR scanning. Use manual UUID entry.');
+      return;
+    }
+
+    if (!navigator?.mediaDevices?.getUserMedia) {
+      setScannerError('Camera API is not available on this device/browser.');
+      return;
+    }
+
+    try {
+      const detector = new window.BarcodeDetector({ formats: ['qr_code'] });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' } },
+        audio: false,
+      });
+
+      scannerStreamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+      }
+
+      setScannerRunning(true);
+      setScannerStatus('Camera is active. Point it at a ticket QR code.');
+
+      scannerTimerRef.current = setInterval(async () => {
+        if (!videoRef.current || scannerBusyRef.current) return;
+
+        scannerBusyRef.current = true;
+        try {
+          const results = await detector.detect(videoRef.current);
+          if (!results?.length) return;
+
+          const rawValue = results[0]?.rawValue;
+
+          // Group QR path — encodes "grp:{transaction_reference}"
+          if (typeof rawValue === 'string' && rawValue.startsWith('grp:')) {
+            const transactionRef = rawValue.slice(4).trim();
+            const now = Date.now();
+            const isRecentDuplicate =
+              lastDetectedRef.current.value === rawValue && now - lastDetectedRef.current.at < 3000;
+            if (isRecentDuplicate) return;
+            lastDetectedRef.current = { value: rawValue, at: now };
+            setScannerStatus('Group QR detected. Boarding all tickets in this order...');
+            await handleGroupScan(transactionRef);
+            return;
+          }
+
+          // Single ticket path
+          const parsedUuid = extractTicketUuid(rawValue);
+          if (!parsedUuid) {
+            setScannerStatus('QR detected, but no valid ticket UUID was found.');
+            return;
+          }
+
+          const now = Date.now();
+          const isRecentDuplicate =
+            lastDetectedRef.current.value === parsedUuid && now - lastDetectedRef.current.at < 3000;
+          if (isRecentDuplicate) return;
+
+          lastDetectedRef.current = { value: parsedUuid, at: now };
+          setScanUuid(parsedUuid);
+          setScannerStatus(`QR captured: ${parsedUuid}. Validating ticket...`);
+          await handleScan(parsedUuid);
+        } catch {
+          setScannerStatus('Scanning... keep QR centered and well-lit.');
+        } finally {
+          scannerBusyRef.current = false;
+        }
+      }, 500);
+    } catch (err) {
+      stopScanner();
+      setScannerError(err?.message || 'Unable to access camera for QR scanning.');
+    }
+  }, [extractTicketUuid, handleGroupScan, handleScan, stopScanner, trip?.trip_id]);
 
   const handleAlight = async (ticketId) => {
     try {
@@ -516,7 +700,48 @@ export default function ConductorDashboard() {
           <section className="grid gap-4 lg:grid-cols-2">
             <article className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
               <h3 className="text-lg font-semibold text-slate-100">Scan QR Ticket</h3>
-              <p className="mt-2 text-sm text-slate-500">Enter ticket UUID to validate a passenger ticket.</p>
+              <p className="mt-2 text-sm text-slate-500">Use smartphone camera scanning, or enter ticket UUID manually.</p>
+
+              <div className="mt-4 rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+                <div className="mb-3 flex flex-wrap items-center gap-2">
+                  {!scannerRunning ? (
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-2 rounded-xl border border-emerald-700 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-300 transition hover:bg-emerald-500/20"
+                      onClick={() => void startScanner()}
+                    >
+                      <Camera className="h-4 w-4" />
+                      Start Camera Scanner
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-2 rounded-xl border border-amber-700 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-300 transition hover:bg-amber-500/20"
+                      onClick={stopScanner}
+                    >
+                      <Camera className="h-4 w-4" />
+                      Stop Camera
+                    </button>
+                  )}
+
+                  <span className="text-xs text-slate-400">
+                    {scannerRunning ? 'Live scanner is active' : 'Scanner is idle'}
+                  </span>
+                </div>
+
+                <div className="overflow-hidden rounded-lg border border-slate-800 bg-slate-950">
+                  <video
+                    ref={videoRef}
+                    className="aspect-video w-full bg-slate-950 object-cover"
+                    muted
+                    playsInline
+                    autoPlay
+                  />
+                </div>
+
+                {scannerStatus && <p className="mt-2 text-xs text-slate-400">{scannerStatus}</p>}
+                {scannerError && <p className="mt-2 text-xs text-red-300">{scannerError}</p>}
+              </div>
 
               <div className="mt-4 flex gap-2">
                 <input
@@ -526,6 +751,7 @@ export default function ConductorDashboard() {
                   onChange={(e) => {
                     setScanUuid(e.target.value);
                     setScanResult(null);
+                    setGroupScanResult(null);
                   }}
                   className="font-data h-11 w-full rounded-xl border border-slate-800 bg-slate-950 px-3 text-sm text-slate-100 outline-none placeholder:text-slate-500 focus:border-sky-400"
                 />
@@ -538,6 +764,7 @@ export default function ConductorDashboard() {
                 </button>
               </div>
 
+              {/* Single-ticket result */}
               {scanResult && (
                 <div
                   className={`mt-4 rounded-xl border px-4 py-3 text-sm ${
@@ -555,6 +782,43 @@ export default function ConductorDashboard() {
                           <div>Destination: {scanResult.data.destination || 'N/A'}</div>
                           <div>Seat Type: {scanResult.data.seat_type}</div>
                           <div className="font-data">Amount: PHP {scanResult.data.amount}</div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Group-ticket result */}
+              {groupScanResult && (
+                <div
+                  className={`mt-4 rounded-xl border px-4 py-3 text-sm ${
+                    groupScanResult.success
+                      ? 'border-emerald-900 bg-emerald-950/40 text-emerald-300'
+                      : 'border-red-900 bg-red-950/40 text-red-300'
+                  }`}
+                >
+                  <div className="flex items-start gap-2">
+                    {groupScanResult.success ? <CheckCircle2 className="mt-0.5 h-4 w-4" /> : <XCircle className="mt-0.5 h-4 w-4" />}
+                    <div className="w-full">
+                      <p className="font-semibold">{groupScanResult.msg}</p>
+                      {groupScanResult.success && groupScanResult.data?.tickets?.length > 0 && (
+                        <div className="mt-2 space-y-1">
+                          {groupScanResult.data.tickets.map((t, i) => (
+                            <div
+                              key={t.ticket_uuid || i}
+                              className={`flex items-center justify-between rounded-lg px-3 py-1.5 text-xs ${
+                                t.skipped
+                                  ? 'bg-slate-800/50 text-slate-400'
+                                  : 'bg-emerald-900/30 text-emerald-300'
+                              }`}
+                            >
+                              <span>{t.passenger_name} → {t.destination || 'N/A'} ({t.seat_type})</span>
+                              <span className="font-semibold">
+                                {t.skipped ? t.skip_reason : 'Boarded'}
+                              </span>
+                            </div>
+                          ))}
                         </div>
                       )}
                     </div>

@@ -91,6 +91,10 @@ class StaffService extends BaseService {
     return await this.request('/conductor/tickets/scan', 'POST', { ticket_uuid: uuid });
   }
 
+  async scanGroupTickets(transactionRef) {
+    return await this.request('/conductor/tickets/scan-group', 'POST', { transaction_reference: transactionRef });
+  }
+
   async recordAlighting(ticketId) {
     return await this.request(`/conductor/tickets/${ticketId}/alight`, 'POST');
   }

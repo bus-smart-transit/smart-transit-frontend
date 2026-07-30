@@ -525,28 +525,6 @@ export default function OperatorDashboard() {
     }));
   };
 
-  const loadFinancialReport = async () => {
-    if (!selectedFleet) {
-      showMessage('Please select a fleet', false);
-      return;
-    }
-
-    setLoadingReport(true);
-    try {
-      const res = await StaffService.getFinancialReport(selectedFleet, {
-        start_date: reportRange.start_date,
-        end_date: reportRange.end_date,
-      });
-      setAdvancedReports((prev) => ({ ...prev, financial: res.data }));
-      setReportType('financial');
-      showMessage('Report loaded successfully', true);
-    } catch (err) {
-      showMessage(err?.message || 'Failed to load financial report', false);
-    } finally {
-      setLoadingReport(false);
-    }
-  };
-
   const loadAdvancedReport = async (type) => {
     if (!selectedFleet) {
       showMessage('Please select a fleet', false);
@@ -1572,6 +1550,7 @@ export default function OperatorDashboard() {
                         <button
                           key={action.id}
                           onClick={() => loadAdvancedReport(action.id)}
+                          disabled={loadingReport}
                           className={[
                             'group relative overflow-hidden rounded-xl border bg-slate-900 p-4 text-left transition',
                             isActive
