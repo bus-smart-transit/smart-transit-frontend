@@ -16,6 +16,7 @@ import {
   Users,
   XCircle,
 } from 'lucide-react';
+import QrScanner from 'qr-scanner';
 import StaffService from '../../api/StaffService/StaffService';
 import usePassengersByTrip from '../../api/hooks/Staff/usePassengersByTrip';
 import useOnsiteReceiptPrinter from '../../api/hooks/Staff/useOnsiteReceiptPrinter';
@@ -92,6 +93,7 @@ export default function ConductorDashboard() {
   const [scanResult, setScanResult] = useState(null);
   const [groupScanResult, setGroupScanResult] = useState(null);
   const [scannerRunning, setScannerRunning] = useState(false);
+  const [scannerBusy, setScannerBusy] = useState(false);
   const [scannerError, setScannerError] = useState('');
   const [scannerStatus, setScannerStatus] = useState('');
   const [onsiteReceipt, setOnsiteReceipt] = useState(null);
@@ -112,7 +114,7 @@ export default function ConductorDashboard() {
   const scannerBusyRef = useRef(false);
   const lastDetectedRef = useRef({ value: '', at: 0 });
   const upcomingTrip = getUpcomingTrip(assignedTrips);
-  const showNoCurrentTripState = !loading && !hasActiveTrip && ['trip', 'occupancy', 'scan', 'passengers', 'pin'].includes(activeTab);
+  const showNoCurrentTripState = !loading && !hasActiveTrip && ['trip', 'occupancy', 'passengers', 'pin'].includes(activeTab);
   const routeStops = trip?.fleet_route?.route?.route_stops || trip?.fleet_route?.route?.routeStops || [];
   const groupedPassengers = usePassengersByTrip(passengers, trip);
   const { printOnsiteReceipt } = useOnsiteReceiptPrinter();
@@ -124,7 +126,14 @@ export default function ConductorDashboard() {
     }
 
     if (scannerStreamRef.current) {
-      scannerStreamRef.current.getTracks().forEach((track) => track.stop());
+      // destroy() stops scanning AND releases all camera resources
+      if (typeof scannerStreamRef.current.destroy === 'function') {
+        scannerStreamRef.current.destroy();
+      } else if (typeof scannerStreamRef.current.stop === 'function') {
+        scannerStreamRef.current.stop();
+      } else if (typeof scannerStreamRef.current.getTracks === 'function') {
+        scannerStreamRef.current.getTracks().forEach((track) => track.stop());
+      }
       scannerStreamRef.current = null;
     }
 
@@ -314,57 +323,50 @@ export default function ConductorDashboard() {
       return;
     }
 
-    if (!window.isSecureContext) {
-      setScannerError('Camera access requires HTTPS (or localhost).');
-      return;
-    }
-
-    if (!('BarcodeDetector' in window)) {
-      setScannerError('This browser does not support built-in QR scanning. Use manual UUID entry.');
-      return;
-    }
-
     if (!navigator?.mediaDevices?.getUserMedia) {
       setScannerError('Camera API is not available on this device/browser.');
       return;
     }
 
+    if (!videoRef.current) {
+      setScannerError('Scanner element is not ready. Please try again.');
+      return;
+    }
+
     try {
-      const detector = new window.BarcodeDetector({ formats: ['qr_code'] });
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: 'environment' } },
-        audio: false,
-      });
+      // Initialize QR Scanner with cross-browser support
+      const qrScanner = new QrScanner(
+        videoRef.current,
+        async (result) => {
+          const rawValue = result?.data;
+          if (!rawValue) return;
 
-      scannerStreamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-      }
+          if (scannerBusyRef.current) return;          // drop scan — one already in flight
+          scannerBusyRef.current = true;
+          setScannerBusy(true);
 
-      setScannerRunning(true);
-      setScannerStatus('Camera is active. Point it at a ticket QR code.');
+          // Prevent duplicate detections within 3 seconds
+          const now = Date.now();
+          const isRecentDuplicate =
+            lastDetectedRef.current.value === rawValue && now - lastDetectedRef.current.at < 3000;
+          if (isRecentDuplicate) {
+            scannerBusyRef.current = false;
+            return;
+          }
 
-      scannerTimerRef.current = setInterval(async () => {
-        if (!videoRef.current || scannerBusyRef.current) return;
-
-        scannerBusyRef.current = true;
-        try {
-          const results = await detector.detect(videoRef.current);
-          if (!results?.length) return;
-
-          const rawValue = results[0]?.rawValue;
+          lastDetectedRef.current = { value: rawValue, at: now };
+          setScannerStatus('⏳ Processing scan…');
 
           // Group QR path — encodes "grp:{transaction_reference}"
           if (typeof rawValue === 'string' && rawValue.startsWith('grp:')) {
             const transactionRef = rawValue.slice(4).trim();
-            const now = Date.now();
-            const isRecentDuplicate =
-              lastDetectedRef.current.value === rawValue && now - lastDetectedRef.current.at < 3000;
-            if (isRecentDuplicate) return;
-            lastDetectedRef.current = { value: rawValue, at: now };
             setScannerStatus('Group QR detected. Boarding all tickets in this order...');
-            await handleGroupScan(transactionRef);
+            try {
+              await handleGroupScan(transactionRef);
+            } finally {
+              scannerBusyRef.current = false;
+              setScannerBusy(false);
+            }
             return;
           }
 
@@ -372,24 +374,38 @@ export default function ConductorDashboard() {
           const parsedUuid = extractTicketUuid(rawValue);
           if (!parsedUuid) {
             setScannerStatus('QR detected, but no valid ticket UUID was found.');
+            scannerBusyRef.current = false;
+            setScannerBusy(false);
             return;
           }
 
-          const now = Date.now();
-          const isRecentDuplicate =
-            lastDetectedRef.current.value === parsedUuid && now - lastDetectedRef.current.at < 3000;
-          if (isRecentDuplicate) return;
-
-          lastDetectedRef.current = { value: parsedUuid, at: now };
           setScanUuid(parsedUuid);
           setScannerStatus(`QR captured: ${parsedUuid}. Validating ticket...`);
-          await handleScan(parsedUuid);
-        } catch {
-          setScannerStatus('Scanning... keep QR centered and well-lit.');
-        } finally {
-          scannerBusyRef.current = false;
+          try {
+            await handleScan(parsedUuid);
+          } finally {
+            scannerBusyRef.current = false;
+            setScannerBusy(false);
+          }
+        },
+        {
+          onDecodeError: () => {
+            setScannerStatus('Scanning... keep QR centered and well-lit.');
+          },
+          maxScansPerSecond: 2,
+          preferredCamera: 'environment',
+          workerPath: '/qr-scanner-worker.min.js',
         }
-      }, 500);
+      );
+
+      scannerStreamRef.current = qrScanner;
+      await qrScanner.start();
+
+      // Guard: scanner may have been stopped while start() was awaiting (e.g. tab change)
+      if (!scannerStreamRef.current) return;
+
+      setScannerRunning(true);
+      setScannerStatus('Camera is active. Point it at a ticket QR code.');
     } catch (err) {
       stopScanner();
       setScannerError(err?.message || 'Unable to access camera for QR scanning.');
@@ -696,7 +712,7 @@ export default function ConductorDashboard() {
           </section>
         )}
 
-        {!loading && activeTab === 'scan' && !showNoCurrentTripState && (
+        {!loading && activeTab === 'scan' && (
           <section className="grid gap-4 lg:grid-cols-2">
             <article className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
               <h3 className="text-lg font-semibold text-slate-100">Scan QR Ticket</h3>
@@ -729,7 +745,7 @@ export default function ConductorDashboard() {
                   </span>
                 </div>
 
-                <div className="overflow-hidden rounded-lg border border-slate-800 bg-slate-950">
+                <div className="relative overflow-hidden rounded-lg border border-slate-800 bg-slate-950">
                   <video
                     ref={videoRef}
                     className="aspect-video w-full bg-slate-950 object-cover"
@@ -737,6 +753,12 @@ export default function ConductorDashboard() {
                     playsInline
                     autoPlay
                   />
+                  {scannerBusy && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-slate-950/80 backdrop-blur-sm">
+                      <div className="h-8 w-8 animate-spin rounded-full border-4 border-slate-700 border-t-sky-400" />
+                      <p className="text-xs font-semibold text-sky-300">Validating…</p>
+                    </div>
+                  )}
                 </div>
 
                 {scannerStatus && <p className="mt-2 text-xs text-slate-400">{scannerStatus}</p>}
@@ -756,11 +778,13 @@ export default function ConductorDashboard() {
                   className="font-data h-11 w-full rounded-xl border border-slate-800 bg-slate-950 px-3 text-sm text-slate-100 outline-none placeholder:text-slate-500 focus:border-sky-400"
                 />
                 <button
-                  className="inline-flex items-center gap-2 rounded-xl bg-sky-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-sky-400"
+                  className="inline-flex items-center gap-2 rounded-xl bg-sky-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-50"
                   onClick={handleScan}
+                  disabled={scannerBusy}
                 >
-                  <QrCode className="h-4 w-4" />
-                  Scan
+                  {scannerBusy
+                    ? <><div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-950/30 border-t-slate-950" />Validating…</>
+                    : <><QrCode className="h-4 w-4" />Scan</>}
                 </button>
               </div>
 
@@ -986,13 +1010,33 @@ export default function ConductorDashboard() {
                 <div className="font-data mt-4 rounded-xl border border-dashed border-slate-700 bg-slate-950 p-4 text-center text-2xl font-bold tracking-[0.2em] text-slate-100">
                   {pin.pin_code}
                 </div>
+                {pin.pin_code && (
+                  <div className="mt-3 flex justify-center">
+                    <img
+                      src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(pin.pin_code)}`}
+                      alt="PIN QR code"
+                      className="h-40 w-40 rounded-xl border border-slate-700 bg-white p-1"
+                    />
+                  </div>
+                )}
                 <div className="mt-4 space-y-3 text-sm">
                   <div className="flex items-center justify-between"><span className="text-slate-500">Trip</span><strong className="font-data text-slate-100">#{pin.trip_id ?? '-'}</strong></div>
                   {pin.route_name && <div className="flex items-center justify-between"><span className="text-slate-500">Route</span><strong className="text-slate-100">{pin.route_name}</strong></div>}
-                  {pin.fleet_plate_number && <div className="flex items-center justify-between"><span className="text-slate-500">Fleet</span><strong className="text-slate-100">{pin.fleet_plate_number}</strong></div>}
+                  {pin.fleet_plate_number && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-500">Fleet</span>
+                      <strong className="rounded-full border border-sky-800 bg-sky-950/40 px-2 py-0.5 text-sky-300">{pin.fleet_plate_number}</strong>
+                    </div>
+                  )}
                   {pin.trip_status && <div className="flex items-center justify-between"><span className="text-slate-500">Status</span><strong className="text-slate-100">{pin.trip_status}</strong></div>}
                   <div className="flex items-center justify-between"><span className="text-slate-500">Date</span><strong className="font-data text-slate-100">{formatDateTime(pin.pin_date)}</strong></div>
-                  <div className="flex items-center justify-between"><span className="text-slate-500">Verified</span><strong className="text-slate-100">{pin.conductor_verified_at ? 'Yes' : 'Not yet'}</strong></div>
+                  <div className="flex items-center justify-between"><span className="text-slate-500">Driver Verified</span><strong className={pin.driver_verified_at ? 'text-emerald-400' : 'text-slate-500'}>{pin.driver_verified_at ? '✓ Yes' : 'Not yet'}</strong></div>
+                  <div className="flex items-center justify-between"><span className="text-slate-500">Conductor Verified</span><strong className={pin.conductor_verified_at ? 'text-emerald-400' : 'text-slate-500'}>{pin.conductor_verified_at ? '✓ Yes' : 'Not yet'}</strong></div>
+                  {pin.both_verified && (
+                    <div className="mt-2 rounded-xl border border-emerald-800 bg-emerald-950/40 px-3 py-2 text-center text-xs font-semibold text-emerald-300">
+                      ✓ Both verified — trip is cleared for departure
+                    </div>
+                  )}
                 </div>
               </article>
             )}

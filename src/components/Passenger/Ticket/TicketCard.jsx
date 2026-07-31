@@ -1,7 +1,8 @@
 import './TicketCard.css';
 
 const STATUS_FOOTER = {
-  issued:    { text: 'Valid Ticket — Present QR code to board', mod: '' },
+  valid:     { text: 'Valid Ticket — Present QR code to board', mod: '' },
+  valid:     { text: 'Valid Ticket — Present QR code to board', mod: '' },
   boarded:   { text: 'Boarded — You are currently on this trip', mod: 'st-ticket-foot--boarded' },
   alighted:  { text: 'Trip Completed — Thank you for riding!', mod: 'st-ticket-foot--alighted' },
   expired:   { text: 'Ticket Expired — This ticket is no longer valid', mod: 'st-ticket-foot--expired' },
@@ -16,7 +17,6 @@ export default function TicketCard({
   routeLabel,
   qrUrl,
   statusLabel,
-  amountLabel,
   validLabel,
   expiresLabel,
 }) {
@@ -57,7 +57,6 @@ export default function TicketCard({
           <div><dt>Valid</dt><dd>{validLabel || '-'}</dd></div>
           <div><dt>Expires</dt><dd>{expiresLabel || '-'}</dd></div>
           <div><dt>Status</dt><dd>{statusLabel || '-'}</dd></div>
-          <div><dt>Fare Paid</dt><dd>{amountLabel || '-'}</dd></div>
         </dl>
       </div>
 

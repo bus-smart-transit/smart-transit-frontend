@@ -705,8 +705,42 @@ export default function DriverDashboard() {
             </article>
 
             <article className="rounded-2xl border border-slate-800 bg-slate-900 p-4 sm:p-6">
-              <h4 className="mb-3 text-base font-semibold text-slate-100">Verify Daily PIN</h4>
-              {pin && <p className="font-data mb-3 text-sm text-slate-300">PIN: {pin.pin_code}</p>}
+              <h4 className="mb-3 text-base font-semibold text-slate-100">Daily PIN Verification</h4>
+              {pin && (
+                <>
+                  <div className="font-data mb-2 rounded-xl border border-dashed border-slate-700 bg-slate-950 p-3 text-center text-2xl font-bold tracking-[0.2em] text-slate-100">
+                    {pin.pin_code}
+                  </div>
+                  <div className="mb-3 flex justify-center">
+                    <img
+                      src={`https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(pin.pin_code)}`}
+                      alt="PIN QR code"
+                      className="h-36 w-36 rounded-xl border border-slate-700 bg-white p-1"
+                    />
+                  </div>
+                  <div className="mb-3 space-y-2 text-xs">
+                    {pin.fleet_plate_number && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-500">Fleet</span>
+                        <strong className="rounded-full border border-sky-800 bg-sky-950/40 px-2 py-0.5 text-sky-300">{pin.fleet_plate_number}</strong>
+                      </div>
+                    )}
+                    {pin.route_name && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-500">Route</span>
+                        <strong className="text-slate-300">{pin.route_name}</strong>
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between"><span className="text-slate-500">Driver Verified</span><strong className={pin.driver_verified_at ? 'text-emerald-400' : 'text-slate-500'}>{pin.driver_verified_at ? '✓ Yes' : 'Not yet'}</strong></div>
+                    <div className="flex items-center justify-between"><span className="text-slate-500">Conductor Verified</span><strong className={pin.conductor_verified_at ? 'text-emerald-400' : 'text-slate-500'}>{pin.conductor_verified_at ? '✓ Yes' : 'Not yet'}</strong></div>
+                  </div>
+                  {pin.both_verified && (
+                    <div className="mb-3 rounded-xl border border-emerald-800 bg-emerald-950/40 px-3 py-2 text-center text-xs font-semibold text-emerald-300">
+                      ✓ Both verified — trip is cleared for departure
+                    </div>
+                  )}
+                </>
+              )}
               <div className="flex gap-2">
                 <input
                   type="text"

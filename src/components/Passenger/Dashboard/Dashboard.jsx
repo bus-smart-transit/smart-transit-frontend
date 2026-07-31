@@ -33,11 +33,11 @@ function GroupOrderCard({ tickets, onCardClick, openTicketModal, getOriginLabel,
   const totalAmount = tickets.reduce((sum, t) => sum + Number(t.amount ?? 0), 0);
   const allBoarded = tickets.every((t) => t.status === 'boarded');
   const anyBoarded = tickets.some((t) => t.status === 'boarded');
-  const groupStatus = allBoarded ? 'boarded' : anyBoarded ? 'partial' : 'issued';
+  const groupStatus = allBoarded ? 'boarded' : anyBoarded ? 'partial' : 'valid';
   const statusColors = {
     boarded: { bg: 'rgba(14,165,233,0.1)', border: 'rgba(56,189,248,0.3)', color: '#38bdf8', label: 'All Boarded' },
     partial: { bg: 'rgba(251,191,36,0.1)', border: 'rgba(251,191,36,0.3)', color: '#fbbf24', label: 'Partially Boarded' },
-    issued:  { bg: 'rgba(52,211,153,0.1)', border: 'rgba(52,211,153,0.3)', color: '#34d399', label: 'Ready to Board' },
+    valid:   { bg: 'rgba(52,211,153,0.1)', border: 'rgba(52,211,153,0.3)', color: '#34d399', label: 'Ready to Board' },
   };
   const sc = statusColors[groupStatus];
 
@@ -64,9 +64,6 @@ function GroupOrderCard({ tickets, onCardClick, openTicketModal, getOriginLabel,
         <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
           <span style={{ fontSize: '0.7rem', padding: '2px 8px', borderRadius: '10px', background: sc.bg, border: `1px solid ${sc.border}`, color: sc.color, fontWeight: 700 }}>
             {sc.label}
-          </span>
-          <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#e2e8f0' }}>
-            PHP {totalAmount.toFixed(2)}
           </span>
         </div>
       </div>
@@ -148,7 +145,7 @@ function TicketTabWithFilter({
     { id: 'all',     label: 'All' },
     { id: 'single',  label: 'Single QR' },
     ...(hasGroupTickets ? [{ id: 'group', label: 'Group QR' }] : []),
-    { id: 'issued',  label: 'Issued' },
+    { id: 'valid',   label: 'Valid' },
     { id: 'boarded', label: 'Boarded' },
   ];
 
@@ -159,7 +156,7 @@ function TicketTabWithFilter({
       const ref = t?.payment?.transaction_reference;
       return !ref || (refCounts[ref] ?? 1) === 1;
     }
-    if (filter === 'issued')  return (t.status || 'issued') === 'issued';
+    if (filter === 'valid')   return (t.status || 'valid') === 'valid';
     if (filter === 'boarded') return t.status === 'boarded';
     return false;
   });
@@ -170,7 +167,7 @@ function TicketTabWithFilter({
 
   const emptyMsg = tickets.length === 0
     ? 'No tickets available yet.'
-    : `No ${filter === 'boarded' ? 'boarded' : filter === 'issued' ? 'issued' : filter === 'single' ? 'single QR' : filter === 'group' ? 'group' : ''} tickets found.`;
+    : `No ${filter === 'boarded' ? 'boarded' : filter === 'valid' ? 'valid' : filter === 'single' ? 'single QR' : filter === 'group' ? 'group' : ''} tickets found.`;
 
   // Derive group modal display values
   const modalTransRef   = groupModal?.[0]?.payment?.transaction_reference ?? '';
@@ -250,7 +247,7 @@ function TicketTabWithFilter({
                   <p className="passenger-ticket-meta">Booked: {formatDateTime(ticket?.created_at)}</p>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
-                  <em>{ticket.status || 'issued'}</em>
+                  <em>{ticket.status || 'valid'}</em>
                   {isPartOfGroup && (
                     <span style={{ fontSize: '0.68rem', padding: '2px 7px', borderRadius: '10px', background: 'rgba(56,189,248,0.12)', color: '#38bdf8', border: '1px solid rgba(56,189,248,0.25)', whiteSpace: 'nowrap' }}>
                       Group order
@@ -327,7 +324,7 @@ function TicketTabWithFilter({
                         {getOriginLabel(ticket)} → {getDestinationLabel(ticket)}
                       </p>
                       <p style={{ margin: '2px 0 0', fontSize: '0.72rem', color: '#5a7896' }}>
-                        {ticket.seat_type || 'seated'} · {formatDateTime(ticket.valid_from)} · PHP {Number(ticket.amount ?? 0).toFixed(2)}
+                        {ticket.seat_type || 'seated'} · {formatDateTime(ticket.valid_from)}
                       </p>
                     </div>
                     <span style={{
@@ -336,17 +333,13 @@ function TicketTabWithFilter({
                       color: ticket.status === 'boarded' ? '#0369a1' : ticket.status === 'alighted' ? '#475569' : '#166534',
                       border: ticket.status === 'boarded' ? '1px solid #7dd3fc' : ticket.status === 'alighted' ? '1px solid #94a3b8' : '1px solid #9dd7af',
                     }}>
-                      {ticket.status || 'issued'}
+                      {ticket.status || 'valid'}
                     </span>
                   </button>
                 ))}
               </div>
 
-              {/* Total */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 12px', borderTop: '1px solid #e0ebf8', marginTop: '4px' }}>
-                <span style={{ fontSize: '0.82rem', color: '#5a7896', fontWeight: 600 }}>Total Paid</span>
-                <span style={{ fontSize: '0.88rem', fontWeight: 700, color: '#12365a' }}>PHP {modalTotal.toFixed(2)}</span>
-              </div>
+              {/* Total removed — amounts visible in Transaction History */}
             </div>
           </section>
         </div>
@@ -463,20 +456,19 @@ export default function Dashboard() {
                 <th>Timestamp</th>
                 <th>Reference</th>
                 <th>Channel</th>
-                <th>Gross Amount</th>
+                <th>Amount Paid</th>
                 <th>Rewards Used</th>
-                <th>Net Paid</th>
                 <th>Payment Status</th>
               </tr>
             </thead>
             <tbody>
               {isLoadingPrivate ? (
                 <tr>
-                  <td colSpan={8}>Loading transaction history...</td>
+                  <td colSpan={7}>Loading transaction history...</td>
                 </tr>
               ) : transactions.length === 0 ? (
                 <tr>
-                  <td colSpan={8}>No transaction records yet.</td>
+                  <td colSpan={7}>No transaction records yet.</td>
                 </tr>
               ) : (
                 transactions.map((payment, idx) => (
@@ -485,9 +477,8 @@ export default function Dashboard() {
                     <td>{formatDateTime(payment.paid_at)}</td>
                     <td>{payment.transaction_reference || payment.payment_uuid || '-'}</td>
                     <td>{payment.payment_channel || payment.payment_method || '-'}</td>
-                    <td>PHP {Number(payment.gross_amount ?? payment.amount ?? 0).toFixed(2)}</td>
-                    <td>{Number(payment.reward_points_redeemed ?? 0).toFixed(0)} pts</td>
                     <td>PHP {Number(payment.amount ?? 0).toFixed(2)}</td>
+                    <td>{Number(payment.reward_points_redeemed ?? 0).toFixed(0)} pts</td>
                     <td>{payment.status || '-'}</td>
                   </tr>
                 ))
@@ -635,7 +626,6 @@ export default function Dashboard() {
                     routeLabel={`${getOriginLabel(selectedTicket)} to ${getDestinationLabel(selectedTicket)}`}
                     qrUrl={selectedTicketQr?.qr_url || ''}
                     statusLabel={selectedTicket.status || '-'}
-                    amountLabel={`PHP ${Number(selectedTicket.amount ?? selectedTicket.final_amount ?? 0).toFixed(2)}`}
                     validLabel={formatDateTime(selectedTicket.valid_from ?? selectedTicketQr?.valid_from)}
                     expiresLabel={formatDateTime(selectedTicket.expires_at ?? selectedTicketQr?.expires_at)}
                   />

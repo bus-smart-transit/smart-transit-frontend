@@ -11,9 +11,15 @@ const HTTP_ERROR_MESSAGES = {
 
 const DEFAULT_ERROR_MESSAGE = "Something went wrong. Please try again.";
 
-function handleApiError(error) {
+function handleApiError(error, tokenKey) {
   const status = error?.response?.status;
   const responseData = error?.response?.data;
+
+  // Auto-clear stale token on 401 so the user gets redirected to login
+  if (status === 401 && tokenKey) {
+    localStorage.removeItem(tokenKey);
+    sessionStorage.removeItem(tokenKey);
+  }
 
   if (status === 422 && responseData?.errors) {
     const firstErrors = Object.values(responseData.errors)[0];
@@ -62,7 +68,7 @@ export class BaseService {
       const response = await api(config);
       return response.data;
     } catch (error) {
-      handleApiError(error);
+      handleApiError(error, this.tokenKey);
     }
   }
 }

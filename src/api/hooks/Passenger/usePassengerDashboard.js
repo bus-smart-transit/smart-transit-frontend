@@ -268,7 +268,7 @@ export default function usePassengerDashboard({ preloadMapView }) {
     if (!selectedTicket) return;
 
     const qrUrl = selectedTicketQr?.qr_url || '';
-    const ticketStatus = String(selectedTicket.status || 'issued').toLowerCase();
+    const ticketStatus = String(selectedTicket.status || 'valid').toLowerCase();
     const footerMessages = {
       boarded:   'Boarded — You are currently on this trip',
       alighted:  'Trip Completed — Thank you for riding!',
