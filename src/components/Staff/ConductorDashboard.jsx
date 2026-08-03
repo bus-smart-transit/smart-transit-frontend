@@ -20,6 +20,7 @@ import QrScanner from 'qr-scanner';
 import StaffService from '../../api/StaffService/StaffService';
 import usePassengersByTrip from '../../api/hooks/Staff/usePassengersByTrip';
 import useOnsiteReceiptPrinter from '../../api/hooks/Staff/useOnsiteReceiptPrinter';
+import PairingScreen from './PairingScreen';
 
 const NAV_ITEMS = [
   { key: 'trip', label: 'Current Trip', icon: Bus },
@@ -79,6 +80,44 @@ const getUpcomingTrip = (trips) => {
 };
 
 export default function ConductorDashboard() {
+  const navigate = useNavigate();
+
+  // ── Pairing gate (backend-verified on every mount) ──────────────────
+  const [paired, setPaired] = useState(null);
+
+  useEffect(() => {
+    StaffService.getPairingStatus('conductor')
+      .then((res) => setPaired(res?.data?.paired === true))
+      .catch(() => setPaired(false));
+  }, []);
+
+  const handleLogout = async () => {
+    await StaffService.logout('conductor').catch(() => {});
+    navigate('/employee/login');
+  };
+
+  if (paired === null) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-950">
+        <div className="h-10 w-10 animate-spin rounded-full border-4 border-slate-700 border-t-sky-400" />
+      </div>
+    );
+  }
+
+  if (!paired) {
+    return (
+      <PairingScreen
+        role="conductor"
+        onPaired={() => setPaired(true)}
+        onLogout={handleLogout}
+      />
+    );
+  }
+
+  return <ConductorDashboardInner onLogout={handleLogout} />;
+}
+
+function ConductorDashboardInner({ onLogout }) {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('trip');
   const [profile, setProfile] = useState(null);
@@ -481,10 +520,7 @@ export default function ConductorDashboard() {
     }
   };
 
-  const handleLogout = async () => {
-    await StaffService.logout('conductor').catch(() => {});
-    navigate('/employee/login');
-  };
+  const handleLogout = onLogout;
 
   const capPct = occupancy
     ? Math.min(

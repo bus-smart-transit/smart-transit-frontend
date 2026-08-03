@@ -16,6 +16,7 @@ import {
   User,
 } from 'lucide-react';
 import StaffService from '../../api/StaffService/StaffService';
+import PairingScreen from './PairingScreen';
 
 const STATUS_COLOR = {
   scheduled: '#64748b',
@@ -84,6 +85,46 @@ const getUpcomingTrip = (trips) => {
 
 export default function DriverDashboard() {
   const navigate = useNavigate();
+
+  // ── Pairing gate (checked from backend on every mount) ─────────────────
+  const [paired, setPaired] = useState(null); // null=loading, false=not paired, true=paired
+
+  useEffect(() => {
+    StaffService.getPairingStatus('driver')
+      .then((res) => setPaired(res?.data?.paired === true))
+      .catch(() => setPaired(false));
+  }, []);
+
+  const handleLogout = async () => {
+    await StaffService.logout('driver').catch(() => {});
+    navigate('/employee/login');
+  };
+
+  if (paired === null) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-950">
+        <div className="h-10 w-10 animate-spin rounded-full border-4 border-slate-700 border-t-sky-400" />
+      </div>
+    );
+  }
+
+  if (!paired) {
+    return (
+      <PairingScreen
+        role="driver"
+        onPaired={() => setPaired(true)}
+        onLogout={handleLogout}
+      />
+    );
+  }
+
+  return <DriverDashboardInner onLogout={handleLogout} />;
+}
+
+function DriverDashboardInner({ onLogout }) {
+  const navigate = useNavigate();
+  const navigateRef = useRef(navigate);
+  useEffect(() => { navigateRef.current = navigate; }, [navigate]);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [profile, setProfile] = useState(null);
   const [trip, setTrip] = useState(null);
@@ -102,6 +143,7 @@ export default function DriverDashboard() {
   const gpsIntervalRef = useRef(null);
   const gpsWatchRef = useRef(null);
   const lastGpsRef = useRef(null);
+  const lastSentGpsRef = useRef(null); // tracks last successfully sent position for deduplication
   const showNoCurrentTripState = !loading && !hasActiveTrip && ['dashboard', 'journey', 'navigation', 'trip'].includes(activeTab);
 
   const currentRoute = trip?.fleet_route?.route;
@@ -181,6 +223,7 @@ export default function DriverDashboard() {
       clearInterval(gpsIntervalRef.current);
       gpsIntervalRef.current = null;
       lastGpsRef.current = null;
+      lastSentGpsRef.current = null;
       return;
     }
 
@@ -204,14 +247,23 @@ export default function DriverDashboard() {
       { enableHighAccuracy: true, maximumAge: 10000 }
     );
 
-    // Push to backend every 10 seconds
+    // Push to backend every 10 seconds — only if moved > 30m since last send
+    const MIN_DISTANCE_M = 30;
     const sendPing = async () => {
       if (!lastGpsRef.current) return;
+      const last = lastSentGpsRef.current;
+      if (last) {
+        const dLat = lastGpsRef.current.latitude - last.latitude;
+        const dLng = lastGpsRef.current.longitude - last.longitude;
+        const approxMeters = Math.sqrt(dLat * dLat + dLng * dLng) * 111320;
+        if (approxMeters < MIN_DISTANCE_M) return; // haven't moved enough — skip
+      }
       try {
         await StaffService.updateLocation(
           lastGpsRef.current.latitude,
           lastGpsRef.current.longitude,
         );
+        lastSentGpsRef.current = { latitude: lastGpsRef.current.latitude, longitude: lastGpsRef.current.longitude };
       } catch {
         // Ignore — network hiccups should not surface as errors during a trip
       }
@@ -299,10 +351,7 @@ export default function DriverDashboard() {
     }
   };
 
-  const handleLogout = async () => {
-    await StaffService.logout('driver').catch(() => {});
-    navigate('/employee/login');
-  };
+  const handleLogout = onLogout;
 
   const notifications = [
     {

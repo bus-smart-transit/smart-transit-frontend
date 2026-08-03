@@ -62,6 +62,19 @@ class StaffService extends BaseService {
     return await this.request('/driver/pin/verify', 'POST', { pin_code: pin });
   }
 
+  // ── Driver/Conductor Pairing ──
+  async getPairingToken(role) {
+    return await this.request(`/${role}/pairing-token`, 'GET');
+  }
+
+  async submitPairing(role, partnerToken) {
+    return await this.request(`/${role}/pair`, 'POST', { token: partnerToken });
+  }
+
+  async getPairingStatus(role) {
+    return await this.request(`/${role}/pairing-status`, 'GET');
+  }
+
   async updateLocation(latitude, longitude) {
     return await this.request('/driver/location', 'POST', { latitude, longitude });
   }

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { AuthContext } from "../AuthContext";
 import PassengerService from "../../PassengerService/PassengerService";
 
@@ -6,9 +6,14 @@ const SERVICE_MAP = {
   passenger: PassengerService,
 };
 
+// Auto-logout after 30 minutes of inactivity
+const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000;
+const ACTIVITY_EVENTS = ['mousedown', 'keydown', 'touchstart', 'scroll'];
+
 export function AuthProvider({ role = "passenger", children }) {
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const inactivityTimerRef = useRef(null);
 
   const tokenKey = `${role}_token`;
   const activeService = SERVICE_MAP[role];
@@ -63,6 +68,26 @@ export function AuthProvider({ role = "passenger", children }) {
       });
     }
   }, [activeService, tokenKey, role]);
+
+  // Inactivity auto-logout: reset timer on any user activity
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const resetTimer = () => {
+      clearTimeout(inactivityTimerRef.current);
+      inactivityTimerRef.current = setTimeout(() => {
+        logout();
+      }, INACTIVITY_TIMEOUT_MS);
+    };
+
+    resetTimer(); // start on mount
+    ACTIVITY_EVENTS.forEach((evt) => window.addEventListener(evt, resetTimer, { passive: true }));
+
+    return () => {
+      clearTimeout(inactivityTimerRef.current);
+      ACTIVITY_EVENTS.forEach((evt) => window.removeEventListener(evt, resetTimer));
+    };
+  }, [isAuthenticated, logout]);
 
   return (
     <AuthContext.Provider value={{ user, isAuthenticated, isLoading, login, logout }}>

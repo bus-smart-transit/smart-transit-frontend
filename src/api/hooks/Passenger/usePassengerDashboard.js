@@ -194,7 +194,9 @@ export default function usePassengerDashboard({ preloadMapView }) {
     const timer = setTimeout(() => {
       if (paymentStatus === 'success') {
         setPaymentNotice('Payment successful. You have been redirected back.');
-        if (isAuthenticated) {
+        // Only reload if last sync was more than 5s ago — prevents double-load
+        // on checkout return when the auth change also fires loadPrivateData
+        if (isAuthenticated && (!lastSync || Date.now() - lastSync.getTime() > 5000)) {
           void loadPrivateData();
         }
       } else if (paymentStatus === 'cancel') {
