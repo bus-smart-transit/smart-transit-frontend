@@ -155,6 +155,7 @@ export default function useBuyTicket({ onTicketPurchased }) {
   const inFlightLookupRef = useRef(new Set());
   const processedCheckoutRef = useRef(new Set());
   const lastCheckoutEventTsRef = useRef(0);
+  const pendingCheckoutRef = useRef(null);
 
   const [form, setForm] = useState({
     trip_id: '',
@@ -424,8 +425,13 @@ export default function useBuyTicket({ onTicketPurchased }) {
 
   const clearPendingCheckout = useCallback(() => {
     setPendingCheckout(null);
+    pendingCheckoutRef.current = null;
     localStorage.removeItem(CHECKOUT_PENDING_KEY);
   }, []);
+
+  useEffect(() => {
+    pendingCheckoutRef.current = pendingCheckout;
+  }, [pendingCheckout]);
 
   const persistLookupCache = useCallback(() => {
     writeSessionCache(CHECKOUT_LOOKUP_CACHE_KEY, lookupCacheRef.current);
@@ -573,13 +579,29 @@ export default function useBuyTicket({ onTicketPurchased }) {
       setSuccess('Payment successful. We will show your ticket QR once it becomes active.');
       setError('');
 
-      if (!pendingCheckout) {
+      let activePending = pendingCheckoutRef.current;
+      if (!activePending) {
+        try {
+          const storedPending = localStorage.getItem(CHECKOUT_PENDING_KEY);
+          if (storedPending) {
+            activePending = JSON.parse(storedPending);
+            setPendingCheckout(activePending);
+            pendingCheckoutRef.current = activePending;
+          }
+        } catch {
+          activePending = null;
+        }
+      }
+
+      if (!activePending) {
+        setCheckoutStatus('success');
+        localStorage.removeItem(CHECKOUT_PENDING_KEY);
         localStorage.removeItem(CHECKOUT_EVENT_KEY);
         return;
       }
 
       void (async () => {
-        await loadPurchasedQrTickets(pendingCheckout);
+        await loadPurchasedQrTickets(activePending);
         onTicketPurchased?.();
         clearPendingCheckout();
         localStorage.removeItem(CHECKOUT_EVENT_KEY);
@@ -593,7 +615,7 @@ export default function useBuyTicket({ onTicketPurchased }) {
     setError('Payment was cancelled or failed. You may retry payment.');
     clearPendingCheckout();
     localStorage.removeItem(CHECKOUT_EVENT_KEY);
-  }, [pendingCheckout, onTicketPurchased, loadPurchasedQrTickets, clearPendingCheckout]);
+  }, [onTicketPurchased, loadPurchasedQrTickets, clearPendingCheckout]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -706,6 +728,26 @@ export default function useBuyTicket({ onTicketPurchased }) {
     window.addEventListener('storage', onStorage);
     return () => window.removeEventListener('storage', onStorage);
   }, [handleCheckoutResult]);
+
+  useEffect(() => {
+    if (checkoutStatus !== 'pending') return undefined;
+
+    const timer = setInterval(() => {
+      const storedEvent = localStorage.getItem(CHECKOUT_EVENT_KEY);
+      if (!storedEvent) return;
+
+      try {
+        const payload = JSON.parse(storedEvent);
+        if (payload?.status) {
+          handleCheckoutResult(payload.status, payload.timestamp);
+        }
+      } catch {
+        // Ignore malformed payloads.
+      }
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [checkoutStatus, handleCheckoutResult]);
 
   useEffect(() => {
     const calculateFare = async () => {

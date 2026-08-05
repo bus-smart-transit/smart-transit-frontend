@@ -86,42 +86,76 @@ const getUpcomingTrip = (trips) => {
 export default function DriverDashboard() {
   const navigate = useNavigate();
 
-  // ── Pairing gate (checked from backend on every mount) ─────────────────
-  const [paired, setPaired] = useState(null); // null=loading, false=not paired, true=paired
+  const [pairing, setPairing] = useState({ loading: true, paired: false, reason: '' });
+  const didInitialPairingCheck = useRef(false);
+  const pairingRequestRef = useRef(null);
+
+  const refreshPairingStatus = useCallback(async () => {
+    if (pairingRequestRef.current) {
+      return pairingRequestRef.current;
+    }
+
+    pairingRequestRef.current = (async () => {
+      try {
+        const res = await StaffService.getPairingStatus('driver');
+        const data = res?.data ?? {};
+        const nextPaired = data?.paired === true;
+        const nextReason = data?.reason || '';
+        setPairing((prev) => {
+          if (!prev.loading && prev.paired === nextPaired && prev.reason === nextReason) {
+            return prev;
+          }
+
+          return {
+            loading: false,
+            paired: nextPaired,
+            reason: nextReason,
+          };
+        });
+      } catch {
+        setPairing((prev) => ({ ...prev, loading: false, paired: false }));
+      } finally {
+        pairingRequestRef.current = null;
+      }
+    })();
+
+    return pairingRequestRef.current;
+  }, []);
 
   useEffect(() => {
-    StaffService.getPairingStatus('driver')
-      .then((res) => setPaired(res?.data?.paired === true))
-      .catch(() => setPaired(false));
-  }, []);
+    if (didInitialPairingCheck.current) return;
+    didInitialPairingCheck.current = true;
+    void refreshPairingStatus();
+  }, [refreshPairingStatus]);
+
+  useEffect(() => {
+    if (pairing.paired) {
+      return undefined;
+    }
+    const timer = setInterval(() => {
+      if (!document.hidden) {
+        void refreshPairingStatus();
+      }
+    }, 12000);
+
+    return () => clearInterval(timer);
+  }, [pairing.paired, refreshPairingStatus]);
 
   const handleLogout = async () => {
     await StaffService.logout('driver').catch(() => {});
     navigate('/employee/login');
   };
 
-  if (paired === null) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-950">
-        <div className="h-10 w-10 animate-spin rounded-full border-4 border-slate-700 border-t-sky-400" />
-      </div>
-    );
-  }
-
-  if (!paired) {
-    return (
-      <PairingScreen
-        role="driver"
-        onPaired={() => setPaired(true)}
-        onLogout={handleLogout}
-      />
-    );
-  }
-
-  return <DriverDashboardInner onLogout={handleLogout} />;
+  return (
+    <DriverDashboardInner
+      onLogout={handleLogout}
+      pairing={pairing}
+      refreshPairingStatus={refreshPairingStatus}
+    />
+  );
 }
 
-function DriverDashboardInner({ onLogout }) {
+function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   const navigate = useNavigate();
   const navigateRef = useRef(navigate);
   useEffect(() => { navigateRef.current = navigate; }, [navigate]);
@@ -131,12 +165,15 @@ function DriverDashboardInner({ onLogout }) {
   const [assignedTrips, setAssignedTrips] = useState([]);
   const [stops, setStops] = useState([]);
   const [pin, setPin] = useState(null);
+  const [showTripPin, setShowTripPin] = useState(false);
   const [pinInput, setPinInput] = useState('');
   const [pinStatus, setPinStatus] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [actionMsg, setActionMsg] = useState('');
   const [gpsActive, setGpsActive] = useState(false);
+  const isPaired = pairing?.paired === true;
+  const pairingReason = pairing?.reason || 'Waiting for pairing with your Conductor before enabling session-synced features.';
   const hasActiveTrip = isCurrentOrSameDayTrip(trip);
   const didBootstrap = useRef(false);
   const upcomingTrip = getUpcomingTrip(assignedTrips);
@@ -144,7 +181,7 @@ function DriverDashboardInner({ onLogout }) {
   const gpsWatchRef = useRef(null);
   const lastGpsRef = useRef(null);
   const lastSentGpsRef = useRef(null); // tracks last successfully sent position for deduplication
-  const showNoCurrentTripState = !loading && !hasActiveTrip && ['dashboard', 'journey', 'navigation', 'trip'].includes(activeTab);
+  const showNoCurrentTripState = !loading && isPaired && !hasActiveTrip && ['dashboard', 'journey', 'navigation', 'trip'].includes(activeTab);
 
   const currentRoute = trip?.fleet_route?.route;
   const currentFleet = trip?.fleet_route?.fleet;
@@ -176,7 +213,7 @@ function DriverDashboardInner({ onLogout }) {
   }, []);
 
   const loadStops = useCallback(async () => {
-    if (!hasActiveTrip) {
+    if (!isPaired || !hasActiveTrip) {
       setStops([]);
       return;
     }
@@ -191,11 +228,12 @@ function DriverDashboardInner({ onLogout }) {
     } catch (err) {
       setError(err.message);
     }
-  }, [hasActiveTrip]);
+  }, [hasActiveTrip, isPaired]);
 
   const loadPin = useCallback(async () => {
-    if (!hasActiveTrip) {
+    if (!isPaired || !hasActiveTrip) {
       setPin(null);
+      setShowTripPin(false);
       return;
     }
     try {
@@ -204,7 +242,7 @@ function DriverDashboardInner({ onLogout }) {
     } catch (err) {
       setError(err.message);
     }
-  }, [hasActiveTrip]);
+  }, [hasActiveTrip, isPaired]);
 
   useEffect(() => {
     if (didBootstrap.current) return;
@@ -214,7 +252,7 @@ function DriverDashboardInner({ onLogout }) {
 
   // ── GPS push: runs only while driver has an active same-day trip ────────────
   useEffect(() => {
-    if (!hasActiveTrip) {
+    if (!isPaired || !hasActiveTrip) {
       // Clean up any running watcher/interval when trip becomes inactive
       if (gpsWatchRef.current !== null) {
         navigator.geolocation?.clearWatch(gpsWatchRef.current);
@@ -276,27 +314,27 @@ function DriverDashboardInner({ onLogout }) {
       clearInterval(gpsIntervalRef.current);
       gpsIntervalRef.current = null;
     };
-  }, [hasActiveTrip]);
+  }, [hasActiveTrip, isPaired]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (['journey', 'navigation', 'trip', 'dashboard'].includes(activeTab) && hasActiveTrip) {
+      if (['journey', 'navigation', 'trip', 'dashboard'].includes(activeTab) && hasActiveTrip && isPaired) {
         void loadStops();
       }
     }, 0);
 
     return () => clearTimeout(timer);
-  }, [activeTab, hasActiveTrip, loadStops]);
+  }, [activeTab, hasActiveTrip, isPaired, loadStops]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (['trip', 'account'].includes(activeTab) && hasActiveTrip) {
+      if (['trip', 'account'].includes(activeTab) && hasActiveTrip && isPaired) {
         void loadPin();
       }
     }, 0);
 
     return () => clearTimeout(timer);
-  }, [activeTab, hasActiveTrip, loadPin]);
+  }, [activeTab, hasActiveTrip, isPaired, loadPin]);
 
   const handleVerifyPin = async () => {
     if (!trip?.trip_id) {
@@ -327,6 +365,11 @@ function DriverDashboardInner({ onLogout }) {
   }, []);
 
   const handleAcknowledgeStop = async (stopId) => {
+    if (!isPaired) {
+      setActionMsg(pairingReason);
+      return;
+    }
+
     try {
       await StaffService.acknowledgeStop(stopId);
       // Relay current GPS position immediately so passenger map
@@ -341,6 +384,11 @@ function DriverDashboardInner({ onLogout }) {
 
   const handleTripAction = async (action) => {
     if (!trip) return;
+    if (!isPaired && action === 'depart') {
+      setActionMsg(pairingReason);
+      return;
+    }
+
     try {
       if (action === 'depart') await StaffService.departTrip(trip.trip_id);
       if (action === 'complete') await StaffService.completeTrip(trip.trip_id);
@@ -471,6 +519,17 @@ function DriverDashboardInner({ onLogout }) {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <span
+              className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${
+                pairing.loading
+                  ? 'border-slate-700 bg-slate-900 text-slate-400'
+                  : isPaired
+                    ? 'border-emerald-700 bg-emerald-950/40 text-emerald-300'
+                    : 'border-amber-700 bg-amber-950/40 text-amber-300'
+              }`}
+            >
+              {pairing.loading ? 'Checking pairing...' : isPaired ? 'Paired' : 'Not paired'}
+            </span>
             {hasActiveTrip && (
               <span
                 title={gpsActive ? 'GPS active — location is being sent to passengers' : 'Waiting for GPS fix…'}
@@ -534,7 +593,15 @@ function DriverDashboardInner({ onLogout }) {
           </section>
         )}
 
-        {!loading && activeTab === 'dashboard' && !showNoCurrentTripState && (
+        {!loading && activeTab === 'dashboard' && !isPaired && (
+          <section className="rounded-2xl border border-amber-800 bg-amber-950/20 p-6">
+            <h3 className="text-lg font-semibold text-amber-300">Live dashboard features are locked</h3>
+            <p className="mt-2 text-sm text-amber-200/90">{pairingReason}</p>
+            <p className="mt-2 text-sm text-slate-300">Assigned routes and schedule remain available under Assigned Routes.</p>
+          </section>
+        )}
+
+        {!loading && activeTab === 'dashboard' && isPaired && !showNoCurrentTripState && (
           <section className="grid gap-4 xl:grid-cols-4 md:grid-cols-2">
             <article className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
               <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Today's Trip</p>
@@ -569,13 +636,13 @@ function DriverDashboardInner({ onLogout }) {
                 <h4 className="text-base font-semibold text-slate-100">Quick Actions</h4>
               </div>
               <div className="flex flex-wrap gap-2">
-                <button className="rounded-xl bg-sky-500 px-3 py-2 text-xs font-semibold text-slate-950 transition hover:bg-sky-400 disabled:opacity-50" onClick={() => handleTripAction('depart')} disabled={trip?.status !== 'boarding'}>
+                <button className="rounded-xl bg-sky-500 px-3 py-2 text-xs font-semibold text-slate-950 transition hover:bg-sky-400 disabled:opacity-50" onClick={() => handleTripAction('depart')} disabled={!isPaired || trip?.status !== 'boarding'}>
                   Start Trip
                 </button>
                 <button className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-xs font-semibold text-slate-300 transition hover:border-slate-500" onClick={loadData}>
                   Receive Route Updates
                 </button>
-                <button className="rounded-xl border border-red-900 bg-red-950/30 px-3 py-2 text-xs font-semibold text-red-300 transition hover:bg-red-950/50 disabled:opacity-50" onClick={() => handleTripAction('complete')} disabled={!['departed', 'in-progress'].includes(trip?.status)}>
+                <button className="rounded-xl border border-red-900 bg-red-950/30 px-3 py-2 text-xs font-semibold text-red-300 transition hover:bg-red-950/50 disabled:opacity-50" onClick={() => handleTripAction('complete')} disabled={!isPaired || !['departed', 'in-progress'].includes(trip?.status)}>
                   End Trip
                 </button>
               </div>
@@ -637,7 +704,14 @@ function DriverDashboardInner({ onLogout }) {
           </section>
         )}
 
-        {!loading && activeTab === 'journey' && !showNoCurrentTripState && (
+        {!loading && activeTab === 'journey' && !isPaired && (
+          <section className="rounded-2xl border border-amber-800 bg-amber-950/20 p-6">
+            <h3 className="text-lg font-semibold text-amber-300">Journey tracking is locked</h3>
+            <p className="mt-2 text-sm text-amber-200/90">{pairingReason}</p>
+          </section>
+        )}
+
+        {!loading && activeTab === 'journey' && isPaired && !showNoCurrentTripState && (
           <section className="grid gap-4 lg:grid-cols-2">
             <article className="rounded-2xl border border-slate-800 bg-slate-900 p-4 sm:p-6">
               <h4 className="mb-3 text-base font-semibold text-slate-100">Journey Stops</h4>
@@ -676,7 +750,14 @@ function DriverDashboardInner({ onLogout }) {
           </section>
         )}
 
-        {!loading && activeTab === 'navigation' && !showNoCurrentTripState && (
+        {!loading && activeTab === 'navigation' && !isPaired && (
+          <section className="rounded-2xl border border-amber-800 bg-amber-950/20 p-6">
+            <h3 className="text-lg font-semibold text-amber-300">Route navigation is locked</h3>
+            <p className="mt-2 text-sm text-amber-200/90">{pairingReason}</p>
+          </section>
+        )}
+
+        {!loading && activeTab === 'navigation' && isPaired && !showNoCurrentTripState && (
           <section className="grid gap-4 lg:grid-cols-2">
             <article className="rounded-2xl border border-slate-800 bg-slate-900 p-4 sm:p-6">
               <h4 className="mb-3 text-base font-semibold text-slate-100">Route Navigation</h4>
@@ -731,7 +812,21 @@ function DriverDashboardInner({ onLogout }) {
           </section>
         )}
 
-        {!loading && activeTab === 'trip' && !showNoCurrentTripState && (
+        {!loading && activeTab === 'trip' && !isPaired && (
+          <section className="space-y-4">
+            <PairingScreen
+              role="driver"
+              paired={isPaired}
+              pairingReason={pairingReason}
+              onPaired={() => void refreshPairingStatus()}
+            />
+            <article className="rounded-2xl border border-amber-800 bg-amber-950/20 p-4">
+              <p className="text-sm text-amber-200/90">Start Trip and all active-trip tools stay locked until pairing is complete.</p>
+            </article>
+          </section>
+        )}
+
+        {!loading && activeTab === 'trip' && isPaired && !showNoCurrentTripState && (
           <section className="grid gap-4 lg:grid-cols-2">
             <article className="rounded-2xl border border-slate-800 bg-slate-900 p-4 sm:p-6">
               <div className="mb-3 flex items-center justify-between">
@@ -748,8 +843,8 @@ function DriverDashboardInner({ onLogout }) {
                 <div className="h-full rounded-full bg-linear-to-r from-blue-500 to-sky-400" style={{ width: `${tripProgress}%` }} />
               </div>
               <div className="mt-4 flex flex-wrap gap-2">
-                <button className="rounded-xl bg-sky-500 px-3 py-2 text-xs font-semibold text-slate-950 transition hover:bg-sky-400 disabled:opacity-50" onClick={() => handleTripAction('depart')} disabled={trip?.status !== 'boarding'}>Start Trip</button>
-                <button className="rounded-xl border border-red-900 bg-red-950/30 px-3 py-2 text-xs font-semibold text-red-300 transition hover:bg-red-950/50 disabled:opacity-50" onClick={() => handleTripAction('complete')} disabled={!['departed', 'in-progress'].includes(trip?.status)}>End Trip</button>
+                <button className="rounded-xl bg-sky-500 px-3 py-2 text-xs font-semibold text-slate-950 transition hover:bg-sky-400 disabled:opacity-50" onClick={() => handleTripAction('depart')} disabled={!isPaired || trip?.status !== 'boarding'}>Start Trip</button>
+                <button className="rounded-xl border border-red-900 bg-red-950/30 px-3 py-2 text-xs font-semibold text-red-300 transition hover:bg-red-950/50 disabled:opacity-50" onClick={() => handleTripAction('complete')} disabled={!isPaired || !['departed', 'in-progress'].includes(trip?.status)}>End Trip</button>
               </div>
             </article>
 
@@ -758,15 +853,23 @@ function DriverDashboardInner({ onLogout }) {
               {pin && (
                 <>
                   <div className="font-data mb-2 rounded-xl border border-dashed border-slate-700 bg-slate-950 p-3 text-center text-2xl font-bold tracking-[0.2em] text-slate-100">
-                    {pin.pin_code}
+                    {showTripPin ? pin.pin_code : '••••••'}
                   </div>
                   <div className="mb-3 flex justify-center">
-                    <img
-                      src={`https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(pin.pin_code)}`}
-                      alt="PIN QR code"
-                      className="h-36 w-36 rounded-xl border border-slate-700 bg-white p-1"
-                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowTripPin((prev) => !prev)}
+                      className="rounded-xl border border-slate-700 bg-white p-1 transition hover:scale-[1.01]"
+                      title="Tap QR to show or hide PIN"
+                    >
+                      <img
+                        src={`https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(pin.pin_code)}`}
+                        alt="PIN QR code"
+                        className="h-36 w-36"
+                      />
+                    </button>
                   </div>
+                  <p className="mb-3 text-center text-xs text-slate-500">Tap QR to {showTripPin ? 'hide' : 'show'} PIN code</p>
                   <div className="mb-3 space-y-2 text-xs">
                     {pin.fleet_plate_number && (
                       <div className="flex items-center justify-between">

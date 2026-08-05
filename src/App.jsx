@@ -1,7 +1,8 @@
 import { Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 
-const DefaultLayout = lazy(() => import('./layouts/default'));
+// DefaultLayout is retained for future public pages but not used by LandingPage,
+// which is now self-contained with its own Navbar and Footer.
 const PassengerBaseRouter = lazy(() => import('./pages/passenger'));
 const EmployeeBaseRouter = lazy(() => import('./pages/employee'));
 const LandingPage = lazy(() => import('./components/Passenger/LandingPage/LandingPage'));
@@ -20,9 +21,8 @@ export default function App() {
     <BrowserRouter>
       <Suspense fallback={<RouteFallback />}>
         <Routes>
-          <Route element={<DefaultLayout />}>
-            <Route path="/" element={<LandingPage />} />
-          </Route>
+          {/* LandingPage is self-contained — no layout wrapper needed */}
+          <Route path="/" element={<LandingPage />} />
 
           <Route path="/passenger/*" element={<PassengerBaseRouter />} />
           <Route path="/checkout/success" element={<CheckoutReturn />} />

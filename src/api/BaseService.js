@@ -43,9 +43,16 @@ export class BaseService {
   }
 
   async request(url, method, params = {}) {
-    const token =
-      localStorage.getItem(this.tokenKey) ||
-      sessionStorage.getItem(this.tokenKey);
+    const localToken = localStorage.getItem(this.tokenKey);
+    const sessionToken = sessionStorage.getItem(this.tokenKey);
+
+    // Staff token recovery: session token is usually from the most recent login.
+    // If both storages hold different values, prefer session and normalize both.
+    if (this.tokenKey === 'staff_token' && sessionToken && localToken && sessionToken !== localToken) {
+      localStorage.setItem(this.tokenKey, sessionToken);
+    }
+
+    const token = sessionToken || localToken;
 
     const headers = {};
     if (token) {
@@ -68,6 +75,37 @@ export class BaseService {
       const response = await api(config);
       return response.data;
     } catch (error) {
+      // Staff role-token mismatch recovery: if first attempt used local token and
+      // backend returned role-based 403, retry once with session token.
+      const status = error?.response?.status;
+      const message = String(error?.response?.data?.message || '').toLowerCase();
+      const canRetryWithSession =
+        this.tokenKey === 'staff_token' &&
+        status === 403 &&
+        message.includes('access denied') &&
+        !!sessionToken &&
+        !!localToken &&
+        sessionToken !== localToken &&
+        token === localToken;
+
+      if (canRetryWithSession) {
+        const retryConfig = {
+          ...config,
+          headers: {
+            ...headers,
+            Authorization: `Bearer ${sessionToken}`,
+          },
+        };
+
+        try {
+          const retryResponse = await api(retryConfig);
+          localStorage.setItem(this.tokenKey, sessionToken);
+          return retryResponse.data;
+        } catch (retryError) {
+          handleApiError(retryError, this.tokenKey);
+        }
+      }
+
       handleApiError(error, this.tokenKey);
     }
   }

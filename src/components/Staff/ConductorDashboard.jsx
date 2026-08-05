@@ -82,50 +82,69 @@ const getUpcomingTrip = (trips) => {
 export default function ConductorDashboard() {
   const navigate = useNavigate();
 
-  // ── Pairing gate (backend-verified on every mount) ──────────────────
-  const [paired, setPaired] = useState(null);
+  const [pairing, setPairing] = useState({ loading: true, paired: false, reason: '' });
+  const didInitialPairingCheck = useRef(false);
+  const pairingRequestRef = useRef(null);
+
+  const refreshPairingStatus = useCallback(async () => {
+    if (pairingRequestRef.current) {
+      return pairingRequestRef.current;
+    }
+
+    pairingRequestRef.current = (async () => {
+      try {
+        const res = await StaffService.getPairingStatus('conductor');
+        const data = res?.data ?? {};
+        const nextPaired = data?.paired === true;
+        const nextReason = data?.reason || '';
+        setPairing((prev) => {
+          if (!prev.loading && prev.paired === nextPaired && prev.reason === nextReason) {
+            return prev;
+          }
+
+          return {
+            loading: false,
+            paired: nextPaired,
+            reason: nextReason,
+          };
+        });
+      } catch {
+        setPairing((prev) => ({ ...prev, loading: false, paired: false }));
+      } finally {
+        pairingRequestRef.current = null;
+      }
+    })();
+
+    return pairingRequestRef.current;
+  }, []);
 
   useEffect(() => {
-    StaffService.getPairingStatus('conductor')
-      .then((res) => setPaired(res?.data?.paired === true))
-      .catch(() => setPaired(false));
-  }, []);
+    if (didInitialPairingCheck.current) return;
+    didInitialPairingCheck.current = true;
+    void refreshPairingStatus();
+  }, [refreshPairingStatus]);
 
   const handleLogout = async () => {
     await StaffService.logout('conductor').catch(() => {});
     navigate('/employee/login');
   };
 
-  if (paired === null) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-950">
-        <div className="h-10 w-10 animate-spin rounded-full border-4 border-slate-700 border-t-sky-400" />
-      </div>
-    );
-  }
-
-  if (!paired) {
-    return (
-      <PairingScreen
-        role="conductor"
-        onPaired={() => setPaired(true)}
-        onLogout={handleLogout}
-      />
-    );
-  }
-
-  return <ConductorDashboardInner onLogout={handleLogout} />;
+  return (
+    <ConductorDashboardInner
+      onLogout={handleLogout}
+      pairing={pairing}
+      refreshPairingStatus={refreshPairingStatus}
+    />
+  );
 }
 
-function ConductorDashboardInner({ onLogout }) {
-  const navigate = useNavigate();
+function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   const [activeTab, setActiveTab] = useState('trip');
   const [profile, setProfile] = useState(null);
   const [trip, setTrip] = useState(null);
   const [assignedTrips, setAssignedTrips] = useState([]);
   const [occupancy, setOccupancy] = useState(null);
   const [passengers, setPassengers] = useState([]);
-  const [pin, setPin] = useState(null);
   const [pinInput, setPinInput] = useState('');
   const [pinStatus, setPinStatus] = useState('');
   const [scanUuid, setScanUuid] = useState('');
@@ -145,6 +164,8 @@ function ConductorDashboardInner({ onLogout }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [actionMsg, setActionMsg] = useState('');
+  const isPaired = pairing?.paired === true;
+  const pairingReason = pairing?.reason || 'Waiting for pairing with your Driver before live trip features unlock.';
   const hasActiveTrip = isCurrentOrSameDayTrip(trip);
   const didBootstrap = useRef(false);
   const videoRef = useRef(null);
@@ -153,7 +174,7 @@ function ConductorDashboardInner({ onLogout }) {
   const scannerBusyRef = useRef(false);
   const lastDetectedRef = useRef({ value: '', at: 0 });
   const upcomingTrip = getUpcomingTrip(assignedTrips);
-  const showNoCurrentTripState = !loading && !hasActiveTrip && ['trip', 'occupancy', 'passengers', 'pin'].includes(activeTab);
+  const showNoCurrentTripState = !loading && isPaired && !hasActiveTrip && ['trip', 'occupancy', 'passengers', 'pin', 'scan'].includes(activeTab);
   const routeStops = trip?.fleet_route?.route?.route_stops || trip?.fleet_route?.route?.routeStops || [];
   const groupedPassengers = usePassengersByTrip(passengers, trip);
   const { printOnsiteReceipt } = useOnsiteReceiptPrinter();
@@ -259,12 +280,10 @@ function ConductorDashboardInner({ onLogout }) {
 
   const loadPin = useCallback(async () => {
     if (!trip?.trip_id) {
-      setPin(null);
       return;
     }
     try {
-      const res = await StaffService.getConductorPin();
-      setPin(res?.data);
+      await StaffService.getConductorPin();
     } catch (err) {
       setError(err.message);
     }
@@ -278,38 +297,47 @@ function ConductorDashboardInner({ onLogout }) {
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (activeTab === 'occupancy' && hasActiveTrip) void loadOccupancy();
+      if (activeTab === 'occupancy' && hasActiveTrip && isPaired) void loadOccupancy();
     }, 0);
 
     return () => clearTimeout(timer);
-  }, [activeTab, hasActiveTrip, loadOccupancy]);
+  }, [activeTab, hasActiveTrip, isPaired, loadOccupancy]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (activeTab === 'passengers' && hasActiveTrip) void loadPassengers();
+      if (activeTab === 'passengers' && hasActiveTrip && isPaired) void loadPassengers();
     }, 0);
 
     return () => clearTimeout(timer);
-  }, [activeTab, hasActiveTrip, loadPassengers]);
+  }, [activeTab, hasActiveTrip, isPaired, loadPassengers]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (activeTab === 'pin' && hasActiveTrip) void loadPin();
+      if (activeTab === 'pin' && hasActiveTrip && isPaired) void loadPin();
     }, 0);
 
     return () => clearTimeout(timer);
-  }, [activeTab, hasActiveTrip, loadPin]);
+  }, [activeTab, hasActiveTrip, isPaired, loadPin]);
 
   useEffect(() => {
     if (activeTab !== 'scan') {
-      stopScanner();
+      const timer = setTimeout(() => {
+        stopScanner();
+      }, 0);
+      return () => clearTimeout(timer);
     }
+    return undefined;
   }, [activeTab, stopScanner]);
 
   useEffect(() => () => stopScanner(), [stopScanner]);
 
   const handleScan = useCallback(async (scannedUuid = scanUuid) => {
     const ticketUuid = String(scannedUuid || '').trim();
+
+    if (!isPaired) {
+      setScanResult({ success: false, msg: pairingReason });
+      return;
+    }
 
     if (!trip?.trip_id) {
       setScanResult({ success: false, msg: 'No active trip assigned. Ticket scanning is unavailable.' });
@@ -332,9 +360,14 @@ function ConductorDashboardInner({ onLogout }) {
     } catch (err) {
       setScanResult({ success: false, msg: err.message });
     }
-  }, [loadOccupancy, scanUuid, trip?.trip_id]);
+  }, [isPaired, loadOccupancy, pairingReason, scanUuid, trip?.trip_id]);
 
   const handleGroupScan = useCallback(async (transactionRef) => {
+    if (!isPaired) {
+      setGroupScanResult({ success: false, msg: pairingReason });
+      return;
+    }
+
     if (!trip?.trip_id) {
       setGroupScanResult({ success: false, msg: 'No active trip assigned. Group scanning is unavailable.' });
       return;
@@ -350,7 +383,7 @@ function ConductorDashboardInner({ onLogout }) {
     } catch (err) {
       setGroupScanResult({ success: false, msg: err.message });
     }
-  }, [loadOccupancy, trip?.trip_id]);
+  }, [isPaired, loadOccupancy, pairingReason, trip?.trip_id]);
 
   const startScanner = useCallback(async () => {
     setScannerError('');
@@ -359,6 +392,11 @@ function ConductorDashboardInner({ onLogout }) {
 
     if (!trip?.trip_id) {
       setScannerError('No active trip assigned. Camera scanning is unavailable.');
+      return;
+    }
+
+    if (!isPaired) {
+      setScannerError(pairingReason);
       return;
     }
 
@@ -449,9 +487,14 @@ function ConductorDashboardInner({ onLogout }) {
       stopScanner();
       setScannerError(err?.message || 'Unable to access camera for QR scanning.');
     }
-  }, [extractTicketUuid, handleGroupScan, handleScan, stopScanner, trip?.trip_id]);
+  }, [extractTicketUuid, handleGroupScan, handleScan, isPaired, pairingReason, stopScanner, trip?.trip_id]);
 
   const handleAlight = async (ticketId) => {
+    if (!isPaired) {
+      setActionMsg(pairingReason);
+      return;
+    }
+
     try {
       await StaffService.recordAlighting(ticketId);
       setActionMsg('Alighting recorded.');
@@ -462,6 +505,11 @@ function ConductorDashboardInner({ onLogout }) {
   };
 
   const handleVerifyPin = async () => {
+    if (!isPaired) {
+      setPinStatus(pairingReason);
+      return;
+    }
+
     if (!trip?.trip_id) {
       setPinStatus('No active trip assigned. PIN verification is unavailable.');
       return;
@@ -475,6 +523,11 @@ function ConductorDashboardInner({ onLogout }) {
   };
 
   const handleOnsiteCheckout = async () => {
+    if (!isPaired) {
+      setActionMsg(pairingReason);
+      return;
+    }
+
     if (!trip?.trip_id) {
       setActionMsg('No active trip assigned. Onsite checkout is unavailable.');
       return;
@@ -621,6 +674,17 @@ function ConductorDashboardInner({ onLogout }) {
         <header className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-xl font-bold text-slate-100">{pageTitle}</h1>
           <div className="flex items-center gap-2">
+            <span
+              className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${
+                pairing.loading
+                  ? 'border-slate-700 bg-slate-900 text-slate-400'
+                  : isPaired
+                    ? 'border-emerald-700 bg-emerald-950/40 text-emerald-300'
+                    : 'border-amber-700 bg-amber-950/40 text-amber-300'
+              }`}
+            >
+              {pairing.loading ? 'Checking pairing...' : isPaired ? 'Paired' : 'Not paired'}
+            </span>
             <button
               className="inline-flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-semibold text-slate-300 transition hover:border-slate-500"
               onClick={loadData}
@@ -664,7 +728,14 @@ function ConductorDashboardInner({ onLogout }) {
           </section>
         )}
 
-        {!loading && activeTab === 'trip' && !showNoCurrentTripState && (
+        {!loading && activeTab === 'trip' && !isPaired && (
+          <section className="rounded-2xl border border-amber-800 bg-amber-950/20 p-6">
+            <h3 className="text-lg font-semibold text-amber-300">Current trip is locked</h3>
+            <p className="mt-2 text-sm text-amber-200/90">{pairingReason}</p>
+          </section>
+        )}
+
+        {!loading && activeTab === 'trip' && isPaired && !showNoCurrentTripState && (
           <section className="grid gap-4 md:grid-cols-2">
             {!trip ? (
               <article className="rounded-2xl border border-dashed border-slate-800 bg-slate-900 p-6">
@@ -713,7 +784,14 @@ function ConductorDashboardInner({ onLogout }) {
           </section>
         )}
 
-        {!loading && activeTab === 'occupancy' && !showNoCurrentTripState && (
+        {!loading && activeTab === 'occupancy' && !isPaired && (
+          <section className="rounded-2xl border border-amber-800 bg-amber-950/20 p-6">
+            <h3 className="text-lg font-semibold text-amber-300">Occupancy view is locked</h3>
+            <p className="mt-2 text-sm text-amber-200/90">{pairingReason}</p>
+          </section>
+        )}
+
+        {!loading && activeTab === 'occupancy' && isPaired && !showNoCurrentTripState && (
           <section className="max-w-2xl">
             {!occupancy ? (
               <article className="rounded-2xl border border-dashed border-slate-800 bg-slate-900 p-6">
@@ -748,7 +826,14 @@ function ConductorDashboardInner({ onLogout }) {
           </section>
         )}
 
-        {!loading && activeTab === 'scan' && (
+        {!loading && activeTab === 'scan' && !isPaired && (
+          <section className="rounded-2xl border border-amber-800 bg-amber-950/20 p-6">
+            <h3 className="text-lg font-semibold text-amber-300">Ticket scanning is locked</h3>
+            <p className="mt-2 text-sm text-amber-200/90">{pairingReason}</p>
+          </section>
+        )}
+
+        {!loading && activeTab === 'scan' && isPaired && (
           <section className="grid gap-4 lg:grid-cols-2">
             <article className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
               <h3 className="text-lg font-semibold text-slate-100">Scan QR Ticket</h3>
@@ -942,7 +1027,7 @@ function ConductorDashboardInner({ onLogout }) {
                   type="button"
                   className="inline-flex items-center gap-2 rounded-xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400"
                   onClick={handleOnsiteCheckout}
-                  disabled={!hasActiveTrip}
+                  disabled={!hasActiveTrip || !isPaired}
                 >
                   Record Cash Checkout
                 </button>
@@ -971,7 +1056,14 @@ function ConductorDashboardInner({ onLogout }) {
           </section>
         )}
 
-        {!loading && activeTab === 'passengers' && !showNoCurrentTripState && (
+        {!loading && activeTab === 'passengers' && !isPaired && (
+          <section className="rounded-2xl border border-amber-800 bg-amber-950/20 p-6">
+            <h3 className="text-lg font-semibold text-amber-300">Passengers and alighting are locked</h3>
+            <p className="mt-2 text-sm text-amber-200/90">{pairingReason}</p>
+          </section>
+        )}
+
+        {!loading && activeTab === 'passengers' && isPaired && !showNoCurrentTripState && (
           <section className="rounded-2xl border border-slate-800 bg-slate-900 p-4 sm:p-6">
             {groupedPassengers.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-slate-800 bg-slate-950 p-6">
@@ -1038,72 +1130,48 @@ function ConductorDashboardInner({ onLogout }) {
           </section>
         )}
 
-        {!loading && activeTab === 'pin' && !showNoCurrentTripState && (
-          <section className="grid max-w-3xl gap-4 md:grid-cols-2">
-            {pin && (
-              <article className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
-                <h3 className="text-lg font-semibold text-slate-100">Today's PIN Code</h3>
-                <div className="font-data mt-4 rounded-xl border border-dashed border-slate-700 bg-slate-950 p-4 text-center text-2xl font-bold tracking-[0.2em] text-slate-100">
-                  {pin.pin_code}
+        {!loading && activeTab === 'pin' && (
+          <section className="space-y-4">
+            <PairingScreen
+              role="conductor"
+              paired={isPaired}
+              pairingReason={pairingReason}
+              onPaired={() => {
+                void refreshPairingStatus();
+                void loadData();
+              }}
+            />
+
+            {isPaired && !showNoCurrentTripState && (
+              <article className="max-w-xl rounded-2xl border border-slate-800 bg-slate-900 p-6">
+                <h3 className="text-lg font-semibold text-slate-100">Verify Daily PIN</h3>
+                <p className="mt-1 text-xs text-slate-500">Manual PIN verification uses the same assignment checks and trip context.</p>
+                <div className="mt-4 flex gap-2">
+                  <input
+                    type="text"
+                    maxLength={6}
+                    placeholder="000000"
+                    value={pinInput}
+                    onChange={(e) => {
+                      setPinInput(e.target.value);
+                      setPinStatus('');
+                    }}
+                    className="font-data h-11 w-full rounded-xl border border-slate-800 bg-slate-950 px-3 text-sm text-slate-100 outline-none placeholder:text-slate-500 focus:border-sky-400"
+                  />
+                  <button
+                    className="inline-flex items-center gap-2 rounded-xl bg-sky-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-sky-400"
+                    onClick={handleVerifyPin}
+                  >
+                    Verify
+                  </button>
                 </div>
-                {pin.pin_code && (
-                  <div className="mt-3 flex justify-center">
-                    <img
-                      src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(pin.pin_code)}`}
-                      alt="PIN QR code"
-                      className="h-40 w-40 rounded-xl border border-slate-700 bg-white p-1"
-                    />
-                  </div>
+                {pinStatus && (
+                  <p className={`mt-3 text-sm ${pinStatus === 'PIN verified successfully.' ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {pinStatus}
+                  </p>
                 )}
-                <div className="mt-4 space-y-3 text-sm">
-                  <div className="flex items-center justify-between"><span className="text-slate-500">Trip</span><strong className="font-data text-slate-100">#{pin.trip_id ?? '-'}</strong></div>
-                  {pin.route_name && <div className="flex items-center justify-between"><span className="text-slate-500">Route</span><strong className="text-slate-100">{pin.route_name}</strong></div>}
-                  {pin.fleet_plate_number && (
-                    <div className="flex items-center justify-between">
-                      <span className="text-slate-500">Fleet</span>
-                      <strong className="rounded-full border border-sky-800 bg-sky-950/40 px-2 py-0.5 text-sky-300">{pin.fleet_plate_number}</strong>
-                    </div>
-                  )}
-                  {pin.trip_status && <div className="flex items-center justify-between"><span className="text-slate-500">Status</span><strong className="text-slate-100">{pin.trip_status}</strong></div>}
-                  <div className="flex items-center justify-between"><span className="text-slate-500">Date</span><strong className="font-data text-slate-100">{formatDateTime(pin.pin_date)}</strong></div>
-                  <div className="flex items-center justify-between"><span className="text-slate-500">Driver Verified</span><strong className={pin.driver_verified_at ? 'text-emerald-400' : 'text-slate-500'}>{pin.driver_verified_at ? '✓ Yes' : 'Not yet'}</strong></div>
-                  <div className="flex items-center justify-between"><span className="text-slate-500">Conductor Verified</span><strong className={pin.conductor_verified_at ? 'text-emerald-400' : 'text-slate-500'}>{pin.conductor_verified_at ? '✓ Yes' : 'Not yet'}</strong></div>
-                  {pin.both_verified && (
-                    <div className="mt-2 rounded-xl border border-emerald-800 bg-emerald-950/40 px-3 py-2 text-center text-xs font-semibold text-emerald-300">
-                      ✓ Both verified — trip is cleared for departure
-                    </div>
-                  )}
-                </div>
               </article>
             )}
-
-            <article className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
-              <h3 className="text-lg font-semibold text-slate-100">Verify PIN</h3>
-              <div className="mt-4 flex gap-2">
-                <input
-                  type="text"
-                  maxLength={6}
-                  placeholder="000000"
-                  value={pinInput}
-                  onChange={(e) => {
-                    setPinInput(e.target.value);
-                    setPinStatus('');
-                  }}
-                  className="font-data h-11 w-full rounded-xl border border-slate-800 bg-slate-950 px-3 text-sm text-slate-100 outline-none placeholder:text-slate-500 focus:border-sky-400"
-                />
-                <button
-                  className="inline-flex items-center gap-2 rounded-xl bg-sky-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-sky-400"
-                  onClick={handleVerifyPin}
-                >
-                  Verify
-                </button>
-              </div>
-              {pinStatus && (
-                <p className={`mt-3 text-sm ${pinStatus === 'PIN verified successfully.' ? 'text-emerald-400' : 'text-red-400'}`}>
-                  {pinStatus}
-                </p>
-              )}
-            </article>
           </section>
         )}
       </main>

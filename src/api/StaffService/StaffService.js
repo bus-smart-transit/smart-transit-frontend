@@ -14,10 +14,12 @@ class StaffService extends BaseService {
 
   async logout(role) {
     try {
-      return await this.request(`/${role}/logout`, 'DELETE');
+      return await this.request('/staff/logout', 'DELETE');
     } finally {
       localStorage.removeItem(TOKEN_KEY);
       sessionStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem('staff_role');
+      sessionStorage.removeItem('staff_role');
     }
   }
 
@@ -67,8 +69,12 @@ class StaffService extends BaseService {
     return await this.request(`/${role}/pairing-token`, 'GET');
   }
 
-  async submitPairing(role, partnerToken) {
-    return await this.request(`/${role}/pair`, 'POST', { token: partnerToken });
+  async submitPairing(role, credential, mode = 'token') {
+    const payload = mode === 'pin'
+      ? { pin_code: credential }
+      : { token: credential };
+
+    return await this.request(`/${role}/pair`, 'POST', payload);
   }
 
   async getPairingStatus(role) {

@@ -71,6 +71,8 @@ export default function usePassengerDashboard({ preloadMapView }) {
   const [selectedTicketQr, setSelectedTicketQr] = useState(null);
   const [loadingTicketQr, setLoadingTicketQr] = useState(false);
   const qrCacheRef = useRef(readSessionCache(TICKET_QR_CACHE_KEY));
+  const privateLoadRequestRef = useRef(null);
+  const lastPrivateLoadStartedAtRef = useRef(0);
 
   const formatDateTime = useCallback((value) => {
     const date = toDate(value);
@@ -113,6 +115,10 @@ export default function usePassengerDashboard({ preloadMapView }) {
   }, []);
 
   const loadPrivateData = useCallback(async () => {
+    if (privateLoadRequestRef.current) {
+      return privateLoadRequestRef.current;
+    }
+
     if (!isAuthenticated) {
       setProfile(null);
       setTickets([]);
@@ -122,56 +128,70 @@ export default function usePassengerDashboard({ preloadMapView }) {
       return;
     }
 
-    setIsLoadingPrivate(true);
-    setPrivateError('');
+    privateLoadRequestRef.current = (async () => {
+      lastPrivateLoadStartedAtRef.current = Date.now();
+      setIsLoadingPrivate(true);
+      setPrivateError('');
 
-    const [profileRes, ticketsRes, rewardsRes, paymentsRes] = await Promise.allSettled([
-      PassengerService.getProfile(),
-      PassengerService.getTickets(),
-      PassengerService.getRewardsHistory(),
-      PassengerService.getPaymentHistory(),
-    ]);
+      try {
+        const summaryRes = await PassengerService.getDashboardSummary();
+        const payload = summaryRes?.data ?? summaryRes ?? {};
 
-    const failures = [];
+        const profilePayload = payload?.profile ?? user ?? null;
+        const ticketList = payload?.tickets ?? [];
+        const rewardList = payload?.rewards ?? [];
+        const paymentList = payload?.payments ?? [];
 
-    if (profileRes.status === 'fulfilled') {
-      setProfile(profileRes.value?.data ?? profileRes.value ?? null);
-    } else {
-      setProfile(null);
-      failures.push('Profile endpoint failed');
-    }
+        setProfile(profilePayload);
+        setTickets(Array.isArray(ticketList) ? ticketList : []);
+        setRewards(Array.isArray(rewardList) ? rewardList : []);
+        setTransactions(Array.isArray(paymentList) ? paymentList : []);
+      } catch {
+        const [ticketsRes, rewardsRes, paymentsRes] = await Promise.allSettled([
+          PassengerService.getTickets(),
+          PassengerService.getRewardsHistory(),
+          PassengerService.getPaymentHistory(),
+        ]);
 
-    if (ticketsRes.status === 'fulfilled') {
-      const ticketList = ticketsRes.value?.data ?? ticketsRes.value ?? [];
-      setTickets(Array.isArray(ticketList) ? ticketList : []);
-    } else {
-      setTickets([]);
-      failures.push('Tickets endpoint failed');
-    }
+        const failures = [];
+        setProfile(user ?? null);
 
-    if (rewardsRes.status === 'fulfilled') {
-      const rewardList = rewardsRes.value?.data ?? rewardsRes.value ?? [];
-      setRewards(Array.isArray(rewardList) ? rewardList : []);
-    } else {
-      setRewards([]);
-      failures.push('Rewards endpoint failed');
-    }
+        if (ticketsRes.status === 'fulfilled') {
+          const ticketList = ticketsRes.value?.data ?? ticketsRes.value ?? [];
+          setTickets(Array.isArray(ticketList) ? ticketList : []);
+        } else {
+          setTickets([]);
+          failures.push('Tickets endpoint failed');
+        }
 
-    if (paymentsRes.status === 'fulfilled') {
-      const paymentList = paymentsRes.value?.data ?? paymentsRes.value ?? [];
-      setTransactions(Array.isArray(paymentList) ? paymentList : []);
-    } else {
-      setTransactions([]);
-      failures.push('Payments endpoint failed');
-    }
+        if (rewardsRes.status === 'fulfilled') {
+          const rewardList = rewardsRes.value?.data ?? rewardsRes.value ?? [];
+          setRewards(Array.isArray(rewardList) ? rewardList : []);
+        } else {
+          setRewards([]);
+          failures.push('Rewards endpoint failed');
+        }
 
-    if (failures.length > 0) {
-      setPrivateError(failures.join(' | '));
-    }
+        if (paymentsRes.status === 'fulfilled') {
+          const paymentList = paymentsRes.value?.data ?? paymentsRes.value ?? [];
+          setTransactions(Array.isArray(paymentList) ? paymentList : []);
+        } else {
+          setTransactions([]);
+          failures.push('Payments endpoint failed');
+        }
 
-    setLastSync(new Date());
-    setIsLoadingPrivate(false);
-  }, [isAuthenticated]);
+        if (failures.length > 0) {
+          setPrivateError(failures.join(' | '));
+        }
+      } finally {
+        setLastSync(new Date());
+        setIsLoadingPrivate(false);
+        privateLoadRequestRef.current = null;
+      }
+    })();
+
+    return privateLoadRequestRef.current;
+  }, [isAuthenticated, user]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -194,9 +214,10 @@ export default function usePassengerDashboard({ preloadMapView }) {
     const timer = setTimeout(() => {
       if (paymentStatus === 'success') {
         setPaymentNotice('Payment successful. You have been redirected back.');
-        // Only reload if last sync was more than 5s ago — prevents double-load
-        // on checkout return when the auth change also fires loadPrivateData
-        if (isAuthenticated && (!lastSync || Date.now() - lastSync.getTime() > 5000)) {
+        const isLoadInFlight = !!privateLoadRequestRef.current;
+        const startedRecently = Date.now() - lastPrivateLoadStartedAtRef.current <= 5000;
+        // Avoid immediate duplicate reload when an auth/mount-triggered load already started.
+        if (isAuthenticated && !isLoadInFlight && !startedRecently) {
           void loadPrivateData();
         }
       } else if (paymentStatus === 'cancel') {

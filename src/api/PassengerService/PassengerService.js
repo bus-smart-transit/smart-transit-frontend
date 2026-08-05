@@ -33,8 +33,12 @@ class PassengerService extends RoleAuthServiceBase {
     return await this.request(`/${this.endpointBase}/rewards/history`, "GET");
   }
 
-  async getAvailableTrips() {
-    return await this.request(`/trips`, "GET");
+  async getDashboardSummary() {
+    return await this.request(`/${this.endpointBase}/dashboard-summary`, "GET");
+  }
+
+  async getAvailableTrips(options = {}) {
+    return await this.request(`/trips`, "GET", options);
   }
 
   async checkoutOnline(payload) {

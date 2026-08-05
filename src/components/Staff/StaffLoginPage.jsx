@@ -61,10 +61,19 @@ export default function StaffLoginPage() {
 
       if (!token) throw new Error('No token received');
 
-      sessionStorage.setItem('staff_token', token);
-      sessionStorage.setItem('staff_role', role || selectedRole);
+      const resolvedRole = role || selectedRole;
 
-      navigate(`/employee/${role || selectedRole}/dashboard`);
+      localStorage.removeItem('staff_token');
+      localStorage.removeItem('staff_role');
+      sessionStorage.removeItem('staff_token');
+      sessionStorage.removeItem('staff_role');
+
+      sessionStorage.setItem('staff_token', token);
+      sessionStorage.setItem('staff_role', resolvedRole);
+      localStorage.setItem('staff_token', token);
+      localStorage.setItem('staff_role', resolvedRole);
+
+      navigate(`/employee/${resolvedRole}/dashboard`);
     } catch (err) {
       setError(err?.message || 'Invalid credentials. Please try again.');
     } finally {

@@ -153,31 +153,34 @@ export default function OperatorDashboard() {
   const loadDashboardData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const profileRes = await StaffService.getProfile('operator');
+      const [
+        profileRes,
+        fleetsRes,
+        driversRes,
+        conductorsRes,
+        routesRes,
+        stopsRes,
+        fleetRoutesRes,
+        upcomingTripsRes,
+      ] = await Promise.all([
+        StaffService.getProfile('operator'),
+        StaffService.getOperatorFleets(),
+        StaffService.getOperatorDrivers(),
+        StaffService.getOperatorConductors(),
+        StaffService.getOperatorRoutes(),
+        StaffService.getOperatorStops(),
+        StaffService.getOperatorFleetRoutes(),
+        StaffService.getOperatorTrips(),
+      ]);
+
       setProfile(profileRes.data);
-
-      const fleetsRes = await StaffService.getOperatorFleets();
       setFleets(fleetsRes.data || []);
-
-      const driversRes = await StaffService.getOperatorDrivers();
       setDrivers(driversRes.data || []);
-
-      const conductorsRes = await StaffService.getOperatorConductors();
       setConductors(conductorsRes.data || []);
-
-      const routesRes = await StaffService.getOperatorRoutes();
       setRoutes(routesRes.data || []);
-
-      const stopsRes = await StaffService.getOperatorStops();
       setStops(stopsRes.data || []);
-
-      const fleetRoutesRes = await StaffService.getOperatorFleetRoutes();
-      const assignedFleetRoutes = fleetRoutesRes?.data || [];
-      setFleetRouteOptions(assignedFleetRoutes);
-
-      const upcomingTripsRes = await StaffService.getOperatorTrips();
-      const upcomingTrips = upcomingTripsRes?.data || [];
-      setTrips(upcomingTrips);
+      setFleetRouteOptions(fleetRoutesRes?.data || []);
+      setTrips(upcomingTripsRes?.data || []);
     } catch (err) {
       showMessage(err?.message || 'Failed to load dashboard', false);
     } finally {
