@@ -299,3 +299,279 @@ export const REDEMPTION_HISTORY = [
   },
 ];
 
+// --- News (full News page + homepage preview) ------------------------------------------------------
+export const NEWS_ITEMS = [
+  {
+    id: "news-1",
+    category: "Route Update",
+    date: "June 3, 2026",
+    title: "New Ecoland–Tagum express trip added at 5:30 AM",
+    summary:
+      "An earlier departure has been added on weekdays to help commuters beat rush hour traffic.",
+    body: [
+      "Starting this month, SmartTransit is adding a new 5:30 AM express trip on the Ecoland–Tagum route, running Monday through Friday.",
+      "The express service makes limited stops and is designed for commuters who need to be in Tagum before the morning rush. Seats can be reserved in advance through the app just like any other trip.",
+      "This is the third schedule expansion this year as ridership on the northern routes continues to grow.",
+    ],
+  },
+  {
+    id: "news-2",
+    category: "Service Advisory",
+    date: "May 28, 2026",
+    title: "Panabo route detour due to road repair",
+    summary:
+      "Buses passing through Panabo will take an alternate route until repairs are completed.",
+    body: [
+      "Ongoing road repair along the national highway near Panabo Junction will require all SmartTransit buses on the Ecoland–Panabo route to take a short detour through the local barangay road.",
+      "Passengers should expect an additional 10 to 15 minutes of travel time until repairs are complete. Live tracking will reflect the detoured route automatically.",
+      "We appreciate our passengers' patience while local authorities complete the repair work.",
+    ],
+  },
+  {
+    id: "news-3",
+    category: "Holiday Schedule",
+    date: "May 20, 2026",
+    title: "Adjusted trips for the Davao Fiesta holiday",
+    summary:
+      "Expect fewer trips and higher demand on routes to Mati and Digos during the holiday weekend.",
+    body: [
+      "In observance of the Davao Fiesta holiday weekend, SmartTransit will run a reduced weekend schedule on the Mati and Digos routes.",
+      "Because demand is traditionally higher during this weekend, we recommend booking your seat at least two days in advance through My Tickets.",
+      "Regular weekday schedules resume the following Monday.",
+    ],
+  },
+  {
+    id: "news-4",
+    category: "Product Update",
+    date: "May 12, 2026",
+    title: "Rewards points can now be redeemed for free one-way tickets",
+    summary:
+      "Frequent riders can now trade in points for a completely free trip on select routes.",
+    body: [
+      "SmartTransit Rewards now includes a free one-way ticket redemption on the Ecoland ⇄ Digos route for passengers who have accumulated 400 points or more.",
+      "Points are still earned at the same rate — 1 point for every ₱1 spent on fare — and can be viewed anytime from the Rewards page.",
+      "More routes will be added to the free-ticket redemption list later this year.",
+    ],
+  },
+  {
+    id: "news-5",
+    category: "Safety",
+    date: "April 30, 2026",
+    title: "All buses now equipped with live GPS tracking",
+    summary:
+      "Every active SmartTransit bus can now be tracked in real time from the Track Bus page.",
+    body: [
+      "As of this week, all buses in the SmartTransit fleet have been fitted with GPS tracking units, allowing passengers to see their bus's current stop and estimated arrival time before it arrives at the terminal.",
+      "This rollout completes a six-month effort to bring live tracking to every route we operate across Davao Region XI.",
+    ],
+  },
+  {
+    id: "news-6",
+    category: "Service Advisory",
+    date: "April 18, 2026",
+    title: "Terminal window hours extended at Ecoland Terminal",
+    summary:
+      "The Ecoland Terminal help desk now stays open later to assist passengers with walk-in concerns.",
+    body: [
+      "The passenger help desk at Ecoland Terminal is now open from 5:00 AM to 9:00 PM daily, an extension of two hours from the previous schedule.",
+      "This change is in response to passenger feedback requesting more support during early morning and evening trips.",
+    ],
+  },
+];
+
+// --- FAQ (full FAQ page, grouped by category + homepage preview) ------------------------------------------------------
+export const FAQ_CATEGORIES = [
+  {
+    category: "Getting Started",
+    items: [
+      {
+        question: "What is SmartTransit?",
+        answer:
+          "SmartTransit is a bus transportation platform for commuters travelling across Davao Region XI. It lets you check live schedules, reserve a seat, pay online, and track your bus, all from your browser.",
+      },
+      {
+        question: "Which routes does SmartTransit currently cover?",
+        answer:
+          "Trips connecting Davao City (Ecoland Terminal) to Tagum, Panabo, Digos, and Mati terminals across Davao Region XI.",
+      },
+      {
+        question: "Do I need to create an account to use SmartTransit?",
+        answer:
+          "You can search trips and preview bus tracking as a guest. Booking a seat, viewing tickets, and earning rewards requires a free account.",
+      },
+    ],
+  },
+  {
+    category: "Bus Tracking",
+    items: [
+      {
+        question: "Can I track my bus before it arrives?",
+        answer:
+          "Yes. Open Track Bus to see your bus's current stop, next stop, and estimated arrival time. Guests can preview tracking; passengers with an upcoming trip see it linked to their booking.",
+      },
+      {
+        question: "Is the tracking data real GPS?",
+        answer:
+          "This demo uses simulated tracking data to show how the feature will look and behave. Once GPS hardware and a backend are connected, this page will show each bus's real location.",
+      },
+    ],
+  },
+  {
+    category: "Tickets & Payments",
+    items: [
+      {
+        question: "How do I pay for my seat?",
+        answer:
+          "Bookings are paid online through GCash. Once payment is confirmed, your e-ticket and QR code appear in My Tickets right away.",
+      },
+      {
+        question: "How do I board using my digital ticket?",
+        answer:
+          "Open My Tickets, select your upcoming booking, and show the QR code to the conductor when boarding.",
+      },
+      {
+        question: "Can I get a refund if I cancel a ticket?",
+        answer:
+          "Cancelled bookings are refunded to your original GCash payment method. Refund status appears under Trip History.",
+      },
+    ],
+  },
+  {
+    category: "Trips & Bookings",
+    items: [
+      {
+        question: "What if I need to cancel or change my trip?",
+        answer:
+          "You can view and manage upcoming trips from My Tickets. Cancellation policies are shown before you confirm a change.",
+      },
+      {
+        question: "Where can I see my past trips?",
+        answer:
+          "Trip History lists every completed and cancelled trip, along with fare, payment method, and status.",
+      },
+    ],
+  },
+  {
+    category: "Rewards",
+    items: [
+      {
+        question: "How do I earn reward points?",
+        answer:
+          "You earn 1 point for every ₱1 spent on fare. Points are added automatically after a completed trip.",
+      },
+      {
+        question: "What can I redeem points for?",
+        answer:
+          "Points can be redeemed for fare discounts, waived reservation fees, and free one-way tickets on select routes from the Rewards page.",
+      },
+    ],
+  },
+  {
+    category: "Account",
+    items: [
+      {
+        question: "How do I update my profile information?",
+        answer:
+          "Go to Profile and open Edit Profile to update your name, email, or phone number.",
+      },
+      {
+        question: "I forgot my password. What do I do?",
+        answer:
+          "On the Login page, select \"Forgot Password?\" and enter your account email to receive reset instructions.",
+      },
+      {
+        question: "Can I turn off notifications?",
+        answer:
+          "Yes. Notification preferences can be managed from the Notification Settings section on your Profile page.",
+      },
+    ],
+  },
+];
+
+// --- Track Bus: multi-route live-tracking mock data ------------------------------------------------------
+export const ACTIVE_BUSES = [
+  {
+    id: "bus-01",
+    busNumber: "Bus 01",
+    route: "Ecoland Terminal → Tagum Terminal",
+    status: "On Time",
+    currentStop: "Buhangin Checkpoint",
+    nextStop: "Panabo Junction",
+    eta: "12 min",
+    lastUpdated: "Just now",
+    progress: 45,
+    path: [
+      { x: 60, y: 260, label: "Ecoland Terminal" },
+      { x: 220, y: 160, label: "Buhangin Checkpoint" },
+      { x: 400, y: 190, label: "Panabo Junction" },
+      { x: 560, y: 60, label: "Tagum Terminal" },
+    ],
+  },
+  {
+    id: "bus-04",
+    busNumber: "Bus 04",
+    route: "Ecoland Terminal → Tagum Terminal",
+    status: "Delayed",
+    currentStop: "Ecoland Terminal",
+    nextStop: "Buhangin Checkpoint",
+    eta: "28 min",
+    lastUpdated: "2 min ago",
+    progress: 10,
+    path: [
+      { x: 60, y: 260, label: "Ecoland Terminal" },
+      { x: 220, y: 160, label: "Buhangin Checkpoint" },
+      { x: 400, y: 190, label: "Panabo Junction" },
+      { x: 560, y: 60, label: "Tagum Terminal" },
+    ],
+  },
+  {
+    id: "bus-12",
+    busNumber: "Bus 12",
+    route: "Ecoland Terminal → Digos Terminal",
+    status: "On Time",
+    currentStop: "Toril Crossing",
+    nextStop: "Digos Terminal",
+    eta: "9 min",
+    lastUpdated: "Just now",
+    progress: 72,
+    path: [
+      { x: 60, y: 80, label: "Ecoland Terminal" },
+      { x: 260, y: 200, label: "Toril Crossing" },
+      { x: 560, y: 260, label: "Digos Terminal" },
+    ],
+  },
+  {
+    id: "bus-20",
+    busNumber: "Bus 20",
+    route: "Ecoland Terminal → Mati Terminal",
+    status: "Boarding",
+    currentStop: "Ecoland Terminal",
+    nextStop: "Panabo Junction",
+    eta: "45 min",
+    lastUpdated: "5 min ago",
+    progress: 2,
+    path: [
+      { x: 60, y: 60, label: "Ecoland Terminal" },
+      { x: 300, y: 140, label: "Panabo Junction" },
+      { x: 460, y: 260, label: "Mainit Hot Spring" },
+      { x: 580, y: 300, label: "Mati Terminal" },
+    ],
+  },
+  {
+    id: "bus-07",
+    busNumber: "Bus 07",
+    route: "Ecoland Terminal → Panabo Terminal",
+    status: "On Time",
+    currentStop: "Panabo Junction",
+    nextStop: "Panabo Terminal",
+    eta: "6 min",
+    lastUpdated: "Just now",
+    progress: 88,
+    path: [
+      { x: 60, y: 220, label: "Ecoland Terminal" },
+      { x: 320, y: 140, label: "Buhangin Checkpoint" },
+      { x: 560, y: 100, label: "Panabo Terminal" },
+    ],
+  },
+];
+

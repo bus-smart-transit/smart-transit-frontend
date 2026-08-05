@@ -3,7 +3,6 @@ import AppTopBar from "../../components/AppTopBar.jsx";
 import TripList from "../../components/TripList.jsx";
 import { useBooking } from "../../context/BookingContext.jsx";
 import { SAMPLE_TRIPS } from "../../data/sampleData.js";
-import "./TripResultsPage.css";
 
 export default function TripResultsPage() {
   const navigate = useNavigate();
@@ -19,10 +18,9 @@ export default function TripResultsPage() {
   };
 
   return (
-    <div className="trip-results">
-      <AppTopBar backTo="/dashboard" backLabel="Back to Dashboard" />
-
-      <div className="container trip-results__body">
+    <div className="min-h-screen bg-slate-50">
+      <AppTopBar backTo="/" backLabel="Back to Home" />
+      <div className="container-page py-8">
         <TripList
           trips={SAMPLE_TRIPS}
           origin={origin}

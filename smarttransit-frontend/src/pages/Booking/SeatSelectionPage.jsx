@@ -1,18 +1,17 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import AppTopBar from "../../components/AppTopBar.jsx";
+import Card from "../../components/ui/Card.jsx";
+import Button from "../../components/ui/Button.jsx";
 import { ClockIcon, BusIcon, MapPinIcon } from "../../components/Icons.jsx";
 import { useBooking } from "../../context/BookingContext.jsx";
 import { BUS_SEAT_COLUMNS, BUS_SEAT_ROWS, TAKEN_SEATS } from "../../data/sampleData.js";
-import "./SeatSelectionPage.css";
 
 export default function SeatSelectionPage() {
   const navigate = useNavigate();
   const { booking, selectSeat } = useBooking();
   const { selectedTrip, selectedSeat } = booking;
 
-  // If someone lands here directly without picking a trip first,
-  // send them back to search instead of showing a broken page.
   useEffect(() => {
     if (!selectedTrip) navigate("/booking", { replace: true });
   }, [selectedTrip, navigate]);
@@ -30,112 +29,140 @@ export default function SeatSelectionPage() {
   };
 
   return (
-    <div className="seat-page">
+    <div className="min-h-screen bg-slate-50">
       <AppTopBar backTo="/booking" backLabel="Back to Search" />
 
-      <div className="container seat-page__body">
-        <div className="seat-page__main">
-          <div className="route-card">
-            <div className="route-card__top">
-              <span className="route-card__label">Route</span>
-              <span className="route-card__badge">
+      <div className="container-page grid gap-6 py-8 lg:grid-cols-[1fr_320px]">
+        <div className="space-y-6">
+          <Card className="p-5 sm:p-6">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                Route
+              </span>
+              <span className="rounded-full bg-teal-50 px-3 py-1 text-xs font-semibold text-teal-700">
                 {selectedTrip.seatsAvailable} seats available
               </span>
             </div>
-            <p className="route-card__origin">{selectedTrip.origin}</p>
-            <div className="route-card__grid">
+            <p className="mt-2 font-display text-lg font-bold text-navy-950">
+              {selectedTrip.origin} → {selectedTrip.destination}
+            </p>
+            <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
               <div>
-                <ClockIcon size={18} />
-                <span>Departure</span>
-                <strong>{selectedTrip.departure}</strong>
+                <p className="flex items-center gap-1.5 text-xs text-slate-400">
+                  <ClockIcon size={14} /> Departure
+                </p>
+                <p className="mt-1 text-sm font-semibold text-navy-950">{selectedTrip.departure}</p>
               </div>
               <div>
-                <ClockIcon size={18} />
-                <span>Arrival</span>
-                <strong>{selectedTrip.arrival}</strong>
+                <p className="flex items-center gap-1.5 text-xs text-slate-400">
+                  <ClockIcon size={14} /> Arrival
+                </p>
+                <p className="mt-1 text-sm font-semibold text-navy-950">{selectedTrip.arrival}</p>
               </div>
               <div>
-                <BusIcon size={18} />
-                <span>Vehicle</span>
-                <strong>{selectedTrip.bus}</strong>
+                <p className="flex items-center gap-1.5 text-xs text-slate-400">
+                  <BusIcon size={14} /> Vehicle
+                </p>
+                <p className="mt-1 text-sm font-semibold text-navy-950">{selectedTrip.bus}</p>
               </div>
               <div>
-                <MapPinIcon size={18} />
-                <span>Duration</span>
-                <strong>{selectedTrip.duration}</strong>
+                <p className="flex items-center gap-1.5 text-xs text-slate-400">
+                  <MapPinIcon size={14} /> Duration
+                </p>
+                <p className="mt-1 text-sm font-semibold text-navy-950">{selectedTrip.duration}</p>
               </div>
             </div>
-          </div>
+          </Card>
 
-          <div className="seat-card">
-            <h2>Select Your Seat</h2>
-            <div className="seat-legend">
-              <span><i className="seat-legend__swatch seat-legend__swatch--available" /> Available</span>
-              <span><i className="seat-legend__swatch seat-legend__swatch--taken" /> Taken</span>
-              <span><i className="seat-legend__swatch seat-legend__swatch--selected" /> Your selection</span>
+          <Card className="p-5 sm:p-6">
+            <h2 className="font-display text-lg font-semibold text-navy-950">Select Your Seat</h2>
+            <div className="mt-3 flex flex-wrap justify-center gap-4 text-xs text-slate-500">
+              <span className="flex items-center gap-1.5">
+                <i className="h-3.5 w-3.5 rounded border border-slate-300 bg-white" /> Available
+              </span>
+              <span className="flex items-center gap-1.5">
+                <i className="h-3.5 w-3.5 rounded bg-black" /> Taken
+              </span>
+              <span className="flex items-center gap-1.5">
+                <i className="h-3.5 w-3.5 rounded bg-navy-800" /> Your selection
+              </span>
             </div>
 
-            <div className="seat-grid">
-              {seatNumbers.map((seat) => {
-                const isTaken = TAKEN_SEATS.includes(seat);
-                const isSelected = selectedSeat === seat;
-                return (
-                  <button
-                    key={seat}
-                    className={`seat ${isTaken ? "seat--taken" : ""} ${isSelected ? "seat--selected" : ""}`}
-                    disabled={isTaken}
-                    onClick={() => handlePickSeat(seat)}
-                  >
-                    {seat}
-                  </button>
-                );
-              })}
+            <div className="mt-5 flex justify-center">
+              <div className="grid grid-cols-4 gap-3">
+                {seatNumbers.map((seat) => {
+                  const isTaken = TAKEN_SEATS.includes(seat);
+                  const isSelected = selectedSeat === seat;
+                  return (
+                    <button
+                      key={seat}
+                      disabled={isTaken}
+                      onClick={() => handlePickSeat(seat)}
+                      className={`flex h-11 w-16 items-center justify-center rounded-lg text-sm font-semibold transition-colors ${
+                        isTaken
+                          ? "cursor-not-allowed bg-black text-white"
+                          : isSelected
+                          ? "bg-navy-800 text-white"
+                          : "border border-slate-300 bg-white text-navy-900 hover:border-navy-700 hover:bg-navy-50"
+                      }`}
+                    >
+                      {seat}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             {selectedSeat && (
-              <p className="seat-card__selection">Seat {selectedSeat} selected</p>
+              <p className="mt-4 text-center text-sm font-semibold text-teal-700">Seat {selectedSeat} selected</p>
             )}
-          </div>
+          </Card>
         </div>
 
-        <aside className="booking-summary-card">
-          <h2>Booking Summary</h2>
-          <dl>
-            <div>
-              <dt>Route</dt>
-              <dd>
+        <Card className="h-fit p-5 sm:p-6">
+          <h2 className="font-display text-lg font-semibold text-navy-950">Booking Summary</h2>
+          <dl className="mt-4 space-y-3 text-sm">
+            <div className="flex justify-between gap-4">
+              <dt className="text-slate-400">Route</dt>
+              <dd className="text-right font-medium text-navy-950">
                 {selectedTrip.origin} → {selectedTrip.destination}
               </dd>
             </div>
-            <div>
-              <dt>Departure</dt>
-              <dd>{selectedTrip.departure}</dd>
+            <div className="flex justify-between gap-4">
+              <dt className="text-slate-400">Departure</dt>
+              <dd className="font-medium text-navy-950">{selectedTrip.departure}</dd>
             </div>
-            <div>
-              <dt>Seat</dt>
-              <dd>{selectedSeat ? `Seat ${selectedSeat}` : "Not selected yet"}</dd>
+            <div className="flex justify-between gap-4">
+              <dt className="text-slate-400">Seat</dt>
+              <dd className="font-medium text-navy-950">
+                {selectedSeat ? `Seat ${selectedSeat}` : "Not selected yet"}
+              </dd>
             </div>
-            <div>
-              <dt>Passengers</dt>
-              <dd>1</dd>
+            <div className="flex justify-between gap-4">
+              <dt className="text-slate-400">Passengers</dt>
+              <dd className="font-medium text-navy-950">1</dd>
             </div>
-            <div>
-              <dt>Fare per passenger</dt>
-              <dd>₱{selectedTrip.fare.toFixed(2)}</dd>
+            <div className="flex justify-between gap-4">
+              <dt className="text-slate-400">Fare per passenger</dt>
+              <dd className="font-medium text-navy-950">₱{selectedTrip.fare.toFixed(2)}</dd>
             </div>
           </dl>
-          <div className="booking-summary-card__total">
-            <span>Total</span>
-            <strong>₱{selectedTrip.fare.toFixed(2)}</strong>
+          <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-4">
+            <span className="text-sm font-semibold text-navy-950">Total</span>
+            <span className="font-display text-xl font-bold text-navy-950">
+              ₱{selectedTrip.fare.toFixed(2)}
+            </span>
           </div>
-          <button
-            className="booking-summary-card__cta"
+          <Button
+            variant="primary"
+            size="lg"
+            className="mt-5 w-full"
             disabled={!selectedSeat}
             onClick={() => navigate("/booking/payment")}
           >
             Continue To Payment
-          </button>
-        </aside>
+          </Button>
+        </Card>
       </div>
     </div>
   );

@@ -1,18 +1,14 @@
-import { useState } from "react";
-import { useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useBooking } from "../../context/BookingContext.jsx";
-import "./GCashPlaceholderPage.css";
+import Button from "../../components/ui/Button.jsx";
+import FormInput from "../../components/ui/FormInput.jsx";
 
-// This page stands in for a real GCash checkout redirect. It is a
-// frontend-only simulation — no real payment happens here. Once a
-// real payment gateway is available, this whole component gets
-// replaced by a redirect to the gateway's hosted checkout page.
 export default function GCashPlaceholderPage() {
   const navigate = useNavigate();
   const { booking } = useBooking();
   const { selectedTrip, selectedSeat } = booking;
-  const [status, setStatus] = useState("idle"); // idle -> processing -> done
+  const [status, setStatus] = useState("idle");
 
   useEffect(() => {
     if (!selectedTrip || !selectedSeat) navigate("/booking", { replace: true });
@@ -22,7 +18,6 @@ export default function GCashPlaceholderPage() {
 
   const handlePay = () => {
     setStatus("processing");
-    // Simulated processing delay so it feels like a real checkout.
     setTimeout(() => {
       setStatus("done");
       navigate("/booking/confirmation");
@@ -30,36 +25,37 @@ export default function GCashPlaceholderPage() {
   };
 
   return (
-    <div className="gcash-page">
-      <div className="gcash-card">
-        <div className="gcash-card__brand">GCash</div>
-        <p className="gcash-card__note">
-          Sample checkout screen — SmartTransit would redirect here to the
-          real GCash app once a payment gateway is connected.
+    <div className="flex min-h-screen items-center justify-center bg-navy-950 px-4 py-10">
+      <div className="w-full max-w-sm rounded-2xl bg-white p-6 sm:p-7">
+        <div className="rounded-xl bg-blue-600 px-4 py-3 text-center font-display text-lg font-bold text-white">
+          GCash
+        </div>
+        <p className="mt-4 text-center text-xs text-slate-500">
+          Sample checkout screen — SmartTransit would redirect here to the real GCash app once a
+          payment gateway is connected.
         </p>
 
-        <div className="gcash-card__amount">
-          <span>Amount to Pay</span>
-          <strong>₱{selectedTrip.fare.toFixed(2)}</strong>
+        <div className="mt-5 flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3">
+          <span className="text-sm text-slate-500">Amount to Pay</span>
+          <span className="font-display text-xl font-bold text-navy-950">
+            ₱{selectedTrip.fare.toFixed(2)}
+          </span>
         </div>
 
-        <label className="gcash-card__field">
-          GCash Mobile Number
-          <input type="tel" placeholder="09XX XXX XXXX" defaultValue="0917 123 4567" />
-        </label>
+        <div className="mt-5 space-y-4">
+          <FormInput label="GCash Mobile Number" type="tel" placeholder="09XX XXX XXXX" defaultValue="0917 123 4567" />
+          <FormInput label="MPIN" type="password" placeholder="••••" maxLength={4} defaultValue="1234" />
+        </div>
 
-        <label className="gcash-card__field">
-          MPIN
-          <input type="password" placeholder="••••" maxLength={4} defaultValue="1234" />
-        </label>
-
-        <button
-          className="gcash-card__pay-btn"
+        <Button
+          variant="primary"
+          size="lg"
+          className="mt-6 w-full !bg-blue-600 hover:!bg-blue-700"
           onClick={handlePay}
           disabled={status === "processing"}
         >
           {status === "processing" ? "Processing…" : `Pay ₱${selectedTrip.fare.toFixed(2)}`}
-        </button>
+        </Button>
       </div>
     </div>
   );

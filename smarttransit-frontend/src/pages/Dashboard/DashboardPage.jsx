@@ -1,13 +1,17 @@
-import { useNavigate } from "react-router-dom";
 import DashboardLayout from "../../components/DashboardLayout.jsx";
 import CalendarWidget from "../../components/CalendarWidget.jsx";
+import Card from "../../components/ui/Card.jsx";
+import StatusBadge from "../../components/ui/StatusBadge.jsx";
+import Button from "../../components/ui/Button.jsx";
 import {
   TicketIcon,
   ClockIcon,
   MapPinIcon,
   BellIcon,
   RouteIcon,
+  GiftIcon,
 } from "../../components/Icons.jsx";
+import { useAuth } from "../../context/AuthContext.jsx";
 import {
   UPCOMING_TRIPS,
   RECENT_BOOKINGS,
@@ -16,7 +20,6 @@ import {
   BUS_SCHEDULE,
   ROUTE_STATS,
 } from "../../data/sampleData.js";
-import "./DashboardPage.css";
 
 const STATS = [
   { icon: TicketIcon, label: "Upcoming Trips", value: UPCOMING_TRIPS.length },
@@ -24,171 +27,203 @@ const STATS = [
   { icon: MapPinIcon, label: "Active Routes Nearby", value: ACTIVE_ROUTES.length },
 ];
 
+const QUICK_ACTIONS = [
+  { to: "/my-tickets", label: "My Tickets", icon: TicketIcon },
+  { to: "/trip-history", label: "Trip History", icon: ClockIcon },
+  { to: "/track-bus", label: "Track Bus", icon: MapPinIcon },
+  { to: "/rewards", label: "Rewards", icon: GiftIcon },
+];
+
 export default function DashboardPage() {
-  const navigate = useNavigate();
+  const { user } = useAuth();
+  const today = new Date();
+  const formattedDate = today.toLocaleDateString("en-US", {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
 
   return (
     <DashboardLayout>
-      <div className="dashboard-page">
-        <div className="dashboard-page__header">
-          <div>
-            <h1>Welcome, Josh!</h1>
-            <p>Sunday, May 23, 2027 · Davao City</p>
-          </div>
+      <div className="space-y-6">
+        <div>
+          <h1 className="font-display text-2xl font-bold text-navy-950 sm:text-3xl">
+            Welcome, {user?.firstName ?? "Passenger"}!
+          </h1>
+          <p className="mt-1 text-sm text-slate-500">{formattedDate} · Davao City</p>
         </div>
 
-        <div className="dashboard-page__stats">
+        <div className="grid gap-4 sm:grid-cols-3">
           {STATS.map(({ icon: Icon, label, value }) => (
-            <div className="stat-card" key={label}>
-              <div className="stat-card__icon">
+            <Card key={label} className="flex items-center gap-4 p-5">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-navy-50 text-navy-800">
                 <Icon size={22} />
-              </div>
+              </span>
               <div>
-                <p className="stat-card__value">{value}</p>
-                <p className="stat-card__label">{label}</p>
+                <p className="font-display text-2xl font-bold text-navy-950">{value}</p>
+                <p className="text-xs text-slate-500">{label}</p>
               </div>
-            </div>
+            </Card>
           ))}
         </div>
 
-        <div className="dashboard-page__columns">
-          <div className="dashboard-page__main-column">
-            <section className="dashboard-panel">
-              <h2>Upcoming Trip</h2>
+        <div className="grid gap-6 lg:grid-cols-3">
+          <div className="space-y-6 lg:col-span-2">
+            <Card className="p-6">
+              <h2 className="font-display text-lg font-semibold text-navy-950">Upcoming Trip</h2>
               {UPCOMING_TRIPS.length === 0 ? (
-                <p className="dashboard-panel__empty">
-                  No upcoming trips yet — search above to book one.
+                <p className="mt-3 text-sm text-slate-500">
+                  No upcoming trips yet — search from the homepage to book one.
                 </p>
               ) : (
-                UPCOMING_TRIPS.map((trip) => (
-                  <div className="upcoming-trip" key={trip.id}>
-                    <div>
-                      <p className="upcoming-trip__route">{trip.route}</p>
-                      <p className="upcoming-trip__meta">
-                        {trip.date} · {trip.time} · Seat {trip.seat}
-                      </p>
+                <div className="mt-4 space-y-3">
+                  {UPCOMING_TRIPS.map((trip) => (
+                    <div
+                      key={trip.id}
+                      className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-slate-50 px-4 py-3.5"
+                    >
+                      <div>
+                        <p className="text-sm font-semibold text-navy-950">{trip.route}</p>
+                        <p className="text-xs text-slate-500">
+                          {trip.date} · {trip.time} · Seat {trip.seat}
+                        </p>
+                      </div>
+                      <StatusBadge status={trip.status} />
                     </div>
-                    <span className="upcoming-trip__status">{trip.status}</span>
-                  </div>
-                ))
+                  ))}
+                </div>
               )}
-            </section>
+            </Card>
 
-            <section className="dashboard-panel">
-              <h2>Bus Schedule</h2>
-              <table className="bus-schedule">
-                <thead>
-                  <tr>
-                    <th>Route</th>
-                    <th>Departure</th>
-                    <th>Bus</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {BUS_SCHEDULE.map((entry) => (
-                    <tr key={entry.id}>
-                      <td>{entry.route}</td>
-                      <td>{entry.time}</td>
-                      <td>{entry.bus}</td>
+            <Card className="p-6">
+              <h2 className="font-display text-lg font-semibold text-navy-950">Bus Schedule</h2>
+              <div className="mt-4 overflow-x-auto">
+                <table className="w-full min-w-[420px] text-left text-sm">
+                  <thead>
+                    <tr className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                      <th className="pb-2">Route</th>
+                      <th className="pb-2">Departure</th>
+                      <th className="pb-2">Bus</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </section>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {BUS_SCHEDULE.map((entry) => (
+                      <tr key={entry.id}>
+                        <td className="py-2.5 font-medium text-navy-950">{entry.route}</td>
+                        <td className="py-2.5 text-slate-500">{entry.time}</td>
+                        <td className="py-2.5 text-slate-500">{entry.bus}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
 
-            <section className="dashboard-panel">
-              <h2>Recent Bookings</h2>
-              <table className="recent-bookings">
-                <thead>
-                  <tr>
-                    <th>Route</th>
-                    <th>Date</th>
-                    <th>Amount</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {RECENT_BOOKINGS.map((booking) => (
-                    <tr key={booking.id}>
-                      <td>{booking.route}</td>
-                      <td>{booking.date}</td>
-                      <td>₱{booking.amount.toFixed(2)}</td>
-                      <td>
-                        <span className="recent-bookings__status">{booking.status}</span>
-                      </td>
+            <Card className="p-6">
+              <h2 className="font-display text-lg font-semibold text-navy-950">Recent Bookings</h2>
+              <div className="mt-4 overflow-x-auto">
+                <table className="w-full min-w-[480px] text-left text-sm">
+                  <thead>
+                    <tr className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                      <th className="pb-2">Route</th>
+                      <th className="pb-2">Date</th>
+                      <th className="pb-2">Amount</th>
+                      <th className="pb-2">Status</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </section>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {RECENT_BOOKINGS.map((booking) => (
+                      <tr key={booking.id}>
+                        <td className="py-2.5 font-medium text-navy-950">{booking.route}</td>
+                        <td className="py-2.5 text-slate-500">{booking.date}</td>
+                        <td className="py-2.5 text-slate-500">₱{booking.amount.toFixed(2)}</td>
+                        <td className="py-2.5">
+                          <StatusBadge status={booking.status} />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
 
-            <section className="dashboard-panel">
-              <h2>
-                <RouteIcon size={18} /> Your Route Statistics
+            <Card className="p-6">
+              <h2 className="flex items-center gap-2 font-display text-lg font-semibold text-navy-950">
+                <RouteIcon size={18} className="text-teal-600" /> Your Route Statistics
               </h2>
-              <div className="route-stats">
+              <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
                 <div>
-                  <p className="route-stats__value">{ROUTE_STATS.totalTrips}</p>
-                  <p className="route-stats__label">Total Trips</p>
+                  <p className="font-display text-xl font-bold text-navy-950">{ROUTE_STATS.totalTrips}</p>
+                  <p className="text-xs text-slate-500">Total Trips</p>
                 </div>
                 <div>
-                  <p className="route-stats__value">{ROUTE_STATS.mostTraveledRoute}</p>
-                  <p className="route-stats__label">Most Traveled Route</p>
+                  <p className="font-display text-base font-bold text-navy-950">
+                    {ROUTE_STATS.mostTraveledRoute}
+                  </p>
+                  <p className="text-xs text-slate-500">Most Traveled Route</p>
                 </div>
                 <div>
-                  <p className="route-stats__value">₱{ROUTE_STATS.totalSpent}</p>
-                  <p className="route-stats__label">Total Spent</p>
+                  <p className="font-display text-xl font-bold text-navy-950">
+                    ₱{ROUTE_STATS.totalSpent}
+                  </p>
+                  <p className="text-xs text-slate-500">Total Spent</p>
                 </div>
                 <div>
-                  <p className="route-stats__value">{ROUTE_STATS.onTimeRate}%</p>
-                  <p className="route-stats__label">On-Time Rate</p>
+                  <p className="font-display text-xl font-bold text-navy-950">
+                    {ROUTE_STATS.onTimeRate}%
+                  </p>
+                  <p className="text-xs text-slate-500">On-Time Rate</p>
                 </div>
               </div>
-            </section>
+            </Card>
           </div>
 
-          <div className="dashboard-page__side-column">
-            <section className="dashboard-panel">
-              <h2>Calendar</h2>
-              <CalendarWidget year={2026} month={5} highlightDays={[10]} />
-            </section>
-
-            <section className="dashboard-panel">
-              <h2>Quick Actions</h2>
-              <div className="quick-actions">
-                <button onClick={() => navigate("/booking")}>Book a New Trip</button>
-                <button onClick={() => navigate("/track-bus")}>Track My Bus</button>
-                <button onClick={() => navigate("/my-tickets")}>View My Tickets</button>
+          <div className="space-y-6">
+            <Card className="p-6">
+              <h2 className="font-display text-lg font-semibold text-navy-950">Calendar</h2>
+              <div className="mt-4">
+                <CalendarWidget year={2026} month={5} highlightDays={[10]} />
               </div>
-            </section>
+            </Card>
 
-            <section className="dashboard-panel">
-              <h2>Active Routes</h2>
-              <ul className="active-routes">
+            <Card className="p-6">
+              <h2 className="font-display text-lg font-semibold text-navy-950">Quick Actions</h2>
+              <div className="mt-4 grid grid-cols-2 gap-2.5">
+                {QUICK_ACTIONS.map(({ to, label, icon: Icon }) => (
+                  <Button key={to} to={to} variant="outline" size="sm" className="!flex-col !py-3.5">
+                    <Icon size={18} />
+                    {label}
+                  </Button>
+                ))}
+              </div>
+            </Card>
+
+            <Card className="p-6">
+              <h2 className="font-display text-lg font-semibold text-navy-950">Active Routes</h2>
+              <ul className="mt-4 space-y-3">
                 {ACTIVE_ROUTES.map((route) => (
-                  <li key={route.id}>
-                    <span>{route.name}</span>
-                    <span className="active-routes__count">
-                      {route.busesActive} buses active
-                    </span>
+                  <li key={route.id} className="flex items-center justify-between text-sm">
+                    <span className="font-medium text-navy-950">{route.name}</span>
+                    <span className="text-xs text-slate-500">{route.busesActive} buses active</span>
                   </li>
                 ))}
               </ul>
-            </section>
+            </Card>
 
-            <section className="dashboard-panel">
-              <h2>
-                <BellIcon size={18} /> Announcements
+            <Card className="p-6">
+              <h2 className="flex items-center gap-2 font-display text-lg font-semibold text-navy-950">
+                <BellIcon size={18} className="text-teal-600" /> Announcements
               </h2>
-              <ul className="announcements">
+              <ul className="mt-4 space-y-3">
                 {ANNOUNCEMENTS.map((note) => (
-                  <li key={note.id}>
-                    <p>{note.title}</p>
-                    <span>{note.date}</span>
+                  <li key={note.id} className="border-b border-slate-100 pb-3 last:border-b-0 last:pb-0">
+                    <p className="text-sm font-medium text-navy-950">{note.title}</p>
+                    <p className="mt-0.5 text-xs text-slate-400">{note.date}</p>
                   </li>
                 ))}
               </ul>
-            </section>
+            </Card>
           </div>
         </div>
       </div>
