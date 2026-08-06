@@ -37,14 +37,43 @@ const UUID_PATTERN = /[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}
 
 const formatDateTime = (value) => {
   if (!value) return '-';
-  const date = new Date(value);
+  const str = String(value);
+  const isDateOnly = /^\d{4}-\d{2}-\d{2}$/.test(str);
+  const date = new Date(isDateOnly ? str + 'T00:00' : str);
   if (Number.isNaN(date.getTime())) return '-';
   const yyyy = date.getFullYear();
   const mm = String(date.getMonth() + 1).padStart(2, '0');
   const dd = String(date.getDate()).padStart(2, '0');
+  if (isDateOnly) return `${yyyy}/${mm}/${dd}`;
   const hh = String(date.getHours()).padStart(2, '0');
   const min = String(date.getMinutes()).padStart(2, '0');
   return `${yyyy}/${mm}/${dd} - ${hh}:${min}`;
+};
+
+const toCompactTime = (value) => {
+  if (!value) return '';
+  const str = String(value).trim();
+  const hhmmss = str.match(/^(\d{2}:\d{2})(?::\d{2})?$/);
+  if (hhmmss) return hhmmss[1];
+  return str;
+};
+
+const formatDateOnly = (value) => {
+  if (!value) return '-';
+  const str = String(value);
+  const match = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (match) return `${match[1]}/${match[2]}/${match[3]}`;
+  return formatDateTime(value);
+};
+
+const formatTripSchedule = (tripLike) => {
+  if (!tripLike) return '-';
+  const dateLabel = formatDateOnly(tripLike?.trip_date);
+  const start = toCompactTime(tripLike?.fleet_route?.start_time);
+  const end = toCompactTime(tripLike?.fleet_route?.end_time);
+  if (start && end) return `${dateLabel} - ${start} to ${end}`;
+  if (start) return `${dateLabel} - ${start}`;
+  return dateLabel;
 };
 
 const isSameDay = (value) => {
@@ -84,7 +113,7 @@ const getUpcomingTrip = (trips) => {
 export default function ConductorDashboard() {
   const navigate = useNavigate();
 
-  const [pairing, setPairing] = useState({ loading: true, paired: false, reason: '' });
+  const [pairing, setPairing] = useState({ loading: false, paired: false, reason: '' });
   const didInitialPairingCheck = useRef(false);
   const pairingRequestRef = useRef(null);
 
@@ -452,6 +481,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
             lastDetectedRef.current.value === rawValue && now - lastDetectedRef.current.at < 3000;
           if (isRecentDuplicate) {
             scannerBusyRef.current = false;
+            setScannerBusy(false);
             return;
           }
 
@@ -738,7 +768,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
             </p>
             {upcomingTrip ? (
               <p className="mt-3 text-sm text-sky-300">
-                Upcoming trip: {upcomingTrip?.fleet_route?.route?.origin || '-'} to {upcomingTrip?.fleet_route?.route?.destination || '-'} on {formatDateTime(upcomingTrip?.trip_date)}.
+                Upcoming trip: {upcomingTrip?.fleet_route?.route?.origin || '-'} to {upcomingTrip?.fleet_route?.route?.destination || '-'} on {formatTripSchedule(upcomingTrip)}.
               </p>
             ) : (
               <p className="mt-3 text-sm text-slate-500">
@@ -775,7 +805,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                   <span className="rounded-full border border-sky-500/40 bg-sky-500/10 px-3 py-1 text-xs text-sky-300">{trip.status}</span>
                 </div>
                 <div className="space-y-3 text-sm">
-                  <div className="flex items-center justify-between"><span className="text-slate-500">Date</span><strong className="font-data text-slate-100">{formatDateTime(trip.trip_date)}</strong></div>
+                  <div className="flex items-center justify-between"><span className="text-slate-500">Schedule</span><strong className="font-data text-slate-100">{formatTripSchedule(trip)}</strong></div>
                   <div className="flex items-center justify-between"><span className="text-slate-500">Seated Passengers</span><strong className="font-data text-slate-100">{trip.current_seated_capacity ?? 0}</strong></div>
                   <div className="flex items-center justify-between"><span className="text-slate-500">Standing Passengers</span><strong className="font-data text-slate-100">{trip.current_standing_capacity ?? 0}</strong></div>
                   <div className="flex items-center justify-between"><span className="text-slate-500">Total Occupancy</span><strong className="font-data text-slate-100">{trip.total_occupancy ?? 0}</strong></div>
@@ -800,7 +830,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                     <span className="rounded-full border border-sky-500/40 bg-sky-500/10 px-3 py-1 text-xs text-sky-300">{item.status}</span>
                   </div>
                   <div className="space-y-3 text-sm">
-                    <div className="flex items-center justify-between"><span className="text-slate-500">Date</span><strong className="font-data text-slate-100">{formatDateTime(item.trip_date)}</strong></div>
+                    <div className="flex items-center justify-between"><span className="text-slate-500">Schedule</span><strong className="font-data text-slate-100">{formatTripSchedule(item)}</strong></div>
                     <div className="flex items-center justify-between"><span className="text-slate-500">Fleet</span><strong className="text-slate-100">{item.fleet_route?.fleet?.plate_number || `Fleet ${item.fleet_route?.fleet_id || '-'}`}</strong></div>
                     <div className="flex items-center justify-between"><span className="text-slate-500">Route</span><strong className="text-slate-100">{item.fleet_route?.route?.route_name || `Route ${item.fleet_route?.route_id || '-'}`}</strong></div>
                   </div>

@@ -1,9 +1,74 @@
-import { MapPin, Clock, Smartphone, CreditCard, AlertCircle, CheckCircle, Loader, LocateFixed } from 'lucide-react';
+import { useState } from 'react';
+import { MapPin, Clock, Smartphone, CreditCard, AlertCircle, CheckCircle, Loader, LocateFixed, Users } from 'lucide-react';
 import useBuyTicket from '../../../api/hooks/Passenger/useBuyTicket';
 import TicketCard from '../Ticket/TicketCard';
 import './BuyTicketPortal.css';
 
+const toCompactTime = (value) => {
+  if (!value) return '';
+  const str = String(value).trim();
+  const hhmmss = str.match(/^(\d{2}:\d{2})(?::\d{2})?$/);
+  if (hhmmss) return hhmmss[1];
+  return str;
+};
+
+const toDateLabel = (value) => {
+  if (!value) return '-';
+  const str = String(value);
+  const dateOnlyMatch = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (dateOnlyMatch) {
+    return `${dateOnlyMatch[1]}/${dateOnlyMatch[2]}/${dateOnlyMatch[3]}`;
+  }
+
+  const date = new Date(str);
+  if (Number.isNaN(date.getTime())) return '-';
+  const yyyy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const dd = String(date.getDate()).padStart(2, '0');
+  return `${yyyy}/${mm}/${dd}`;
+};
+
+const getTripScheduleLabel = (trip) => {
+  const dateLabel = toDateLabel(trip?.trip_date);
+  const startTime = toCompactTime(trip?.fleet_route?.start_time);
+  const endTime = toCompactTime(trip?.fleet_route?.end_time);
+
+  if (startTime && endTime) return `${dateLabel} ${startTime}-${endTime}`;
+  if (startTime) return `${dateLabel} ${startTime}`;
+  return dateLabel;
+};
+
+const toSeatAvailability = (trip, fleet) => {
+  const seatedTotal = Number(fleet?.seated_capacity ?? 0);
+  const standingTotal = Number(fleet?.standing_capacity ?? 0);
+
+  const explicitSeatedAvailable = trip?.available_seated_capacity ?? trip?.available_seated ?? trip?.remaining_seated_capacity;
+  const explicitStandingAvailable = trip?.available_standing_capacity ?? trip?.available_standing ?? trip?.remaining_standing_capacity;
+
+  let seatedLeft;
+  let standingLeft;
+
+  if (explicitSeatedAvailable != null || explicitStandingAvailable != null) {
+    seatedLeft = Number(explicitSeatedAvailable ?? 0);
+    standingLeft = Number(explicitStandingAvailable ?? 0);
+  } else {
+    // Backend stores current_* as occupied counts, so remaining is total-current.
+    const currentSeated = Number(trip?.current_seated_capacity ?? 0);
+    const currentStanding = Number(trip?.current_standing_capacity ?? 0);
+    seatedLeft = Math.max(0, seatedTotal - currentSeated);
+    standingLeft = Math.max(0, standingTotal - currentStanding);
+  }
+
+  return {
+    seatedLeft: Math.max(0, seatedLeft),
+    standingLeft: Math.max(0, standingLeft),
+    seatedTotal: Math.max(0, seatedTotal),
+    standingTotal: Math.max(0, standingTotal),
+  };
+};
+
 export default function BuyTicket({ onTicketPurchased }) {
+  const [tripDetailsModal, setTripDetailsModal] = useState(null);
   const {
     availableRewardPoints,
     canProceedToOnlinePayment,
@@ -166,7 +231,7 @@ export default function BuyTicket({ onTicketPurchased }) {
               type="text"
               value={form.search_from || ''}
               onChange={(e) => handleChange('search_from', e.target.value)}
-              placeholder="From"
+              placeholder="From (origin terminal)"
             />
 
             <input
@@ -184,7 +249,7 @@ export default function BuyTicket({ onTicketPurchased }) {
                 }
               }}
               readOnly={dropoffMode === 'custom'}
-              placeholder={dropoffMode === 'stop' ? 'To' : 'Pin destination on map below'}
+              placeholder={dropoffMode === 'stop' ? 'To (destination terminal)' : 'Pin destination on map below'}
             />
 
             <input
@@ -198,19 +263,6 @@ export default function BuyTicket({ onTicketPurchased }) {
                 <option key={`dest-${stop.stop_id}`} value={stopLabel(stop)} />
               ))}
             </datalist>
-
-            <select
-              value={form.trip_id}
-              onChange={(e) => handleTripSelect(e.target.value)}
-            >
-              <option value="">Select Trip</option>
-              {trips.map((trip) => (
-                <option key={trip.trip_id} value={trip.trip_id}>
-                  {(trip.fleet_route?.fleet?.plate_number ? `Fleet ${trip.fleet_route.fleet.plate_number}` : `Fleet ${trip.fleet_route?.fleet_id || '-'}`)}
-                  {` • ${trip.fleet_route?.route?.origin || '-'} to ${trip.fleet_route?.route?.destination || '-'}`}
-                </option>
-              ))}
-            </select>
 
             <button type="button" onClick={useCurrentLocationAsOrigin} disabled={locatingOrigin || !selectedStops.length}>
               {locatingOrigin ? 'Locating...' : 'Use Current'}
@@ -237,29 +289,82 @@ export default function BuyTicket({ onTicketPurchased }) {
                 </p>
               )}
               <div className="buy-trip-list">
-                {trips.map((trip, idx) => {
+                {trips.map((trip) => {
                 const checked = form.trip_id === String(trip.trip_id);
-                const fleetLabel = trip.fleet_route?.fleet?.plate_number
-                  ? `Fleet ${trip.fleet_route.fleet.plate_number}`
-                  : `Fleet ${trip.fleet_route?.fleet_id || '-'}`;
+                const route = trip.fleet_route?.route || {};
+                const fleet = trip.fleet_route?.fleet || {};
+                const {
+                  seatedLeft,
+                  standingLeft,
+                  seatedTotal,
+                  standingTotal,
+                } = toSeatAvailability(trip, fleet);
+                const isFull = seatedLeft <= 0 && standingLeft <= 0;
                 return (
-                  <label key={trip.trip_id} className={`buy-trip-card ${checked ? 'active' : ''}`}>
-                    <input
-                      type="radio"
-                      name="trip"
-                      value={trip.trip_id}
-                      checked={checked}
-                      onChange={(e) => handleTripSelect(e.target.value)}
-                    />
+                  <div
+                    key={trip.trip_id}
+                    role="button"
+                    tabIndex={0}
+                    className={`buy-trip-card ${checked ? 'active' : ''} ${isFull ? 'full' : ''}`}
+                    onClick={() => !isFull && handleTripSelect(checked ? '' : String(trip.trip_id))}
+                    onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && !isFull) handleTripSelect(checked ? '' : String(trip.trip_id)); }}
+                    aria-pressed={checked}
+                    aria-disabled={isFull}
+                    style={{ cursor: isFull ? 'not-allowed' : 'pointer', opacity: isFull ? 0.6 : 1 }}
+                  >
+                    {/* Route header */}
                     <div className="buy-trip-main">
-                      <h4>{idx + 1}. {fleetLabel}</h4>
-                      <p><Clock size={13} /> {formatDateTime(trip.trip_date)} • {trip.fleet_route?.route?.origin || '-'} to {trip.fleet_route?.route?.destination || '-'} • Status: {trip.status}</p>
+                      <h4 style={{ marginBottom: '2px', fontSize: '1rem', fontWeight: 700 }}>
+                        {route.origin || 'Origin'} &rarr; {route.destination || 'Destination'}
+                      </h4>
+                      <p style={{ margin: 0, fontSize: '0.78rem', color: '#94a3b8' }}>
+                        {route.route_name || ''}
+                      </p>
+                      {/* Fleet sub-info */}
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '6px', fontSize: '0.75rem', color: '#64748b' }}>
+                        {fleet.plate_number && <span>🚌 {fleet.plate_number}</span>}
+                        {fleet.fleet_type  && <span style={{ textTransform: 'capitalize' }}>{fleet.fleet_type}</span>}
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+                          <Clock size={11} /> {getTripScheduleLabel(trip)}
+                        </span>
+                        <span style={{ textTransform: 'capitalize', color: trip.status === 'boarding' ? '#22c55e' : '#64748b' }}>
+                          {trip.status}
+                        </span>
+                      </div>
                     </div>
-                    <div className="buy-trip-side">
-                      <strong>PHP {fare ? fare.toFixed(2) : '50.00'}</strong>
-                      <span>per passenger</span>
+
+                    {/* Capacity + fare column */}
+                    <div className="buy-trip-side" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px', minWidth: '100px' }}>
+                      {/* Fare */}
+                      <strong style={{ fontSize: '1rem', color: checked && fare ? '#34d399' : '#e2e8f0' }}>
+                        {checked && fare ? `PHP ${fare.toFixed(2)}` : 'See fare ↓'}
+                      </strong>
+                      <span style={{ fontSize: '0.7rem', color: '#64748b' }}>per passenger</span>
+
+                      {/* Seated capacity */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px', fontSize: '0.72rem', color: seatedLeft > 0 ? '#38bdf8' : '#ef4444' }}>
+                        <Users size={11} />
+                        <span>Seated: {seatedLeft}/{seatedTotal}</span>
+                      </div>
+                      {/* Standing capacity */}
+                      <div style={{ fontSize: '0.72rem', color: standingLeft > 0 ? '#94a3b8' : '#ef4444' }}>
+                        Standing: {standingLeft}/{standingTotal}
+                      </div>
+
+                      {isFull && (
+                        <span style={{ fontSize: '0.68rem', color: '#ef4444', fontWeight: 600 }}>FULL</span>
+                      )}
+
+                      {/* Trip info link */}
+                      <button
+                        type="button"
+                        style={{ marginTop: '4px', fontSize: '0.68rem', color: '#38bdf8', background: 'none', border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'underline' }}
+                        onClick={(ev) => { ev.stopPropagation(); setTripDetailsModal(trip); }}
+                      >
+                        Trip info
+                      </button>
                     </div>
-                  </label>
+                  </div>
                 );
                 })}
               </div>
@@ -552,6 +657,60 @@ export default function BuyTicket({ onTicketPurchased }) {
           </section>
         )}
       </form>
+
+      {/* ── Trip Details Modal (Suggestion) ─────────────────────────────── */}
+      {tripDetailsModal && (() => {
+        const td = tripDetailsModal;
+        const route = td.fleet_route?.route || {};
+        const fleet = td.fleet_route?.fleet || {};
+        const {
+          seatedLeft,
+          standingLeft,
+          seatedTotal,
+          standingTotal,
+        } = toSeatAvailability(td, fleet);
+        return (
+          <div
+            style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.65)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}
+            role="presentation"
+            onClick={() => setTripDetailsModal(null)}
+          >
+            <section
+              role="dialog"
+              aria-modal="true"
+              aria-label="Trip details"
+              onClick={(e) => e.stopPropagation()}
+              style={{ background: '#0f172a', border: '1px solid rgba(148,163,184,0.2)', borderRadius: '16px', padding: '24px', width: '100%', maxWidth: '420px', color: '#e2e8f0' }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
+                <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>
+                  {route.origin || '—'} → {route.destination || '—'}
+                </h3>
+                <button type="button" onClick={() => setTripDetailsModal(null)} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: '1.1rem' }}>✕</button>
+              </div>
+
+              <dl style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 0', fontSize: '0.82rem' }}>
+                {[
+                  ['Route', route.route_name || '—'],
+                  ['Schedule', getTripScheduleLabel(td)],
+                  ['Status', td.status],
+                  ['Fleet', fleet.plate_number || '—'],
+                  ['Fleet type', fleet.fleet_type || '—'],
+                  ['Seated capacity', seatedTotal],
+                  ['Standing capacity', standingTotal],
+                  ['Seated available', seatedLeft],
+                  ['Standing available', standingLeft],
+                ].map(([k, v]) => (
+                  <div key={k}>
+                    <dt style={{ color: '#64748b', marginBottom: '2px' }}>{k}</dt>
+                    <dd style={{ margin: 0, fontWeight: 600, textTransform: 'capitalize' }}>{String(v)}</dd>
+                  </div>
+                ))}
+              </dl>
+            </section>
+          </div>
+        );
+      })()}
     </div>
   );
 }

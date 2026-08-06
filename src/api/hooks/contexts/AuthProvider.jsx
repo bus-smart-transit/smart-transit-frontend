@@ -33,10 +33,23 @@ export function AuthProvider({ role = "passenger", children }) {
       try {
         const profile = await activeService.getProfile();
         if (!cancelled) setUser(profile?.data ?? profile); // unwrap the envelope
-      } catch {
-        localStorage.removeItem(tokenKey);
-        sessionStorage.removeItem(tokenKey);
-        if (!cancelled) setIsAuthenticated(false);
+      } catch (err) {
+        // Invalid session or mismatched account profile should clear auth.
+        // Keep other transient/server failures non-destructive.
+        const status =
+          err?.cause?.response?.status ??
+          err?.response?.status ??
+          err?.status ??
+          null;
+        if (status === 401 || status === 403 || status === 404) {
+          localStorage.removeItem(tokenKey);
+          sessionStorage.removeItem(tokenKey);
+          if (!cancelled) {
+            setUser(null);
+            setIsAuthenticated(false);
+          }
+        }
+        // For all other errors, keep isAuthenticated as-is.
       } finally {
         if (!cancelled) setIsLoading(false);
       }
@@ -49,6 +62,11 @@ export function AuthProvider({ role = "passenger", children }) {
 
   const login = useCallback(
     (token, remember = false) => {
+      // Keep only one active token source to avoid stale-token precedence
+      // (session vs local) causing immediate post-login auth failures.
+      localStorage.removeItem(tokenKey);
+      sessionStorage.removeItem(tokenKey);
+
       const storage = remember ? localStorage : sessionStorage;
       storage.setItem(tokenKey, token);
       setIsAuthenticated(true); // triggers the fetchProfile effect above

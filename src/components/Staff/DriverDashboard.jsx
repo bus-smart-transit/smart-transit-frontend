@@ -42,14 +42,47 @@ const NAV_ITEMS = [
 
 const formatDateTime = (value) => {
   if (!value) return '-';
-  const date = new Date(value);
+  const str = String(value);
+  // YYYY-MM-DD with no time — parsed as UTC midnight by the spec, which
+  // shifts the displayed date/time by the user's UTC offset (e.g. UTC+2
+  // shows 02:00 instead of 00:00). Append T00:00 so it is treated as local
+  // time and show only the date since no meaningful time was stored.
+  const isDateOnly = /^\d{4}-\d{2}-\d{2}$/.test(str);
+  const date = new Date(isDateOnly ? str + 'T00:00' : str);
   if (Number.isNaN(date.getTime())) return '-';
   const yyyy = date.getFullYear();
   const mm = String(date.getMonth() + 1).padStart(2, '0');
   const dd = String(date.getDate()).padStart(2, '0');
+  if (isDateOnly) return `${yyyy}/${mm}/${dd}`;
   const hh = String(date.getHours()).padStart(2, '0');
   const min = String(date.getMinutes()).padStart(2, '0');
   return `${yyyy}/${mm}/${dd} - ${hh}:${min}`;
+};
+
+const toCompactTime = (value) => {
+  if (!value) return '';
+  const str = String(value).trim();
+  const hhmmss = str.match(/^(\d{2}:\d{2})(?::\d{2})?$/);
+  if (hhmmss) return hhmmss[1];
+  return str;
+};
+
+const formatDateOnly = (value) => {
+  if (!value) return '-';
+  const str = String(value);
+  const match = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (match) return `${match[1]}/${match[2]}/${match[3]}`;
+  return formatDateTime(value);
+};
+
+const formatTripSchedule = (tripLike) => {
+  if (!tripLike) return '-';
+  const dateLabel = formatDateOnly(tripLike?.trip_date);
+  const start = toCompactTime(tripLike?.fleet_route?.start_time);
+  const end = toCompactTime(tripLike?.fleet_route?.end_time);
+  if (start && end) return `${dateLabel} - ${start} to ${end}`;
+  if (start) return `${dateLabel} - ${start}`;
+  return dateLabel;
 };
 
 const isSameDay = (value) => {
@@ -89,7 +122,9 @@ const getUpcomingTrip = (trips) => {
 export default function DriverDashboard() {
   const navigate = useNavigate();
 
-  const [pairing, setPairing] = useState({ loading: true, paired: false, reason: '' });
+  // Start loading:false so the badge never flashes "Checking pairing..." on
+  // initial mount; the first API call fills in the real state within ~1 s.
+  const [pairing, setPairing] = useState({ loading: false, paired: false, reason: '' });
   const didInitialPairingCheck = useRef(false);
   const pairingRequestRef = useRef(null);
 
@@ -172,6 +207,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   const [pinInput, setPinInput] = useState('');
   const [pinStatus, setPinStatus] = useState('');
   const [earnings, setEarnings] = useState(null);
+  const [tripDetailsModal, setTripDetailsModal] = useState(null); // suggestion: trip info modal
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [actionMsg, setActionMsg] = useState('');
@@ -671,7 +707,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
             </p>
             {upcomingTrip ? (
               <p className="mt-3 text-sm text-sky-300">
-                Upcoming trip: {upcomingTrip?.fleet_route?.route?.origin || '-'} to {upcomingTrip?.fleet_route?.route?.destination || '-'} on {formatDateTime(upcomingTrip?.trip_date)}.
+                Upcoming trip: {upcomingTrip?.fleet_route?.route?.origin || '-'} to {upcomingTrip?.fleet_route?.route?.destination || '-'} on {formatTripSchedule(upcomingTrip)}.
               </p>
             ) : (
               <p className="mt-3 text-sm text-slate-500">
@@ -707,7 +743,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
             <article className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
               <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Next Stop</p>
               <h3 className="mt-2 text-lg font-semibold text-slate-100">{nextStop?.stop_name ?? nextStop?.name ?? 'No pending stop'}</h3>
-              <p className="mt-1 inline-flex items-center gap-1 text-sm text-slate-400"><Clock3 className="h-3.5 w-3.5" /> ETA {formatDateTime(trip?.trip_date)}</p>
+              <p className="mt-1 inline-flex items-center gap-1 text-sm text-slate-400"><Clock3 className="h-3.5 w-3.5" /> ETA {formatTripSchedule(trip)}</p>
             </article>
 
             <article className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
@@ -783,10 +819,15 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                   </thead>
                   <tbody>
                     {assignedTrips.map((item) => (
-                      <tr key={item.trip_id} className="border-b border-slate-800/70">
+                      <tr
+                        key={item.trip_id}
+                        className="border-b border-slate-800/70 cursor-pointer hover:bg-slate-900/60 transition-colors"
+                        onClick={() => setTripDetailsModal(item)}
+                        title="Click for trip details"
+                      >
                         <td className="py-3 font-data text-slate-400">RTE-{item.trip_id}</td>
                         <td className="py-3 text-slate-200">{item.fleet_route?.route?.origin || '-'} to {item.fleet_route?.route?.destination || '-'}</td>
-                        <td className="py-3 font-data text-slate-300">{formatDateTime(item.trip_date)}</td>
+                        <td className="py-3 font-data text-slate-300">{formatTripSchedule(item)}</td>
                         <td className="py-3 text-slate-300">{item.fleet_route?.route?.destination || '-'}</td>
                         <td className="py-3"><span className="rounded-full border border-slate-700 px-2 py-1 text-xs capitalize" style={{ color: STATUS_COLOR[item.status] || '#64748b' }}>{item.status}</span></td>
                       </tr>
@@ -1077,6 +1118,55 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
           </section>
         )}
       </main>
+
+      {/* ── Suggestion: Trip details modal ───────────────────────────────── */}
+      {tripDetailsModal && (() => {
+        const td = tripDetailsModal;
+        const route = td.fleet_route?.route || {};
+        const fleet = td.fleet_route?.fleet || {};
+        return (
+          <div
+            style={{ position: 'fixed', inset: 0, zIndex: 100, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}
+            role="presentation"
+            onClick={() => setTripDetailsModal(null)}
+          >
+            <section
+              role="dialog"
+              aria-modal="true"
+              aria-label="Trip details"
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900 p-6 text-slate-200"
+            >
+              <div className="mb-4 flex items-start justify-between">
+                <div>
+                  <h3 className="text-base font-bold text-slate-100">Trip Details</h3>
+                  <p className="text-xs text-slate-500">RTE-{td.trip_id}</p>
+                </div>
+                <button type="button" onClick={() => setTripDetailsModal(null)} className="text-slate-500 hover:text-slate-300 text-lg leading-none">✕</button>
+              </div>
+
+              <div className="space-y-2 text-sm">
+                {[
+                  ['Route', `${route.origin || '—'} → ${route.destination || '—'}`],
+                  ['Route name', route.route_name || '—'],
+                  ['Date & time', formatDateTime(td.trip_date)],
+                  ['Status', td.status],
+                  ['Fleet', fleet.plate_number || '—'],
+                  ['Fleet type', fleet.fleet_type || '—'],
+                  ['Total capacity', fleet.capacity ?? '—'],
+                  ['Seated remaining', td.current_seated_capacity ?? '—'],
+                  ['Standing remaining', td.current_standing_capacity ?? '—'],
+                ].map(([k, v]) => (
+                  <div key={k} className="flex items-center justify-between gap-4 border-b border-slate-800 pb-2">
+                    <span className="text-slate-500 capitalize">{k}</span>
+                    <strong className="text-slate-100 capitalize text-right">{String(v)}</strong>
+                  </div>
+                ))}
+              </div>
+            </section>
+          </div>
+        );
+      })()}
     </div>
   );
 }

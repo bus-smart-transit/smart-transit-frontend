@@ -43,14 +43,43 @@ const asCurrency = (value) => `P${Number(value || 0).toLocaleString(undefined, {
 
 const formatDateTime = (value) => {
   if (!value) return '-';
-  const date = new Date(value);
+  const str = String(value);
+  const isDateOnly = /^\d{4}-\d{2}-\d{2}$/.test(str);
+  const date = new Date(isDateOnly ? str + 'T00:00' : str);
   if (Number.isNaN(date.getTime())) return '-';
   const yyyy = date.getFullYear();
   const mm = String(date.getMonth() + 1).padStart(2, '0');
   const dd = String(date.getDate()).padStart(2, '0');
+  if (isDateOnly) return `${yyyy}/${mm}/${dd}`;
   const hh = String(date.getHours()).padStart(2, '0');
   const min = String(date.getMinutes()).padStart(2, '0');
   return `${yyyy}/${mm}/${dd} - ${hh}:${min}`;
+};
+
+const toCompactTime = (value) => {
+  if (!value) return '';
+  const str = String(value).trim();
+  const hhmmss = str.match(/^(\d{2}:\d{2})(?::\d{2})?$/);
+  if (hhmmss) return hhmmss[1];
+  return str;
+};
+
+const formatDateOnly = (value) => {
+  if (!value) return '-';
+  const str = String(value);
+  const match = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (match) return `${match[1]}/${match[2]}/${match[3]}`;
+  return formatDateTime(value);
+};
+
+const formatTripSchedule = (tripLike) => {
+  if (!tripLike) return '-';
+  const dateLabel = formatDateOnly(tripLike?.trip_date);
+  const start = toCompactTime(tripLike?.fleet_route?.start_time);
+  const end = toCompactTime(tripLike?.fleet_route?.end_time);
+  if (start && end) return `${dateLabel} - ${start} to ${end}`;
+  if (start) return `${dateLabel} - ${start}`;
+  return dateLabel;
 };
 
 const toRows = (data) => {
@@ -1499,7 +1528,7 @@ export default function OperatorDashboard() {
                   <div className="rounded-2xl border border-slate-700 bg-slate-900/70 p-6">
                     <h2 className="text-xl font-bold mb-4">Upcoming Trips ({trips.length})</h2>
                     <div className="space-y-3">
-                      {trips.length === 0 ? <p className="text-slate-500 text-center py-8">No trips scheduled. Pick a fleet route, date, and crew to publish the first trip.</p> : trips.map(trip => <div key={trip.trip_id} className="p-4 bg-slate-800 border border-slate-700 rounded-lg"><h3 className="font-semibold text-white">{formatDateTime(trip.trip_date)} • {trip.fleet_route?.route?.route_name || `Route ${trip.fleet_route?.route_id || '-'}`}</h3><p className="text-sm text-slate-400 mt-1">Fleet: {trip.fleet_route?.fleet?.plate_number || `Fleet ${trip.fleet_route?.fleet_id || '-'}`}</p><p className="text-sm text-slate-400">Status: {trip.status}</p></div>)}
+                      {trips.length === 0 ? <p className="text-slate-500 text-center py-8">No trips scheduled. Pick a fleet route, date, and crew to publish the first trip.</p> : trips.map(trip => <div key={trip.trip_id} className="p-4 bg-slate-800 border border-slate-700 rounded-lg"><h3 className="font-semibold text-white">{formatTripSchedule(trip)} • {trip.fleet_route?.route?.route_name || `Route ${trip.fleet_route?.route_id || '-'}`}</h3><p className="text-sm text-slate-400 mt-1">Fleet: {trip.fleet_route?.fleet?.plate_number || `Fleet ${trip.fleet_route?.fleet_id || '-'}`}</p><p className="text-sm text-slate-400">Status: {trip.status}</p></div>)}
                     </div>
                   </div>
                 </div>
@@ -1609,7 +1638,7 @@ export default function OperatorDashboard() {
                         trips.slice(0, 8).map((item) => (
                           <div key={item.trip_id} className="rounded-lg border border-slate-700 bg-slate-800 p-3">
                             <div className="font-semibold text-white">Trip #{item.trip_id} • {item.fleet_route?.route?.route_name || `Route ${item.fleet_route?.route_id || '-'}`}</div>
-                            <div className="mt-1 text-sm text-slate-400">Date: {formatDateTime(item.trip_date)} • Status: {item.status}</div>
+                            <div className="mt-1 text-sm text-slate-400">Schedule: {formatTripSchedule(item)} • Status: {item.status}</div>
                           </div>
                         ))
                       )}

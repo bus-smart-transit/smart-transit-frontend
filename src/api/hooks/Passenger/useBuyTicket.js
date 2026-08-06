@@ -80,11 +80,14 @@ const setCachedEntry = (cache, key, value) => {
 
 const formatDateTime = (value) => {
   if (!value) return '-';
-  const date = new Date(value);
+  const str = String(value);
+  const isDateOnly = /^\d{4}-\d{2}-\d{2}$/.test(str);
+  const date = new Date(isDateOnly ? str + 'T00:00' : str);
   if (Number.isNaN(date.getTime())) return '-';
   const yyyy = date.getFullYear();
   const mm = String(date.getMonth() + 1).padStart(2, '0');
   const dd = String(date.getDate()).padStart(2, '0');
+  if (isDateOnly) return `${yyyy}/${mm}/${dd}`;
   const hh = String(date.getHours()).padStart(2, '0');
   const min = String(date.getMinutes()).padStart(2, '0');
   return `${yyyy}/${mm}/${dd} - ${hh}:${min}`;
@@ -905,6 +908,10 @@ export default function useBuyTicket({ onTicketPurchased }) {
       }
       handleChange('search_from', route?.origin || '');
       handleChange('search_to', route?.destination || '');
+    } else {
+      // Deselected — clear the search fields too
+      handleChange('search_from', '');
+      handleChange('search_to', '');
     }
   }, [clearDestinationPinnedLabel, handleChange, trips]);
 

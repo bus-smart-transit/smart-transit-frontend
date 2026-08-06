@@ -29,7 +29,11 @@ const writeSessionCache = (key, value) => {
 
 const toDate = (value) => {
   if (!value) return null;
-  const date = new Date(value);
+  const str = String(value);
+  // Date-only strings (YYYY-MM-DD) are parsed as UTC midnight by spec,
+  // shifting the display by the user's UTC offset. Parse as local time instead.
+  const normalized = /^\d{4}-\d{2}-\d{2}$/.test(str) ? str + 'T00:00' : str;
+  const date = new Date(normalized);
   return Number.isNaN(date.getTime()) ? null : date;
 };
 
@@ -75,11 +79,14 @@ export default function usePassengerDashboard({ preloadMapView }) {
   const lastPrivateLoadStartedAtRef = useRef(0);
 
   const formatDateTime = useCallback((value) => {
+    const str = String(value ?? '');
+    const isDateOnly = /^\d{4}-\d{2}-\d{2}$/.test(str);
     const date = toDate(value);
     if (!date) return '-';
     const yyyy = date.getFullYear();
     const mm = String(date.getMonth() + 1).padStart(2, '0');
     const dd = String(date.getDate()).padStart(2, '0');
+    if (isDateOnly) return `${yyyy}/${mm}/${dd}`;
     const hh = String(date.getHours()).padStart(2, '0');
     const min = String(date.getMinutes()).padStart(2, '0');
     return `${yyyy}/${mm}/${dd} - ${hh}:${min}`;
@@ -140,6 +147,8 @@ export default function usePassengerDashboard({ preloadMapView }) {
       setIsLoadingPrivate(true);
       setPrivateError('');
 
+      const getStatus = (err) => err?.cause?.response?.status ?? err?.response?.status ?? null;
+
       try {
         const summaryRes = await PassengerService.getDashboardSummary();
         const payload = summaryRes?.data ?? summaryRes ?? {};
@@ -153,12 +162,31 @@ export default function usePassengerDashboard({ preloadMapView }) {
         setTickets(Array.isArray(ticketList) ? ticketList : []);
         setRewards(Array.isArray(rewardList) ? rewardList : []);
         setTransactions(Array.isArray(paymentList) ? paymentList : []);
-      } catch {
+      } catch (summaryErr) {
+        const summaryStatus = getStatus(summaryErr);
+        if (summaryStatus === 401 || summaryStatus === 403 || summaryStatus === 404) {
+          clearPrivateData();
+          await logout();
+          return;
+        }
+
         const [ticketsRes, rewardsRes, paymentsRes] = await Promise.allSettled([
           PassengerService.getTickets(),
           PassengerService.getRewardsHistory(),
           PassengerService.getPaymentHistory(),
         ]);
+
+        const authLikeFailure = [ticketsRes, rewardsRes, paymentsRes].some((result) => {
+          if (result.status !== 'rejected') return false;
+          const status = getStatus(result.reason);
+          return status === 401 || status === 403 || status === 404;
+        });
+
+        if (authLikeFailure) {
+          clearPrivateData();
+          await logout();
+          return;
+        }
 
         const failures = [];
         setProfile(user ?? null);
@@ -198,7 +226,7 @@ export default function usePassengerDashboard({ preloadMapView }) {
     })();
 
     return privateLoadRequestRef.current;
-  }, [isAuthenticated, user]);
+  }, [clearPrivateData, isAuthenticated, logout, user]);
 
   useEffect(() => {
     const timer = setTimeout(() => {

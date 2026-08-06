@@ -7,6 +7,10 @@ class StaffService extends BaseService {
     super(TOKEN_KEY);
   }
 
+  getResponseStatus(err) {
+    return err?.cause?.response?.status ?? err?.response?.status ?? null;
+  }
+
   // ── Auth ──
   async login(credentials) {
     return await this.request('/staff/login', 'POST', credentials);
@@ -33,7 +37,12 @@ class StaffService extends BaseService {
   }
 
   async getCurrentTrip() {
-    return await this.request('/driver/trips/current', 'GET');
+    try {
+      return await this.request('/driver/trips/current', 'GET');
+    } catch (err) {
+      if (this.getResponseStatus(err) === 404) return { data: null };
+      throw err;
+    }
   }
 
   async getCurrentTripStops() {
@@ -87,7 +96,12 @@ class StaffService extends BaseService {
 
   // ── Conductor ──
   async getConductorTrip() {
-    return await this.request('/conductor/trips/current', 'GET');
+    try {
+      return await this.request('/conductor/trips/current', 'GET');
+    } catch (err) {
+      if (this.getResponseStatus(err) === 404) return { data: null };
+      throw err;
+    }
   }
 
   async getConductorTrips() {
@@ -325,7 +339,15 @@ class StaffService extends BaseService {
   // ── Earnings ──
   async getTripEarnings(role) {
     // role = 'driver' | 'conductor'
-    return await this.request(`/${role}/trips/current/earnings`, 'GET');
+    try {
+      return await this.request(`/${role}/trips/current/earnings`, 'GET');
+    } catch (err) {
+      const status = this.getResponseStatus(err);
+      if (status === 404 || status === 500) {
+        return { data: null };
+      }
+      throw err;
+    }
   }
 
   // ── Public: Route Stops (for navigation map) ──

@@ -22,6 +22,7 @@ export default function MapView({ role = "passenger" }) {
   const destinationMarker = useRef(null);
   const fleetMarkersRef = useRef([]);
   const nearestFleetMarkerRef = useRef(null);
+  const routeStopMarkersRef = useRef([]);
   const routePolylineAddedRef = useRef(false);
 
   const [currentCoords, setCurrentCoords] = useState(null);
@@ -40,6 +41,11 @@ export default function MapView({ role = "passenger" }) {
   const clearFleetMarkers = useCallback(() => {
     fleetMarkersRef.current.forEach((marker) => marker.remove());
     fleetMarkersRef.current = [];
+  }, []);
+
+  const clearRouteStopMarkers = useCallback(() => {
+    routeStopMarkersRef.current.forEach((marker) => marker.remove());
+    routeStopMarkersRef.current = [];
   }, []);
 
   // Draw or refresh the fleet's route polyline (Feature 1)
@@ -63,6 +69,7 @@ export default function MapView({ role = "passenger" }) {
         if (mapObj.getLayer('fleet-route-line')) mapObj.removeLayer('fleet-route-line');
         if (mapObj.getSource('fleet-route-path')) mapObj.removeSource('fleet-route-path');
         routePolylineAddedRef.current = false;
+        clearRouteStopMarkers();
 
         mapObj.addSource('fleet-route-path', {
           type: 'geojson',
@@ -81,6 +88,33 @@ export default function MapView({ role = "passenger" }) {
         });
         routePolylineAddedRef.current = true;
 
+        // Add stop pins along the selected fleet route for better context.
+        routeStopMarkersRef.current = valid.map((stop, idx) => {
+          const markerEl = document.createElement('div');
+          markerEl.style.width = '16px';
+          markerEl.style.height = '16px';
+          markerEl.style.borderRadius = '999px';
+          markerEl.style.background = '#f59e0b';
+          markerEl.style.border = '2px solid #ffffff';
+          markerEl.style.boxShadow = '0 0 0 1px rgba(15, 23, 42, 0.35)';
+
+          const label = stop?.stop_name || stop?.name || stop?.stop?.stop_name || `Stop ${idx + 1}`;
+          const orderRaw = stop?.stop_order ?? stop?.sequence_number ?? idx + 1;
+          const order = Number.isFinite(Number(orderRaw)) ? Number(orderRaw) : idx + 1;
+
+          return new maplibregl.Marker({ element: markerEl })
+            .setLngLat([Number(stop.longitude), Number(stop.latitude)])
+            .setPopup(
+              new maplibregl.Popup({ offset: 14 }).setHTML(
+                `<div style="color:#0f172a;font-family:sans-serif;padding:6px;min-width:120px;">
+                  <p style="margin:0;font-weight:700;font-size:12px;">Stop ${order}</p>
+                  <p style="margin:4px 0 0;font-size:12px;color:#334155;">${label}</p>
+                </div>`
+              )
+            )
+            .addTo(mapObj);
+        });
+
         // Fit map to route bounds
         const bounds = coords.reduce(
           (acc, c) => acc.extend(c),
@@ -97,7 +131,7 @@ export default function MapView({ role = "passenger" }) {
     } catch {
       // Ignore — map still works without route overlay
     }
-  }, []);
+  }, [clearRouteStopMarkers]);
 
   useEffect(() => {
     if (map.current) return;
@@ -207,12 +241,13 @@ export default function MapView({ role = "passenger" }) {
       cancelled = true;
       clearInterval(id);
       clearFleetMarkers();
+      clearRouteStopMarkers();
       if (nearestFleetMarkerRef.current) {
         nearestFleetMarkerRef.current.remove();
         nearestFleetMarkerRef.current = null;
       }
     };
-  }, [clearFleetMarkers, refreshFleetLocations, role]);
+  }, [clearFleetMarkers, clearRouteStopMarkers, refreshFleetLocations, role]);
 
   const handlePinCurrentLocation = () => {
     const maplibregl = mapLibRef.current;
