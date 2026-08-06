@@ -321,6 +321,17 @@ class StaffService extends BaseService {
   async getAdminConductors() {
     return await this.request(`/admin/conductors`, 'GET');
   }
+
+  // ── Earnings ──
+  async getTripEarnings(role) {
+    // role = 'driver' | 'conductor'
+    return await this.request(`/${role}/trips/current/earnings`, 'GET');
+  }
+
+  // ── Public: Route Stops (for navigation map) ──
+  async getRouteStops(routeId) {
+    return await this.request(`/routes/${routeId}/stops`, 'GET');
+  }
 }
 
 export const staffToken = TOKEN_KEY;

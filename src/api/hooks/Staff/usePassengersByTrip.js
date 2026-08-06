@@ -1,14 +1,21 @@
 import { useMemo } from 'react';
 
 const resolveDestination = (passenger) => {
-  return (
+  // Named stop (stop-based ticket)
+  const stopName =
     (typeof passenger.destination_stop === 'string' && passenger.destination_stop) ||
     passenger.destination_stop?.stop_name ||
     (typeof passenger.destinationStop === 'string' && passenger.destinationStop) ||
     passenger.destinationStop?.stop_name ||
-    passenger.destination ||
-    'N/A'
-  );
+    passenger.destination;
+  if (stopName) return stopName;
+
+  // Custom GPS pinpoint ticket — show brief coordinate label (Feature 3)
+  if (passenger.destination_lat != null && passenger.destination_lng != null) {
+    return `GPS (${Number(passenger.destination_lat).toFixed(4)}, ${Number(passenger.destination_lng).toFixed(4)})`;
+  }
+
+  return 'N/A';
 };
 
 export default function usePassengersByTrip(passengers, activeTrip) {

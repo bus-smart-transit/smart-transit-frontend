@@ -71,6 +71,10 @@ class PassengerService extends RoleAuthServiceBase {
   async guestLookupTicket(payload) {
     return await this.request(`/tickets/lookup`, "GET", payload);
   }
+
+  async getRouteStops(routeId) {
+    return await this.request(`/routes/${routeId}/stops`, "GET");
+  }
 }
 
 export default new PassengerService();

@@ -12,6 +12,7 @@ import {
   QrCode,
   RefreshCw,
   Ticket,
+  TrendingUp,
   UserCheck,
   Users,
   XCircle,
@@ -28,6 +29,7 @@ const NAV_ITEMS = [
   { key: 'occupancy', label: 'Occupancy', icon: BarChart3 },
   { key: 'scan', label: 'Scan Ticket', icon: QrCode },
   { key: 'passengers', label: 'Passengers', icon: Users },
+  { key: 'earnings', label: 'Earnings', icon: TrendingUp },
   { key: 'pin', label: 'Daily PIN', icon: KeyRound },
 ];
 
@@ -145,6 +147,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   const [assignedTrips, setAssignedTrips] = useState([]);
   const [occupancy, setOccupancy] = useState(null);
   const [passengers, setPassengers] = useState([]);
+  const [earnings, setEarnings] = useState(null);
   const [pinInput, setPinInput] = useState('');
   const [pinStatus, setPinStatus] = useState('');
   const [scanUuid, setScanUuid] = useState('');
@@ -289,6 +292,19 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     }
   }, [trip?.trip_id]);
 
+  const loadEarnings = useCallback(async () => {
+    if (!trip?.trip_id || !isPaired) {
+      setEarnings(null);
+      return;
+    }
+    try {
+      const res = await StaffService.getTripEarnings('conductor');
+      setEarnings(res?.data ?? null);
+    } catch {
+      setEarnings(null);
+    }
+  }, [isPaired, trip?.trip_id]);
+
   useEffect(() => {
     if (didBootstrap.current) return;
     didBootstrap.current = true;
@@ -318,6 +334,14 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
 
     return () => clearTimeout(timer);
   }, [activeTab, hasActiveTrip, isPaired, loadPin]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (activeTab === 'earnings' && hasActiveTrip && isPaired) void loadEarnings();
+    }, 0);
+
+    return () => clearTimeout(timer);
+  }, [activeTab, hasActiveTrip, isPaired, loadEarnings]);
 
   useEffect(() => {
     if (activeTab !== 'scan') {
@@ -604,7 +628,9 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
             ? 'Scan Ticket'
             : activeTab === 'passengers'
               ? 'Current Passengers'
-              : 'Daily PIN Verification';
+              : activeTab === 'earnings'
+                ? 'Trip Earnings'
+                : 'Daily PIN Verification';
 
   return (
     <div className="grid min-h-screen grid-cols-1 bg-slate-950 text-slate-200 lg:grid-cols-[280px_1fr]">
@@ -1127,6 +1153,60 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                 ))}
               </div>
             )}
+          </section>
+        )}
+
+        {!loading && activeTab === 'earnings' && !isPaired && (
+          <section className="rounded-2xl border border-amber-800 bg-amber-950/20 p-6">
+            <h3 className="text-lg font-semibold text-amber-300">Earnings locked</h3>
+            <p className="mt-2 text-sm text-amber-200/90">{pairingReason}</p>
+          </section>
+        )}
+
+        {!loading && activeTab === 'earnings' && isPaired && showNoCurrentTripState && (
+          <div className="rounded-2xl border border-dashed border-slate-800 bg-slate-900 p-6 text-sm text-slate-400">No active trip. Earnings are only available during an active trip.</div>
+        )}
+
+        {!loading && activeTab === 'earnings' && isPaired && !showNoCurrentTripState && (
+          <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <article className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
+              <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Total Fare Collected</p>
+              <h3 className="font-data mt-2 text-2xl font-bold text-slate-100">
+                PHP {earnings ? Number(earnings.total_fare).toFixed(2) : '—'}
+              </h3>
+              <p className="mt-1 text-sm text-slate-400">{earnings?.passenger_count ?? 0} passengers</p>
+            </article>
+            <article className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
+              <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Onsite (Cash)</p>
+              <h3 className="font-data mt-2 text-2xl font-bold text-emerald-300">
+                PHP {earnings ? Number(earnings.onsite_amount).toFixed(2) : '—'}
+              </h3>
+            </article>
+            <article className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
+              <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Online (PayMongo)</p>
+              <h3 className="font-data mt-2 text-2xl font-bold text-sky-300">
+                PHP {earnings ? Number(earnings.online_amount).toFixed(2) : '—'}
+              </h3>
+            </article>
+            <article className="rounded-2xl border border-slate-800 bg-slate-900 p-4 md:col-span-2 xl:col-span-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Average Fare</p>
+                  <p className="font-data mt-1 text-lg font-semibold text-slate-100">
+                    PHP {earnings ? Number(earnings.average_fare).toFixed(2) : '—'} per passenger
+                  </p>
+                </div>
+                <button
+                  className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-xs font-semibold text-slate-300 transition hover:border-slate-500"
+                  onClick={loadEarnings}
+                >
+                  <RefreshCw className="inline h-3.5 w-3.5 mr-1" />Refresh
+                </button>
+              </div>
+              <p className="mt-2 text-xs text-slate-500">
+                Computed server-side from verified payment records. Only boarded/alighted passengers are counted.
+              </p>
+            </article>
           </section>
         )}
 

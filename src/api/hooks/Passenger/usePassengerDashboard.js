@@ -85,21 +85,28 @@ export default function usePassengerDashboard({ preloadMapView }) {
     return `${yyyy}/${mm}/${dd} - ${hh}:${min}`;
   }, []);
 
-  const getOriginLabel = useCallback((ticket) => (
-    pickStopName(ticket?.origin_stop) ||
-    pickStopName(ticket?.originStop) ||
-    ticket?.origin ||
-    getRouteOriginFallback(ticket) ||
-    'Route unavailable'
-  ), []);
+  const getOriginLabel = useCallback((ticket) => {
+    const stopName = pickStopName(ticket?.origin_stop) || pickStopName(ticket?.originStop);
+    if (stopName) return stopName;
+    if (ticket?.origin) return ticket.origin;
+    // Custom GPS pinpoint — show short coordinate label
+    if (ticket?.origin_lat != null && ticket?.origin_lng != null) {
+      return `GPS Pickup (${Number(ticket.origin_lat).toFixed(4)}, ${Number(ticket.origin_lng).toFixed(4)})`;
+    }
+    return getRouteOriginFallback(ticket) || 'Route unavailable';
+  }, []);
 
-  const getDestinationLabel = useCallback((ticket) => (
-    pickStopName(ticket?.destination_stop) ||
-    pickStopName(ticket?.destinationStop) ||
-    ticket?.destination ||
-    getRouteDestinationFallback(ticket) ||
-    'Route unavailable'
-  ), []);
+  const getDestinationLabel = useCallback((ticket) => {
+    const stopName = pickStopName(ticket?.destination_stop) || pickStopName(ticket?.destinationStop);
+    if (stopName) return stopName;
+    if (ticket?.destination) return ticket.destination;
+    // Custom GPS drop-off — show short coordinate label so the ticket is
+    // clearly distinct from a full-route terminal display.
+    if (ticket?.destination_lat != null && ticket?.destination_lng != null) {
+      return `Custom Drop-off (${Number(ticket.destination_lat).toFixed(4)}, ${Number(ticket.destination_lng).toFixed(4)})`;
+    }
+    return getRouteDestinationFallback(ticket) || 'Route unavailable';
+  }, []);
 
   const clearPrivateData = useCallback(() => {
     setIsLoadingPrivate(false);

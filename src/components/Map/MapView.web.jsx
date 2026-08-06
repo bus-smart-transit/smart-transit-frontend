@@ -1,8 +1,18 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Clock3, LocateFixed, MapPin, Route, Ruler } from 'lucide-react';
+import { Bus, Clock3, LocateFixed, MapPin, Route, Ruler, X } from 'lucide-react';
 import "maplibre-gl/dist/maplibre-gl.css";
 import { loadMapLib } from './mapDependencies';
 import PassengerService from '../../api/PassengerService/PassengerService';
+
+// Haversine distance in metres (for fleet sidebar sorting)
+const haversineM = (lat1, lng1, lat2, lng2) => {
+  const R = 6371000;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2
+    + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+};
 
 export default function MapView({ role = "passenger" }) {
   const mapContainer = useRef(null);
@@ -12,6 +22,7 @@ export default function MapView({ role = "passenger" }) {
   const destinationMarker = useRef(null);
   const fleetMarkersRef = useRef([]);
   const nearestFleetMarkerRef = useRef(null);
+  const routePolylineAddedRef = useRef(false);
 
   const [currentCoords, setCurrentCoords] = useState(null);
   const [destinationInput, setDestinationInput] = useState("");
@@ -19,6 +30,8 @@ export default function MapView({ role = "passenger" }) {
   const [isCalculating, setIsCalculating] = useState(false);
   const [fleetLocations, setFleetLocations] = useState([]);
   const [nearestFleet, setNearestFleet] = useState(null);
+  const [selectedFleetId, setSelectedFleetId] = useState(null);
+  const [showSidebar, setShowSidebar] = useState(false);
 
   const [lng] = useState(125.6047);
   const [lat] = useState(7.0707);
@@ -27,6 +40,63 @@ export default function MapView({ role = "passenger" }) {
   const clearFleetMarkers = useCallback(() => {
     fleetMarkersRef.current.forEach((marker) => marker.remove());
     fleetMarkersRef.current = [];
+  }, []);
+
+  // Draw or refresh the fleet's route polyline (Feature 1)
+  const drawFleetRoute = useCallback(async (routeId) => {
+    const mapObj = map.current;
+    const maplibregl = mapLibRef.current;
+    if (!mapObj || !maplibregl || !routeId) return;
+
+    try {
+      const res = await PassengerService.getRouteStops(routeId);
+      const stops = res?.data ?? [];
+      const valid = stops.filter(
+        (s) => Number.isFinite(Number(s?.longitude)) && Number.isFinite(Number(s?.latitude))
+      );
+      if (valid.length < 2) return;
+
+      const coords = valid.map((s) => [Number(s.longitude), Number(s.latitude)]);
+
+      const addRoute = () => {
+        // Remove existing route layer before drawing new one
+        if (mapObj.getLayer('fleet-route-line')) mapObj.removeLayer('fleet-route-line');
+        if (mapObj.getSource('fleet-route-path')) mapObj.removeSource('fleet-route-path');
+        routePolylineAddedRef.current = false;
+
+        mapObj.addSource('fleet-route-path', {
+          type: 'geojson',
+          data: {
+            type: 'Feature',
+            properties: {},
+            geometry: { type: 'LineString', coordinates: coords },
+          },
+        });
+        mapObj.addLayer({
+          id: 'fleet-route-line',
+          type: 'line',
+          source: 'fleet-route-path',
+          layout: { 'line-join': 'round', 'line-cap': 'round' },
+          paint: { 'line-color': '#f59e0b', 'line-width': 4, 'line-opacity': 0.75 },
+        });
+        routePolylineAddedRef.current = true;
+
+        // Fit map to route bounds
+        const bounds = coords.reduce(
+          (acc, c) => acc.extend(c),
+          new maplibregl.LngLatBounds(coords[0], coords[0])
+        );
+        mapObj.fitBounds(bounds, { padding: 80, maxZoom: 14 });
+      };
+
+      if (mapObj.isStyleLoaded()) {
+        addRoute();
+      } else {
+        mapObj.once('load', addRoute);
+      }
+    } catch {
+      // Ignore — map still works without route overlay
+    }
   }, []);
 
   useEffect(() => {
@@ -83,7 +153,16 @@ export default function MapView({ role = "passenger" }) {
       fleetMarkersRef.current = locations
         .filter((row) => Number.isFinite(Number(row?.longitude)) && Number.isFinite(Number(row?.latitude)))
         .map((row) => {
+          const isActive = ['departed', 'in-progress'].includes(row?.trip_status);
           const el = makeBusMarkerEl(row?.trip_status);
+          el.addEventListener('click', () => {
+            setSelectedFleetId(row?.fleet_id ?? null);
+            setShowSidebar(true);
+            // Draw route polyline when a fleet is clicked (Feature 1)
+            const routeId = row?.route_id ?? row?.fleet_route?.route_id ?? null;
+            if (routeId) void drawFleetRoute(routeId);
+          });
+          void isActive; // used indirectly via makeBusMarkerEl colour
           const speedLabel = Number.isFinite(Number(row?.speed_kmh))
             ? `${Number(row.speed_kmh).toFixed(0)} km/h`
             : 'Speed N/A';
@@ -98,6 +177,7 @@ export default function MapView({ role = "passenger" }) {
                   <p style="margin:0;font-weight:700;font-size:13px;">🚌 ${row?.plate_number || 'Bus ' + row?.fleet_id || '-'}</p>
                   <p style="margin:4px 0 0;font-size:11px;color:#64748b;text-transform:capitalize;">Status: ${row?.trip_status || 'active'}</p>
                   <p style="margin:2px 0 0;font-size:11px;color:#64748b;">${speedLabel}${headingLabel ? ' · ' + headingLabel : ''}</p>
+                  <p style="margin:4px 0 0;font-size:11px;color:#0ea5e9;cursor:pointer;" onclick="this.closest('.maplibregl-popup').style.display='none'">Click bus to see route →</p>
                 </div>`
               )
             )
@@ -390,7 +470,16 @@ export default function MapView({ role = "passenger" }) {
 
         {role === 'passenger' && (
           <div className="mt-3 rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-slate-400">
-            <p>Live fleets tracked: <strong className="text-slate-200">{fleetLocations.length}</strong></p>
+            <div className="flex items-center justify-between">
+              <p>Live fleets tracked: <strong className="text-slate-200">{fleetLocations.length}</strong></p>
+              <button
+                type="button"
+                onClick={() => setShowSidebar((v) => !v)}
+                className="rounded-lg border border-sky-800 bg-sky-950/30 px-2 py-1 text-xs font-semibold text-sky-300 hover:bg-sky-950/60 transition"
+              >
+                <Bus className="inline h-3 w-3 mr-1" />{showSidebar ? 'Hide' : 'View'} Fleets
+              </button>
+            </div>
             <p>
               Nearest: <strong className="text-slate-200">{nearestFleet?.plate_number || nearestFleet?.fleet_id || 'Not selected'}</strong>
               {nearestFleet?.distance_meters ? ` (${Number(nearestFleet.distance_meters).toFixed(0)} m)` : ''}
@@ -398,6 +487,86 @@ export default function MapView({ role = "passenger" }) {
           </div>
         )}
       </aside>
+
+      {/* ── Feature 6: Nearby Fleets Sidebar ────────────────────────────────── */}
+      {role === 'passenger' && showSidebar && fleetLocations.length > 0 && (
+        <aside className="absolute right-4 top-4 z-10 w-[min(92vw,22rem)] rounded-2xl border border-slate-800 bg-slate-950/95 shadow-2xl backdrop-blur-md">
+          <div className="flex items-center justify-between border-b border-slate-800 px-4 py-3">
+            <h4 className="text-sm font-semibold text-slate-100 flex items-center gap-2">
+              <Bus className="h-4 w-4 text-sky-400" />
+              Nearby Fleets ({fleetLocations.length})
+            </h4>
+            <button
+              type="button"
+              onClick={() => setShowSidebar(false)}
+              className="text-slate-500 hover:text-slate-300"
+              aria-label="Close fleet sidebar"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+
+          <div className="max-h-72 overflow-y-auto">
+            {[...fleetLocations]
+              .map((row) => ({
+                ...row,
+                _distM: currentCoords
+                  ? haversineM(currentCoords.lat, currentCoords.lng, Number(row.latitude), Number(row.longitude))
+                  : null,
+              }))
+              .sort((a, b) => {
+                if (a._distM === null) return 1;
+                if (b._distM === null) return -1;
+                return a._distM - b._distM;
+              })
+              .map((row) => {
+                const isSelected = selectedFleetId === row.fleet_id;
+                const isActive = ['departed', 'in-progress'].includes(row?.trip_status);
+                const distLabel = row._distM !== null
+                  ? row._distM < 1000
+                    ? `${Math.round(row._distM)} m`
+                    : `${(row._distM / 1000).toFixed(1)} km`
+                  : null;
+
+                return (
+                  <button
+                    key={row.fleet_id ?? row.plate_number}
+                    type="button"
+                    className={`flex w-full items-center gap-3 border-b border-slate-800/60 px-4 py-3 text-left transition hover:bg-slate-900 ${isSelected ? 'bg-sky-950/40' : ''}`}
+                    onClick={() => {
+                      setSelectedFleetId(row.fleet_id ?? null);
+                      // Center map on this fleet
+                      if (map.current && Number.isFinite(Number(row.longitude)) && Number.isFinite(Number(row.latitude))) {
+                        map.current.flyTo({ center: [Number(row.longitude), Number(row.latitude)], zoom: 14 });
+                      }
+                      // Draw route polyline
+                      const routeId = row?.route_id ?? row?.fleet_route?.route_id ?? null;
+                      if (routeId) void drawFleetRoute(routeId);
+                    }}
+                  >
+                    <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${isActive ? 'bg-sky-500' : 'bg-slate-700'}`}>
+                      <span className="text-base">🚌</span>
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-slate-100">
+                        {row?.plate_number || `Fleet ${row?.fleet_id || '-'}`}
+                      </p>
+                      <p className="text-xs text-slate-400 capitalize">
+                        {row?.trip_status || 'active'}
+                        {distLabel ? ` · ${distLabel} away` : ''}
+                      </p>
+                    </div>
+                    {isSelected && <span className="shrink-0 text-xs text-sky-400">→ Route</span>}
+                  </button>
+                );
+              })}
+          </div>
+
+          {!currentCoords && (
+            <p className="px-4 py-2 text-xs text-slate-500">Pin your location to see distances</p>
+          )}
+        </aside>
+      )}
     </div>
   );
 }

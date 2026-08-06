@@ -13,10 +13,12 @@ import {
   Navigation,
   RefreshCw,
   Route,
+  TrendingUp,
   User,
 } from 'lucide-react';
 import StaffService from '../../api/StaffService/StaffService';
 import PairingScreen from './PairingScreen';
+import DriverNavigationMap from './DriverNavigationMap';
 
 const STATUS_COLOR = {
   scheduled: '#64748b',
@@ -32,6 +34,7 @@ const NAV_ITEMS = [
   { key: 'assigned', label: 'Assigned Routes', icon: Calendar },
   { key: 'journey', label: 'Journey', icon: Route },
   { key: 'navigation', label: 'Navigation', icon: Navigation },
+  { key: 'earnings', label: 'Earnings', icon: TrendingUp },
   { key: 'alerts', label: 'Traffic Alerts', icon: Bell },
   { key: 'trip', label: 'Trip Status', icon: Bus },
   { key: 'account', label: 'Account', icon: User },
@@ -168,6 +171,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   const [showTripPin, setShowTripPin] = useState(false);
   const [pinInput, setPinInput] = useState('');
   const [pinStatus, setPinStatus] = useState('');
+  const [earnings, setEarnings] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [actionMsg, setActionMsg] = useState('');
@@ -181,6 +185,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   const gpsWatchRef = useRef(null);
   const lastGpsRef = useRef(null);
   const lastSentGpsRef = useRef(null); // tracks last successfully sent position for deduplication
+  const [proximityAlert, setProximityAlert] = useState(null); // { stop_name, count } | null
   const showNoCurrentTripState = !loading && isPaired && !hasActiveTrip && ['dashboard', 'journey', 'navigation', 'trip'].includes(activeTab);
 
   const currentRoute = trip?.fleet_route?.route;
@@ -241,6 +246,19 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
       setPin(res?.data);
     } catch (err) {
       setError(err.message);
+    }
+  }, [hasActiveTrip, isPaired]);
+
+  const loadEarnings = useCallback(async () => {
+    if (!isPaired || !hasActiveTrip) {
+      setEarnings(null);
+      return;
+    }
+    try {
+      const res = await StaffService.getTripEarnings('driver');
+      setEarnings(res?.data ?? null);
+    } catch {
+      setEarnings(null);
     }
   }, [hasActiveTrip, isPaired]);
 
@@ -326,6 +344,51 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     return () => clearTimeout(timer);
   }, [activeTab, hasActiveTrip, isPaired, loadStops]);
 
+  // ── Alighting proximity check (Feature 4) ─────────────────────────────────
+  // Runs every 15 seconds while a trip is active. When the driver is within
+  // 500m of an unacknowledged stop that has passengers alighting, show a
+  // batched banner notification instead of per-passenger spam.
+  useEffect(() => {
+    if (!hasActiveTrip || !isPaired) {
+      setProximityAlert(null);
+      return undefined;
+    }
+
+    const PROXIMITY_M = 500;
+    const haversineM = (lat1, lng1, lat2, lng2) => {
+      const R = 6371000;
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLng = (lng2 - lng1) * Math.PI / 180;
+      const a = Math.sin(dLat / 2) ** 2
+        + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    };
+
+    const check = () => {
+      const pos = lastGpsRef.current;
+      if (!pos) return;
+
+      const unacked = stops.filter(
+        (s) => !s.is_acknowledged && Number.isFinite(Number(s.latitude)) && Number.isFinite(Number(s.longitude))
+      );
+
+      for (const stop of unacked) {
+        const dist = haversineM(pos.latitude, pos.longitude, Number(stop.latitude), Number(stop.longitude));
+        if (dist <= PROXIMITY_M) {
+          // Count passengers alighting at this stop (from the occupancy by-stop data if available,
+          // otherwise we can't know per-passenger, so just show the stop name).
+          setProximityAlert({ stop_name: stop.stop_name ?? stop.name ?? 'next stop', distance_m: Math.round(dist) });
+          return;
+        }
+      }
+      setProximityAlert(null);
+    };
+
+    check();
+    const id = setInterval(check, 15000);
+    return () => clearInterval(id);
+  }, [hasActiveTrip, isPaired, stops]);
+
   useEffect(() => {
     const timer = setTimeout(() => {
       if (['trip', 'account'].includes(activeTab) && hasActiveTrip && isPaired) {
@@ -335,6 +398,16 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
 
     return () => clearTimeout(timer);
   }, [activeTab, hasActiveTrip, isPaired, loadPin]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (activeTab === 'earnings' && hasActiveTrip && isPaired) {
+        void loadEarnings();
+      }
+    }, 0);
+
+    return () => clearTimeout(timer);
+  }, [activeTab, hasActiveTrip, isPaired, loadEarnings]);
 
   const handleVerifyPin = async () => {
     if (!trip?.trip_id) {
@@ -438,11 +511,13 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
           ? 'Journey'
           : activeTab === 'navigation'
             ? 'Journey / Route Navigation'
-            : activeTab === 'alerts'
-              ? 'Traffic Alerts'
-              : activeTab === 'trip'
-                ? 'Trip Status'
-                : 'Account';
+            : activeTab === 'earnings'
+              ? 'Trip Earnings'
+              : activeTab === 'alerts'
+                ? 'Traffic Alerts'
+                : activeTab === 'trip'
+                  ? 'Trip Status'
+                  : 'Account';
 
   return (
     <div className="grid min-h-screen grid-cols-1 bg-slate-950 text-slate-200 lg:grid-cols-[280px_1fr]">
@@ -566,6 +641,25 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
           <div className="mb-4 inline-flex items-center gap-2 rounded-xl border border-emerald-900 bg-emerald-950/40 px-3 py-2 text-sm text-emerald-300">
             <CheckCircle2 className="h-4 w-4" />
             {actionMsg}
+          </div>
+        )}
+
+        {/* ── Alighting proximity notification (Feature 4) ──────────────────── */}
+        {proximityAlert && (
+          <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-amber-700 bg-amber-950/40 px-4 py-3 text-sm text-amber-200">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 shrink-0 text-amber-400" />
+              <span>
+                <strong>Approaching stop:</strong> {proximityAlert.stop_name}
+                {' '}— {proximityAlert.distance_m} m away. Passengers may be alighting.
+              </span>
+            </div>
+            <button
+              className="shrink-0 text-xs text-amber-400 hover:text-amber-200"
+              onClick={() => setProximityAlert(null)}
+            >
+              Dismiss
+            </button>
           </div>
         )}
 
@@ -759,16 +853,9 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
 
         {!loading && activeTab === 'navigation' && isPaired && !showNoCurrentTripState && (
           <section className="grid gap-4 lg:grid-cols-2">
-            <article className="rounded-2xl border border-slate-800 bg-slate-900 p-4 sm:p-6">
+            <article className="rounded-2xl border border-slate-800 bg-slate-900 p-4 sm:p-6 lg:col-span-2">
               <h4 className="mb-3 text-base font-semibold text-slate-100">Route Navigation</h4>
-              <div className="relative min-h-70 rounded-xl border border-dashed border-slate-700 bg-slate-950 p-4">
-                <div className="absolute left-[10%] right-[10%] top-1/2 h-1 -translate-y-1/2 rounded-full bg-sky-500/60" />
-                <span className="absolute left-[8%] top-[48%] h-3.5 w-3.5 rounded-full border-2 border-slate-950 bg-sky-400" />
-                <span className="absolute right-[8%] top-[48%] h-3.5 w-3.5 rounded-full border-2 border-slate-950 bg-rose-400" />
-                <span className="absolute left-[8%] top-[62%] text-xs text-slate-400">{currentRoute?.origin || 'Origin'}</span>
-                <span className="absolute right-[8%] top-[62%] text-xs text-slate-400">{currentRoute?.destination || 'Destination'}</span>
-                <Map className="absolute left-1/2 top-[36%] h-6 w-6 -translate-x-1/2 text-slate-600" />
-              </div>
+              <DriverNavigationMap trip={trip} stops={stops} lastGpsRef={lastGpsRef} />
             </article>
 
             <article className="rounded-2xl border border-slate-800 bg-slate-900 p-4 sm:p-6">
@@ -784,10 +871,61 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                         <p className="text-sm font-semibold text-slate-100">{stop.stop_name ?? stop.name ?? `Stop ${idx + 1}`}</p>
                         <small className="font-data text-xs text-slate-500">{stop.distance_from_origin_km != null ? `${stop.distance_from_origin_km} km` : ''}</small>
                       </div>
+                      {stop.is_acknowledged && <span className="ml-auto text-xs text-emerald-400">✓</span>}
                     </div>
                   ))}
                 </div>
               )}
+            </article>
+          </section>
+        )}
+
+        {!loading && activeTab === 'earnings' && !isPaired && (
+          <section className="rounded-2xl border border-amber-800 bg-amber-950/20 p-6">
+            <h3 className="text-lg font-semibold text-amber-300">Earnings locked</h3>
+            <p className="mt-2 text-sm text-amber-200/90">{pairingReason}</p>
+          </section>
+        )}
+
+        {!loading && activeTab === 'earnings' && isPaired && !showNoCurrentTripState && (
+          <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <article className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
+              <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Total Fare Collected</p>
+              <h3 className="font-data mt-2 text-2xl font-bold text-slate-100">
+                PHP {earnings ? Number(earnings.total_fare).toFixed(2) : '—'}
+              </h3>
+              <p className="mt-1 text-sm text-slate-400">{earnings?.passenger_count ?? 0} passengers</p>
+            </article>
+            <article className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
+              <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Onsite (Cash)</p>
+              <h3 className="font-data mt-2 text-2xl font-bold text-emerald-300">
+                PHP {earnings ? Number(earnings.onsite_amount).toFixed(2) : '—'}
+              </h3>
+            </article>
+            <article className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
+              <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Online (PayMongo)</p>
+              <h3 className="font-data mt-2 text-2xl font-bold text-sky-300">
+                PHP {earnings ? Number(earnings.online_amount).toFixed(2) : '—'}
+              </h3>
+            </article>
+            <article className="rounded-2xl border border-slate-800 bg-slate-900 p-4 md:col-span-2 xl:col-span-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Average Fare</p>
+                  <p className="font-data mt-1 text-lg font-semibold text-slate-100">
+                    PHP {earnings ? Number(earnings.average_fare).toFixed(2) : '—'} per passenger
+                  </p>
+                </div>
+                <button
+                  className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-xs font-semibold text-slate-300 transition hover:border-slate-500"
+                  onClick={loadEarnings}
+                >
+                  <RefreshCw className="inline h-3.5 w-3.5 mr-1" />Refresh
+                </button>
+              </div>
+              <p className="mt-2 text-xs text-slate-500">
+                Computed server-side from verified payment records. Only boarded/alighted passengers are counted.
+              </p>
             </article>
           </section>
         )}
