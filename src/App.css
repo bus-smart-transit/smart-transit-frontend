@@ -1,6 +1,10 @@
-.counter {
-  font-size: 16px;
-  padding: 5px 10px;
+/*
+ * App.css — UNUSED
+ *
+ * This file is the default Vite + React starter template CSS.
+ * It is not imported anywhere in the project and can be deleted.
+ */
+
   border-radius: 5px;
   color: var(--accent);
   background: var(--accent-bg);

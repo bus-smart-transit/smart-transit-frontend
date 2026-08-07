@@ -1,57 +1,80 @@
-import BaseService from "../BaseService";
+import RoleAuthServiceBase from "../RoleAuthServiceBase";
 
-class PassengerService extends BaseService {
-  /**
-   * Register a new passenger account.
-   * @param {object} payload
-   */
-  async register(payload) {
-    return await this.request("/register", "POST", payload);
+class PassengerService extends RoleAuthServiceBase {
+  constructor() {
+    super("passenger"); // → token key "passenger_token", endpoint base "/passengers"
   }
 
-  /**
-   * Log in with email and password.
-   * @param {object} credentials
-   */
-  async login(credentials) {
-    return await this.request("/login", "POST", credentials);
-  }
-
-  /**
-   * Log out (cleans local state tokens).
-   */
-  async logout() {
-    try {
-      return await this.request("/logout", "DELETE");
-    } finally {
-      localStorage.removeItem("passenger_token");
-      sessionStorage.removeItem("passenger_token");
-    }
-  }
-
-  /**
-   * Get the currently authenticated passenger's profile.
-   */
-  async getProfile() {
-    return await this.request("/passengers/profile", "GET");
-  }
-
-  /**
-   * Update passenger profile data configurations.
-   * @param {object} updates
-   */
   async updateProfile(updates) {
-    return await this.request("/passengers/profile", "PUT", updates);
+    return await this.request(`/${this.endpointBase}/profile`, "PUT", updates);
   }
 
-  /**
-   * Request a backend password reset distribution link.
-   * @param {object} payload
-   */
   async requestPasswordReset(payload) {
-    return await this.request("/passengers/password-reset", "POST", payload);
+    return await this.request(
+      `/${this.endpointBase}/password-reset`,
+      "POST",
+      payload,
+    );
+  }
+
+  async getTickets() {
+    return await this.request(`/${this.endpointBase}/tickets`, "GET");
+  }
+
+  async getPaymentHistory() {
+    return await this.request(`/${this.endpointBase}/payments`, "GET");
+  }
+
+  async getTicketQR(ticketUuid) {
+    return await this.request(`/${this.endpointBase}/tickets/${ticketUuid}/qr`, "GET");
+  }
+
+  async getRewardsHistory() {
+    return await this.request(`/${this.endpointBase}/rewards/history`, "GET");
+  }
+
+  async getDashboardSummary() {
+    return await this.request(`/${this.endpointBase}/dashboard-summary`, "GET");
+  }
+
+  async getAvailableTrips(options = {}) {
+    return await this.request(`/trips`, "GET", options);
+  }
+
+  async checkoutOnline(payload) {
+    const hasToken = !!(localStorage.getItem('passenger_token') || sessionStorage.getItem('passenger_token'));
+    const endpoint = hasToken ? `/${this.endpointBase}/checkout` : '/checkout';
+    return await this.request(endpoint, "POST", payload);
+  }
+
+  // ── Public Quote Endpoints (no auth required) ──
+  async quoteFare(payload) {
+    return await this.request(`/fare/quote`, "POST", payload);
+  }
+
+  async quoteFleetsByLocation(payload) {
+    return await this.request(`/fare/quote-fleets-by-location`, "POST", payload);
+  }
+
+  async getFleetLocations() {
+    return await this.request(`/fleet/locations`, "GET");
+  }
+
+  async getNearestFleet(payload) {
+    return await this.request(`/fleet/nearest`, "GET", payload);
+  }
+
+  async getRouteFares(routeId) {
+    return await this.request(`/routes/${routeId}/fares`, "GET");
+  }
+
+  async guestLookupTicket(payload) {
+    return await this.request(`/tickets/lookup`, "GET", payload);
+  }
+
+  async getRouteStops(routeId) {
+    return await this.request(`/routes/${routeId}/stops`, "GET");
   }
 }
 
-// Export a single initialized instance of the service class
 export default new PassengerService();

@@ -1,1 +1,0 @@
-export { default } from '../../components/Passenger/SignupPage/SignupPage';

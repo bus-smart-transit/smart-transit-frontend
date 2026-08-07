@@ -1,40 +1,38 @@
+import { Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import DefaultLayout from './layouts/default';
-import { ProtectedRoute, GuestRoute } from './components/AuthGuard';
 
-// ── CLEAN PAGE LEVEL IMPORTS ──
-import LandingPage from './pages/passenger/landingpage';
-import SignUpPage from './pages/passenger/signup';
-import LoginPage from './pages/passenger/login';
-import PassengerDashboard from './pages/passenger/dashboard'; // 👈 Your main dashboard panel component
+// DefaultLayout is retained for future public pages but not used by LandingPage,
+// which is now self-contained with its own Navbar and Footer.
+const PassengerBaseRouter = lazy(() => import('./pages/passenger'));
+const EmployeeBaseRouter = lazy(() => import('./pages/employee'));
+const LandingPage = lazy(() => import('./components/Passenger/LandingPage/LandingPage'));
+const CheckoutReturn = lazy(() => import('./components/Passenger/CheckoutReturn/CheckoutReturn'));
+
+function RouteFallback() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-slate-950 px-4 text-slate-300">
+      <div className="rounded-xl border border-slate-800 bg-slate-900/70 px-4 py-3 text-sm">Loading transit view...</div>
+    </div>
+  );
+}
 
 export default function App() {
   return (
     <BrowserRouter>
-      <Routes>
-        {/* ── PUBLIC ACCESS ROUTES ── */}
-        <Route element={<DefaultLayout />}>
+      <Suspense fallback={<RouteFallback />}>
+        <Routes>
+          {/* LandingPage is self-contained — no layout wrapper needed */}
           <Route path="/" element={<LandingPage />} />
-        </Route>
 
-        {/* ── GUEST ONLY ROUTES (Redirects authenticated users) ── */}
-        <Route element={<GuestRoute />}>
-          <Route path="/passenger/signup" element={<SignUpPage />} />
-          <Route path="/passenger/login" element={<LoginPage />} />
-        </Route>
+          <Route path="/passenger/*" element={<PassengerBaseRouter />} />
+          <Route path="/checkout/success" element={<CheckoutReturn />} />
+          <Route path="/checkout/cancel" element={<CheckoutReturn />} />
+          <Route path="/employee/*" element={<EmployeeBaseRouter />} />
+          <Route path="/staff/*" element={<Navigate to="/employee/login" replace />} />
 
-        {/* ── PROTECTED PASSENGER ROUTE ── */}
-        <Route element={<ProtectedRoute />}>
-          {/* Letting /passenger/dashboard handle everything. 
-            Inside your dashboard component, your sidebar buttons can switch state views 
-            dynamically between the Live Map, QR tickets, and User settings seamlessly!
-          */}
-          <Route path="/passenger/dashboard" element={<PassengerDashboard />} />
-        </Route>
-
-        {/* Catch-all redirect back to the entry root */}
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Suspense>
     </BrowserRouter>
   );
 }

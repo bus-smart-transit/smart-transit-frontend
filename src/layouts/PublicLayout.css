@@ -1,8 +1,10 @@
-/* ─── Navbar ──────────────────────────────────────────────────── */
-.navbar {
-  position: sticky;
-  top: 0;
-  z-index: 1000;
+/*
+ * PublicLayout.css — UNUSED
+ *
+ * DefaultLayout has been rewritten with Tailwind utilities.
+ * This file is no longer imported anywhere and can be deleted.
+ */
+
   width: 100%;
   padding: 0;
   transition: all 0.3s ease;

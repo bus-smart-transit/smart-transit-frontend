@@ -1,0 +1,155 @@
+.st-ticket-card {
+  border: 1px solid #d6dbe5;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #ffffff;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.1);
+}
+
+.st-ticket-head {
+  background: linear-gradient(145deg, #2ab557, #31c964);
+  color: #ffffff;
+  padding: 18px 18px 16px;
+}
+
+.st-ticket-head h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.st-ticket-head h4 {
+  margin: 4px 0 0;
+  font-size: 1.75rem;
+  line-height: 1.05;
+  font-weight: 800;
+}
+
+.st-ticket-strip {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.st-ticket-strip span {
+  display: block;
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+
+.st-ticket-strip strong {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.st-ticket-body {
+  padding: 14px;
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 14px;
+  border-top: 2px dashed #d6dbe5;
+}
+
+.st-ticket-qr-wrap {
+  width: 140px;
+  height: 140px;
+  border: 1px solid #d7dee8;
+  border-radius: 10px;
+  background: #f8fafc;
+  display: grid;
+  place-items: center;
+}
+
+.st-ticket-qr {
+  width: 124px;
+  height: 124px;
+  object-fit: contain;
+}
+
+.st-ticket-qr-empty {
+  color: #64748b;
+  font-size: 0.74rem;
+}
+
+.st-ticket-meta {
+  margin: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.st-ticket-meta div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-bottom: 1px solid #ebeff5;
+  padding-bottom: 6px;
+}
+
+.st-ticket-meta dt {
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+.st-ticket-meta dd {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #0f172a;
+  font-weight: 700;
+  text-align: right;
+}
+
+.st-ticket-foot {
+  margin: 0 14px 14px;
+  border: 1px solid #9dd7af;
+  background: #eaf9f0;
+  color: #166534;
+  border-radius: 10px;
+  padding: 9px 10px;
+  font-size: 0.8rem;
+  text-align: center;
+  font-weight: 700;
+}
+
+.st-ticket-foot--boarded {
+  border-color: #7dd3fc;
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.st-ticket-foot--alighted {
+  border-color: #94a3b8;
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.st-ticket-foot--expired {
+  border-color: #fca5a5;
+  background: #fef2f2;
+  color: #991b1b;
+}
+
+.st-ticket-foot--cancelled {
+  border-color: #fca5a5;
+  background: #fef2f2;
+  color: #7f1d1d;
+}
+
+@media (max-width: 640px) {
+  .st-ticket-head h4 {
+    font-size: 1.35rem;
+  }
+
+  .st-ticket-body {
+    grid-template-columns: 1fr;
+  }
+
+  .st-ticket-qr-wrap {
+    width: 100%;
+  }
+}

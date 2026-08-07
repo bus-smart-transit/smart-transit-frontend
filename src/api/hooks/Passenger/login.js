@@ -1,14 +1,15 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import PassengerService from "../../../api/PassengerService/PassengerService";
+import { useAuth } from "../../../api/hooks/useAuth"; // adjust path
 
 export function useLogin() {
   const navigate = useNavigate();
+  const { login } = useAuth(); // ← pull login from context
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
-
   const [form, setForm] = useState({ email: "", password: "" });
   const [errors, setErrors] = useState({});
 
@@ -43,22 +44,15 @@ export function useLogin() {
         password: form.password,
       });
 
-      // FIX: Access the inner data wrapper from your unified backend trait
       const token = response?.data?.token;
-
       if (!token) {
         throw new Error("Authentication token missing from server response.");
       }
 
-      const storage = rememberMe ? localStorage : sessionStorage;
-      storage.setItem("passenger_token", token);
-
+      login(token, rememberMe); // ← updates AuthProvider's state, triggers re-render
       navigate("/passenger/dashboard");
     } catch (err) {
-      setError(
-        err?.response?.data?.message ||
-          "Invalid email or password. Please try again.",
-      );
+      setError(err?.message || "Invalid email or password. Please try again.");
     } finally {
       setIsLoading(false);
     }

@@ -1,6 +1,5 @@
 import api from "../services/api.js";
 
-// 1. Centralized HTTP Status Error Dictionary Configuration
 const HTTP_ERROR_MESSAGES = {
   400: "Bad Request. Please check your input parameters.",
   401: "Unauthorized. Please log in again.",
@@ -12,30 +11,50 @@ const HTTP_ERROR_MESSAGES = {
 
 const DEFAULT_ERROR_MESSAGE = "Something went wrong. Please try again.";
 
-/**
- * Custom error handler that maps statuses and preserves the original root error context.
- */
-function handleApiError(error) {
+function handleApiError(error, tokenKey) {
   const status = error?.response?.status;
-  const backendMessage = error?.response?.data?.message || error?.message;
+  const responseData = error?.response?.data;
 
-  // Resolve the best message fallback strategy
+  // Auto-clear stale token on 401 so the user gets redirected to login
+  if (status === 401 && tokenKey) {
+    localStorage.removeItem(tokenKey);
+    sessionStorage.removeItem(tokenKey);
+  }
+
+  if (status === 422 && responseData?.errors) {
+    const firstErrors = Object.values(responseData.errors)[0];
+    const fieldMessage = Array.isArray(firstErrors) ? firstErrors[0] : firstErrors;
+    throw new Error(fieldMessage, { cause: error });
+  }
+
+  const backendMessage = responseData?.message || error?.message;
   const baselineMessage = HTTP_ERROR_MESSAGES[status] || DEFAULT_ERROR_MESSAGE;
   const finalMessage = backendMessage || baselineMessage;
 
-  // FIX: Passing the original error object inside { cause: error } satisfies the linter!
   throw new Error(finalMessage, { cause: error });
 }
 
-// 2. Pure Core Base Service Class Implementation
 export class BaseService {
-  async request(url, method, params = {}) {
-    // FIX: Dynamically read the active token from storage instead of forcing 'null'
-    const token =
-      localStorage.getItem("passenger_token") ||
-      sessionStorage.getItem("passenger_token");
-    const headers = {};
+  /**
+   * @param {string} tokenKey - storage key for this service's auth token.
+   */
+  constructor(tokenKey = "passenger_token") {
+    this.tokenKey = tokenKey;
+  }
 
+  async request(url, method, params = {}) {
+    const localToken = localStorage.getItem(this.tokenKey);
+    const sessionToken = sessionStorage.getItem(this.tokenKey);
+
+    // Staff token recovery: session token is usually from the most recent login.
+    // If both storages hold different values, prefer session and normalize both.
+    if (this.tokenKey === 'staff_token' && sessionToken && localToken && sessionToken !== localToken) {
+      localStorage.setItem(this.tokenKey, sessionToken);
+    }
+
+    const token = sessionToken || localToken;
+
+    const headers = {};
     if (token) {
       headers.Authorization = `Bearer ${token}`;
     }
@@ -53,10 +72,41 @@ export class BaseService {
     }
 
     try {
-      const response = await api(config); // Uses your custom port 8000 configured instance
+      const response = await api(config);
       return response.data;
     } catch (error) {
-      handleApiError(error);
+      // Staff role-token mismatch recovery: if first attempt used local token and
+      // backend returned role-based 403, retry once with session token.
+      const status = error?.response?.status;
+      const message = String(error?.response?.data?.message || '').toLowerCase();
+      const canRetryWithSession =
+        this.tokenKey === 'staff_token' &&
+        status === 403 &&
+        message.includes('access denied') &&
+        !!sessionToken &&
+        !!localToken &&
+        sessionToken !== localToken &&
+        token === localToken;
+
+      if (canRetryWithSession) {
+        const retryConfig = {
+          ...config,
+          headers: {
+            ...headers,
+            Authorization: `Bearer ${sessionToken}`,
+          },
+        };
+
+        try {
+          const retryResponse = await api(retryConfig);
+          localStorage.setItem(this.tokenKey, sessionToken);
+          return retryResponse.data;
+        } catch (retryError) {
+          handleApiError(retryError, this.tokenKey);
+        }
+      }
+
+      handleApiError(error, this.tokenKey);
     }
   }
 }
