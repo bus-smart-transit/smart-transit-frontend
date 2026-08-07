@@ -34,14 +34,16 @@ export function AuthProvider({ role = "passenger", children }) {
         const profile = await activeService.getProfile();
         if (!cancelled) setUser(profile?.data ?? profile); // unwrap the envelope
       } catch (err) {
-        // Invalid session or mismatched account profile should clear auth.
-        // Keep other transient/server failures non-destructive.
+        // Only 401/403 mean the token itself is rejected — clear the session.
+        // 404 from profile means no passenger_users row exists yet, which is a
+        // data gap, NOT an invalid token. Clearing auth on 404 causes the
+        // immediate post-login redirect loop.
         const status =
           err?.cause?.response?.status ??
           err?.response?.status ??
           err?.status ??
           null;
-        if (status === 401 || status === 403 || status === 404) {
+        if (status === 401 || status === 403) {
           localStorage.removeItem(tokenKey);
           sessionStorage.removeItem(tokenKey);
           if (!cancelled) {
@@ -49,7 +51,8 @@ export function AuthProvider({ role = "passenger", children }) {
             setIsAuthenticated(false);
           }
         }
-        // For all other errors, keep isAuthenticated as-is.
+        // For all other errors (404, 500, network), keep isAuthenticated as-is
+        // so the user is not logged out by transient or data-gap failures.
       } finally {
         if (!cancelled) setIsLoading(false);
       }

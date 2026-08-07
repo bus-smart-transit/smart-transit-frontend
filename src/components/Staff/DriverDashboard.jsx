@@ -19,6 +19,7 @@ import {
 import StaffService from '../../api/StaffService/StaffService';
 import PairingScreen from './PairingScreen';
 import DriverNavigationMap from './DriverNavigationMap';
+import { haversineM } from '../../utils/geo';
 
 const STATUS_COLOR = {
   scheduled: '#64748b',
@@ -216,6 +217,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   const pairingReason = pairing?.reason || 'Waiting for pairing with your Conductor before enabling session-synced features.';
   const hasActiveTrip = isCurrentOrSameDayTrip(trip);
   const didBootstrap = useRef(false);
+  const stopsLoadedRef = useRef(false);
   const upcomingTrip = getUpcomingTrip(assignedTrips);
   const gpsIntervalRef = useRef(null);
   const gpsWatchRef = useRef(null);
@@ -256,6 +258,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   const loadStops = useCallback(async () => {
     if (!isPaired || !hasActiveTrip) {
       setStops([]);
+      stopsLoadedRef.current = false;
       return;
     }
     try {
@@ -266,6 +269,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
       } else {
         setStops(payload?.stops ?? []);
       }
+      stopsLoadedRef.current = true;
     } catch (err) {
       setError(err.message);
     }
@@ -371,13 +375,18 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   }, [hasActiveTrip, isPaired]);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      if (['journey', 'navigation', 'trip', 'dashboard'].includes(activeTab) && hasActiveTrip && isPaired) {
-        void loadStops();
-      }
-    }, 0);
-
-    return () => clearTimeout(timer);
+    // Fetch stops once per active trip — not on every tab switch.
+    // Re-fetch is triggered explicitly by handleAcknowledgeStop.
+    if (!hasActiveTrip || !isPaired) {
+      stopsLoadedRef.current = false;
+      return;
+    }
+    if (stopsLoadedRef.current) return;
+    if (['journey', 'navigation', 'trip', 'dashboard'].includes(activeTab)) {
+      const timer = setTimeout(() => { void loadStops(); }, 0);
+      return () => clearTimeout(timer);
+    }
+    return undefined;
   }, [activeTab, hasActiveTrip, isPaired, loadStops]);
 
   // ── Alighting proximity check (Feature 4) ─────────────────────────────────
@@ -391,14 +400,6 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     }
 
     const PROXIMITY_M = 500;
-    const haversineM = (lat1, lng1, lat2, lng2) => {
-      const R = 6371000;
-      const dLat = (lat2 - lat1) * Math.PI / 180;
-      const dLng = (lng2 - lng1) * Math.PI / 180;
-      const a = Math.sin(dLat / 2) ** 2
-        + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
-      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    };
 
     const check = () => {
       const pos = lastGpsRef.current;

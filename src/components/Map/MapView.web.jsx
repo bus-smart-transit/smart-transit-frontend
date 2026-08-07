@@ -3,16 +3,7 @@ import { Bus, Clock3, LocateFixed, MapPin, Route, Ruler, X } from 'lucide-react'
 import "maplibre-gl/dist/maplibre-gl.css";
 import { loadMapLib } from './mapDependencies';
 import PassengerService from '../../api/PassengerService/PassengerService';
-
-// Haversine distance in metres (for fleet sidebar sorting)
-const haversineM = (lat1, lng1, lat2, lng2) => {
-  const R = 6371000;
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLng = (lng2 - lng1) * Math.PI / 180;
-  const a = Math.sin(dLat / 2) ** 2
-    + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-};
+import { haversineM } from '../../utils/geo';
 
 export default function MapView({ role = "passenger" }) {
   const mapContainer = useRef(null);
@@ -235,7 +226,7 @@ export default function MapView({ role = "passenger" }) {
     void tick();
     const id = setInterval(() => {
       void tick();
-    }, 6000);
+    }, 12000);
 
     return () => {
       cancelled = true;
@@ -321,6 +312,15 @@ export default function MapView({ role = "passenger" }) {
             )
           )
           .addTo(map.current);
+
+        // Pan to show both the passenger's pin and the nearest bus
+        const bounds = new maplibregl.LngLatBounds(
+          [currentCoords.lng, currentCoords.lat],
+          [Number(nearest.longitude), Number(nearest.latitude)]
+        );
+        map.current.fitBounds(bounds, { padding: 80, maxZoom: 14 });
+      } else {
+        alert('No active bus found within 25 km of your location. Check back when a trip is live.');
       }
     } catch {
       alert('Unable to locate nearest fleet right now. Please try again.');
