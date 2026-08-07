@@ -1,7 +1,3 @@
-// Centralized sample data. Once a backend exists, these would be
-// replaced with real API calls — keeping them in one file makes
-// that swap easier later.
-
 export const TERMINALS = [
   "Ecoland Terminal, Davao City",
   "Tagum Terminal, Tagum City",
