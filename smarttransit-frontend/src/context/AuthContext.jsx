@@ -1,8 +1,5 @@
 import { createContext, useContext, useEffect, useState } from "react";
 
-// Frontend-only authentication. There's no backend, so "accounts" live in
-// localStorage as a small registry. One demo account is seeded so the app
-// is usable without registering first.
 const AUTH_STORAGE_KEY = "smarttransit.auth";
 const USERS_STORAGE_KEY = "smarttransit.registeredUsers";
 
