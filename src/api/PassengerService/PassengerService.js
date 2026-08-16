@@ -75,6 +75,13 @@ class PassengerService extends RoleAuthServiceBase {
   async getRouteStops(routeId) {
     return await this.request(`/routes/${routeId}/stops`, "GET");
   }
+
+  async verifyOtp(userId, otp) {
+    return await this.request(`/${this.endpointBase}/verify-otp`, "POST", {
+      user_id: userId,
+      otp,
+    });
+  }
 }
 
 export default new PassengerService();

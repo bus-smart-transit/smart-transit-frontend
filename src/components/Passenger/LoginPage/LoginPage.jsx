@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Eye, EyeOff, Lock, Mail, MoveLeft, Route, TrainFront, TriangleAlert } from 'lucide-react';
+import { Eye, EyeOff, Lock, Mail, MoveLeft, Route, ShieldCheck, TrainFront, TriangleAlert } from 'lucide-react';
 import { useLogin } from '../../../api/hooks/Passenger/login';
 
 export default function LoginPage() {
@@ -14,6 +14,15 @@ export default function LoginPage() {
     setRememberMe,
     update,
     handleSubmit,
+    // OTP
+    otpRequired,
+    otp,
+    setOtp,
+    otpError,
+    otpEmailMasked,
+    handleVerifyOtp,
+    handleResendOtp,
+    cancelOtp,
   } = useLogin();
 
   return (
@@ -66,106 +75,186 @@ export default function LoginPage() {
         </section>
 
         <section className="p-6 sm:p-8">
-          <div className="mb-6">
-            <h1 className="text-2xl font-bold text-slate-100">Sign In</h1>
-            <p className="mt-1 text-sm text-slate-500">Enter your credentials to access your dashboard.</p>
-          </div>
-
-          {error && (
-            <div className="mb-4 inline-flex w-full items-center gap-2 rounded-xl border border-red-900 bg-red-950/40 px-3 py-2 text-sm text-red-300" role="alert">
-              <TriangleAlert className="h-4 w-4" />
-              {error}
-            </div>
-          )}
-
-          <form className="space-y-4" onSubmit={handleSubmit} noValidate id="login-form">
-            <label className="block text-sm font-medium text-slate-300" htmlFor="login-email">
-              Email Address
-              <div className="mt-1 flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-950 px-3 focus-within:border-sky-400">
-                <Mail className="h-4 w-4 text-slate-500" aria-hidden="true" />
-                <input
-                  id="login-email"
-                  type="email"
-                  className="h-11 w-full bg-transparent text-sm text-slate-100 outline-none placeholder:text-slate-500"
-                  placeholder="juan@example.com"
-                  value={form.email}
-                  onChange={e => update('email', e.target.value)}
-                  autoComplete="email"
-                  autoFocus
-                />
+          {/* ── OTP verification screen ──────────────────────────────────── */}
+          {otpRequired ? (
+            <>
+              <div className="mb-6 flex items-center gap-3">
+                <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-sky-800 bg-sky-950/50 text-sky-400">
+                  <ShieldCheck className="h-5 w-5" />
+                </span>
+                <div>
+                  <h1 className="text-2xl font-bold text-slate-100">Verify your identity</h1>
+                  <p className="mt-0.5 text-sm text-slate-500">
+                    A 6-digit code was sent to <span className="font-medium text-slate-300">{otpEmailMasked}</span>
+                  </p>
+                </div>
               </div>
-              {errors.email && <span className="mt-1 block text-xs text-red-400">{errors.email}</span>}
-            </label>
 
-            <label className="block text-sm font-medium text-slate-300" htmlFor="login-password">
-              <span className="mb-1 flex items-center justify-between">
-                Password
-                <a href="#" className="text-xs text-sky-400 hover:text-sky-300" id="forgot-password-link">Forgot password?</a>
-              </span>
-              <div className="mt-1 flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-950 px-3 focus-within:border-sky-400">
-                <Lock className="h-4 w-4 text-slate-500" aria-hidden="true" />
-                <input
-                  id="login-password"
-                  type={showPassword ? 'text' : 'password'}
-                  className="h-11 w-full bg-transparent text-sm text-slate-100 outline-none placeholder:text-slate-500"
-                  placeholder="Enter your password"
-                  value={form.password}
-                  onChange={e => update('password', e.target.value)}
-                  autoComplete="current-password"
-                />
+              {otpError && (
+                <div className="mb-4 inline-flex w-full items-center gap-2 rounded-xl border border-red-900 bg-red-950/40 px-3 py-2 text-sm text-red-300" role="alert">
+                  <TriangleAlert className="h-4 w-4" />
+                  {otpError}
+                </div>
+              )}
+
+              <form className="space-y-4" onSubmit={handleVerifyOtp} noValidate>
+                <label className="block text-sm font-medium text-slate-300" htmlFor="otp-input">
+                  Verification Code
+                  <input
+                    id="otp-input"
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={6}
+                    className="mt-1 h-14 w-full rounded-xl border border-slate-800 bg-slate-950 px-4 text-center font-mono text-2xl font-bold tracking-[0.6em] text-slate-100 outline-none placeholder:text-slate-600 focus:border-sky-400"
+                    placeholder="000000"
+                    value={otp}
+                    onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    autoFocus
+                    autoComplete="one-time-code"
+                  />
+                </label>
+
+                <button
+                  type="submit"
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={isLoading || otp.length !== 6}
+                >
+                  {isLoading ? (
+                    <>
+                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" aria-hidden="true" />
+                      Verifying...
+                    </>
+                  ) : (
+                    'Confirm Code'
+                  )}
+                </button>
+              </form>
+
+              <div className="mt-4 flex items-center justify-between text-sm text-slate-500">
                 <button
                   type="button"
-                  className="text-slate-500 transition hover:text-slate-300"
-                  onClick={() => setShowPassword(!showPassword)}
-                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  onClick={handleResendOtp}
+                  disabled={isLoading}
+                  className="text-sky-400 transition hover:text-sky-300 disabled:opacity-50"
                 >
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  Resend code
+                </button>
+                <button
+                  type="button"
+                  onClick={cancelOtp}
+                  className="hover:text-slate-300"
+                >
+                  ← Back to login
                 </button>
               </div>
-              {errors.password && <span className="mt-1 block text-xs text-red-400">{errors.password}</span>}
-            </label>
+            </>
+          ) : (
+            /* ── Credentials screen ──────────────────────────────────────── */
+            <>
+              <div className="mb-6">
+                <h1 className="text-2xl font-bold text-slate-100">Sign In</h1>
+                <p className="mt-1 text-sm text-slate-500">Enter your credentials to access your dashboard.</p>
+              </div>
 
-            <label className="inline-flex cursor-pointer items-center gap-2 text-sm text-slate-400" htmlFor="login-remember">
-              <input
-                id="login-remember"
-                type="checkbox"
-                className="h-4 w-4 rounded border-slate-700 bg-slate-900 text-sky-500"
-                checked={rememberMe}
-                onChange={e => setRememberMe(e.target.checked)}
-              />
-              Remember me for 30 days
-            </label>
-
-            <button
-              type="submit"
-              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={isLoading}
-              id="login-submit-btn"
-            >
-              {isLoading ? (
-                <>
-                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" aria-hidden="true" />
-                  Signing in...
-                </>
-              ) : (
-                'Sign In'
+              {error && (
+                <div className="mb-4 inline-flex w-full items-center gap-2 rounded-xl border border-red-900 bg-red-950/40 px-3 py-2 text-sm text-red-300" role="alert">
+                  <TriangleAlert className="h-4 w-4" />
+                  {error}
+                </div>
               )}
-            </button>
-          </form>
 
-          <p className="mt-6 text-center text-sm text-slate-500">
-            Don&apos;t have an account?{' '}
-            <Link to="/passenger/signup" className="font-medium text-sky-400 hover:text-sky-300" id="switch-to-signup">Create one free</Link>
-          </p>
+              <form className="space-y-4" onSubmit={handleSubmit} noValidate id="login-form">
+                <label className="block text-sm font-medium text-slate-300" htmlFor="login-email">
+                  Email Address
+                  <div className="mt-1 flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-950 px-3 focus-within:border-sky-400">
+                    <Mail className="h-4 w-4 text-slate-500" aria-hidden="true" />
+                    <input
+                      id="login-email"
+                      type="email"
+                      className="h-11 w-full bg-transparent text-sm text-slate-100 outline-none placeholder:text-slate-500"
+                      placeholder="juan@example.com"
+                      value={form.email}
+                      onChange={e => update('email', e.target.value)}
+                      autoComplete="email"
+                      autoFocus
+                    />
+                  </div>
+                  {errors.email && <span className="mt-1 block text-xs text-red-400">{errors.email}</span>}
+                </label>
 
-          <p className="mt-4 text-center">
-            <Link to="/" className="inline-flex items-center gap-1 text-sm text-slate-500 transition hover:text-slate-300" id="back-to-home">
-              <MoveLeft className="h-4 w-4" />
-              Back to Home
-            </Link>
-          </p>
+                <label className="block text-sm font-medium text-slate-300" htmlFor="login-password">
+                  <span className="mb-1 flex items-center justify-between">
+                    Password
+                    <a href="#" className="text-xs text-sky-400 hover:text-sky-300" id="forgot-password-link">Forgot password?</a>
+                  </span>
+                  <div className="mt-1 flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-950 px-3 focus-within:border-sky-400">
+                    <Lock className="h-4 w-4 text-slate-500" aria-hidden="true" />
+                    <input
+                      id="login-password"
+                      type={showPassword ? 'text' : 'password'}
+                      className="h-11 w-full bg-transparent text-sm text-slate-100 outline-none placeholder:text-slate-500"
+                      placeholder="Enter your password"
+                      value={form.password}
+                      onChange={e => update('password', e.target.value)}
+                      autoComplete="current-password"
+                    />
+                    <button
+                      type="button"
+                      className="text-slate-500 transition hover:text-slate-300"
+                      onClick={() => setShowPassword(!showPassword)}
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                  {errors.password && <span className="mt-1 block text-xs text-red-400">{errors.password}</span>}
+                </label>
+
+                <label className="inline-flex cursor-pointer items-center gap-2 text-sm text-slate-400" htmlFor="login-remember">
+                  <input
+                    id="login-remember"
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-slate-700 bg-slate-900 text-sky-500"
+                    checked={rememberMe}
+                    onChange={e => setRememberMe(e.target.checked)}
+                  />
+                  Remember me for 30 days
+                </label>
+
+                <button
+                  type="submit"
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={isLoading}
+                  id="login-submit-btn"
+                >
+                  {isLoading ? (
+                    <>
+                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" aria-hidden="true" />
+                      Sending code...
+                    </>
+                  ) : (
+                    'Continue'
+                  )}
+                </button>
+              </form>
+
+              <p className="mt-6 text-center text-sm text-slate-500">
+                Don&apos;t have an account?{' '}
+                <Link to="/passenger/signup" className="font-medium text-sky-400 hover:text-sky-300" id="switch-to-signup">Create one free</Link>
+              </p>
+
+              <p className="mt-4 text-center">
+                <Link to="/" className="inline-flex items-center gap-1 text-sm text-slate-500 transition hover:text-slate-300" id="back-to-home">
+                  <MoveLeft className="h-4 w-4" />
+                  Back to Home
+                </Link>
+              </p>
+            </>
+          )}
         </section>
       </div>
     </div>
   );
 }
+
+
