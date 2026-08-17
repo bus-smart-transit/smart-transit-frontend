@@ -1,6 +1,7 @@
 import { Suspense, lazy, useState } from 'react';
 import { Bell, Map, Ticket, User, LogOut, Gift, History, ShoppingCart, Menu } from 'lucide-react';
 import usePassengerDashboard from '../../../api/hooks/Passenger/usePassengerDashboard';
+import PassengerService from '../../../api/PassengerService/PassengerService';
 import TicketCard from '../Ticket/TicketCard';
 import './PassengerPortal.css';
 
@@ -386,6 +387,29 @@ export default function Dashboard() {
     </section>
   );
 
+  const [twoFactorOverride, setTwoFactorOverride] = useState(null);
+  const [updating2fa, setUpdating2fa] = useState(false);
+  const [twoFactorMsg, setTwoFactorMsg] = useState('');
+
+  const twoFactorEnabled = twoFactorOverride ?? profile?.user?.two_factor_enabled ?? true;
+
+  const handleTwoFactorToggle = async (event) => {
+    const enabled = event.target.checked;
+    setTwoFactorOverride(enabled);
+    setUpdating2fa(true);
+    setTwoFactorMsg('');
+
+    try {
+      await PassengerService.setTwoFactorPreference(enabled);
+      setTwoFactorMsg(enabled ? '2FA enabled. Future logins require OTP.' : '2FA disabled. Future logins skip OTP.');
+    } catch (err) {
+      setTwoFactorOverride(null);
+      setTwoFactorMsg(err?.message || 'Unable to update 2FA preference right now.');
+    } finally {
+      setUpdating2fa(false);
+    }
+  };
+
   const renderContent = () => {
     if (visibleTab === 'buy') {
       return (
@@ -534,6 +558,24 @@ export default function Dashboard() {
             <div><span>Contact Number</span><strong>{profile?.phone_num || '-'}</strong></div>
             <div><span>Address</span><strong>{profile?.address || '-'}</strong></div>
             <div><span>Rewards Points</span><strong>{points}</strong></div>
+          </div>
+          <div style={{ marginTop: '16px', border: '1px solid rgba(148,163,184,0.2)', borderRadius: '10px', padding: '12px', background: 'rgba(15,23,42,0.45)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+              <div>
+                <p style={{ margin: 0, fontSize: '0.9rem', fontWeight: 700, color: '#e2e8f0' }}>Login 2FA</p>
+                <p style={{ margin: '4px 0 0', fontSize: '0.78rem', color: '#94a3b8' }}>Require a 6-digit OTP during sign-in.</p>
+              </div>
+              <label style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', cursor: updating2fa ? 'not-allowed' : 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={twoFactorEnabled}
+                  onChange={handleTwoFactorToggle}
+                  disabled={updating2fa}
+                />
+                <span style={{ fontSize: '0.8rem', color: '#cbd5e1' }}>{twoFactorEnabled ? 'Enabled' : 'Disabled'}</span>
+              </label>
+            </div>
+            {twoFactorMsg && <p style={{ margin: '10px 0 0', fontSize: '0.78rem', color: '#7dd3fc' }}>{twoFactorMsg}</p>}
           </div>
         </section>
       );

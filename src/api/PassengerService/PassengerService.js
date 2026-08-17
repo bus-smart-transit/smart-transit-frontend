@@ -82,6 +82,12 @@ class PassengerService extends RoleAuthServiceBase {
       otp,
     });
   }
+
+  async setTwoFactorPreference(enabled) {
+    return await this.request(`/${this.endpointBase}/2fa-preference`, "PATCH", {
+      enabled,
+    });
+  }
 }
 
 export default new PassengerService();

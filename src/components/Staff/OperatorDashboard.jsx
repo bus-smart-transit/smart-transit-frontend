@@ -104,6 +104,8 @@ export default function OperatorDashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+  const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
+  const [saving2fa, setSaving2fa] = useState(false);
 
   const [fleets, setFleets] = useState([]);
   const [fleetForm, setFleetForm] = useState({
@@ -179,6 +181,21 @@ export default function OperatorDashboard() {
     }
   };
 
+  const handleTwoFactorToggle = async (event) => {
+    const enabled = event.target.checked;
+    setTwoFactorEnabled(enabled);
+    setSaving2fa(true);
+    try {
+      await StaffService.setTwoFactorPreference(enabled);
+      showMessage(enabled ? '2FA enabled for your account.' : '2FA disabled for your account.', true);
+    } catch (err) {
+      setTwoFactorEnabled(!enabled);
+      showMessage(err?.message || 'Failed to update 2FA preference.', false);
+    } finally {
+      setSaving2fa(false);
+    }
+  };
+
   const loadDashboardData = useCallback(async () => {
     setIsLoading(true);
     try {
@@ -203,6 +220,9 @@ export default function OperatorDashboard() {
       ]);
 
       setProfile(profileRes.data);
+      if (typeof profileRes.data?.user?.two_factor_enabled === 'boolean') {
+        setTwoFactorEnabled(profileRes.data.user.two_factor_enabled);
+      }
       setFleets(fleetsRes.data || []);
       setDrivers(driversRes.data || []);
       setConductors(conductorsRes.data || []);
@@ -934,13 +954,33 @@ export default function OperatorDashboard() {
         </div>
 
         {profile && (
-          <div className="flex gap-3 p-4 bg-slate-900 rounded-lg mb-8">
-            <div className="w-12 h-12 rounded-full bg-linear-to-br from-blue-500 to-blue-600 flex items-center justify-center font-bold text-lg shrink-0">
+          <div className="mb-8 rounded-lg bg-slate-900 p-4">
+            <div className="flex gap-3">
+              <div className="h-12 w-12 shrink-0 rounded-full bg-linear-to-br from-blue-500 to-blue-600 flex items-center justify-center font-bold text-lg">
               {(profile.name || 'O')[0].toUpperCase()}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="font-semibold text-white truncate">{profile.name}</div>
+                <div className="text-xs text-slate-400 truncate">{profile?.user?.email || profile.email}</div>
+              </div>
             </div>
-            <div className="flex-1 min-w-0">
-              <div className="font-semibold text-white truncate">{profile.name}</div>
-              <div className="text-xs text-slate-400 truncate">{profile.email}</div>
+
+            <div className="mt-3 rounded-md border border-slate-700 bg-slate-950 p-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <p className="text-xs font-semibold text-slate-200">Login 2FA</p>
+                  <p className="text-[11px] text-slate-500">OTP required on sign-in</p>
+                </div>
+                <label className="inline-flex items-center gap-1.5 text-[11px] text-slate-300">
+                  <input
+                    type="checkbox"
+                    checked={twoFactorEnabled}
+                    onChange={handleTwoFactorToggle}
+                    disabled={saving2fa}
+                  />
+                  {twoFactorEnabled ? 'On' : 'Off'}
+                </label>
+              </div>
             </div>
           </div>
         )}

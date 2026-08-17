@@ -16,6 +16,17 @@ class StaffService extends BaseService {
     return await this.request('/staff/login', 'POST', credentials);
   }
 
+  async verifyOtp(userId, otp) {
+    return await this.request('/staff/verify-otp', 'POST', {
+      user_id: userId,
+      otp,
+    });
+  }
+
+  async setTwoFactorPreference(enabled) {
+    return await this.request('/staff/2fa-preference', 'PATCH', { enabled });
+  }
+
   async logout(role) {
     try {
       return await this.request('/staff/logout', 'DELETE');

@@ -1,8 +1,11 @@
 import { Link } from 'react-router-dom';
+import { useRef } from 'react';
 import { Eye, EyeOff, Lock, Mail, MoveLeft, Route, ShieldCheck, TrainFront, TriangleAlert } from 'lucide-react';
 import { useLogin } from '../../../api/hooks/Passenger/login';
 
 export default function LoginPage() {
+  const otpRefs = useRef([]);
+
   const {
     form,
     errors,
@@ -20,10 +23,59 @@ export default function LoginPage() {
     setOtp,
     otpError,
     otpEmailMasked,
+    otpExpiresIn,
+    resendCooldown,
     handleVerifyOtp,
     handleResendOtp,
     cancelOtp,
   } = useLogin();
+
+  const otpDigits = Array.from({ length: 6 }, (_, index) => otp[index] ?? '');
+  const ttlMinutes = String(Math.floor(otpExpiresIn / 60)).padStart(2, '0');
+  const ttlSeconds = String(otpExpiresIn % 60).padStart(2, '0');
+
+  const commitOtpDigit = (index, value) => {
+    const cleaned = value.replace(/\D/g, '').slice(-1);
+    const next = otpDigits.slice();
+    next[index] = cleaned;
+    const combined = next.join('');
+    setOtp(combined);
+
+    if (cleaned && index < 5) {
+      otpRefs.current[index + 1]?.focus();
+    }
+
+    if (combined.length === 6 && !next.includes('')) {
+      void handleVerifyOtp(combined);
+    }
+  };
+
+  const handleOtpKeyDown = (index, event) => {
+    if (event.key === 'Backspace' && !otpDigits[index] && index > 0) {
+      otpRefs.current[index - 1]?.focus();
+    }
+    if (event.key === 'ArrowLeft' && index > 0) {
+      otpRefs.current[index - 1]?.focus();
+    }
+    if (event.key === 'ArrowRight' && index < 5) {
+      otpRefs.current[index + 1]?.focus();
+    }
+  };
+
+  const handleOtpPaste = (event) => {
+    event.preventDefault();
+    const pasted = event.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+    if (!pasted) return;
+
+    setOtp(pasted);
+
+    const focusIndex = Math.min(5, Math.max(0, pasted.length - 1));
+    otpRefs.current[focusIndex]?.focus();
+
+    if (pasted.length === 6) {
+      void handleVerifyOtp(pasted);
+    }
+  };
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-slate-950 px-4 py-8 text-slate-200 sm:px-6 lg:px-10">
@@ -87,6 +139,7 @@ export default function LoginPage() {
                   <p className="mt-0.5 text-sm text-slate-500">
                     A 6-digit code was sent to <span className="font-medium text-slate-300">{otpEmailMasked}</span>
                   </p>
+                  <p className="mt-1 text-xs text-slate-500">Code expires in {ttlMinutes}:{ttlSeconds}</p>
                 </div>
               </div>
 
@@ -98,21 +151,29 @@ export default function LoginPage() {
               )}
 
               <form className="space-y-4" onSubmit={handleVerifyOtp} noValidate>
-                <label className="block text-sm font-medium text-slate-300" htmlFor="otp-input">
-                  Verification Code
-                  <input
-                    id="otp-input"
-                    type="text"
-                    inputMode="numeric"
-                    maxLength={6}
-                    className="mt-1 h-14 w-full rounded-xl border border-slate-800 bg-slate-950 px-4 text-center font-mono text-2xl font-bold tracking-[0.6em] text-slate-100 outline-none placeholder:text-slate-600 focus:border-sky-400"
-                    placeholder="000000"
-                    value={otp}
-                    onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                    autoFocus
-                    autoComplete="one-time-code"
-                  />
-                </label>
+                <div>
+                  <label className="block text-sm font-medium text-slate-300" htmlFor="otp-box-0">Verification Code</label>
+                  <div className="mt-2 grid grid-cols-6 gap-2 sm:gap-3" onPaste={handleOtpPaste}>
+                    {otpDigits.map((digit, index) => (
+                      <input
+                        key={`otp-box-${index}`}
+                        id={`otp-box-${index}`}
+                        ref={(node) => { otpRefs.current[index] = node; }}
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        maxLength={1}
+                        value={digit}
+                        onChange={(event) => commitOtpDigit(index, event.target.value)}
+                        onKeyDown={(event) => handleOtpKeyDown(index, event)}
+                        className="h-14 rounded-xl border border-slate-800 bg-slate-950 text-center font-mono text-xl font-bold text-slate-100 outline-none focus:border-sky-400"
+                        autoComplete={index === 0 ? 'one-time-code' : 'off'}
+                        autoFocus={index === 0}
+                        aria-label={`OTP digit ${index + 1}`}
+                      />
+                    ))}
+                  </div>
+                </div>
 
                 <button
                   type="submit"
@@ -134,10 +195,10 @@ export default function LoginPage() {
                 <button
                   type="button"
                   onClick={handleResendOtp}
-                  disabled={isLoading}
+                  disabled={isLoading || resendCooldown > 0}
                   className="text-sky-400 transition hover:text-sky-300 disabled:opacity-50"
                 >
-                  Resend code
+                  {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend code'}
                 </button>
                 <button
                   type="button"

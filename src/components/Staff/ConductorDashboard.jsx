@@ -196,6 +196,8 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [actionMsg, setActionMsg] = useState('');
+  const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
+  const [saving2fa, setSaving2fa] = useState(false);
   const isPaired = pairing?.paired === true;
   const pairingReason = pairing?.reason || 'Waiting for pairing with your Driver before live trip features unlock.';
   const hasActiveTrip = isCurrentOrSameDayTrip(trip);
@@ -210,6 +212,23 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   const routeStops = trip?.fleet_route?.route?.route_stops || trip?.fleet_route?.route?.routeStops || [];
   const groupedPassengers = usePassengersByTrip(passengers, trip);
   const { printOnsiteReceipt } = useOnsiteReceiptPrinter();
+
+  const handleTwoFactorToggle = async (event) => {
+    const enabled = event.target.checked;
+    setTwoFactorEnabled(enabled);
+    setSaving2fa(true);
+    setActionMsg('');
+
+    try {
+      await StaffService.setTwoFactorPreference(enabled);
+      setActionMsg(enabled ? '2FA enabled for your account.' : '2FA disabled for your account.');
+    } catch (err) {
+      setTwoFactorEnabled(!enabled);
+      setActionMsg(err?.message || 'Failed to update 2FA preference.');
+    } finally {
+      setSaving2fa(false);
+    }
+  };
 
   const stopScanner = useCallback(() => {
     if (scannerTimerRef.current) {
@@ -271,7 +290,13 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
         StaffService.getConductorTrip(),
         StaffService.getConductorTrips(),
       ]);
-      if (profileRes.status === 'fulfilled') setProfile(profileRes.value?.data);
+      if (profileRes.status === 'fulfilled') {
+        const nextProfile = profileRes.value?.data;
+        setProfile(nextProfile);
+        if (typeof nextProfile?.user?.two_factor_enabled === 'boolean') {
+          setTwoFactorEnabled(nextProfile.user.two_factor_enabled);
+        }
+      }
       if (tripRes.status === 'fulfilled') setTrip(tripRes.value?.data);
       if (tripsRes.status === 'fulfilled') setAssignedTrips(tripsRes.value?.data ?? []);
     } finally {
@@ -680,6 +705,24 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                 <div>
                   <p className="text-sm font-semibold text-slate-100">{profile.name}</p>
                   <p className="text-xs text-slate-500">Conductor</p>
+                </div>
+              </div>
+
+              <div className="mt-3 rounded-xl border border-slate-800 bg-slate-950 p-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <p className="text-xs font-semibold text-slate-200">Login 2FA</p>
+                    <p className="text-[11px] text-slate-500">OTP required on sign-in</p>
+                  </div>
+                  <label className="inline-flex items-center gap-1.5 text-[11px] text-slate-300">
+                    <input
+                      type="checkbox"
+                      checked={twoFactorEnabled}
+                      onChange={handleTwoFactorToggle}
+                      disabled={saving2fa}
+                    />
+                    {twoFactorEnabled ? 'On' : 'Off'}
+                  </label>
                 </div>
               </div>
             </div>
