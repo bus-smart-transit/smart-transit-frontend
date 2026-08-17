@@ -89,7 +89,7 @@ export default function SeatSelectionPage() {
             </div>
 
             <div className="mt-5 flex justify-center">
-              <div className="grid grid-cols-4 gap-3">
+              <div className="grid grid-cols-4 gap-2 sm:gap-3">
                 {seatNumbers.map((seat) => {
                   const isTaken = TAKEN_SEATS.includes(seat);
                   const isSelected = selectedSeat === seat;
@@ -98,7 +98,7 @@ export default function SeatSelectionPage() {
                       key={seat}
                       disabled={isTaken}
                       onClick={() => handlePickSeat(seat)}
-                      className={`flex h-11 w-16 items-center justify-center rounded-lg text-sm font-semibold transition-colors ${
+                      className={`flex h-10 w-12 items-center justify-center rounded-lg text-xs font-semibold transition-colors sm:h-11 sm:w-16 sm:text-sm ${
                         isTaken
                           ? "cursor-not-allowed bg-black text-white"
                           : isSelected

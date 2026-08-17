@@ -18,7 +18,13 @@ export default function FaqAccordionItem({ question, answer, open, onToggle }) {
           {open ? <MinusIcon size={15} /> : <PlusIcon size={15} />}
         </span>
       </button>
-      {open && <p className="mt-3 text-sm leading-relaxed text-slate-500">{answer}</p>}
+      <div
+        className={`grid transition-all duration-300 ease-in-out ${
+          open ? "mt-3 grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
+        }`}
+      >
+        <p className="overflow-hidden text-sm leading-relaxed text-slate-500">{answer}</p>
+      </div>
     </div>
   );
 }

@@ -1,72 +1,17 @@
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import DashboardLayout from "../../components/DashboardLayout.jsx";
 import PublicLayout from "../../components/PublicLayout.jsx";
+import MapView from "../../components/MapView.jsx";
 import Card from "../../components/ui/Card.jsx";
 import StatusBadge from "../../components/ui/StatusBadge.jsx";
 import SearchBar from "../../components/ui/SearchBar.jsx";
-import { BusIcon, MapPinIcon, ClockIcon, InfoIcon, SignalIcon } from "../../components/Icons.jsx";
+import { BusIcon, MapPinIcon, ClockIcon, InfoIcon } from "../../components/Icons.jsx";
 import { ACTIVE_BUSES } from "../../data/sampleData.js";
 import { useAuth } from "../../context/AuthContext.jsx";
-
-function BusMap({ bus, tracking, onTrackLive }) {
-  const animateRef = useRef(null);
-  const pathD = `M ${bus.path.map((p) => `${p.x},${p.y}`).join(" L ")}`;
-
-  return (
-    <div className="relative overflow-hidden rounded-2xl bg-navy-900">
-      <svg viewBox="0 0 620 320" className="h-72 w-full sm:h-96">
-        <path d={pathD} stroke="#41fdfe" strokeWidth="3" strokeDasharray="7 7" fill="none" opacity="0.6" />
-
-        {bus.path.map((point, i) => (
-          <g key={i}>
-            <circle cx={point.x} cy={point.y} r={7} fill="#ffffff" />
-            <text x={point.x} y={point.y - 14} fill="#cbd5e1" fontSize="11" textAnchor="middle">
-              {point.label}
-            </text>
-          </g>
-        ))}
-
-        <circle
-          cx={bus.path[0].x + (bus.path[bus.path.length - 1].x - bus.path[0].x) * (bus.progress / 100)}
-          cy={bus.path[0].y + (bus.path[bus.path.length - 1].y - bus.path[0].y) * (bus.progress / 100)}
-          r="9"
-          fill="#41fdfe"
-        >
-          {tracking && (
-            <animateMotion
-              ref={animateRef}
-              dur="6s"
-              begin="indefinite"
-              fill="freeze"
-              path={pathD}
-            />
-          )}
-        </circle>
-      </svg>
-
-      <div className="absolute bottom-3 left-3 right-3 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-navy-950/70 px-4 py-2.5 text-xs text-navy-100 backdrop-blur">
-        <span className="flex items-center gap-1.5">
-          <SignalIcon size={14} className="text-teal-400" />
-          Simulated tracking data
-        </span>
-        <button
-          onClick={() => {
-            onTrackLive();
-            if (animateRef.current) animateRef.current.beginElement();
-          }}
-          className="font-semibold text-teal-300 hover:underline"
-        >
-          {tracking ? "Replay animation" : "Play animation"}
-        </button>
-      </div>
-    </div>
-  );
-}
 
 function TrackBusContent() {
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState(ACTIVE_BUSES[0].id);
-  const [tracking, setTracking] = useState(false);
 
   const filteredBuses = useMemo(
     () =>
@@ -102,7 +47,9 @@ function TrackBusContent() {
             </div>
 
             <div className="mt-4">
-              <BusMap bus={selectedBus} tracking={tracking} onTrackLive={() => setTracking(true)} />
+              <div className="h-72 overflow-hidden rounded-2xl bg-navy-900 sm:h-96">
+                <MapView />
+              </div>
             </div>
           </Card>
 
@@ -158,10 +105,7 @@ function TrackBusContent() {
               return (
                 <button
                   key={bus.id}
-                  onClick={() => {
-                    setSelectedId(bus.id);
-                    setTracking(false);
-                  }}
+                  onClick={() => setSelectedId(bus.id)}
                   className={`w-full rounded-xl border p-3 text-left transition-colors ${
                     active
                       ? "border-navy-800 bg-navy-50"

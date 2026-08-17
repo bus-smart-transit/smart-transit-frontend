@@ -1,7 +1,3 @@
-// Small, dependency-free SVG icons used across the site.
-// Keeping them as simple inline components means we don't need
-// an icon package, and they inherit color via `currentColor`.
-
 export function BusIcon({ size = 32, className }) {
   return (
     <svg

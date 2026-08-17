@@ -1,9 +1,5 @@
 import { createContext, useContext, useState } from "react";
 
-// This context holds the state of an in-progress booking as the
-// passenger moves through: search -> pick a trip -> pick a seat -> pay.
-// It's just React state (no backend yet) so it resets on page refresh —
-// that's fine for a sample/demo flow like this one.
 const BookingContext = createContext(null);
 
 const initialState = {
