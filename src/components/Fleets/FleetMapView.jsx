@@ -487,12 +487,12 @@ function TrackingRow({ trip }) {
 
   return (
     <article className="rounded-2xl bg-white px-3 py-2 shadow-[0_2px_8px_rgba(0,0,0,0.25)]">
-      <div className="mb-1 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs text-gray-700 sm:text-[0.95rem]">
+      <div className="mb-1 flex items-center justify-between text-[0.95rem] text-gray-700">
         <span>{trip.route}</span>
 
         <span>{trip.busId}</span>
 
-        <span className="text-xs font-semibold text-[#2196f3] sm:text-sm">
+        <span className="text-sm font-semibold text-[#2196f3]">
           {trip.status}
         </span>
       </div>
@@ -744,7 +744,7 @@ export default function FleetMapView({
     origin || [7.0736, 125.6128]
 
   return (
-    <section className="rounded-2xl border border-gray-300 bg-[#efefef] p-3 shadow-sm sm:p-4">
+    <section className="rounded-2xl border border-gray-300 bg-[#efefef] p-4 shadow-sm">
       {/* ==============================================================
           BACK
       ============================================================== */}
@@ -765,7 +765,7 @@ export default function FleetMapView({
             MAP
         ============================================================ */}
 
-        <div className="relative h-[320px] overflow-hidden rounded-xl border border-gray-300 sm:h-[400px] md:h-[500px]">
+        <div className="relative h-[500px] overflow-hidden rounded-xl border border-gray-300">
           <MapContainer
             center={mapCenter}
             zoom={10}
@@ -945,7 +945,7 @@ export default function FleetMapView({
 
           {routeLoading && (
             <div className="absolute inset-0 z-[1000] flex items-center justify-center bg-white/70">
-              <div className="rounded-xl bg-white px-4 py-2.5 text-xs font-semibold text-gray-700 shadow-lg sm:px-5 sm:py-3 sm:text-sm">
+              <div className="rounded-xl bg-white px-5 py-3 text-sm font-semibold text-gray-700 shadow-lg">
                 Loading road route...
               </div>
             </div>
@@ -955,8 +955,8 @@ export default function FleetMapView({
               LIVE GPS
           ========================================================== */}
 
-          <div className="absolute left-2 top-2 z-[1000] flex items-center gap-1.5 rounded-full bg-white px-2.5 py-1.5 text-xs font-semibold text-gray-700 shadow-md sm:left-3 sm:top-3 sm:gap-2 sm:px-3 sm:py-2 sm:text-sm">
-            <span className="h-2 w-2 animate-pulse rounded-full bg-green-500 sm:h-2.5 sm:w-2.5" />
+          <div className="absolute left-3 top-3 z-[1000] flex items-center gap-2 rounded-full bg-white px-3 py-2 text-sm font-semibold text-gray-700 shadow-md">
+            <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-green-500" />
 
             Live GPS
           </div>
@@ -965,18 +965,18 @@ export default function FleetMapView({
               CURRENT BUS
           ========================================================== */}
 
-          <div className="absolute bottom-2 left-2 z-[1000] rounded-xl bg-white px-2.5 py-1.5 shadow-md sm:bottom-3 sm:left-3 sm:px-3 sm:py-2">
-            <div className="flex items-center gap-1.5 sm:gap-2">
-              <span className="text-base sm:text-xl">
+          <div className="absolute bottom-3 left-3 z-[1000] rounded-xl bg-white px-3 py-2 shadow-md">
+            <div className="flex items-center gap-2">
+              <span className="text-xl">
                 🚌
               </span>
 
               <div>
-                <div className="text-[0.65rem] text-gray-500 sm:text-xs">
+                <div className="text-xs text-gray-500">
                   Current Bus
                 </div>
 
-                <div className="text-sm font-bold text-gray-800 sm:text-base">
+                <div className="font-bold text-gray-800">
                   {selectedTrip.busId}
                 </div>
               </div>
@@ -987,12 +987,12 @@ export default function FleetMapView({
               ROUTE INFORMATION
           ========================================================== */}
 
-          <div className="absolute right-2 bottom-2 z-[1000] max-w-[45%] rounded-xl bg-white px-2.5 py-1.5 shadow-md sm:right-3 sm:bottom-3 sm:max-w-none sm:px-3 sm:py-2">
-            <div className="text-[0.65rem] text-gray-500 sm:text-xs">
+          <div className="absolute right-3 bottom-3 z-[1000] rounded-xl bg-white px-3 py-2 shadow-md">
+            <div className="text-xs text-gray-500">
               Route
             </div>
 
-            <div className="truncate text-xs font-semibold text-gray-800 sm:text-sm">
+            <div className="font-semibold text-gray-800">
               {originName}
               {' → '}
               {destinationName}
@@ -1004,7 +1004,7 @@ export default function FleetMapView({
           ========================================================== */}
 
           {routeError && (
-            <div className="absolute right-2 top-2 z-[1000] max-w-[160px] rounded-lg bg-white px-2.5 py-1.5 text-[0.65rem] text-red-600 shadow sm:right-3 sm:top-3 sm:max-w-[220px] sm:px-3 sm:py-2 sm:text-xs">
+            <div className="absolute right-3 top-3 z-[1000] max-w-[220px] rounded-lg bg-white px-3 py-2 text-xs text-red-600 shadow">
               Unable to load the road route for
               this trip.
             </div>
@@ -1021,11 +1021,11 @@ export default function FleetMapView({
           ========================================================== */}
 
           <div className="mb-3 flex items-center justify-between">
-            <h3 className="text-lg font-bold text-gray-900 sm:text-xl md:text-2xl">
+            <h3 className="text-[2rem] font-bold text-gray-900">
               Live Tracking
             </h3>
 
-            <span className="rounded-full bg-[#d8dadd] px-3 py-1 text-xs font-semibold text-gray-700 sm:px-4 sm:text-sm md:px-5 md:text-base">
+            <span className="rounded-full bg-[#d8dadd] px-5 py-1 text-xl font-semibold text-gray-700">
               Status
             </span>
           </div>
@@ -1040,7 +1040,7 @@ export default function FleetMapView({
               OTHER TRIPS
           ========================================================== */}
 
-          <h4 className="mb-3 text-lg font-bold text-gray-900 sm:text-xl md:text-2xl">
+          <h4 className="mb-3 text-[2rem] font-bold text-gray-900">
             Other Trips
           </h4>
 

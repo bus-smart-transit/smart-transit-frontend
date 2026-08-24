@@ -12,23 +12,23 @@ export default function Login({ onSignIn }) {
   }
 
   return (
-    <div className="flex min-h-screen flex-col md:flex-row">
-      <aside className="flex flex-col items-center justify-center bg-[#243b72] px-6 py-10 text-center text-white md:w-1/2 md:px-12 md:py-0">
-        <h1 className="mb-2 text-3xl font-bold sm:text-4xl md:text-5xl">Bus Operator</h1>
-        <p className="mb-6 text-xs tracking-wide text-white/90 sm:text-sm md:mb-16">
+    <div className="flex min-h-screen">
+      <aside className="flex w-1/2 flex-col items-center justify-center bg-[#243b72] px-12 text-center text-white">
+        <h1 className="mb-2 text-5xl font-bold">Bus Operator</h1>
+        <p className="mb-16 text-sm tracking-wide text-white/90">
           FLEET MANAGEMENT: Bus Operator PORTAL
         </p>
-        <Bus className="h-20 w-20 text-white/90 sm:h-28 sm:w-28 md:h-40 md:w-40" strokeWidth={1.25} />
+        <Bus className="h-40 w-40 text-white/90" strokeWidth={1.25} />
       </aside>
 
-      <main className="flex flex-1 items-center justify-center bg-[#f4f4f4] px-6 py-10 sm:px-10 md:w-1/2 md:px-16 md:py-0">
+      <main className="flex w-1/2 items-center justify-center bg-[#f4f4f4] px-16">
         <div className="w-full max-w-md">
-          <h2 className="mb-2 text-2xl font-bold text-gray-900 sm:text-3xl md:text-4xl">Sign In</h2>
-          <p className="mb-8 text-sm text-gray-600 md:mb-10">
+          <h2 className="mb-2 text-4xl font-bold text-gray-900">Sign In</h2>
+          <p className="mb-10 text-sm text-gray-600">
             Please enter the credentials provided by your Bus Operator administrator.
           </p>
 
-          <form onSubmit={handleSubmit} className="space-y-5 md:space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-6">
             <label className="block">
               <span className="mb-2 block text-sm font-semibold text-gray-800">
                 Bus Operator ID
