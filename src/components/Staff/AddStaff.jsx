@@ -41,11 +41,11 @@ export default function AddStaffModal({ onClose, onAdd, nextStaffId }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
-        <div className="mb-6 flex items-center justify-between">
+      <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-5 shadow-xl sm:p-6">
+        <div className="mb-5 flex items-center justify-between sm:mb-6">
           <div className="flex items-center gap-2">
             <User className="h-5 w-5 text-gray-700" />
-            <h2 className="text-xl font-bold text-gray-800">Add New Staff</h2>
+            <h2 className="text-lg font-bold text-gray-800 sm:text-xl">Add New Staff</h2>
           </div>
           <button
             type="button"
@@ -133,7 +133,7 @@ export default function AddStaffModal({ onClose, onAdd, nextStaffId }) {
             />
           </label>
 
-          <div className="flex justify-end gap-3 pt-2">
+          <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end">
             <button
               type="button"
               onClick={onClose}
@@ -143,7 +143,7 @@ export default function AddStaffModal({ onClose, onAdd, nextStaffId }) {
             </button>
             <button
               type="submit"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-5 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50"
+              className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-gray-300 bg-white px-5 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50"
             >
               <Check className="h-4 w-4" />
               Save Staff
