@@ -3,7 +3,6 @@ import {
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
-  Download,
   TrendingUp,
   TrendingDown,
   Minus,
@@ -35,8 +34,12 @@ function adherenceTone(value) {
   }
 }
 
+// ---- trend badge ----------------------------------------------------------
+
 function TrendBadge({ trend }) {
-  if (trend === undefined || trend === null) return null
+  if (trend === undefined || trend === null) {
+    return null
+  }
 
   const isUp = trend > 0
   const isFlat = trend === 0
@@ -59,7 +62,9 @@ function TrendBadge({ trend }) {
     >
       <Icon size={16} strokeWidth={2.5} />
 
-      {isFlat ? '0%' : `${isUp ? '+' : ''}${trend}%`}
+      {isFlat
+        ? '0%'
+        : `${isUp ? '+' : ''}${trend}%`}
     </span>
   )
 }
@@ -90,26 +95,23 @@ function RouteStatCard({ stat }) {
   )
 }
 
-// ---- Peak Hours -----------------------------------------------------------
+// ---- peak hours -----------------------------------------------------------
 
-function PeakHoursCard({ label = 'Peak Hours' }) {
-  const times = ['6-8 AM', '4-6 PM']
-
+function PeakHoursCard() {
   return (
     <article className="rounded-xl bg-white px-5 py-4 shadow-sm ring-1 ring-gray-100">
       <p className="mb-3 text-[1.05rem] font-bold tracking-tight text-[#9ca3af]">
-        {label}
+        Peak Hours
       </p>
 
       <div className="flex flex-col gap-2">
-        {times.map((time) => (
-          <span
-            key={time}
-            className="w-fit rounded-full bg-gray-100 px-3 py-1.5 text-[0.9rem] font-semibold text-gray-700"
-          >
-            {time}
-          </span>
-        ))}
+        <span className="w-fit rounded-full bg-gray-100 px-3 py-1.5 text-[0.9rem] font-semibold text-gray-700">
+          6-8 AM
+        </span>
+
+        <span className="w-fit rounded-full bg-gray-100 px-3 py-1.5 text-[0.9rem] font-semibold text-gray-700">
+          4-6 PM
+        </span>
       </div>
     </article>
   )
@@ -133,7 +135,9 @@ function RouteAdherenceTable({ rows }) {
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
 
-    if (!q) return parsed
+    if (!q) {
+      return parsed
+    }
 
     return parsed.filter(
       (r) =>
@@ -156,11 +160,15 @@ function RouteAdherenceTable({ rows }) {
   }, [filtered, sortDir])
 
   const toggleSort = () => {
-    setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    setSortDir((current) =>
+      current === 'asc' ? 'desc' : 'asc'
+    )
   }
 
   return (
     <section className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-gray-100">
+
+      {/* Header */}
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-[1.5rem] font-bold text-gray-900">
@@ -172,6 +180,7 @@ function RouteAdherenceTable({ rows }) {
           </p>
         </div>
 
+        {/* Search only - Export removed */}
         <div className="flex items-center gap-2">
           <input
             type="text"
@@ -180,21 +189,16 @@ function RouteAdherenceTable({ rows }) {
             placeholder="Search driver, bus, trip"
             className="w-48 rounded-lg border border-gray-200 px-3 py-1.5 text-[0.9rem] text-gray-700 outline-none focus:border-[#0f8eb1] focus:ring-1 focus:ring-[#0f8eb1]"
           />
-
-          <button
-            type="button"
-            className="flex items-center gap-1.5 rounded-lg bg-[#0f8eb1] px-3 py-1.5 text-[0.9rem] font-semibold text-white transition-colors hover:bg-[#0c7794]"
-          >
-            <Download size={15} />
-            Export
-          </button>
         </div>
       </div>
 
+      {/* Table */}
       <div className="overflow-x-auto">
         <table className="w-full min-w-[420px] border-collapse text-[1rem]">
+
           <thead>
             <tr className="border-b border-gray-200 text-left text-gray-500">
+
               <th className="px-3 py-2 text-[0.85rem] font-semibold uppercase tracking-wide">
                 Driver
               </th>
@@ -224,6 +228,7 @@ function RouteAdherenceTable({ rows }) {
                   )}
                 </button>
               </th>
+
             </tr>
           </thead>
 
@@ -270,10 +275,13 @@ function RouteAdherenceTable({ rows }) {
               </tr>
             )}
           </tbody>
+
         </table>
       </div>
 
+      {/* Legend */}
       <div className="mt-4 flex items-center gap-4 text-[0.85rem] text-gray-500">
+
         <span className="flex items-center gap-1.5">
           <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
           90%+
@@ -288,6 +296,7 @@ function RouteAdherenceTable({ rows }) {
           <span className="h-2.5 w-2.5 rounded-full bg-rose-500" />
           Below 80%
         </span>
+
       </div>
     </section>
   )
@@ -296,10 +305,13 @@ function RouteAdherenceTable({ rows }) {
 // ---- peak demand hours ----------------------------------------------------
 
 function PeakDemandHours({ hours }) {
-  const max = Math.max(...hours.map((h) => h.value))
+  const max = Math.max(
+    ...hours.map((h) => h.value)
+  )
 
   return (
     <section className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-gray-100">
+
       <div className="mb-4">
         <h2 className="text-[1.5rem] font-bold text-gray-900">
           Peak Demand Hours
@@ -319,6 +331,8 @@ function PeakDemandHours({ hours }) {
               key={hour.label}
               className="grid grid-cols-[4.5rem_1fr_3.5rem] items-center gap-3"
             >
+
+              {/* Time */}
               <p
                 className={`text-[0.95rem] ${
                   isPeak
@@ -329,6 +343,7 @@ function PeakDemandHours({ hours }) {
                 {hour.label}
               </p>
 
+              {/* Progress bar */}
               <div className="h-3.5 rounded-full bg-[#e9ebee]">
                 <div
                   className={`h-full rounded-full ${
@@ -342,6 +357,7 @@ function PeakDemandHours({ hours }) {
                 />
               </div>
 
+              {/* Percentage */}
               <p
                 className={`text-right text-[0.9rem] tabular-nums ${
                   isPeak
@@ -352,6 +368,7 @@ function PeakDemandHours({ hours }) {
                 {hour.passengers ??
                   `${Math.round(hour.value * 100)}%`}
               </p>
+
             </div>
           )
         })}
@@ -370,8 +387,8 @@ export default function RoutesPanel({
   return (
     <section className="rounded-2xl bg-[#efefef] p-4">
 
-      {/* Header */}
-      <header className="mb-4 flex items-center justify-between rounded-xl bg-white px-5 py-4 shadow-sm ring-1 ring-gray-100">
+
+      <header className="mb-4 flex items-center rounded-xl bg-white px-5 py-4 shadow-sm ring-1 ring-gray-100">
         <div>
           <h1 className="text-[1.75rem] font-bold text-gray-900">
             Analytical Reports
@@ -381,22 +398,15 @@ export default function RoutesPanel({
             Route performance and demand insights
           </p>
         </div>
-
-        <button
-          type="button"
-          className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-[0.9rem] font-semibold text-gray-600 transition-colors hover:bg-gray-50"
-        >
-          <Download size={15} />
-          Export report
-        </button>
       </header>
 
-      {/* Top Statistics */}
+
       <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
 
-        {/* Normal statistics */}
         {routeStats
-          .filter((stat) => stat.label !== 'Peak Hours')
+          .filter(
+            (stat) => stat.label !== 'Peak Hours'
+          )
           .map((stat) => (
             <RouteStatCard
               key={stat.label}
@@ -404,12 +414,12 @@ export default function RoutesPanel({
             />
           ))}
 
-        {/* Only one Peak Hours card */}
-        <PeakHoursCard label="Peak Hours" />
+        {/* Peak Hours - only one card */}
+        <PeakHoursCard />
 
       </div>
 
-      {/* Main Report Sections */}
+
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.2fr_1fr]">
 
         <RouteAdherenceTable
@@ -421,6 +431,7 @@ export default function RoutesPanel({
         />
 
       </div>
+
     </section>
   )
 }
@@ -436,12 +447,14 @@ export function RoutesPanelDemo() {
       trend: 8,
       highlight: false,
     },
+
     {
       label: 'Avg Daily Passengers',
       value: 400,
       trend: 3,
       highlight: false,
     },
+
     {
       label: 'Route Adherence',
       value: '90%',
@@ -457,30 +470,35 @@ export function RoutesPanelDemo() {
       trip: 'Boston',
       adherence: '78%',
     },
+
     {
       driver: 'J. Licong',
       busId: 'B-107',
       trip: 'Cateel',
       adherence: '80%',
     },
+
     {
       driver: 'E. Ang',
       busId: 'B-110',
       trip: 'Digos',
       adherence: '82%',
     },
+
     {
       driver: 'J. Galo',
       busId: 'B-105',
       trip: 'Mati',
       adherence: '88%',
     },
+
     {
       driver: 'J. Maunas',
       busId: 'B-102',
       trip: 'Carmen',
       adherence: '90%',
     },
+
     {
       driver: 'R. Ababa',
       busId: 'B-103',
@@ -495,41 +513,49 @@ export function RoutesPanelDemo() {
       value: 0.8,
       passengers: '80%',
     },
+
     {
       label: '6-8 AM',
       value: 1.0,
       passengers: '100%',
     },
+
     {
       label: '8-10 AM',
       value: 0.95,
       passengers: '95%',
     },
+
     {
       label: '10-12 PM',
       value: 0.83,
       passengers: '83%',
     },
+
     {
       label: '12-2 PM',
       value: 0.66,
       passengers: '66%',
     },
+
     {
       label: '2-4 PM',
       value: 0.76,
       passengers: '76%',
     },
+
     {
       label: '4-6 PM',
       value: 1.0,
       passengers: '100%',
     },
+
     {
       label: '6-8 PM',
       value: 0.9,
       passengers: '90%',
     },
+
     {
       label: '8-10 PM',
       value: 0.7,
