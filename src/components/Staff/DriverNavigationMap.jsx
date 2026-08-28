@@ -22,7 +22,7 @@ export default function DriverNavigationMap({ trip, stops, lastGpsRef }) {
   const mapContainer = useRef(null);
   const mapRef       = useRef(null);
   const mapLibRef    = useRef(null);
-  const driverMarkerRef   = useRef(null);
+  const driverSourceAddedRef = useRef(false);
   const routeDrawnRef     = useRef(false);
   const gpsIntervalRef    = useRef(null);
 
@@ -186,49 +186,73 @@ export default function DriverNavigationMap({ trip, stops, lastGpsRef }) {
     })();
   }, [mapReady, routeId]);
 
-  // ── 3. Driver position marker (fires once map is ready) ───────────────────
+  // ── 3. Driver position (GeoJSON circle layer, updated every 1 s) ──────────
+  // Reading lastGpsRef at 1-second granularity is smooth because
+  // watchPosition fires every few hundred ms on modern mobile — the ref is
+  // always fresh, so 1 s intervals produce near-continuous movement.
   useEffect(() => {
     if (!mapReady) return;
-    const map        = mapRef.current;
-    const maplibregl = mapLibRef.current;
-    if (!map || !maplibregl) return;
+    const map = mapRef.current;
+    if (!map) return;
 
-    const placeOrMove = () => {
+    const DRIVER_POS_SOURCE = 'driver-position';
+    const DRIVER_POS_PULSE  = 'driver-position-pulse';
+    const DRIVER_POS_DOT    = 'driver-position-dot';
+
+    const updatePosition = () => {
       const pos = lastGpsRef?.current;
       if (!pos || !Number.isFinite(pos.latitude) || !Number.isFinite(pos.longitude)) return;
 
-      const lngLat = [Number(pos.longitude), Number(pos.latitude)];
+      const coords  = [Number(pos.longitude), Number(pos.latitude)];
+      const geoData = {
+        type: 'Feature',
+        properties: {},
+        geometry: { type: 'Point', coordinates: coords },
+      };
 
-      if (driverMarkerRef.current) {
-        driverMarkerRef.current.setLngLat(lngLat);
-        map.panTo(lngLat, { duration: 400 });
-      } else {
-        const el = document.createElement('div');
-        el.innerHTML = `
-          <div style="
-            width:20px;height:20px;border-radius:50%;
-            background:#22c55e;border:3px solid #fff;
-            box-shadow:0 0 0 4px rgba(34,197,94,0.3);
-            animation:driverPulse 2s infinite;
-          "></div>
-          <style>
-            @keyframes driverPulse{
-              0%,100%{box-shadow:0 0 0 4px rgba(34,197,94,0.3)}
-              50%{box-shadow:0 0 0 8px rgba(34,197,94,0.1)}
-            }
-          </style>`;
-        driverMarkerRef.current = new maplibregl.Marker({ element: el, anchor: 'center' })
-          .setLngLat(lngLat)
-          .setPopup(new maplibregl.Popup({ offset: 22 }).setHTML(
-            '<p style="margin:0;font-size:12px;font-weight:700;color:#0f172a;">Your Position</p>'
-          ))
-          .addTo(map);
-        map.flyTo({ center: lngLat, zoom: 13, duration: 800 });
+      if (driverSourceAddedRef.current) {
+        // Update in place — no DOM churn, no teleport flicker.
+        const src = map.getSource(DRIVER_POS_SOURCE);
+        if (src) {
+          src.setData(geoData);
+          map.panTo(coords, { duration: 900, easing: (t) => t * (2 - t) });
+        }
+      } else if (map.isStyleLoaded()) {
+        map.addSource(DRIVER_POS_SOURCE, { type: 'geojson', data: geoData });
+
+        // Outer pulse ring
+        map.addLayer({
+          id: DRIVER_POS_PULSE,
+          type: 'circle',
+          source: DRIVER_POS_SOURCE,
+          paint: {
+            'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 18, 16, 26],
+            'circle-color': 'rgba(34,197,94,0.12)',
+            'circle-stroke-color': 'rgba(34,197,94,0.5)',
+            'circle-stroke-width': 2,
+          },
+        });
+
+        // Inner position dot
+        map.addLayer({
+          id: DRIVER_POS_DOT,
+          type: 'circle',
+          source: DRIVER_POS_SOURCE,
+          paint: {
+            'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 7, 16, 11],
+            'circle-color': '#22c55e',
+            'circle-stroke-color': '#ffffff',
+            'circle-stroke-width': 3,
+          },
+        });
+
+        driverSourceAddedRef.current = true;
+        map.flyTo({ center: coords, zoom: 13, duration: 800 });
       }
     };
 
-    placeOrMove();
-    gpsIntervalRef.current = setInterval(placeOrMove, 4000);
+    updatePosition();
+    gpsIntervalRef.current = setInterval(updatePosition, 1000);
     return () => clearInterval(gpsIntervalRef.current);
   }, [mapReady, lastGpsRef]);
 
@@ -238,6 +262,9 @@ export default function DriverNavigationMap({ trip, stops, lastGpsRef }) {
 
     const map = mapRef.current;
     if (map) {
+      if (map.getLayer('driver-position-dot'))   map.removeLayer('driver-position-dot');
+      if (map.getLayer('driver-position-pulse'))  map.removeLayer('driver-position-pulse');
+      if (map.getSource('driver-position'))       map.removeSource('driver-position');
       if (map.getLayer(DRIVER_ROUTE_STOPS_LABEL_LAYER_ID)) map.removeLayer(DRIVER_ROUTE_STOPS_LABEL_LAYER_ID);
       if (map.getLayer(DRIVER_ROUTE_STOPS_LAYER_ID)) map.removeLayer(DRIVER_ROUTE_STOPS_LAYER_ID);
       if (map.getSource(DRIVER_ROUTE_STOPS_SOURCE_ID)) map.removeSource(DRIVER_ROUTE_STOPS_SOURCE_ID);
@@ -246,8 +273,9 @@ export default function DriverNavigationMap({ trip, stops, lastGpsRef }) {
     }
 
     mapRef.current?.remove();
-    mapRef.current       = null;
+    mapRef.current        = null;
     routeDrawnRef.current = false;
+    driverSourceAddedRef.current = false;
   }, []);
 
   if (mapError) {

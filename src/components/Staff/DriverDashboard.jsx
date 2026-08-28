@@ -9,6 +9,7 @@ import {
   Clock3,
   Gauge,
   LogOut,
+  Map,
   Navigation,
   RefreshCw,
   Route,
@@ -18,6 +19,7 @@ import {
 import StaffService from '../../api/StaffService/StaffService';
 import PairingScreen from './PairingScreen';
 import DriverNavigationMap from './DriverNavigationMap';
+import { haversineM } from '../../utils/geo';
 
 const STATUS_COLOR = {
   scheduled: '#64748b',
@@ -210,13 +212,12 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [actionMsg, setActionMsg] = useState('');
-  const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
-  const [saving2fa, setSaving2fa] = useState(false);
   const [gpsActive, setGpsActive] = useState(false);
   const isPaired = pairing?.paired === true;
   const pairingReason = pairing?.reason || 'Waiting for pairing with your Conductor before enabling session-synced features.';
   const hasActiveTrip = isCurrentOrSameDayTrip(trip);
   const didBootstrap = useRef(false);
+  const stopsLoadedRef = useRef(false);
   const upcomingTrip = getUpcomingTrip(assignedTrips);
   const gpsIntervalRef = useRef(null);
   const gpsWatchRef = useRef(null);
@@ -235,23 +236,6 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     ? Math.min(100, Math.round((currentPassengers / currentCapacity) * 100))
     : (trip?.status === 'completed' ? 100 : 35);
 
-  const handleTwoFactorToggle = async (event) => {
-    const enabled = event.target.checked;
-    setTwoFactorEnabled(enabled);
-    setSaving2fa(true);
-    setActionMsg('');
-
-    try {
-      await StaffService.setTwoFactorPreference(enabled);
-      setActionMsg(enabled ? '2FA enabled for your account.' : '2FA disabled for your account.');
-    } catch (err) {
-      setTwoFactorEnabled(!enabled);
-      setActionMsg(err?.message || 'Failed to update 2FA preference.');
-    } finally {
-      setSaving2fa(false);
-    }
-  };
-
   const loadData = useCallback(async () => {
     setLoading(true);
     setError('');
@@ -261,13 +245,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
         StaffService.getCurrentTrip(),
         StaffService.getDriverTrips(),
       ]);
-      if (profileRes.status === 'fulfilled') {
-        const nextProfile = profileRes.value?.data;
-        setProfile(nextProfile);
-        if (typeof nextProfile?.user?.two_factor_enabled === 'boolean') {
-          setTwoFactorEnabled(nextProfile.user.two_factor_enabled);
-        }
-      }
+      if (profileRes.status === 'fulfilled') setProfile(profileRes.value?.data);
       if (tripRes.status === 'fulfilled') setTrip(tripRes.value?.data);
       if (tripsRes.status === 'fulfilled') setAssignedTrips(tripsRes.value?.data ?? []);
     } catch {
@@ -280,6 +258,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   const loadStops = useCallback(async () => {
     if (!isPaired || !hasActiveTrip) {
       setStops([]);
+      stopsLoadedRef.current = false;
       return;
     }
     try {
@@ -290,6 +269,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
       } else {
         setStops(payload?.stops ?? []);
       }
+      stopsLoadedRef.current = true;
     } catch (err) {
       setError(err.message);
     }
@@ -378,6 +358,8 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
         await StaffService.updateLocation(
           lastGpsRef.current.latitude,
           lastGpsRef.current.longitude,
+          lastGpsRef.current.heading ?? null,
+          lastGpsRef.current.speed_kmh ?? null,
         );
         lastSentGpsRef.current = { latitude: lastGpsRef.current.latitude, longitude: lastGpsRef.current.longitude };
       } catch {
@@ -395,13 +377,18 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   }, [hasActiveTrip, isPaired]);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      if (['journey', 'navigation', 'trip', 'dashboard'].includes(activeTab) && hasActiveTrip && isPaired) {
-        void loadStops();
-      }
-    }, 0);
-
-    return () => clearTimeout(timer);
+    // Fetch stops once per active trip — not on every tab switch.
+    // Re-fetch is triggered explicitly by handleAcknowledgeStop.
+    if (!hasActiveTrip || !isPaired) {
+      stopsLoadedRef.current = false;
+      return;
+    }
+    if (stopsLoadedRef.current) return;
+    if (['journey', 'navigation', 'trip', 'dashboard'].includes(activeTab)) {
+      const timer = setTimeout(() => { void loadStops(); }, 0);
+      return () => clearTimeout(timer);
+    }
+    return undefined;
   }, [activeTab, hasActiveTrip, isPaired, loadStops]);
 
   // ── Alighting proximity check (Feature 4) ─────────────────────────────────
@@ -415,14 +402,6 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     }
 
     const PROXIMITY_M = 500;
-    const haversineM = (lat1, lng1, lat2, lng2) => {
-      const R = 6371000;
-      const dLat = (lat2 - lat1) * Math.PI / 180;
-      const dLng = (lng2 - lng1) * Math.PI / 180;
-      const a = Math.sin(dLat / 2) ** 2
-        + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
-      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    };
 
     const check = () => {
       const pos = lastGpsRef.current;
@@ -491,6 +470,8 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
       await StaffService.updateLocation(
         lastGpsRef.current.latitude,
         lastGpsRef.current.longitude,
+        lastGpsRef.current.heading ?? null,
+        lastGpsRef.current.speed_kmh ?? null,
       );
     } catch {
       // Silent — don't surface network errors on stop acknowledge
@@ -1137,24 +1118,6 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                 <div className="flex items-center justify-between"><span className="text-slate-500">Route</span><strong className="text-slate-100">{pin?.route_name || currentRoute?.route_name || '-'}</strong></div>
                 <div className="flex items-center justify-between"><span className="text-slate-500">Fleet</span><strong className="font-data text-slate-100">{pin?.fleet_plate_number || currentFleet?.plate_number || '-'}</strong></div>
                 <div className="flex items-center justify-between"><span className="text-slate-500">Date</span><strong className="font-data text-slate-100">{formatDateTime(pin?.pin_date || trip?.trip_date)}</strong></div>
-              </div>
-
-              <div className="mt-5 rounded-xl border border-slate-800 bg-slate-950 p-3">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-semibold text-slate-100">Login 2FA</p>
-                    <p className="text-xs text-slate-500">Require a 6-digit OTP at sign-in.</p>
-                  </div>
-                  <label className="inline-flex items-center gap-2 text-xs text-slate-300">
-                    <input
-                      type="checkbox"
-                      checked={twoFactorEnabled}
-                      onChange={handleTwoFactorToggle}
-                      disabled={saving2fa}
-                    />
-                    {twoFactorEnabled ? 'Enabled' : 'Disabled'}
-                  </label>
-                </div>
               </div>
             </article>
           </section>

@@ -101,8 +101,11 @@ class StaffService extends BaseService {
     return await this.request(`/${role}/pairing-status`, 'GET');
   }
 
-  async updateLocation(latitude, longitude) {
-    return await this.request('/driver/location', 'POST', { latitude, longitude });
+  async updateLocation(latitude, longitude, heading = null, speedKmh = null) {
+    const payload = { latitude, longitude };
+    if (Number.isFinite(heading)) payload.heading = heading;
+    if (Number.isFinite(speedKmh)) payload.speed_kmh = speedKmh;
+    return await this.request('/driver/location', 'POST', payload);
   }
 
   // ── Conductor ──

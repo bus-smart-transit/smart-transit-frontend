@@ -3,7 +3,7 @@ import { Bus, Clock3, LocateFixed, MapPin, Route, Ruler, X } from 'lucide-react'
 import "maplibre-gl/dist/maplibre-gl.css";
 import { loadMapLib } from './mapDependencies';
 import PassengerService from '../../api/PassengerService/PassengerService';
-import { haversineM } from '../../utils/geo';
+import { haversineM, lerp, lerpAngle } from '../../utils/geo';
 
 export default function MapView({ role = "passenger" }) {
   const mapContainer = useRef(null);
@@ -11,7 +11,18 @@ export default function MapView({ role = "passenger" }) {
   const mapLibRef = useRef(null);
   const currentMarker = useRef(null);
   const destinationMarker = useRef(null);
-  const fleetMarkersRef = useRef([]);
+  // fleet_id → { marker: MapLibre.Marker, innerEl: HTMLElement }
+  const fleetMarkersMapRef = useRef(new Map());
+  // fleet_id → { lat, lng, heading } — positions at interpolation start
+  const fleetPrevRef = useRef({});
+  // fleet_id → { lat, lng, heading } — latest polled positions
+  const fleetNextRef = useRef({});
+  // Timestamp when the last poll completed (used to compute lerp progress)
+  const interpStartRef = useRef(0);
+  // requestAnimationFrame handle
+  const rafIdRef = useRef(null);
+  // Latest row data per fleet (read inside stable click handlers)
+  const fleetDataRef = useRef({});
   const nearestFleetMarkerRef = useRef(null);
   const routeStopMarkersRef = useRef([]);
   const routePolylineAddedRef = useRef(false);
@@ -30,8 +41,12 @@ export default function MapView({ role = "passenger" }) {
   const [zoom] = useState(12);
 
   const clearFleetMarkers = useCallback(() => {
-    fleetMarkersRef.current.forEach((marker) => marker.remove());
-    fleetMarkersRef.current = [];
+    cancelAnimationFrame(rafIdRef.current);
+    fleetMarkersMapRef.current.forEach(({ marker }) => marker.remove());
+    fleetMarkersMapRef.current.clear();
+    fleetPrevRef.current = {};
+    fleetNextRef.current = {};
+    fleetDataRef.current = {};
   }, []);
 
   const clearRouteStopMarkers = useCallback(() => {
@@ -155,63 +170,152 @@ export default function MapView({ role = "passenger" }) {
 
     try {
       const res = await PassengerService.getFleetLocations();
-      const locations = res?.data ?? [];
+      const locations = (res?.data ?? []).filter(
+        (row) => Number.isFinite(Number(row?.longitude)) && Number.isFinite(Number(row?.latitude))
+      );
       setFleetLocations(locations);
 
-      clearFleetMarkers();
+      const POLL_MS = 12000;
+      const now = Date.now();
+      const elapsed = now - interpStartRef.current;
+      const tSnapshot = Math.min(1, elapsed / POLL_MS);
 
-      const makeBusMarkerEl = (status) => {
-        const el = document.createElement('div');
-        const isActive = ['departed', 'in-progress'].includes(status);
-        const bg = isActive ? '#0ea5e9' : '#64748b';
-        el.innerHTML = `
-          <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 36 36">
-            <circle cx="18" cy="18" r="17" fill="${bg}" stroke="#fff" stroke-width="2"/>
-            <text x="18" y="24" text-anchor="middle" font-size="18" fill="#fff">🚌</text>
-          </svg>`;
-        el.style.cursor = 'pointer';
-        el.style.width = '36px';
-        el.style.height = '36px';
-        return el;
-      };
+      // ── Step 1: snapshot current animated position as the new prev ──────────
+      const newPrev = {};
+      for (const [fleetId, { marker }] of fleetMarkersMapRef.current) {
+        const p = fleetPrevRef.current[fleetId];
+        const n = fleetNextRef.current[fleetId];
+        const lngLat = marker.getLngLat();
+        newPrev[fleetId] = p && n ? {
+          lat:     lerp(p.lat, n.lat, tSnapshot),
+          lng:     lerp(p.lng, n.lng, tSnapshot),
+          heading: lerpAngle(p.heading, n.heading, tSnapshot),
+        } : { lat: lngLat.lat, lng: lngLat.lng, heading: p?.heading ?? null };
+      }
+      fleetPrevRef.current = newPrev;
 
-      fleetMarkersRef.current = locations
-        .filter((row) => Number.isFinite(Number(row?.longitude)) && Number.isFinite(Number(row?.latitude)))
-        .map((row) => {
-          const isActive = ['departed', 'in-progress'].includes(row?.trip_status);
-          const el = makeBusMarkerEl(row?.trip_status);
-          el.addEventListener('click', () => {
-            setSelectedFleetId(row?.fleet_id ?? null);
+      // ── Step 2: set new targets + update fleet data ref ───────────────────
+      const newNext = {};
+      for (const row of locations) {
+        newNext[row.fleet_id] = {
+          lat:     Number(row.latitude),
+          lng:     Number(row.longitude),
+          heading: Number.isFinite(Number(row.heading)) ? Number(row.heading) : null,
+        };
+        // Seed prev on first appearance so lerp starts from correct spot
+        if (!fleetPrevRef.current[row.fleet_id]) {
+          fleetPrevRef.current[row.fleet_id] = newNext[row.fleet_id];
+        }
+        fleetDataRef.current[row.fleet_id] = row;
+      }
+      fleetNextRef.current = newNext;
+      interpStartRef.current = now;
+
+      // ── Step 3: create/update markers ──────────────────────────────────────
+      const activeIds = new Set(locations.map((r) => r.fleet_id));
+
+      for (const row of locations) {
+        const fleetId  = row.fleet_id;
+        const isActive = ['departed', 'in-progress'].includes(row?.trip_status);
+        const bg       = isActive ? '#0ea5e9' : '#64748b';
+
+        const speedLabel   = Number.isFinite(Number(row?.speed_kmh))
+          ? `${Number(row.speed_kmh).toFixed(0)} km/h` : 'Speed N/A';
+        const headingLabel = Number.isFinite(Number(row?.heading))
+          ? ` · Heading ${Number(row.heading).toFixed(0)}°` : '';
+
+        const makePopupHtml = (r) => `
+          <div style="color:#0f172a;font-family:sans-serif;padding:6px;min-width:130px;">
+            <p style="margin:0;font-weight:700;font-size:13px;">🚌 ${r?.plate_number || 'Bus ' + r?.fleet_id || '-'}</p>
+            <p style="margin:4px 0 0;font-size:11px;color:#64748b;text-transform:capitalize;">Status: ${r?.trip_status || 'active'}</p>
+            <p style="margin:2px 0 0;font-size:11px;color:#64748b;">${speedLabel}${headingLabel}</p>
+            <p style="margin:4px 0 0;font-size:11px;color:#0ea5e9;cursor:pointer;"
+               onclick="this.closest('.maplibregl-popup').style.display='none'">Click bus to see route →</p>
+          </div>`;
+
+        if (!fleetMarkersMapRef.current.has(fleetId)) {
+          // Build the outer element (MapLibre positions this)
+          const outerEl = document.createElement('div');
+          outerEl.style.cssText = 'width:36px;height:36px;cursor:pointer;';
+
+          // Inner element rotates independently for heading.
+          // SVG points "up" (north); icon-rotate maps 0°=north, 90°=east, etc.
+          const innerEl = document.createElement('div');
+          innerEl.style.cssText = 'width:36px;height:36px;';
+          innerEl.innerHTML = `
+            <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 36 36">
+              <circle cx="18" cy="18" r="16" fill="${bg}" stroke="#fff" stroke-width="2.5"/>
+              <polygon points="18,5 12,14 24,14" fill="rgba(255,255,255,0.9)"/>
+              <rect x="10" y="14" width="16" height="11" rx="1.5"
+                fill="rgba(255,255,255,0.2)" stroke="rgba(255,255,255,0.65)" stroke-width="1"/>
+              <rect x="11" y="15.5" width="5" height="3.5" rx="0.5" fill="rgba(255,255,255,0.75)"/>
+              <rect x="20" y="15.5" width="5" height="3.5" rx="0.5" fill="rgba(255,255,255,0.75)"/>
+            </svg>`;
+          outerEl.appendChild(innerEl);
+
+          // Click handler reads from the live ref so it never captures stale data.
+          outerEl.addEventListener('click', () => {
+            const currentRow = fleetDataRef.current[fleetId];
+            setSelectedFleetId(fleetId);
             setShowSidebar(true);
-            // Draw route polyline when a fleet is clicked (Feature 1)
-            const routeId = row?.route_id ?? row?.fleet_route?.route_id ?? null;
+            const routeId = currentRow?.route_id ?? currentRow?.fleet_route?.route_id ?? null;
             if (routeId) void drawFleetRoute(routeId);
           });
-          void isActive; // used indirectly via makeBusMarkerEl colour
-          const speedLabel = Number.isFinite(Number(row?.speed_kmh))
-            ? `${Number(row.speed_kmh).toFixed(0)} km/h`
-            : 'Speed N/A';
-          const headingLabel = Number.isFinite(Number(row?.heading))
-            ? `Heading ${Number(row.heading).toFixed(0)}°`
-            : '';
-          return new maplibregl.Marker({ element: el })
-            .setLngLat([Number(row.longitude), Number(row.latitude)])
-            .setPopup(
-              new maplibregl.Popup({ offset: 20 }).setHTML(
-                `<div style="color:#0f172a;font-family:sans-serif;padding:6px;min-width:130px;">
-                  <p style="margin:0;font-weight:700;font-size:13px;">🚌 ${row?.plate_number || 'Bus ' + row?.fleet_id || '-'}</p>
-                  <p style="margin:4px 0 0;font-size:11px;color:#64748b;text-transform:capitalize;">Status: ${row?.trip_status || 'active'}</p>
-                  <p style="margin:2px 0 0;font-size:11px;color:#64748b;">${speedLabel}${headingLabel ? ' · ' + headingLabel : ''}</p>
-                  <p style="margin:4px 0 0;font-size:11px;color:#0ea5e9;cursor:pointer;" onclick="this.closest('.maplibregl-popup').style.display='none'">Click bus to see route →</p>
-                </div>`
-              )
-            )
+
+          const startPos = fleetPrevRef.current[fleetId] ?? newNext[fleetId];
+          const marker = new maplibregl.Marker({ element: outerEl })
+            .setLngLat([startPos.lng, startPos.lat])
+            .setPopup(new maplibregl.Popup({ offset: 20 }).setHTML(makePopupHtml(row)))
             .addTo(map.current);
-        });
+
+          fleetMarkersMapRef.current.set(fleetId, { marker, innerEl });
+        } else {
+          // Update popup content and SVG color for existing marker.
+          const { marker, innerEl } = fleetMarkersMapRef.current.get(fleetId);
+          marker.getPopup()?.setHTML(makePopupHtml(row));
+          const circle = innerEl.querySelector('circle');
+          if (circle) circle.setAttribute('fill', bg);
+        }
+      }
+
+      // ── Step 4: remove stale fleet markers ──────────────────────────────────
+      for (const [fleetId, { marker }] of fleetMarkersMapRef.current) {
+        if (!activeIds.has(fleetId)) {
+          marker.remove();
+          fleetMarkersMapRef.current.delete(fleetId);
+          delete fleetPrevRef.current[fleetId];
+          delete fleetNextRef.current[fleetId];
+          delete fleetDataRef.current[fleetId];
+        }
+      }
+
+      // ── Step 5: start rAF interpolation loop ───────────────────────────────
+      cancelAnimationFrame(rafIdRef.current);
+
+      const animate = () => {
+        const t = Math.min(1, (Date.now() - interpStartRef.current) / POLL_MS);
+
+        for (const [fleetId, { marker, innerEl }] of fleetMarkersMapRef.current) {
+          const p = fleetPrevRef.current[fleetId];
+          const n = fleetNextRef.current[fleetId];
+          if (!p || !n) continue;
+
+          marker.setLngLat([lerp(p.lng, n.lng, t), lerp(p.lat, n.lat, t)]);
+
+          if (n.heading !== null) {
+            const h = lerpAngle(p.heading ?? n.heading, n.heading, t);
+            innerEl.style.transform = `rotate(${h}deg)`;
+          }
+        }
+
+        if (t < 1) rafIdRef.current = requestAnimationFrame(animate);
+      };
+
+      rafIdRef.current = requestAnimationFrame(animate);
     } catch {
       // Ignore polling failures to avoid breaking map interactions.
     }
-  }, [clearFleetMarkers, role]);
+  }, [clearFleetMarkers, drawFleetRoute, role]);
 
   useEffect(() => {
     if (role !== 'passenger') return;

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useAuthRole } from "./useAuth";
+import { useAuth } from "./useAuth";
 
 export function usePublicLayout({
   navLinks = [
@@ -14,7 +14,7 @@ export function usePublicLayout({
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
 
-  const { isAuthenticated, isLoading } = useAuthRole("passenger");
+  const { isAuthenticated, isLoading } = useAuth();
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20);
