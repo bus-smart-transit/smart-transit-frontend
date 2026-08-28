@@ -227,12 +227,11 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   const currentRoute = trip?.fleet_route?.route;
   const currentFleet = trip?.fleet_route?.fleet;
   const nextStop = stops.find((stop) => !stop.is_acknowledged) ?? null;
-
-  const currentPassengers = Number(trip?.total_occupancy ?? 0);
-  const currentCapacity = Number(currentFleet?.capacity ?? 0);
-  const tripProgress = currentCapacity > 0
-    ? Math.min(100, Math.round((currentPassengers / currentCapacity) * 100))
-    : (trip?.status === 'completed' ? 100 : 35);
+  const totalStops = stops.length;
+  const completedStops = stops.filter((stop) => stop.is_acknowledged).length;
+  const tripProgress = totalStops > 0
+    ? Math.round((completedStops / totalStops) * 100)
+    : 0;
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -531,13 +530,6 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     },
   ];
 
-  const journeyStatusLabel =
-    trip?.status === 'completed'
-      ? 'Journey Completed'
-      : trip?.status === 'departed' || trip?.status === 'in-progress'
-        ? 'Journey In Progress'
-        : 'Ready to Start';
-
   const pageTitle =
     activeTab === 'dashboard'
       ? 'Dashboard'
@@ -752,7 +744,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
               <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-slate-800">
                 <div className="h-full rounded-full bg-linear-to-r from-blue-500 to-sky-400" style={{ width: `${tripProgress}%` }} />
               </div>
-              <p className="mt-2 text-sm text-slate-400">{journeyStatusLabel}</p>
+              <p className="mt-2 text-sm text-slate-400">{completedStops} of {totalStops} stops completed</p>
             </article>
 
             <article className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
