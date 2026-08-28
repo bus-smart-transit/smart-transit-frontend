@@ -1,10 +1,6 @@
 import { useState, useMemo } from 'react'
 import { Calendar } from 'lucide-react'
 
-// ---------------------------------------------------------------------------
-// Mock data — trips keyed by date (YYYY-MM-DD). Swap this for a real fetch.
-// ---------------------------------------------------------------------------
-
 const routePool = [
   { route: 'Davao City - Cateel', serviceType: 'Aircon' },
   { route: 'Davao City - Tagum City', serviceType: 'Non-Aircon' },
@@ -36,8 +32,6 @@ function toDateKey(date) {
   return `${year}-${month}-${day}`
 }
 
-// Generates a deterministic-but-varied schedule for any given date so every
-// day the user picks on the calendar has data to show.
 function generateTripsForDate(dateKey) {
   const seed = dateKey.split('-').reduce((acc, part) => acc + Number(part), 0)
   const random = seededRandom(seed * 97 + 13)
@@ -62,7 +56,7 @@ function generateTripsForDate(dateKey) {
 }
 
 // ---------------------------------------------------------------------------
-// Calendar date picker
+// Calendar 
 // ---------------------------------------------------------------------------
 
 function CalendarDatePicker({ selectedDate, onSelect }) {
@@ -230,11 +224,6 @@ function StatCard({ label, value }) {
   )
 }
 
-// ---------------------------------------------------------------------------
-// Reports panel — this is the only thing this file needs to export.
-// Your App.jsx should render <Sidebar /> once, then render this panel
-// as the main content when the "reports" tab is active.
-// ---------------------------------------------------------------------------
 
 export default function ReportsPanel() {
   const [selectedDate, setSelectedDate] = useState(new Date())
