@@ -9,7 +9,6 @@ import {
   Clock3,
   Gauge,
   LogOut,
-  Map,
   Navigation,
   RefreshCw,
   Route,
@@ -397,8 +396,10 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   // batched banner notification instead of per-passenger spam.
   useEffect(() => {
     if (!hasActiveTrip || !isPaired) {
-      setProximityAlert(null);
-      return undefined;
+      const timer = setTimeout(() => {
+        setProximityAlert(null);
+      }, 0);
+      return () => clearTimeout(timer);
     }
 
     const PROXIMITY_M = 500;

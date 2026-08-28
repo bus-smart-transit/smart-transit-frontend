@@ -223,8 +223,12 @@ export default function useDropoffPicker({
 
     if (!destinationPinnedLabel) {
       const nearestStop = findNearestStop(lat, lng, selectedStops || []);
-      setDestinationPinnedLabel(nearestStop ? `Pinned near ${stopLabel(nearestStop)}` : 'Pinned custom drop-off location');
+      const timer = setTimeout(() => {
+        setDestinationPinnedLabel(nearestStop ? `Pinned near ${stopLabel(nearestStop)}` : 'Pinned custom drop-off location');
+      }, 0);
+      return () => clearTimeout(timer);
     }
+    return undefined;
   }, [dropoffMode, destinationLat, destinationLng, destinationPinnedLabel, selectedStops, stopLabel, updateDestinationMarker]);
 
   useEffect(() => {
@@ -251,8 +255,11 @@ export default function useDropoffPicker({
     if (!originCoords) return;
 
     updateOriginMarker(originCoords.lng, originCoords.lat);
-    setOriginPinnedLabel(`Origin pinned at ${stopLabel(selectedOriginStop)}`);
+    const timer = setTimeout(() => {
+      setOriginPinnedLabel(`Origin pinned at ${stopLabel(selectedOriginStop)}`);
+    }, 0);
     mapRef.current.flyTo({ center: [originCoords.lng, originCoords.lat], zoom: 13.5 });
+    return () => clearTimeout(timer);
   }, [dropoffMode, selectedOriginStop, stopLabel, updateOriginMarker]);
 
   useEffect(() => () => {

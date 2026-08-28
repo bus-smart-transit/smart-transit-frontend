@@ -1,6 +1,7 @@
 import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, waitFor, fireEvent, screen, act } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import { StrictMode } from 'react';
 import DriverDashboard from '../DriverDashboard';
 import ConductorDashboard from '../ConductorDashboard';
 import PairingScreen from '../PairingScreen';

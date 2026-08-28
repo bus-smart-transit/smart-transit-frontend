@@ -2,7 +2,7 @@ import './TicketCard.css';
 
 const STATUS_FOOTER = {
   valid:     { text: 'Valid Ticket — Present QR code to board', mod: '' },
-  valid:     { text: 'Valid Ticket — Present QR code to board', mod: '' },
+  issued:    { text: 'Ticket Issued — Ready for boarding', mod: '' },
   boarded:   { text: 'Boarded — You are currently on this trip', mod: 'st-ticket-foot--boarded' },
   alighted:  { text: 'Trip Completed — Thank you for riding!', mod: 'st-ticket-foot--alighted' },
   expired:   { text: 'Ticket Expired — This ticket is no longer valid', mod: 'st-ticket-foot--expired' },

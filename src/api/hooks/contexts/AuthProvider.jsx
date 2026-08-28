@@ -25,6 +25,7 @@ export function AuthProvider({ role = "passenger", children }) {
 
   useEffect(() => {
     let cancelled = false;
+
     const fetchProfile = async () => {
       if (!isAuthenticated || !activeService) {
         setIsLoading(false);
@@ -41,7 +42,7 @@ export function AuthProvider({ role = "passenger", children }) {
           err?.response?.status ??
           err?.status ??
           null;
-        if (status === 401 || status === 403 || status === 404) {
+        if (status === 401 || status === 403) {
           localStorage.removeItem(tokenKey);
           sessionStorage.removeItem(tokenKey);
           if (!cancelled) {

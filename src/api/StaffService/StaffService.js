@@ -27,7 +27,7 @@ class StaffService extends BaseService {
     return await this.request('/staff/2fa-preference', 'PATCH', { enabled });
   }
 
-  async logout(role) {
+  async logout() {
     try {
       return await this.request('/staff/logout', 'DELETE');
     } finally {
