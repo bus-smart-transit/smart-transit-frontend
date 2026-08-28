@@ -8,18 +8,20 @@ import {
   Settings,
 } from 'lucide-react'
 
-const navItems = [
+export const navItems = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'fleets', label: 'Fleets', icon: Bus },
   { id: 'routes', label: 'Routes', icon: MapPin },
   { id: 'schedule', label: 'Schedule', icon: Clock },
-  { id: 'reports', label: 'Reports', icon: PieChart },
+  { id: 'reports', label: 'Financial Reports', icon: PieChart },
   { id: 'staff', label: 'Staff', icon: Users },
 ]
 
 export default function Sidebar({ activeTab, onTabChange }) {
+  const settingsActive = activeTab === 'settings'
+
   return (
-    <aside className="flex w-[220px] shrink-0 flex-col bg-[#243b72] px-4 py-8">
+    <aside className="flex w-[220px] shrink-0 flex-col bg-[#0a0e1a] px-4 py-8 border-r border-white/5">
       <div className="mb-10 flex justify-center">
         <Bus className="h-14 w-14 text-white" strokeWidth={1.5} />
       </div>
@@ -28,29 +30,38 @@ export default function Sidebar({ activeTab, onTabChange }) {
         {navItems.map(({ id, label, icon: Icon }) => {
           const active = activeTab === id
           return (
-          <button
-            key={id}
-            type="button"
-            onClick={() => onTabChange(id)}
-            className={`relative flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium transition-colors ${
-              active
-                ? 'bg-[#1a2d5a] text-white'
-                : 'text-white/80 hover:bg-white/10 hover:text-white'
-            }`}
-          >
-            {active && (
-              <span className="absolute -left-4 top-1/2 h-8 w-1 -translate-y-1/2 rounded-r bg-[#00a8cc]" />
-            )}
-            <Icon className="h-5 w-5 shrink-0" strokeWidth={1.75} />
-            {label}
-          </button>
-        )})}
+            <button
+              key={id}
+              type="button"
+              onClick={() => onTabChange(id)}
+              className={`relative flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium transition-colors ${
+                active
+                  ? 'bg-white/10 text-white'
+                  : 'text-white/70 hover:bg-white/5 hover:text-white'
+              }`}
+            >
+              {active && (
+                <span className="absolute -left-4 top-1/2 h-8 w-1 -translate-y-1/2 rounded-r bg-[#3b82f6]" />
+              )}
+              <Icon className="h-5 w-5 shrink-0" strokeWidth={1.75} />
+              {label}
+            </button>
+          )
+        })}
       </nav>
 
       <button
         type="button"
-        className="mt-auto flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium text-white/80 transition-colors hover:bg-white/10 hover:text-white"
+        onClick={() => onTabChange('settings')}
+        className={`relative mt-auto flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium transition-colors ${
+          settingsActive
+            ? 'bg-white/10 text-white'
+            : 'text-white/70 hover:bg-white/5 hover:text-white'
+        }`}
       >
+        {settingsActive && (
+          <span className="absolute -left-4 top-1/2 h-8 w-1 -translate-y-1/2 rounded-r bg-[#3b82f6]" />
+        )}
         <Settings className="h-5 w-5 shrink-0" strokeWidth={1.75} />
         Settings
       </button>

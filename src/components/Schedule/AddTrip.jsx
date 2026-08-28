@@ -35,14 +35,14 @@ export default function AddTripModal({ onClose, onAdd, staff }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <div className="w-full max-w-lg rounded-2xl bg-[#131a2e] p-6 shadow-xl">
         <div className="mb-6 flex items-center justify-between">
-          <h2 className="text-xl font-bold text-gray-800">Add Trip</h2>
+          <h2 className="text-xl font-bold text-gray-100">Add Trip</h2>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
+            className="rounded-lg p-1 text-gray-400 transition-colors hover:bg-white/5 hover:text-gray-200"
           >
             <X className="h-5 w-5" />
           </button>
@@ -51,19 +51,19 @@ export default function AddTripModal({ onClose, onAdd, staff }) {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <label className="block">
-              <span className="mb-1 block text-sm font-medium text-gray-600">Bus ID</span>
+              <span className="mb-1 block text-sm font-medium text-gray-400">Bus ID</span>
               <input
                 type="text"
                 name="busId"
                 value={form.busId}
                 onChange={handleChange}
                 placeholder="e.g. B-107"
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-800 outline-none focus:border-[#00a8cc] focus:ring-1 focus:ring-[#00a8cc]"
+                className="w-full rounded-lg border border-gray-700 bg-[#0d1220] px-3 py-2 text-sm text-gray-100 outline-none placeholder:text-gray-500 focus:border-[#4d8eff] focus:ring-1 focus:ring-[#4d8eff]"
               />
             </label>
 
             <label className="block">
-              <span className="mb-1 block text-sm font-medium text-gray-600">
+              <span className="mb-1 block text-sm font-medium text-gray-400">
                 Departure Time
               </span>
               <input
@@ -72,31 +72,31 @@ export default function AddTripModal({ onClose, onAdd, staff }) {
                 value={form.departureTime}
                 onChange={handleChange}
                 placeholder="e.g. 5:00 AM"
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-800 outline-none focus:border-[#00a8cc] focus:ring-1 focus:ring-[#00a8cc]"
+                className="w-full rounded-lg border border-gray-700 bg-[#0d1220] px-3 py-2 text-sm text-gray-100 outline-none placeholder:text-gray-500 focus:border-[#4d8eff] focus:ring-1 focus:ring-[#4d8eff]"
               />
             </label>
           </div>
 
           <label className="block">
-            <span className="mb-1 block text-sm font-medium text-gray-600">Route</span>
+            <span className="mb-1 block text-sm font-medium text-gray-400">Route</span>
             <input
               type="text"
               name="route"
               value={form.route}
               onChange={handleChange}
               placeholder="e.g. Davao City - Cateel"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-800 outline-none focus:border-[#00a8cc] focus:ring-1 focus:ring-[#00a8cc]"
+              className="w-full rounded-lg border border-gray-700 bg-[#0d1220] px-3 py-2 text-sm text-gray-100 outline-none placeholder:text-gray-500 focus:border-[#4d8eff] focus:ring-1 focus:ring-[#4d8eff]"
             />
           </label>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <label className="block">
-              <span className="mb-1 block text-sm font-medium text-gray-600">Driver</span>
+              <span className="mb-1 block text-sm font-medium text-gray-400">Driver</span>
               <select
                 name="driver"
                 value={form.driver}
                 onChange={handleChange}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-800 outline-none focus:border-[#00a8cc] focus:ring-1 focus:ring-[#00a8cc]"
+                className="w-full rounded-lg border border-gray-700 bg-[#0d1220] px-3 py-2 text-sm text-gray-100 outline-none focus:border-[#4d8eff] focus:ring-1 focus:ring-[#4d8eff]"
               >
                 <option value="">Select Driver</option>
                 {drivers.map((member) => (
@@ -108,12 +108,12 @@ export default function AddTripModal({ onClose, onAdd, staff }) {
             </label>
 
             <label className="block">
-              <span className="mb-1 block text-sm font-medium text-gray-600">Chauffeur</span>
+              <span className="mb-1 block text-sm font-medium text-gray-400">Chauffeur</span>
               <select
                 name="chauffeur"
                 value={form.chauffeur}
                 onChange={handleChange}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-800 outline-none focus:border-[#00a8cc] focus:ring-1 focus:ring-[#00a8cc]"
+                className="w-full rounded-lg border border-gray-700 bg-[#0d1220] px-3 py-2 text-sm text-gray-100 outline-none focus:border-[#4d8eff] focus:ring-1 focus:ring-[#4d8eff]"
               >
                 <option value="">Select Chauffeur</option>
                 {chauffeurs.map((member) => (
@@ -126,14 +126,14 @@ export default function AddTripModal({ onClose, onAdd, staff }) {
           </div>
 
           <label className="block">
-            <span className="mb-1 block text-sm font-medium text-gray-600">
+            <span className="mb-1 block text-sm font-medium text-gray-400">
               Type Of Service
             </span>
             <select
               name="serviceType"
               value={form.serviceType}
               onChange={handleChange}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-800 outline-none focus:border-[#00a8cc] focus:ring-1 focus:ring-[#00a8cc]"
+              className="w-full rounded-lg border border-gray-700 bg-[#0d1220] px-3 py-2 text-sm text-gray-100 outline-none focus:border-[#4d8eff] focus:ring-1 focus:ring-[#4d8eff]"
             >
               <option value="Aircon">Aircon</option>
               <option value="Non-Aircon">Non-Aircon</option>
@@ -144,13 +144,13 @@ export default function AddTripModal({ onClose, onAdd, staff }) {
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg border border-gray-300 px-5 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50"
+              className="rounded-lg border border-gray-700 px-5 py-2 text-sm font-medium text-gray-300 transition-colors hover:bg-white/5"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="rounded-lg bg-[#00a8cc] px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-[#0096b8]"
+              className="rounded-lg bg-[#4d8eff] px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-[#3b7de0]"
             >
               Add Trip
             </button>

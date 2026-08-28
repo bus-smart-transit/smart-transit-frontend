@@ -20,17 +20,17 @@ export default function StaffPanel({ initialStaff }) {
 
   return (
     <>
-      <header className="rounded-xl bg-white px-8 py-5 shadow-sm">
-        <h1 className="text-2xl font-bold text-gray-800">Staff Management</h1>
+      <header className="rounded-xl bg-[#0f1729] px-8 py-5 shadow-sm border border-white/5">
+        <h1 className="text-2xl font-bold text-white">Staff Management</h1>
       </header>
 
-      <section className="rounded-xl bg-white p-6 shadow-sm">
+      <section className="rounded-xl bg-[#0f1729] p-6 shadow-sm border border-white/5">
         <div className="mb-5 flex items-center justify-between">
-          <h2 className="text-lg font-bold text-gray-800">Personnel</h2>
+          <h2 className="text-lg font-bold text-white">Personnel</h2>
           <button
             type="button"
             onClick={() => setShowAddStaff(true)}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-[#00a8cc]/40 bg-white px-4 py-2 text-sm font-medium text-[#00a8cc] transition-colors hover:bg-[#00a8cc]/5"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-[#00a8cc]/40 bg-transparent px-4 py-2 text-sm font-medium text-[#00a8cc] transition-colors hover:bg-[#00a8cc]/10"
           >
             <Plus className="h-4 w-4" />
             Add Staff
@@ -40,23 +40,23 @@ export default function StaffPanel({ initialStaff }) {
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-sm">
             <thead>
-              <tr className="bg-gray-100">
-                <th className="px-4 py-3 text-center font-semibold text-gray-700">
+              <tr className="bg-[#1a2438]">
+                <th className="px-4 py-3 text-center font-semibold text-gray-300">
                   Staff ID
                 </th>
-                <th className="px-4 py-3 text-left font-semibold text-gray-700">
+                <th className="px-4 py-3 text-left font-semibold text-gray-300">
                   Staff Name
                 </th>
-                <th className="px-4 py-3 text-center font-semibold text-gray-700">
+                <th className="px-4 py-3 text-center font-semibold text-gray-300">
                   Position
                 </th>
-                <th className="px-4 py-3 text-center font-semibold text-gray-700">
+                <th className="px-4 py-3 text-center font-semibold text-gray-300">
                   Contact Number
                 </th>
-                <th className="px-4 py-3 text-left font-semibold text-gray-700">
+                <th className="px-4 py-3 text-left font-semibold text-gray-300">
                   Email
                 </th>
-                <th className="px-4 py-3 text-center font-semibold text-gray-700">
+                <th className="px-4 py-3 text-center font-semibold text-gray-300">
                   Status
                 </th>
               </tr>
@@ -65,21 +65,31 @@ export default function StaffPanel({ initialStaff }) {
               {staff.map((member, index) => (
                 <tr
                   key={member.staffId}
-                  className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}
+                  className={`border-b border-white/5 ${
+                    index % 2 === 0 ? 'bg-[#0f1729]' : 'bg-[#141d33]'
+                  }`}
                 >
-                  <td className="px-4 py-3 text-center text-gray-700">
+                  <td className="px-4 py-3 text-center text-gray-300">
                     {member.staffId}
                   </td>
-                  <td className="px-4 py-3 text-left text-gray-700">{member.name}</td>
-                  <td className="px-4 py-3 text-center text-gray-700">
+                  <td className="px-4 py-3 text-left text-gray-300">{member.name}</td>
+                  <td className="px-4 py-3 text-center text-gray-300">
                     {member.position}
                   </td>
-                  <td className="px-4 py-3 text-center text-gray-700">
+                  <td className="px-4 py-3 text-center text-gray-300">
                     {member.contactNumber}
                   </td>
-                  <td className="px-4 py-3 text-left text-gray-700">{member.email}</td>
-                  <td className="px-4 py-3 text-center font-medium text-gray-700">
-                    {member.status}
+                  <td className="px-4 py-3 text-left text-gray-300">{member.email}</td>
+                  <td className="px-4 py-3 text-center font-medium">
+                    <span
+                      className={
+                        member.status === 'Active'
+                          ? 'text-[#00a8cc] font-semibold'
+                          : 'text-gray-400 font-semibold'
+                      }
+                    >
+                      {member.status}
+                    </span>
                   </td>
                 </tr>
               ))}

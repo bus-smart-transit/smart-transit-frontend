@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowLeft } from 'lucide-react'
 import {
   MapContainer,
@@ -7,56 +7,32 @@ import {
   Popup,
   Polyline,
   CircleMarker,
+  ZoomControl,
   useMap,
 } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 
-/*
-|--------------------------------------------------------------------------
-| CITY COORDINATES
-|--------------------------------------------------------------------------
-|
-| These are used to determine the departure and destination.
-|
-| IMPORTANT:
-| Leaflet = [latitude, longitude]
-|--------------------------------------------------------------------------
-*/
-
 const LOCATIONS = {
   davao: [7.0736, 125.6128],
   'davao city': [7.0736, 125.6128],
-
   tagum: [7.4475, 125.8078],
   'tagum city': [7.4475, 125.8078],
-
   mati: [6.9551, 126.2165],
   'mati city': [6.9551, 126.2165],
-
   boston: [7.8617, 126.3689],
-
   carmen: [7.3606, 125.7068],
   malita: [6.4108, 125.6114],
-
   'santo tomas': [7.5336, 125.6239],
   'santo tomas davao del norte': [7.5336, 125.6239],
-
   panabo: [7.3081, 125.6842],
   digos: [6.7498, 125.3572],
   samal: [7.0731, 125.7089],
   'davao del sur': [6.7667, 125.3500],
 }
 
-/*
-|--------------------------------------------------------------------------
-| BUS ICON
-|--------------------------------------------------------------------------
-*/
-
 const busIcon = L.divIcon({
   className: 'bus-location-icon',
-
   html: `
     <div
       style="
@@ -87,132 +63,52 @@ const busIcon = L.divIcon({
       </div>
     </div>
   `,
-
   iconSize: [48, 48],
   iconAnchor: [24, 24],
   popupAnchor: [0, -25],
 })
 
-/*
-|--------------------------------------------------------------------------
-| NORMALIZE LOCATION NAME
-|--------------------------------------------------------------------------
-*/
-
 function normalizeLocation(name) {
   if (!name) return ''
-
-  return name
-    .toLowerCase()
-    .trim()
-    .replace(/\s+/g, ' ')
+  return name.toLowerCase().trim().replace(/\s+/g, ' ')
 }
-
-/*
-|--------------------------------------------------------------------------
-| GET COORDINATES
-|--------------------------------------------------------------------------
-*/
 
 function getLocationCoordinates(name) {
   const normalized = normalizeLocation(name)
-
   if (LOCATIONS[normalized]) {
     return LOCATIONS[normalized]
   }
-
-  /*
-  |--------------------------------------------------------------------------
-  | Try partial matching
-  |--------------------------------------------------------------------------
-  */
-
   const key = Object.keys(LOCATIONS).find(
-    (location) =>
-      normalized.includes(location) ||
-      location.includes(normalized),
+    (location) => normalized.includes(location) || location.includes(normalized),
   )
-
   if (key) {
     return LOCATIONS[key]
   }
-
   return null
 }
 
-/*
-|--------------------------------------------------------------------------
-| GET DEPARTURE + DESTINATION FROM SELECTED TRIP
-|--------------------------------------------------------------------------
-|
-| Supports:
-|
-| {
-|   origin: "Davao",
-|   destination: "Tagum"
-| }
-|
-| OR:
-|
-| {
-|   route: "Davao - Tagum"
-| }
-|--------------------------------------------------------------------------
-*/
-
 function getTripLocations(trip) {
-  /*
-  |--------------------------------------------------------------------------
-  | Preferred method:
-  | explicit origin / destination
-  |--------------------------------------------------------------------------
-  */
-
   if (trip.origin && trip.destination) {
     return {
       originName: trip.origin,
       destinationName: trip.destination,
-
-      origin: getLocationCoordinates(
-        trip.origin,
-      ),
-
-      destination: getLocationCoordinates(
-        trip.destination,
-      ),
+      origin: getLocationCoordinates(trip.origin),
+      destination: getLocationCoordinates(trip.destination),
     }
   }
 
-  /*
-  |--------------------------------------------------------------------------
-  | Fallback:
-  | parse "Davao - Tagum"
-  |--------------------------------------------------------------------------
-  */
-
   if (trip.route) {
-    const parts = trip.route
-      .split(/\s[-–—]\s/)
+    const parts = trip.route.split(/\s[-–—]\s/)
 
     if (parts.length >= 2) {
       const originName = parts[0].trim()
-      const destinationName = parts
-        .slice(1)
-        .join(' - ')
-        .trim()
+      const destinationName = parts.slice(1).join(' - ').trim()
 
       return {
         originName,
         destinationName,
-
-        origin: getLocationCoordinates(
-          originName,
-        ),
-
-        destination:
-          getLocationCoordinates(
-            destinationName,
-          ),
+        origin: getLocationCoordinates(originName),
+        destination: getLocationCoordinates(destinationName),
       }
     }
   }
@@ -225,109 +121,45 @@ function getTripLocations(trip) {
   }
 }
 
-/*
-|--------------------------------------------------------------------------
-| FIND POINT ALONG REAL ROAD ROUTE
-|--------------------------------------------------------------------------
-|
-| progress:
-|
-| 0.00 = departure
-| 0.25 = 25% of route
-| 0.50 = halfway
-| 0.75 = 75%
-| 1.00 = destination
-|--------------------------------------------------------------------------
-*/
-
-function getPointAlongRoute(
-  route,
-  progress,
-) {
+function getPointAlongRoute(route, progress) {
   if (!route || route.length === 0) {
     return null
   }
-
   if (route.length === 1) {
     return route[0]
   }
 
-  const safeProgress = Math.max(
-    0,
-    Math.min(1, Number(progress) || 0),
-  )
-
-  /*
-  |--------------------------------------------------------------------------
-  | Calculate every road segment length
-  |--------------------------------------------------------------------------
-  */
-
+  const safeProgress = Math.max(0, Math.min(1, Number(progress) || 0))
   const distances = []
-
   let totalDistance = 0
 
-  for (
-    let i = 0;
-    i < route.length - 1;
-    i++
-  ) {
+  for (let i = 0; i < route.length - 1; i++) {
     const start = route[i]
     const end = route[i + 1]
-
     const distance = Math.sqrt(
-      Math.pow(end[0] - start[0], 2) +
-        Math.pow(end[1] - start[1], 2),
+      Math.pow(end[0] - start[0], 2) + Math.pow(end[1] - start[1], 2),
     )
-
     distances.push(distance)
     totalDistance += distance
   }
 
-  const targetDistance =
-    totalDistance * safeProgress
-
+  const targetDistance = totalDistance * safeProgress
   let accumulatedDistance = 0
 
-  /*
-  |--------------------------------------------------------------------------
-  | Find which road segment contains the bus
-  |--------------------------------------------------------------------------
-  */
-
-  for (
-    let i = 0;
-    i < distances.length;
-    i++
-  ) {
+  for (let i = 0; i < distances.length; i++) {
     const segmentDistance = distances[i]
 
-    if (
-      accumulatedDistance +
-        segmentDistance >=
-      targetDistance
-    ) {
-      const distanceIntoSegment =
-        targetDistance -
-        accumulatedDistance
-
+    if (accumulatedDistance + segmentDistance >= targetDistance) {
+      const distanceIntoSegment = targetDistance - accumulatedDistance
       const segmentProgress =
-        segmentDistance === 0
-          ? 0
-          : distanceIntoSegment /
-            segmentDistance
+        segmentDistance === 0 ? 0 : distanceIntoSegment / segmentDistance
 
       const start = route[i]
       const end = route[i + 1]
 
       return [
-        start[0] +
-          (end[0] - start[0]) *
-            segmentProgress,
-
-        start[1] +
-          (end[1] - start[1]) *
-            segmentProgress,
+        start[0] + (end[0] - start[0]) * segmentProgress,
+        start[1] + (end[1] - start[1]) * segmentProgress,
       ]
     }
 
@@ -337,260 +169,150 @@ function getPointAlongRoute(
   return route[route.length - 1]
 }
 
-/*
-|--------------------------------------------------------------------------
-| GET COMPLETED PORTION OF ROAD
-|--------------------------------------------------------------------------
-*/
-
-function getCompletedRoute(
-  route,
-  progress,
-) {
+function getCompletedRoute(route, progress) {
   if (!route || route.length === 0) {
     return []
   }
-
   if (route.length === 1) {
     return route
   }
 
-  const safeProgress = Math.max(
-    0,
-    Math.min(1, Number(progress) || 0),
-  )
+  const safeProgress = Math.max(0, Math.min(1, Number(progress) || 0))
 
   if (safeProgress <= 0) {
     return [route[0]]
   }
-
   if (safeProgress >= 1) {
     return route
   }
 
-  /*
-  |--------------------------------------------------------------------------
-  | Calculate distances
-  |--------------------------------------------------------------------------
-  */
-
   const distances = []
-
   let totalDistance = 0
 
-  for (
-    let i = 0;
-    i < route.length - 1;
-    i++
-  ) {
+  for (let i = 0; i < route.length - 1; i++) {
     const start = route[i]
     const end = route[i + 1]
-
     const distance = Math.sqrt(
-      Math.pow(end[0] - start[0], 2) +
-        Math.pow(end[1] - start[1], 2),
+      Math.pow(end[0] - start[0], 2) + Math.pow(end[1] - start[1], 2),
     )
-
     distances.push(distance)
     totalDistance += distance
   }
 
-  const targetDistance =
-    totalDistance * safeProgress
-
+  const targetDistance = totalDistance * safeProgress
   let accumulatedDistance = 0
-
   const completed = [route[0]]
 
-  for (
-    let i = 0;
-    i < distances.length;
-    i++
-  ) {
+  for (let i = 0; i < distances.length; i++) {
     const segmentDistance = distances[i]
 
-    if (
-      accumulatedDistance +
-        segmentDistance >=
-      targetDistance
-    ) {
-      const distanceIntoSegment =
-        targetDistance -
-        accumulatedDistance
-
+    if (accumulatedDistance + segmentDistance >= targetDistance) {
+      const distanceIntoSegment = targetDistance - accumulatedDistance
       const segmentProgress =
-        segmentDistance === 0
-          ? 0
-          : distanceIntoSegment /
-            segmentDistance
+        segmentDistance === 0 ? 0 : distanceIntoSegment / segmentDistance
 
       const start = route[i]
       const end = route[i + 1]
 
       completed.push([
-        start[0] +
-          (end[0] - start[0]) *
-            segmentProgress,
-
-        start[1] +
-          (end[1] - start[1]) *
-            segmentProgress,
+        start[0] + (end[0] - start[0]) * segmentProgress,
+        start[1] + (end[1] - start[1]) * segmentProgress,
       ])
 
       break
     }
 
     completed.push(route[i + 1])
-
-    accumulatedDistance +=
-      segmentDistance
+    accumulatedDistance += segmentDistance
   }
 
   return completed
 }
-
-/*
-|--------------------------------------------------------------------------
-| MOVE MAP TO BUS
-|--------------------------------------------------------------------------
-*/
 
 function MapUpdater({ position }) {
   const map = useMap()
 
   useEffect(() => {
     if (!position) return
-
-    map.panTo(position, {
-      animate: true,
-      duration: 0.8,
-    })
+    map.panTo(position, { animate: true, duration: 0.8 })
   }, [map, position])
 
   return null
 }
 
-/*
-|--------------------------------------------------------------------------
-| TRACKING ROW
-|--------------------------------------------------------------------------
-*/
-
-function TrackingRow({ trip }) {
-  const progress = Math.max(
-    0,
-    Math.min(
-      1,
-      Number(trip.progress) || 0,
-    ),
-  )
+function TrackingRow({ trip, active, onSelect }) {
+  const progress = Math.max(0, Math.min(1, Number(trip.progress) || 0))
 
   return (
-    <article className="rounded-2xl bg-white px-3 py-2 shadow-[0_2px_8px_rgba(0,0,0,0.25)]">
-      <div className="mb-1 flex items-center justify-between text-[0.95rem] text-gray-700">
+    <article
+      onClick={() => onSelect?.(trip)}
+      role={onSelect ? 'button' : undefined}
+      tabIndex={onSelect ? 0 : undefined}
+      onKeyDown={(event) => {
+        if (!onSelect) return
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault()
+          onSelect(trip)
+        }
+      }}
+      className={`rounded-2xl bg-[#0f1729] border border-white/5 px-3 py-2 shadow-sm transition ${
+        onSelect ? 'cursor-pointer hover:bg-white/[0.03]' : ''
+      } ${active ? 'ring-2 ring-[#f59e0b]' : ''}`}
+    >
+      <div className="mb-1 flex items-center justify-between text-[0.95rem] text-gray-300">
         <span>{trip.route}</span>
-
         <span>{trip.busId}</span>
-
-        <span className="text-sm font-semibold text-[#2196f3]">
-          {trip.status}
-        </span>
+        <span className="text-sm font-semibold text-[#3b82f6]">{trip.status}</span>
       </div>
 
-      <div className="h-2 rounded-full bg-[#e1e3e6]">
+      <div className="h-2 rounded-full bg-white/5">
         <div
           className="h-full rounded-full bg-[#3b82f6]"
-          style={{
-            width: `${progress * 100}%`,
-          }}
+          style={{ width: `${progress * 100}%` }}
         />
       </div>
     </article>
   )
 }
 
-/*
-|--------------------------------------------------------------------------
-| MAIN FLEET MAP
-|--------------------------------------------------------------------------
-*/
+const LIVE_GPS_ZOOM = 14
 
-export default function FleetMapView({
-  selectedTrip,
-  fleetTrips,
-  onBack,
-}) {
-  /*
-  |--------------------------------------------------------------------------
-  | GET SELECTED BUS DEPARTURE + DESTINATION
-  |--------------------------------------------------------------------------
-  */
+export default function FleetMapView({ selectedTrip, fleetTrips, onBack }) {
+  const mapRef = useRef(null)
+  const [liveTrips, setLiveTrips] = useState(fleetTrips)
 
-  const tripLocations = useMemo(
-    () =>
-      getTripLocations(
-        selectedTrip,
-      ),
-    [selectedTrip],
+  useEffect(() => {
+    setLiveTrips(fleetTrips)
+  }, [fleetTrips])
+
+  const [activeTripId, setActiveTripId] = useState(selectedTrip.busId)
+
+  useEffect(() => {
+    setActiveTripId(selectedTrip.busId)
+  }, [selectedTrip.busId])
+
+  const activeTrip = useMemo(
+    () => liveTrips.find((trip) => trip.busId === activeTripId) || selectedTrip,
+    [liveTrips, activeTripId, selectedTrip],
   )
 
-  const {
-    originName,
-    destinationName,
-    origin,
-    destination,
-  } = tripLocations
+  const tripLocations = useMemo(() => getTripLocations(activeTrip), [activeTrip])
 
-  /*
-  |--------------------------------------------------------------------------
-  | OTHER TRIPS
-  |--------------------------------------------------------------------------
-  */
+  const { originName, destinationName, origin, destination } = tripLocations
 
   const otherTrips = useMemo(
-    () =>
-      fleetTrips.filter(
-        (trip) =>
-          trip.busId !==
-          selectedTrip.busId,
-      ),
-    [
-      fleetTrips,
-      selectedTrip.busId,
-    ],
+    () => liveTrips.filter((trip) => trip.busId !== activeTrip.busId),
+    [liveTrips, activeTrip.busId],
   )
 
-  /*
-  |--------------------------------------------------------------------------
-  | ROAD ROUTE
-  |--------------------------------------------------------------------------
-  */
-
-  const [roadRoute, setRoadRoute] =
-    useState([])
-
-  const [routeLoading, setRouteLoading] =
-    useState(false)
-
-  const [routeError, setRouteError] =
-    useState(false)
-
-  /*
-  |--------------------------------------------------------------------------
-  | REQUEST ROUTE EVERY TIME THE BUS ROUTE CHANGES
-  |--------------------------------------------------------------------------
-  */
+  const [roadRoute, setRoadRoute] = useState([])
+  const [routeLoading, setRouteLoading] = useState(false)
+  const [routeError, setRouteError] = useState(false)
 
   useEffect(() => {
     let cancelled = false
 
     async function loadRoadRoute() {
-      /*
-      |--------------------------------------------------------------------------
-      | If we cannot identify locations
-      |--------------------------------------------------------------------------
-      */
-
       if (!origin || !destination) {
         setRoadRoute([])
         setRouteError(true)
@@ -603,75 +325,35 @@ export default function FleetMapView({
       setRoadRoute([])
 
       try {
-        /*
-        |--------------------------------------------------------------------------
-        | OSRM uses:
-        |
-        | longitude,latitude
-        |--------------------------------------------------------------------------
-        */
-
-        const start =
-          `${origin[1]},${origin[0]}`
-
-        const end =
-          `${destination[1]},${destination[0]}`
+        const start = `${origin[1]},${origin[0]}`
+        const end = `${destination[1]},${destination[0]}`
 
         const url =
           `https://router.project-osrm.org/route/v1/driving/` +
           `${start};${end}` +
           `?overview=full&geometries=geojson`
 
-        const response =
-          await fetch(url)
+        const response = await fetch(url)
 
         if (!response.ok) {
-          throw new Error(
-            'OSRM request failed',
-          )
+          throw new Error('OSRM request failed')
         }
 
-        const data =
-          await response.json()
+        const data = await response.json()
 
-        if (
-          data.code !== 'Ok' ||
-          !data.routes ||
-          data.routes.length === 0
-        ) {
-          throw new Error(
-            'No road route found',
-          )
+        if (data.code !== 'Ok' || !data.routes || data.routes.length === 0) {
+          throw new Error('No road route found')
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | Convert OSRM:
-        |
-        | [longitude, latitude]
-        |
-        | to Leaflet:
-        |
-        | [latitude, longitude]
-        |--------------------------------------------------------------------------
-        */
-
-        const coordinates =
-          data.routes[0].geometry.coordinates.map(
-            ([longitude, latitude]) => [
-              latitude,
-              longitude,
-            ],
-          )
+        const coordinates = data.routes[0].geometry.coordinates.map(
+          ([longitude, latitude]) => [latitude, longitude],
+        )
 
         if (!cancelled) {
           setRoadRoute(coordinates)
         }
       } catch (error) {
-        console.error(
-          'Unable to load road route:',
-          error,
-        )
+        console.error('Unable to load road route:', error)
 
         if (!cancelled) {
           setRouteError(true)
@@ -689,71 +371,32 @@ export default function FleetMapView({
     return () => {
       cancelled = true
     }
-  }, [
-    origin,
-    destination,
-  ])
-
-  /*
-  |--------------------------------------------------------------------------
-  | BUS POSITION
-  |--------------------------------------------------------------------------
-  |
-  | IMPORTANT:
-  | This is calculated from the SELECTED TRIP's road route.
-  |--------------------------------------------------------------------------
-  */
+  }, [origin, destination])
 
   const busPosition = useMemo(
-    () =>
-      getPointAlongRoute(
-        roadRoute,
-        selectedTrip.progress,
-      ),
-    [
-      roadRoute,
-      selectedTrip.progress,
-    ],
+    () => getPointAlongRoute(roadRoute, activeTrip.progress),
+    [roadRoute, activeTrip.progress],
   )
-
-  /*
-  |--------------------------------------------------------------------------
-  | COMPLETED ROAD
-  |--------------------------------------------------------------------------
-  */
 
   const completedRoute = useMemo(
-    () =>
-      getCompletedRoute(
-        roadRoute,
-        selectedTrip.progress,
-      ),
-    [
-      roadRoute,
-      selectedTrip.progress,
-    ],
+    () => getCompletedRoute(roadRoute, activeTrip.progress),
+    [roadRoute, activeTrip.progress],
   )
 
-  /*
-  |--------------------------------------------------------------------------
-  | MAP CENTER
-  |--------------------------------------------------------------------------
-  */
+  const mapCenter = origin || [7.0736, 125.6128]
 
-  const mapCenter =
-    origin || [7.0736, 125.6128]
+  const handleLiveGpsClick = () => {
+    if (!mapRef.current || !busPosition) return
+    mapRef.current.flyTo(busPosition, LIVE_GPS_ZOOM, { animate: true, duration: 1 })
+  }
 
   return (
-    <section className="rounded-2xl border border-gray-300 bg-[#efefef] p-4 shadow-sm">
-      {/* ==============================================================
-          BACK
-      ============================================================== */}
-
+    <section className="rounded-2xl border border-white/5 bg-[#0a0e1a] p-4 shadow-sm">
       <div className="mb-4 flex items-center justify-between">
         <button
           type="button"
           onClick={onBack}
-          className="inline-flex items-center gap-2 rounded-lg bg-white px-3 py-1.5 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-50"
+          className="inline-flex items-center gap-2 rounded-lg bg-[#0f1729] px-3 py-1.5 text-sm font-medium text-white shadow-sm transition hover:bg-[#1a2540] border border-white/5"
         >
           <ArrowLeft className="h-4 w-4" />
           Back
@@ -761,101 +404,75 @@ export default function FleetMapView({
       </div>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[2.2fr_1fr]">
-        {/* ============================================================
-            MAP
-        ============================================================ */}
-
-        <div className="relative h-[500px] overflow-hidden rounded-xl border border-gray-300">
+        <div className="relative h-[500px] overflow-hidden rounded-xl border border-white/5">
           <MapContainer
+            ref={mapRef}
             center={mapCenter}
             zoom={10}
             scrollWheelZoom={true}
+            zoomControl={false}
             className="h-full w-full"
           >
-            {/* ========================================================
-                OPEN STREET MAP
-            ======================================================== */}
+            <ZoomControl position="topright" />
 
             <TileLayer
               attribution='&copy; OpenStreetMap contributors'
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
 
-            {/* ========================================================
-                ENTIRE ROAD ROUTE
-            ======================================================== */}
+            {!routeLoading && roadRoute.length > 1 && (
+              <Polyline
+                positions={roadRoute}
+                pathOptions={{
+                  color: '#f6c66b',
+                  weight: 7,
+                  opacity: 0.75,
+                  lineCap: 'round',
+                  lineJoin: 'round',
+                }}
+              />
+            )}
 
-            {!routeLoading &&
-              roadRoute.length > 1 && (
-                <Polyline
-                  positions={roadRoute}
-                  pathOptions={{
-                    color: '#f6c66b',
-                    weight: 7,
-                    opacity: 0.75,
-                    lineCap: 'round',
-                    lineJoin: 'round',
-                  }}
-                />
-              )}
-
-            {/* ========================================================
-                BUS PROGRESS ON ROAD
-            ======================================================== */}
-
-            {!routeLoading &&
-              completedRoute.length > 0 && (
-                <Polyline
-                  positions={completedRoute}
-                  pathOptions={{
-                    color: '#f59e0b',
-                    weight: 7,
-                    opacity: 1,
-                    lineCap: 'round',
-                    lineJoin: 'round',
-                  }}
-                />
-              )}
-
-            {/* ========================================================
-                DEPARTURE
-            ======================================================== */}
+            {!routeLoading && completedRoute.length > 0 && (
+              <Polyline
+                positions={completedRoute}
+                pathOptions={{
+                  color: '#f59e0b',
+                  weight: 7,
+                  opacity: 1,
+                  lineCap: 'round',
+                  lineJoin: 'round',
+                }}
+              />
+            )}
 
             {origin && (
               <CircleMarker
                 center={origin}
                 radius={9}
                 pathOptions={{
-                  color: '#ffffff',
+                  color: '#0a0e1a',
                   weight: 3,
-                  fillColor: '#1d4ed8',
+                  fillColor: '#3b82f6',
                   fillOpacity: 1,
                 }}
               >
                 <Popup>
                   <div className="text-sm">
-                    <strong>
-                      {originName}
-                    </strong>
-
+                    <strong>{originName}</strong>
                     <br />
-
                     Departure
                   </div>
                 </Popup>
               </CircleMarker>
             )}
 
-            {/* ========================================================
-                DESTINATION
-            ======================================================== */}
-
             {destination && (
               <CircleMarker
                 center={destination}
                 radius={9}
                 pathOptions={{
-                  color: '#ffffff',
+                  color: '#0a0e1a',
                   weight: 3,
                   fillColor: '#16a34a',
                   fillOpacity: 1,
@@ -863,192 +480,105 @@ export default function FleetMapView({
               >
                 <Popup>
                   <div className="text-sm">
-                    <strong>
-                      {destinationName}
-                    </strong>
-
+                    <strong>{destinationName}</strong>
                     <br />
-
                     Destination
                   </div>
                 </Popup>
               </CircleMarker>
             )}
 
-            {/* ========================================================
-                BUS
-            ======================================================== */}
-
-            {!routeLoading &&
-              busPosition && (
-                <Marker
-                  position={busPosition}
-                  icon={busIcon}
-                  zIndexOffset={1000}
-                >
-                  <Popup>
-                    <div className="min-w-[180px] text-sm">
-                      <div className="mb-2 text-base font-bold">
-                        🚌{' '}
-                        {selectedTrip.busId}
-                      </div>
-
-                      <div>
-                        <strong>
-                          Departure:
-                        </strong>{' '}
-                        {originName}
-                      </div>
-
-                      <div>
-                        <strong>
-                          Destination:
-                        </strong>{' '}
-                        {destinationName}
-                      </div>
-
-                      <div>
-                        <strong>
-                          Status:
-                        </strong>{' '}
-                        {selectedTrip.status}
-                      </div>
-
-                      <div className="mt-1 font-semibold text-orange-500">
-                        Progress:{' '}
-                        {Math.round(
-                          Number(
-                            selectedTrip.progress,
-                          ) * 100,
-                        )}
-                        %
-                      </div>
+            {!routeLoading && busPosition && (
+              <Marker position={busPosition} icon={busIcon} zIndexOffset={1000}>
+                <Popup>
+                  <div className="min-w-[180px] text-sm">
+                    <div className="mb-2 text-base font-bold">🚌 {activeTrip.busId}</div>
+                    <div>
+                      <strong>Departure:</strong> {originName}
                     </div>
-                  </Popup>
-                </Marker>
-              )}
-
-            {/* ========================================================
-                FOLLOW BUS
-            ======================================================== */}
-
-            {busPosition && (
-              <MapUpdater
-                position={busPosition}
-              />
+                    <div>
+                      <strong>Destination:</strong> {destinationName}
+                    </div>
+                    <div>
+                      <strong>Status:</strong> {activeTrip.status}
+                    </div>
+                    <div className="mt-1 font-semibold text-orange-500">
+                      Progress: {Math.round(Number(activeTrip.progress) * 100)}%
+                    </div>
+                  </div>
+                </Popup>
+              </Marker>
             )}
           </MapContainer>
 
-          {/* ==========================================================
-              LOADING
-          ========================================================== */}
-
           {routeLoading && (
-            <div className="absolute inset-0 z-[1000] flex items-center justify-center bg-white/70">
-              <div className="rounded-xl bg-white px-5 py-3 text-sm font-semibold text-gray-700 shadow-lg">
+            <div className="absolute inset-0 z-[1000] flex items-center justify-center bg-[#0a0e1a]/70">
+              <div className="rounded-xl bg-[#0f1729] px-5 py-3 text-sm font-semibold text-white shadow-lg border border-white/5">
                 Loading road route...
               </div>
             </div>
           )}
 
-          {/* ==========================================================
-              LIVE GPS
-          ========================================================== */}
+          <button
+            type="button"
+            onClick={handleLiveGpsClick}
+            disabled={!busPosition}
+            className="absolute left-3 top-3 z-[1000] flex items-center gap-2 rounded-full bg-[#0f1729] px-3 py-2 text-sm font-semibold text-white shadow-md border border-white/5 transition hover:bg-[#1a2540] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <span
+              className={`h-2.5 w-2.5 rounded-full ${
+                activeTrip.status === 'Ongoing' ? 'animate-pulse bg-green-500' : 'bg-gray-500'
+              }`}
+            />
+            {activeTrip.status === 'Ongoing' ? 'Live GPS' : activeTrip.status}
+          </button>
 
-          <div className="absolute left-3 top-3 z-[1000] flex items-center gap-2 rounded-full bg-white px-3 py-2 text-sm font-semibold text-gray-700 shadow-md">
-            <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-green-500" />
-
-            Live GPS
-          </div>
-
-          {/* ==========================================================
-              CURRENT BUS
-          ========================================================== */}
-
-          <div className="absolute bottom-3 left-3 z-[1000] rounded-xl bg-white px-3 py-2 shadow-md">
+          <div className="absolute bottom-3 left-3 z-[1000] rounded-xl bg-[#0f1729] px-3 py-2 shadow-md border border-white/5">
             <div className="flex items-center gap-2">
-              <span className="text-xl">
-                🚌
-              </span>
-
+              <span className="text-xl">🚌</span>
               <div>
-                <div className="text-xs text-gray-500">
-                  Current Bus
-                </div>
-
-                <div className="font-bold text-gray-800">
-                  {selectedTrip.busId}
-                </div>
+                <div className="text-xs text-gray-400">Current Bus</div>
+                <div className="font-bold text-white">{activeTrip.busId}</div>
               </div>
             </div>
           </div>
 
-          {/* ==========================================================
-              ROUTE INFORMATION
-          ========================================================== */}
-
-          <div className="absolute right-3 bottom-3 z-[1000] rounded-xl bg-white px-3 py-2 shadow-md">
-            <div className="text-xs text-gray-500">
-              Route
-            </div>
-
-            <div className="font-semibold text-gray-800">
+          <div className="absolute right-3 bottom-3 z-[1000] rounded-xl bg-[#0f1729] px-3 py-2 shadow-md border border-white/5">
+            <div className="text-xs text-gray-400">Route</div>
+            <div className="font-semibold text-white">
               {originName}
               {' → '}
               {destinationName}
             </div>
           </div>
 
-          {/* ==========================================================
-              ERROR
-          ========================================================== */}
-
           {routeError && (
-            <div className="absolute right-3 top-3 z-[1000] max-w-[220px] rounded-lg bg-white px-3 py-2 text-xs text-red-600 shadow">
-              Unable to load the road route for
-              this trip.
+            <div className="absolute right-3 top-3 z-[1000] max-w-[220px] rounded-lg bg-[#0f1729] px-3 py-2 text-xs text-red-400 shadow border border-white/5">
+              Unable to load the road route for this trip.
             </div>
           )}
         </div>
 
-        {/* ============================================================
-            SIDEBAR
-        ============================================================ */}
-
-        <aside className="rounded-2xl border border-gray-300 bg-[#f2f2f2] p-3">
-          {/* ==========================================================
-              LIVE TRACKING
-          ========================================================== */}
-
+        <aside className="rounded-2xl border border-white/5 bg-[#0a0e1a] p-3">
           <div className="mb-3 flex items-center justify-between">
-            <h3 className="text-[2rem] font-bold text-gray-900">
-              Live Tracking
-            </h3>
-
-            <span className="rounded-full bg-[#d8dadd] px-5 py-1 text-xl font-semibold text-gray-700">
+            <h3 className="text-[2rem] font-bold text-white">Live Tracking</h3>
+            <span className="rounded-full bg-white/5 px-5 py-1 text-xl font-semibold text-gray-300">
               Status
             </span>
           </div>
 
           <div className="mb-6">
-            <TrackingRow
-              trip={selectedTrip}
-            />
+            <TrackingRow trip={activeTrip} active />
           </div>
 
-          {/* ==========================================================
-              OTHER TRIPS
-          ========================================================== */}
-
-          <h4 className="mb-3 text-[2rem] font-bold text-gray-900">
-            Other Trips
-          </h4>
+          <h4 className="mb-3 text-[2rem] font-bold text-white">Other Trips</h4>
 
           <div className="space-y-3">
             {otherTrips.map((trip) => (
               <TrackingRow
                 key={`${trip.route}-${trip.busId}`}
                 trip={trip}
+                onSelect={(selected) => setActiveTripId(selected.busId)}
               />
             ))}
           </div>

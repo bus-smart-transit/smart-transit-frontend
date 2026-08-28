@@ -7,6 +7,7 @@ import RoutesPanel from './components/Routes/Routes'
 import SchedulePanel from './components/Schedule/Schedule'
 import ReportsPanel from './components/Reports/Reports'
 import StaffPanel from './components/Staff/Staff'
+import AccountSettings from './components/AccountSettings'
 import {
   stats,
   trips,
@@ -25,12 +26,17 @@ export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [activeTab, setActiveTab] = useState('dashboard')
 
+  function handleLogout() {
+    setIsLoggedIn(false)
+    setActiveTab('dashboard')
+  }
+
   if (!isLoggedIn) {
     return <Login onSignIn={() => setIsLoggedIn(true)} />
   }
 
   return (
-    <div className="flex min-h-screen bg-[#f4f4f4]">
+    <div className="flex min-h-screen bg-[#0a0e1a]">
       <Sidebar activeTab={activeTab} onTabChange={setActiveTab} />
 
       <main className="flex-1 overflow-y-auto p-8">
@@ -76,6 +82,10 @@ export default function App() {
 
           {activeTab === 'staff' ? (
             <StaffPanel initialStaff={staffMembers} />
+          ) : null}
+
+          {activeTab === 'settings' ? (
+            <AccountSettings onLogout={handleLogout} />
           ) : null}
         </div>
       </main>
