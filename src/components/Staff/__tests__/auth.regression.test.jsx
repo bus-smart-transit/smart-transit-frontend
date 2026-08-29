@@ -65,7 +65,7 @@ describe('Bug 1 — StaffGuestRoute: stale token does not redirect to dashboard'
   });
 
   test('no token in storage → shows login page, fetch not called', async () => {
-    global.fetch.mockResolvedValue({ ok: false, status: 401 });
+    globalThis.fetch.mockResolvedValue({ ok: false, status: 401 });
 
     render(
       <MemoryRouter initialEntries={['/employee/login']}>
@@ -84,13 +84,13 @@ describe('Bug 1 — StaffGuestRoute: stale token does not redirect to dashboard'
     });
     expect(screen.queryByTestId('operator-dashboard')).not.toBeInTheDocument();
     // fetch should not have been called (no token to validate)
-    expect(global.fetch).not.toHaveBeenCalled();
+    expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 
   test('stale token in localStorage (backend returns 401) → stays on login page', async () => {
     localStorage.setItem('staff_token', 'expired-token-abc123');
     localStorage.setItem('staff_role', 'operator');
-    global.fetch.mockResolvedValue({ ok: false, status: 401 });
+    globalThis.fetch.mockResolvedValue({ ok: false, status: 401 });
 
     render(
       <MemoryRouter initialEntries={['/employee/login']}>
@@ -117,7 +117,7 @@ describe('Bug 1 — StaffGuestRoute: stale token does not redirect to dashboard'
   test('valid token (backend returns 200) → redirects to role dashboard', async () => {
     localStorage.setItem('staff_token', 'valid-token-xyz');
     localStorage.setItem('staff_role', 'driver');
-    global.fetch.mockResolvedValue({ ok: true, status: 200 });
+    globalThis.fetch.mockResolvedValue({ ok: true, status: 200 });
 
     render(
       <MemoryRouter initialEntries={['/employee/login']}>
@@ -139,7 +139,7 @@ describe('Bug 1 — StaffGuestRoute: stale token does not redirect to dashboard'
   test('network error during validation → stays on login page (fail-safe)', async () => {
     localStorage.setItem('staff_token', 'some-token');
     localStorage.setItem('staff_role', 'conductor');
-    global.fetch.mockRejectedValue(new Error('Network error'));
+    globalThis.fetch.mockRejectedValue(new Error('Network error'));
 
     render(
       <MemoryRouter initialEntries={['/employee/login']}>

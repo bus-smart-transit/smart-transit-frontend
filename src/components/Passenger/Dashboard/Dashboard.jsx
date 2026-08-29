@@ -31,7 +31,6 @@ function GroupOrderCard({ tickets, onCardClick, openTicketModal, getOriginLabel,
   const groupQrUrl = transRef
     ? `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(`grp:${transRef}`)}`
     : null;
-  const totalAmount = tickets.reduce((sum, t) => sum + Number(t.amount ?? 0), 0);
   const allBoarded = tickets.every((t) => t.status === 'boarded');
   const anyBoarded = tickets.some((t) => t.status === 'boarded');
   const groupStatus = allBoarded ? 'boarded' : anyBoarded ? 'partial' : 'valid';
@@ -175,7 +174,6 @@ function TicketTabWithFilter({
   const modalGroupQrUrl = modalTransRef
     ? `https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=${encodeURIComponent(`grp:${modalTransRef}`)}`
     : null;
-  const modalTotal      = groupModal?.reduce((s, t) => s + Number(t.amount ?? 0), 0) ?? 0;
 
   return (
     <section className="passenger-panel">

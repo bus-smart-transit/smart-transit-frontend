@@ -71,6 +71,17 @@ export default function PairingScreen({ role, onPaired, onLogout, paired = false
     void loadMyToken();
   }, [loadMyToken]);
 
+  const stopScanner = useCallback(() => {
+    if (scannerRef.current) {
+      if (typeof scannerRef.current.destroy === 'function') scannerRef.current.destroy();
+      scannerRef.current = null;
+    }
+    if (videoRef.current) videoRef.current.srcObject = null;
+    scannerBusyRef.current = false;
+    setScannerRunning(false);
+    setScannerBusy(false);
+  }, []);
+
   const submitPairing = useCallback(async (credential, manualType = null) => {
     const value = String(credential ?? '').trim();
     if (!value) return;
@@ -94,18 +105,7 @@ export default function PairingScreen({ role, onPaired, onLogout, paired = false
       setResult({ success: false, message: err.message || 'Pairing failed.' });
       setScannerStatus('');
     }
-  }, [role, onPaired]);
-
-  const stopScanner = useCallback(() => {
-    if (scannerRef.current) {
-      if (typeof scannerRef.current.destroy === 'function') scannerRef.current.destroy();
-      scannerRef.current = null;
-    }
-    if (videoRef.current) videoRef.current.srcObject = null;
-    scannerBusyRef.current = false;
-    setScannerRunning(false);
-    setScannerBusy(false);
-  }, []);
+  }, [role, onPaired, stopScanner]);
 
   const startScanner = useCallback(async () => {
     setScannerError('');

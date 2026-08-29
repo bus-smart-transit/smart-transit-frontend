@@ -8,8 +8,16 @@ const normalizeApiBase = (value) => {
   return trimmed.replace(/\/+$/, '');
 };
 
+const getSafeStorage = () => {
+  if (typeof globalThis === 'undefined') return null;
+  const storage = globalThis.localStorage;
+  if (!storage || typeof storage.getItem !== 'function') return null;
+  return storage;
+};
+
 const resolveApiBaseUrl = () => {
   const envBase = normalizeApiBase(import.meta.env.VITE_API_BASE_URL);
+  const storage = getSafeStorage();
 
   if (typeof window === 'undefined') {
     return envBase || 'http://127.0.0.1:8000/api';
@@ -18,11 +26,11 @@ const resolveApiBaseUrl = () => {
   const params = new URLSearchParams(window.location.search || '');
   const queryBase = normalizeApiBase(params.get('apiBase'));
   if (queryBase) {
-    localStorage.setItem(API_BASE_OVERRIDE_KEY, queryBase);
+    storage?.setItem(API_BASE_OVERRIDE_KEY, queryBase);
     return queryBase;
   }
 
-  const storedBase = normalizeApiBase(localStorage.getItem(API_BASE_OVERRIDE_KEY));
+  const storedBase = normalizeApiBase(storage?.getItem(API_BASE_OVERRIDE_KEY));
   if (storedBase) return storedBase;
 
   if (envBase) return envBase;

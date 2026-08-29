@@ -630,9 +630,11 @@ export default function useBuyTicket({ onTicketPurchased }) {
 
   useEffect(() => {
     if (isGuestCheckout) {
-      setAvailableRewardPoints(0);
-      setLoadingRewards(false);
-      return;
+      const timer = setTimeout(() => {
+        setAvailableRewardPoints(0);
+        setLoadingRewards(false);
+      }, 0);
+      return () => clearTimeout(timer);
     }
 
     let cancelled = false;
@@ -666,26 +668,38 @@ export default function useBuyTicket({ onTicketPurchased }) {
 
   useEffect(() => {
     if (form.booking_option === 'now' && form.booking_date !== toDateInputValue()) {
-      setForm((prev) => ({ ...prev, booking_date: toDateInputValue() }));
+      const timer = setTimeout(() => {
+        setForm((prev) => ({ ...prev, booking_date: toDateInputValue() }));
+      }, 0);
+      return () => clearTimeout(timer);
     }
+    return undefined;
   }, [form.booking_date, form.booking_option]);
 
   useEffect(() => {
     if (form.booking_option === 'now' && !hasBookNowOption) {
-      setForm((prev) => ({
-        ...prev,
-        booking_option: 'later',
-        booking_date: prev.booking_date < minBookingDate ? minBookingDate : prev.booking_date,
-      }));
+      const timer = setTimeout(() => {
+        setForm((prev) => ({
+          ...prev,
+          booking_option: 'later',
+          booking_date: prev.booking_date < minBookingDate ? minBookingDate : prev.booking_date,
+        }));
+      }, 0);
+      return () => clearTimeout(timer);
     }
+    return undefined;
   }, [form.booking_option, hasBookNowOption, minBookingDate]);
 
   useEffect(() => {
     if (form.booking_option !== 'later') return;
     if (!form.booking_date) return;
     if (form.booking_date < minBookingDate) {
-      setForm((prev) => ({ ...prev, booking_date: minBookingDate }));
+      const timer = setTimeout(() => {
+        setForm((prev) => ({ ...prev, booking_date: minBookingDate }));
+      }, 0);
+      return () => clearTimeout(timer);
     }
+    return undefined;
   }, [form.booking_date, form.booking_option, minBookingDate]);
 
   useEffect(() => {
