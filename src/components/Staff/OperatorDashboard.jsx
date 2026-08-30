@@ -701,7 +701,7 @@ function FleetMapView({ selectedTrip, fleetTrips, onBack }) {
     mapRef.current.flyTo(busPosition, LIVE_GPS_ZOOM, { animate: true, duration: 1 })
   }
 
-  return (
+      return (
     <section className="rounded-2xl border border-white/5 bg-[#0a0e1a] p-4 shadow-sm">
       <div className="mb-4 flex items-center justify-between">
         <button
@@ -712,162 +712,90 @@ function FleetMapView({ selectedTrip, fleetTrips, onBack }) {
           <ArrowLeft className="h-4 w-4" />
           Back
         </button>
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[2.2fr_1fr]">
-        <div className="relative h-[500px] overflow-hidden rounded-xl border border-white/5">
-          <MapContainer
-            ref={mapRef}
-            center={mapCenter}
-            zoom={10}
-            scrollWheelZoom={true}
-            zoomControl={false}
-            className="h-full w-full"
-          >
-            <ZoomControl position="topright" />
-
-            <TileLayer
-              attribution='&copy; OpenStreetMap contributors'
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            />
-
-            {!routeLoading && roadRoute.length > 1 && (
-              <Polyline
-                positions={roadRoute}
-                pathOptions={{
-                  color: '#f6c66b',
-                  weight: 7,
-                  opacity: 0.75,
-                  lineCap: 'round',
-                  lineJoin: 'round',
-                }}
-              />
-            )}
-
-            {!routeLoading && completedRoute.length > 0 && (
-              <Polyline
-                positions={completedRoute}
-                pathOptions={{
-                  color: '#f59e0b',
-                  weight: 7,
-                  opacity: 1,
-                  lineCap: 'round',
-                  lineJoin: 'round',
-                }}
-              />
-            )}
-
-            {origin && (
-              <CircleMarker
-                center={origin}
-                radius={9}
-                pathOptions={{
-                  color: '#0a0e1a',
-                  weight: 3,
-                  fillColor: '#3b82f6',
-                  fillOpacity: 1,
-                }}
-              >
-                <Popup>
-                  <div className="text-sm">
-                    <strong>{originName}</strong>
-                    <br />
-                    Departure
-                  </div>
-                </Popup>
-              </CircleMarker>
-            )}
-
-            {destination && (
-              <CircleMarker
-                center={destination}
-                radius={9}
-                pathOptions={{
-                  color: '#0a0e1a',
-                  weight: 3,
-                  fillColor: '#16a34a',
-                  fillOpacity: 1,
-                }}
-              >
-                <Popup>
-                  <div className="text-sm">
-                    <strong>{destinationName}</strong>
-                    <br />
-                    Destination
-                  </div>
-                </Popup>
-              </CircleMarker>
-            )}
-
-            {!routeLoading && busPosition && (
-              <Marker position={busPosition} icon={busIcon} zIndexOffset={1000}>
-                <Popup>
-                  <div className="min-w-[180px] text-sm">
-                    <div className="mb-2 text-base font-bold">🚌 {activeTrip.busId}</div>
-                    <div>
-                      <strong>Departure:</strong> {originName}
-                    </div>
-                    <div>
-                      <strong>Destination:</strong> {destinationName}
-                    </div>
-                    <div>
-                      <strong>Status:</strong> {activeTrip.status}
-                    </div>
-                    <div className="mt-1 font-semibold text-orange-500">
-                      Progress: {Math.round(Number(activeTrip.progress) * 100)}%
-                    </div>
-                  </div>
-                </Popup>
-              </Marker>
-            )}
-          </MapContainer>
-
-          {routeLoading && (
-            <div className="absolute inset-0 z-[1000] flex items-center justify-center bg-[#0a0e1a]/70">
-              <div className="rounded-xl bg-[#0f1729] px-5 py-3 text-sm font-semibold text-white shadow-lg border border-white/5">
-                Loading road route...
-              </div>
-            </div>
-          )}
-
-          <button
-            type="button"
-            onClick={handleLiveGpsClick}
-            disabled={!busPosition}
-            className="absolute left-3 top-3 z-[1000] flex items-center gap-2 rounded-full bg-[#0f1729] px-3 py-2 text-sm font-semibold text-white shadow-md border border-white/5 transition hover:bg-[#1a2540] disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            <span
-              className={`h-2.5 w-2.5 rounded-full ${
-                activeTrip.status === 'Ongoing' ? 'animate-pulse bg-green-500' : 'bg-gray-500'
-              }`}
-            />
-            {activeTrip.status === 'Ongoing' ? 'Live GPS' : activeTrip.status}
-          </button>
-
-          <div className="absolute bottom-3 left-3 z-[1000] rounded-xl bg-[#0f1729] px-3 py-2 shadow-md border border-white/5">
-            <div className="flex items-center gap-2">
-              <span className="text-xl">🚌</span>
-              <div>
-                <div className="text-xs text-gray-400">Current Bus</div>
-                <div className="font-bold text-white">{activeTrip.busId}</div>
-              </div>
-            </div>
           </div>
-
-          <div className="absolute right-3 bottom-3 z-[1000] rounded-xl bg-[#0f1729] px-3 py-2 shadow-md border border-white/5">
-            <div className="text-xs text-gray-400">Route</div>
-            <div className="font-semibold text-white">
-              {originName}
-              {' → '}
-              {destinationName}
-            </div>
+          <div className="rounded-xl border border-slate-700 bg-slate-950 p-4">
+            <div className="text-xs uppercase text-slate-500">Online Payments</div>
+            <div className="mt-2 text-2xl font-bold text-sky-400">{asCurrency(revenue.online)}</div>
           </div>
+          <div className="rounded-xl border border-slate-700 bg-slate-950 p-4">
+            <div className="text-xs uppercase text-slate-500">Cash Payments</div>
+            <div className="mt-2 text-2xl font-bold text-amber-400">{asCurrency(revenue.onsite_cash)}</div>
+          </div>
+          <div className="rounded-xl border border-slate-700 bg-slate-950 p-4">
+            <div className="text-xs uppercase text-slate-500">Completed Trips</div>
+            <div className="mt-2 text-2xl font-bold text-indigo-400">{Number(trips.completed || 0)}</div>
+          </div>
+          <div className="rounded-xl border border-slate-700 bg-slate-950 p-4 md:col-span-2 xl:col-span-2">
+            <div className="text-xs uppercase text-slate-500">Tickets Issued</div>
+            <div className="mt-2 text-xl font-bold text-slate-100">{Number(tickets.total || 0)}</div>
+            <p className="mt-1 text-xs text-slate-500">Avg per completed trip: {Number(tickets.average_per_trip || 0).toFixed(2)}</p>
+          </div>
+          <div className="rounded-xl border border-slate-700 bg-slate-950 p-4 md:col-span-2 xl:col-span-2">
+            <div className="text-xs uppercase text-slate-500">Average Revenue / Trip</div>
+            <div className="mt-2 text-xl font-bold text-slate-100">{asCurrency(trips.average_revenue_per_trip)}</div>
+            <p className="mt-1 text-xs text-slate-500">Period: {report.period?.start_date || '-'} to {report.period?.end_date || '-'}</p>
+          </div>
+        </div>
+      );
+    }
 
-          {routeError && (
-            <div className="absolute right-3 top-3 z-[1000] max-w-[220px] rounded-lg bg-[#0f1729] px-3 py-2 text-xs text-red-400 shadow border border-white/5">
-              Unable to load the road route for this trip.
-            </div>
+    if (reportType === 'daily') {
+      const summary = report.summary || {};
+      const entries = Object.entries(summary);
+      return (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <div className="rounded-xl border border-slate-700 bg-slate-950 p-4 md:col-span-2 xl:col-span-3">
+            <div className="text-xs uppercase text-slate-500">Report Date</div>
+            <div className="mt-2 text-lg font-semibold text-slate-100">{report.date || 'N/A'}</div>
+          </div>
+          {entries.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-slate-700 bg-slate-950 p-6 text-sm text-slate-400">No daily summary data yet.</div>
+          ) : (
+            entries.map(([key, val]) => (
+              <div key={key} className="rounded-xl border border-slate-700 bg-slate-950 p-4">
+                <div className="text-xs uppercase text-slate-500">{key.replaceAll('_', ' ')}</div>
+                <div className="mt-2 text-lg font-semibold text-slate-100">{typeof val === 'number' ? val.toLocaleString() : String(val)}</div>
+              </div>
+            ))
           )}
+        </div>
+      );
+    }
+
+    if (reportType === 'revenue') {
+      const rows = report.routes || [];
+      return (
+        <div className="overflow-x-auto rounded-xl border border-slate-700">
+          <table className="min-w-full divide-y divide-slate-700 bg-slate-950 text-sm">
+            <thead className="bg-slate-900/80 text-slate-300">
+              <tr>
+                <th className="px-4 py-3 text-left font-semibold">Route</th>
+                <th className="px-4 py-3 text-left font-semibold">Total Revenue</th>
+                <th className="px-4 py-3 text-left font-semibold">Online</th>
+                <th className="px-4 py-3 text-left font-semibold">Cash</th>
+                <th className="px-4 py-3 text-left font-semibold">Trips</th>
+                <th className="px-4 py-3 text-left font-semibold">Tickets</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-800 text-slate-200">
+              {rows.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-4 py-6 text-center text-slate-400">No route revenue data in this date range.</td>
+                </tr>
+              ) : (
+                rows.map((row) => (
+                  <tr key={row.route_id || row.route_name} className="hover:bg-slate-900/70">
+                    <td className="px-4 py-3 font-medium text-slate-100">{row.route_name || `Route ${row.route_id}`}</td>
+                    <td className="px-4 py-3">{asCurrency(row.total_revenue)}</td>
+                    <td className="px-4 py-3">{asCurrency(row.online_revenue)}</td>
+                    <td className="px-4 py-3">{asCurrency(row.onsite_revenue)}</td>
+                    <td className="px-4 py-3">{Number(row.total_trips || 0)}</td>
+                    <td className="px-4 py-3">{Number(row.total_tickets || 0)}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
 
         <aside className="rounded-2xl border border-white/5 bg-[#0a0e1a] p-3">
