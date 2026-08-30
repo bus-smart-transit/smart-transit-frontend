@@ -1,194 +1,175 @@
-import { useState } from "react";
 import DashboardLayout from "../../components/DashboardLayout.jsx";
 import Card from "../../components/ui/Card.jsx";
-import Button from "../../components/ui/Button.jsx";
-import Modal from "../../components/ui/Modal.jsx";
-import { GiftIcon, BadgeIcon, CoinIcon, CheckCircleIcon } from "../../components/Icons.jsx";
+import { CoinIcon, CheckCircleIcon, PlusIcon, MinusIcon, InfoIcon } from "../../components/Icons.jsx";
+import { useRewards } from "../../context/RewardsContext.jsx";
 import {
-  REWARDS_NEXT_TIER,
-  REWARDS_TIER,
-  AVAILABLE_REWARDS,
-  EARNED_BADGES,
-  REDEMPTION_HISTORY,
-  REWARDS_POINTS,
-} from "../../data/sampleData.js";
+  MIN_REDEMPTION_POINTS,
+  REWARD_TIERS,
+  getCurrentTier,
+  getNextTier,
+} from "../../utils/rewards.js";
 
 export default function RewardsPage() {
-  const [points, setPoints] = useState(REWARDS_POINTS);
-  const [history, setHistory] = useState(REDEMPTION_HISTORY);
-  const [pendingReward, setPendingReward] = useState(null);
-  const [redeemed, setRedeemed] = useState(false);
+  const { points, activity } = useRewards();
 
-  const progressPercent = Math.min(100, Math.round((points / REWARDS_NEXT_TIER) * 100));
-
-  const handleConfirmRedeem = () => {
-    if (!pendingReward) return;
-    setPoints((prev) => prev - pendingReward.cost);
-    setHistory((prev) => [
-      {
-        id: `redeem-${Date.now()}`,
-        date: "Today",
-        reward: pendingReward.title,
-        pointsUsed: pendingReward.cost,
-      },
-      ...prev,
-    ]);
-    setRedeemed(true);
-  };
-
-  const closeModal = () => {
-    setPendingReward(null);
-    setRedeemed(false);
-  };
+  const eligible = points >= MIN_REDEMPTION_POINTS;
+  const currentTier = getCurrentTier(points);
+  const nextTier = getNextTier(points);
+  const tierProgressPercent = nextTier
+    ? Math.min(100, Math.round((points / nextTier.threshold) * 100))
+    : 100;
 
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        <Card className="flex flex-col gap-6 bg-navy-900 p-6 text-white sm:flex-row sm:items-center sm:justify-between sm:p-8">
-          <div>
-            <p className="text-sm text-navy-200">Your Rewards Points</p>
-            <p className="mt-1 flex items-center gap-2 font-display text-3xl font-bold">
-              <CoinIcon size={22} />
-              {points.toLocaleString()} pts
-            </p>
-            <p className="mt-1 text-sm text-teal-300">Current Tier: {REWARDS_TIER}</p>
-          </div>
-
-          <div className="w-full sm:max-w-xs">
-            <div className="h-2.5 w-full overflow-hidden rounded-full bg-white/10">
-              <div
-                className="h-full rounded-full bg-gradient-to-r from-teal-400 to-teal-300"
-                style={{ width: `${progressPercent}%` }}
-              />
+        {/* Balance hero -- the whole reward system in one glance */}
+        <Card className="!bg-navy-900 p-6 text-white sm:p-8">
+          <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="flex items-center gap-1.5 text-sm text-navy-200">
+                <CoinIcon size={16} /> SmartPoints
+              </p>
+              <p className="mt-1 font-display text-4xl font-bold">{points.toLocaleString()}</p>
+              <p className="mt-1 text-sm text-teal-300">
+                Worth ₱{points.toLocaleString()} in ticket discounts
+              </p>
             </div>
-            <p className="mt-2 text-xs text-navy-200">
-              {points} / {REWARDS_NEXT_TIER} pts to Gold Rider
-            </p>
+
+            {eligible ? (
+              <div className="flex items-center gap-3 rounded-xl bg-teal-400/10 px-4 py-3 sm:max-w-xs">
+                <CheckCircleIcon size={24} className="shrink-0 text-teal-300" />
+                <p className="text-sm text-teal-100">
+                  <span className="font-semibold text-white">Your rewards are ready to use!</span>{" "}
+                  Turn on "Use SmartPoints" at checkout on your next ticket.
+                </p>
+              </div>
+            ) : (
+              <div className="flex items-center gap-3 rounded-xl bg-white/5 px-4 py-3 sm:max-w-xs">
+                <InfoIcon size={24} className="shrink-0 text-navy-200" />
+                <p className="text-sm text-navy-200">
+                  Earn <span className="font-semibold text-white">
+                    {(MIN_REDEMPTION_POINTS - points).toLocaleString()} more points
+                  </span>{" "}
+                  to start using your rewards.
+                </p>
+              </div>
+            )}
           </div>
         </Card>
 
+        {/* Milestone / tier progress */}
         <Card className="p-6">
-          <h2 className="font-display text-lg font-semibold text-navy-950">About Rewards</h2>
-          <p className="mt-2 text-sm leading-relaxed text-slate-500">
-            Earn points every time you complete a paid trip with SmartTransit — 1 point for every
-            ₱1 spent on fare. Redeem points for fare discounts, waived fees, or free one-way
-            tickets on your favorite routes across Davao Region XI.
-          </p>
-        </Card>
+          <div className="flex items-center justify-between">
+            <h2 className="font-display text-lg font-semibold text-navy-950">Rider Milestones</h2>
+            <span className="text-sm font-semibold text-navy-950">
+              {points.toLocaleString()} / {(nextTier ?? currentTier).threshold.toLocaleString()} pts
+            </span>
+          </div>
 
-        <Card className="p-6">
-          <h2 className="font-display text-lg font-semibold text-navy-950">Available Rewards</h2>
-          <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {AVAILABLE_REWARDS.map((reward) => {
-              const canRedeem = points >= reward.cost;
+          <div className="mt-3 h-2.5 w-full overflow-hidden rounded-full bg-slate-100">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-teal-400 to-teal-500"
+              style={{ width: `${tierProgressPercent}%` }}
+            />
+          </div>
+          <p className="mt-2 text-xs text-slate-500">
+            {nextTier
+              ? `${(nextTier.threshold - points).toLocaleString()} more points until your next milestone`
+              : "You've reached the top rider milestone!"}
+          </p>
+
+          <div className="mt-5 flex gap-4">
+            {REWARD_TIERS.map((tier) => {
+              const reached = points >= tier.threshold;
               return (
-                <div key={reward.id} className="flex flex-col rounded-xl border border-slate-200 p-4">
-                  <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-teal-50 text-teal-700">
-                    <GiftIcon size={20} />
-                  </span>
-                  <h3 className="mt-3 text-sm font-semibold text-navy-950">{reward.title}</h3>
-                  <p className="mt-1 flex-1 text-xs leading-relaxed text-slate-500">
-                    {reward.description}
+                <div
+                  key={tier.label}
+                  className={`flex-1 rounded-xl border p-4 text-center ${
+                    reached ? "border-teal-200 bg-teal-50" : "border-slate-200 bg-slate-50"
+                  }`}
+                >
+                  <p className={`text-sm font-semibold ${reached ? "text-teal-800" : "text-slate-400"}`}>
+                    {tier.label}
                   </p>
-                  <div className="mt-3 flex items-center justify-between">
-                    <span className="text-xs font-semibold text-navy-700">{reward.cost} pts</span>
-                    <Button
-                      size="sm"
-                      variant={canRedeem ? "primary" : "outline"}
-                      disabled={!canRedeem}
-                      onClick={() => setPendingReward(reward)}
-                    >
-                      {canRedeem ? "Redeem" : "Not enough"}
-                    </Button>
-                  </div>
+                  <p className={`mt-0.5 text-xs ${reached ? "text-teal-600" : "text-slate-400"}`}>
+                    {tier.threshold.toLocaleString()} SmartPoints
+                  </p>
                 </div>
               );
             })}
           </div>
         </Card>
 
+        {/* How it works -- keeps the concept dead simple */}
         <Card className="p-6">
-          <h2 className="font-display text-lg font-semibold text-navy-950">Earned Badges</h2>
-          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-            {EARNED_BADGES.map((badge) => (
-              <div
-                key={badge.id}
-                className={`flex flex-col items-center gap-2 rounded-xl border p-4 text-center text-xs font-medium ${
-                  badge.earned
-                    ? "border-teal-200 bg-teal-50 text-teal-800"
-                    : "border-slate-200 bg-slate-50 text-slate-400"
-                }`}
-              >
-                <BadgeIcon size={24} />
-                {badge.label}
-              </div>
-            ))}
+          <h2 className="font-display text-lg font-semibold text-navy-950">How SmartPoints Work</h2>
+          <p className="mt-2 text-sm leading-relaxed text-slate-500">
+            Buy a ticket → earn SmartPoints → save your points → use them to reduce the cost of
+            your next SmartTransit ticket.
+          </p>
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
+            <div className="rounded-xl border border-slate-200 p-4">
+              <p className="text-sm font-semibold text-navy-950">1. Earn</p>
+              <p className="mt-1 text-xs leading-relaxed text-slate-500">
+                ₱1 spent on a ticket = 1 SmartPoint, added automatically after a successful
+                payment.
+              </p>
+            </div>
+            <div className="rounded-xl border border-slate-200 p-4">
+              <p className="text-sm font-semibold text-navy-950">2. Save</p>
+              <p className="mt-1 text-xs leading-relaxed text-slate-500">
+                Once you reach {MIN_REDEMPTION_POINTS} points, they're ready to use on any future
+                ticket.
+              </p>
+            </div>
+            <div className="rounded-xl border border-slate-200 p-4">
+              <p className="text-sm font-semibold text-navy-950">3. Use</p>
+              <p className="mt-1 text-xs leading-relaxed text-slate-500">
+                1 SmartPoint = ₱1 off. Switch on "Use SmartPoints" at checkout to apply it
+                automatically.
+              </p>
+            </div>
           </div>
         </Card>
 
+        {/* Activity log -- makes the balance feel functional, not static */}
         <Card className="p-6">
-          <h2 className="font-display text-lg font-semibold text-navy-950">Redemption History</h2>
-          {history.length === 0 ? (
-            <p className="mt-3 text-sm text-slate-500">No rewards redeemed yet.</p>
+          <h2 className="font-display text-lg font-semibold text-navy-950">Rewards Activity</h2>
+          {activity.length === 0 ? (
+            <p className="mt-3 text-sm text-slate-500">
+              No activity yet — book a trip to start earning SmartPoints.
+            </p>
           ) : (
-            <div className="mt-4 overflow-x-auto">
-              <table className="w-full min-w-[420px] text-left text-sm">
-                <thead className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                  <tr>
-                    <th className="pb-2">Date</th>
-                    <th className="pb-2">Reward</th>
-                    <th className="pb-2">Points Used</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {history.map((entry) => (
-                    <tr key={entry.id}>
-                      <td className="py-2.5 text-slate-500">{entry.date}</td>
-                      <td className="py-2.5 font-medium text-navy-950">{entry.reward}</td>
-                      <td className="py-2.5 text-slate-500">-{entry.pointsUsed} pts</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="mt-4 divide-y divide-slate-100">
+              {activity.map((entry) => {
+                const isEarn = entry.type === "earn";
+                return (
+                  <div key={entry.id} className="flex items-center gap-3 py-3.5 first:pt-0 last:pb-0">
+                    <span
+                      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${
+                        isEarn ? "bg-teal-50 text-teal-700" : "bg-slate-100 text-slate-500"
+                      }`}
+                    >
+                      {isEarn ? <PlusIcon size={16} /> : <MinusIcon size={16} />}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-navy-950">{entry.label}</p>
+                      <p className="truncate text-xs text-slate-500">{entry.route}</p>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <p className={`text-sm font-semibold ${isEarn ? "text-teal-700" : "text-slate-500"}`}>
+                        {isEarn ? "+" : "-"}
+                        {entry.points.toLocaleString()} pts
+                      </p>
+                      <p className="text-xs text-slate-400">{entry.date}</p>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </Card>
       </div>
-
-      <Modal open={Boolean(pendingReward)} onClose={closeModal} title={redeemed ? "Reward redeemed" : "Confirm redemption"}>
-        {pendingReward && !redeemed && (
-          <div>
-            <p className="text-sm text-slate-600">
-              Redeem <strong>{pendingReward.title}</strong> for{" "}
-              <strong>{pendingReward.cost} pts</strong>? This will be deducted from your rewards
-              balance immediately.
-            </p>
-            <div className="mt-6 flex justify-end gap-3">
-              <Button variant="ghost" onClick={closeModal}>
-                Cancel
-              </Button>
-              <Button variant="primary" onClick={handleConfirmRedeem}>
-                Confirm Redeem
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {pendingReward && redeemed && (
-          <div className="text-center">
-            <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-teal-50 text-teal-600">
-              <CheckCircleIcon size={30} />
-            </span>
-            <p className="mt-4 text-sm text-slate-600">
-              <strong>{pendingReward.title}</strong> has been redeemed. You now have{" "}
-              <strong>{points.toLocaleString()} pts</strong> remaining.
-            </p>
-            <Button variant="primary" className="mt-6 w-full" onClick={closeModal}>
-              Done
-            </Button>
-          </div>
-        )}
-      </Modal>
     </DashboardLayout>
   );
 }

@@ -8,6 +8,8 @@ const initialState = {
   date: "",
   selectedTrip: null, // the trip card the passenger clicked "Book Seat" on
   selectedSeat: null, // e.g. "13"
+  useSmartPoints: false, // whether the passenger toggled "Use SmartPoints" on at checkout
+  receipt: null, // { fare, pointsUsed, discount, amountPaid, pointsEarned } set once payment succeeds
 };
 
 export function BookingProvider({ children }) {
@@ -18,18 +20,40 @@ export function BookingProvider({ children }) {
   };
 
   const selectTrip = (trip) => {
-    setBooking((prev) => ({ ...prev, selectedTrip: trip, selectedSeat: null }));
+    setBooking((prev) => ({
+      ...prev,
+      selectedTrip: trip,
+      selectedSeat: null,
+      useSmartPoints: false,
+      receipt: null,
+    }));
   };
 
   const selectSeat = (seat) => {
     setBooking((prev) => ({ ...prev, selectedSeat: seat }));
   };
 
+  const setUseSmartPoints = (useSmartPoints) => {
+    setBooking((prev) => ({ ...prev, useSmartPoints }));
+  };
+
+  const setReceipt = (receipt) => {
+    setBooking((prev) => ({ ...prev, receipt }));
+  };
+
   const resetBooking = () => setBooking(initialState);
 
   return (
     <BookingContext.Provider
-      value={{ booking, updateSearch, selectTrip, selectSeat, resetBooking }}
+      value={{
+        booking,
+        updateSearch,
+        selectTrip,
+        selectSeat,
+        setUseSmartPoints,
+        setReceipt,
+        resetBooking,
+      }}
     >
       {children}
     </BookingContext.Provider>

@@ -3,19 +3,29 @@ import { useNavigate } from "react-router-dom";
 import AppTopBar from "../../components/AppTopBar.jsx";
 import Card from "../../components/ui/Card.jsx";
 import Button from "../../components/ui/Button.jsx";
-import { CardIcon } from "../../components/Icons.jsx";
+import Toggle from "../../components/ui/Toggle.jsx";
+import { CardIcon, CoinIcon } from "../../components/Icons.jsx";
 import { useBooking } from "../../context/BookingContext.jsx";
+import { useRewards } from "../../context/RewardsContext.jsx";
+import { calculateCheckout, MIN_REDEMPTION_POINTS } from "../../utils/rewards.js";
 
 export default function PaymentPage() {
   const navigate = useNavigate();
-  const { booking } = useBooking();
-  const { selectedTrip, selectedSeat } = booking;
+  const { booking, setUseSmartPoints } = useBooking();
+  const { selectedTrip, selectedSeat, useSmartPoints } = booking;
+  const { points } = useRewards();
 
   useEffect(() => {
     if (!selectedTrip || !selectedSeat) navigate("/booking", { replace: true });
   }, [selectedTrip, selectedSeat, navigate]);
 
   if (!selectedTrip || !selectedSeat) return null;
+
+  const { eligible, pointsUsed, discount, amountToPay } = calculateCheckout(
+    selectedTrip.fare,
+    points,
+    useSmartPoints
+  );
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -51,15 +61,50 @@ export default function PaymentPage() {
               <dd className="font-medium text-navy-950">1</dd>
             </div>
             <div className="flex justify-between gap-4">
-              <dt className="text-slate-400">Fare per passenger</dt>
+              <dt className="text-slate-400">Ticket Fare</dt>
               <dd className="font-medium text-navy-950">₱{selectedTrip.fare.toFixed(2)}</dd>
             </div>
-            <div className="flex justify-between border-t border-slate-100 pt-3">
-              <dt className="font-semibold text-navy-950">Total</dt>
-              <dd className="font-display text-lg font-bold text-navy-950">
-                ₱{selectedTrip.fare.toFixed(2)}
-              </dd>
+          </dl>
+
+          <div className="mt-5 rounded-xl border border-slate-200 p-4">
+            <div className="flex items-center justify-between gap-4">
+              <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                <CoinIcon size={14} className="text-teal-600" /> SmartPoints Balance
+              </p>
+              <p className="text-sm font-semibold text-navy-950">{points.toLocaleString()} points</p>
             </div>
+
+            {eligible ? (
+              <>
+                <div className="mt-1 border-t border-slate-100">
+                  <Toggle
+                    checked={useSmartPoints}
+                    onChange={setUseSmartPoints}
+                    label="Use SmartPoints"
+                    description={`Apply ${pointsUsed.toLocaleString()} points as a discount on this ticket`}
+                  />
+                </div>
+
+                {useSmartPoints && (
+                  <div className="mt-2 space-y-2 border-t border-slate-100 pt-3 text-sm">
+                    <div className="flex justify-between gap-4">
+                      <dt className="text-slate-400">SmartPoints Discount</dt>
+                      <dd className="font-medium text-teal-700">-₱{discount.toFixed(2)}</dd>
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <p className="mt-2 border-t border-slate-100 pt-3 text-xs text-slate-500">
+                Earn {(MIN_REDEMPTION_POINTS - points).toLocaleString()} more points to start using
+                SmartPoints for a discount.
+              </p>
+            )}
+          </div>
+
+          <dl className="mt-4 flex justify-between border-t border-slate-100 pt-3 text-sm">
+            <dt className="font-semibold text-navy-950">Amount to Pay</dt>
+            <dd className="font-display text-lg font-bold text-navy-950">₱{amountToPay.toFixed(2)}</dd>
           </dl>
 
           <p className="mt-6 text-xs font-semibold uppercase tracking-wide text-slate-400">

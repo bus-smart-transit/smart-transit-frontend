@@ -2,6 +2,7 @@ import { useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import {
   BusIcon,
+  HomeIcon,
   GridIcon,
   TicketIcon,
   ClockIcon,
@@ -36,7 +37,7 @@ export default function DashboardLayout({ children }) {
 
   const linkClasses = ({ isActive }) =>
     `flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium transition-colors ${
-      isActive ? "bg-white text-navy-900 shadow-sm" : "text-navy-200 hover:bg-white/10 hover:text-white"
+      isActive ? "bg-white text-navy-900 shadow-sm" : "text-navy-200 hover:bg-teal-400/10 hover:text-teal-300"
     }`;
 
   return (
@@ -70,7 +71,14 @@ export default function DashboardLayout({ children }) {
           </button>
         </div>
 
-        <p className="mt-8 px-3.5 text-xs font-semibold uppercase tracking-wider text-navy-400">
+        <div className="mt-6 border-b border-white/10 pb-4">
+          <NavLink to="/" end onClick={() => setSidebarOpen(false)} className={linkClasses}>
+            <HomeIcon size={19} />
+            Homepage
+          </NavLink>
+        </div>
+
+        <p className="mt-4 px-3.5 text-xs font-semibold uppercase tracking-wider text-navy-400">
           Main
         </p>
         <nav className="mt-2 flex flex-col gap-1">

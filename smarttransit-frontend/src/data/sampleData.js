@@ -240,58 +240,47 @@ export const NOTIFICATIONS = [
   },
 ];
 
-// --- Rewards ------------------------------------------------------
+// --- Rewards (SmartPoints) ------------------------------------------------------
+// A simple cashback-style loyalty balance: ₱1 spent = 1 point, 1 point =
+// ₱1 discount on a future ticket. See src/utils/rewards.js for the rules
+// (including the Silver/Gold Rider tiers) and src/context/RewardsContext.jsx
+// for the live balance + activity log this seed data feeds into.
 export const REWARDS_POINTS = 340;
-export const REWARDS_NEXT_TIER = 500;
-export const REWARDS_TIER = "Silver Rider";
 
-export const AVAILABLE_REWARDS = [
+// "earn" entries come from completed ticket purchases, "redeem" entries
+// come from using SmartPoints as a checkout discount.
+export const REWARDS_ACTIVITY = [
   {
-    id: "reward-1",
-    title: "₱20 Fare Discount",
-    description: "Use on any single trip within Davao Region XI.",
-    cost: 100,
+    id: "activity-1",
+    type: "earn",
+    points: 150,
+    label: "Ticket purchase",
+    route: "Ecoland Terminal → Tagum Terminal",
+    date: "Aug 18, 2026",
   },
   {
-    id: "reward-2",
-    title: "Free Seat Reservation Fee",
-    description: "Waives the reservation fee on your next booking.",
-    cost: 150,
+    id: "activity-2",
+    type: "redeem",
+    points: 100,
+    label: "Used for ticket discount",
+    route: "Ecoland Terminal → Panabo Terminal",
+    date: "Aug 12, 2026",
   },
   {
-    id: "reward-3",
-    title: "₱50 Fare Discount",
-    description: "Use on any single trip within Davao Region XI.",
-    cost: 250,
+    id: "activity-3",
+    type: "earn",
+    points: 80,
+    label: "Ticket purchase",
+    route: "Ecoland Terminal → Digos Terminal",
+    date: "Aug 5, 2026",
   },
   {
-    id: "reward-4",
-    title: "Free One-Way Ticket (Ecoland ⇄ Digos)",
-    description: "Redeem a full one-way fare on this route.",
-    cost: 400,
-  },
-];
-
-export const EARNED_BADGES = [
-  { id: "badge-1", label: "First Trip", earned: true },
-  { id: "badge-2", label: "5 Trips Completed", earned: true },
-  { id: "badge-3", label: "Early Bird (5AM trip)", earned: true },
-  { id: "badge-4", label: "10 Trips Completed", earned: false },
-  { id: "badge-5", label: "Frequent Rider", earned: false },
-];
-
-export const REDEMPTION_HISTORY = [
-  {
-    id: "redeem-1",
-    date: "May 15, 2026",
-    reward: "₱20 Fare Discount",
-    pointsUsed: 100,
-  },
-  {
-    id: "redeem-2",
-    date: "April 2, 2026",
-    reward: "Free Seat Reservation Fee",
-    pointsUsed: 150,
+    id: "activity-4",
+    type: "earn",
+    points: 45,
+    label: "Ticket purchase",
+    route: "Ecoland Terminal → Panabo Terminal",
+    date: "Jul 28, 2026",
   },
 ];
 
@@ -340,13 +329,13 @@ export const NEWS_ITEMS = [
     id: "news-4",
     category: "Product Update",
     date: "May 12, 2026",
-    title: "Rewards points can now be redeemed for free one-way tickets",
+    title: "SmartPoints can now be used directly at checkout",
     summary:
-      "Frequent riders can now trade in points for a completely free trip on select routes.",
+      "Frequent riders can now switch on SmartPoints during payment and see the discount applied instantly.",
     body: [
-      "SmartTransit Rewards now includes a free one-way ticket redemption on the Ecoland ⇄ Digos route for passengers who have accumulated 400 points or more.",
-      "Points are still earned at the same rate — 1 point for every ₱1 spent on fare — and can be viewed anytime from the Rewards page.",
-      "More routes will be added to the free-ticket redemption list later this year.",
+      "SmartTransit Rewards now works like straightforward cashback: every ₱1 spent on a ticket earns 1 SmartPoint, and every SmartPoint is worth ₱1 off a future fare.",
+      "Once a passenger has at least 100 points, a new \"Use SmartPoints\" toggle appears on the payment page. Turning it on applies the discount automatically — no separate voucher required.",
+      "Points, discounts, and rewards activity can be tracked anytime from the Rewards page.",
     ],
   },
   {
@@ -456,9 +445,9 @@ export const FAQ_CATEGORIES = [
           "You earn 1 point for every ₱1 spent on fare. Points are added automatically after a completed trip.",
       },
       {
-        question: "What can I redeem points for?",
+        question: "What can I use points for?",
         answer:
-          "Points can be redeemed for fare discounts, waived reservation fees, and free one-way tickets on select routes from the Rewards page.",
+          "Every SmartPoint is worth ₱1 off a future ticket. Once you have at least 100 points, switch on \"Use SmartPoints\" at checkout and the discount is applied automatically.",
       },
     ],
   },

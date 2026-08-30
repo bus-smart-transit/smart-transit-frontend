@@ -6,8 +6,10 @@ import Button from "../../components/ui/Button.jsx";
 import FormInput from "../../components/ui/FormInput.jsx";
 import Toggle from "../../components/ui/Toggle.jsx";
 import { UserIcon, CoinIcon, ChevronDownIcon, LockIcon, BellIcon, GearIcon, LogoutIcon } from "../../components/Icons.jsx";
-import { REWARDS_POINTS, REWARDS_TIER, TERMINALS } from "../../data/sampleData.js";
+import { TERMINALS } from "../../data/sampleData.js";
 import { useAuth } from "../../context/AuthContext.jsx";
+import { useRewards } from "../../context/RewardsContext.jsx";
+import { getCurrentTier } from "../../utils/rewards.js";
 
 const SECTIONS = [
   { key: "edit", label: "Edit Profile", icon: UserIcon },
@@ -18,6 +20,8 @@ const SECTIONS = [
 
 export default function ProfilePage() {
   const { user, updateProfile, logout } = useAuth();
+  const { points } = useRewards();
+  const tier = getCurrentTier(points);
   const navigate = useNavigate();
   const [openSection, setOpenSection] = useState("edit");
 
@@ -103,13 +107,13 @@ export default function ProfilePage() {
             </div>
           </Card>
 
-          <Card className="flex items-center justify-between gap-6 bg-navy-900 p-6 text-white sm:min-w-[16rem]">
+          <Card className="flex items-center justify-between gap-6 !bg-navy-900 p-6 text-white sm:min-w-[16rem]">
             <div>
               <p className="flex items-center gap-1.5 text-xs text-navy-200">
                 <CoinIcon size={14} /> Rewards Points
               </p>
-              <p className="mt-1 font-display text-2xl font-bold">{REWARDS_POINTS.toLocaleString()}</p>
-              <p className="text-xs text-teal-300">{REWARDS_TIER}</p>
+              <p className="mt-1 font-display text-2xl font-bold">{points.toLocaleString()}</p>
+              <p className="text-xs text-teal-300">{tier.label}</p>
             </div>
             <Link to="/rewards" className="text-xs font-semibold text-teal-300 hover:underline">
               View Rewards

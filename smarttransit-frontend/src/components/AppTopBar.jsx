@@ -1,12 +1,14 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { BusIcon, BellIcon, ArrowLeftIcon, CoinIcon } from "./Icons.jsx";
-import { REWARDS_POINTS, NOTIFICATIONS } from "../data/sampleData.js";
+import { NOTIFICATIONS } from "../data/sampleData.js";
 import { useAuth } from "../context/AuthContext.jsx";
+import { useRewards } from "../context/RewardsContext.jsx";
 
 export default function AppTopBar({ backTo, backLabel = "Back" }) {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { points } = useRewards();
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const unreadCount = NOTIFICATIONS.filter((n) => !n.read).length;
 
@@ -34,7 +36,7 @@ export default function AppTopBar({ backTo, backLabel = "Back" }) {
       <div className="flex items-center gap-2 sm:gap-4">
         <div className="hidden items-center gap-1.5 rounded-full bg-teal-50 px-3 py-1.5 text-xs font-semibold text-teal-700 sm:flex">
           <CoinIcon size={14} />
-          {REWARDS_POINTS.toLocaleString()} pts
+          {points.toLocaleString()} pts
         </div>
 
         <div className="relative">
