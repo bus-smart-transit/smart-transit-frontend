@@ -23,17 +23,6 @@ import {
   Users,
   X,
 } from 'lucide-react'
-import {
-  MapContainer,
-  TileLayer,
-  Marker,
-  Popup,
-  Polyline,
-  CircleMarker,
-  ZoomControl,
-} from 'react-leaflet'
-import L from 'leaflet'
-import 'leaflet/dist/leaflet.css'
 
 
 async function safeJsonFetch(url, options) {
@@ -355,42 +344,7 @@ const LOCATIONS = {
   'davao del sur': [6.7667, 125.3500],
 }
 
-const busIcon = L.divIcon({
-  className: 'bus-location-icon',
-  html: `
-    <div
-      style="
-        width: 48px;
-        height: 48px;
-        border-radius: 50%;
-        background: white;
-        border: 3px solid #f59e0b;
-        box-shadow: 0 3px 12px rgba(0,0,0,0.35);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      "
-    >
-      <div
-        style="
-          width: 34px;
-          height: 34px;
-          border-radius: 9px;
-          background: #f59e0b;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 20px;
-        "
-      >
-        🚌
-      </div>
-    </div>
-  `,
-  iconSize: [48, 48],
-  iconAnchor: [24, 24],
-  popupAnchor: [0, -25],
-})
+const busIcon = null // placeholder — leaflet map removed from FleetMapView
 
 function normalizeLocation(name) {
   if (!name) return ''
@@ -712,92 +666,9 @@ function FleetMapView({ selectedTrip, fleetTrips, onBack }) {
           <ArrowLeft className="h-4 w-4" />
           Back
         </button>
-          </div>
-          <div className="rounded-xl border border-slate-700 bg-slate-950 p-4">
-            <div className="text-xs uppercase text-slate-500">Online Payments</div>
-            <div className="mt-2 text-2xl font-bold text-sky-400">{asCurrency(revenue.online)}</div>
-          </div>
-          <div className="rounded-xl border border-slate-700 bg-slate-950 p-4">
-            <div className="text-xs uppercase text-slate-500">Cash Payments</div>
-            <div className="mt-2 text-2xl font-bold text-amber-400">{asCurrency(revenue.onsite_cash)}</div>
-          </div>
-          <div className="rounded-xl border border-slate-700 bg-slate-950 p-4">
-            <div className="text-xs uppercase text-slate-500">Completed Trips</div>
-            <div className="mt-2 text-2xl font-bold text-indigo-400">{Number(trips.completed || 0)}</div>
-          </div>
-          <div className="rounded-xl border border-slate-700 bg-slate-950 p-4 md:col-span-2 xl:col-span-2">
-            <div className="text-xs uppercase text-slate-500">Tickets Issued</div>
-            <div className="mt-2 text-xl font-bold text-slate-100">{Number(tickets.total || 0)}</div>
-            <p className="mt-1 text-xs text-slate-500">Avg per completed trip: {Number(tickets.average_per_trip || 0).toFixed(2)}</p>
-          </div>
-          <div className="rounded-xl border border-slate-700 bg-slate-950 p-4 md:col-span-2 xl:col-span-2">
-            <div className="text-xs uppercase text-slate-500">Average Revenue / Trip</div>
-            <div className="mt-2 text-xl font-bold text-slate-100">{asCurrency(trips.average_revenue_per_trip)}</div>
-            <p className="mt-1 text-xs text-slate-500">Period: {report.period?.start_date || '-'} to {report.period?.end_date || '-'}</p>
-          </div>
-        </div>
-      );
-    }
+      </div>
 
-    if (reportType === 'daily') {
-      const summary = report.summary || {};
-      const entries = Object.entries(summary);
-      return (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-          <div className="rounded-xl border border-slate-700 bg-slate-950 p-4 md:col-span-2 xl:col-span-3">
-            <div className="text-xs uppercase text-slate-500">Report Date</div>
-            <div className="mt-2 text-lg font-semibold text-slate-100">{report.date || 'N/A'}</div>
-          </div>
-          {entries.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-slate-700 bg-slate-950 p-6 text-sm text-slate-400">No daily summary data yet.</div>
-          ) : (
-            entries.map(([key, val]) => (
-              <div key={key} className="rounded-xl border border-slate-700 bg-slate-950 p-4">
-                <div className="text-xs uppercase text-slate-500">{key.replaceAll('_', ' ')}</div>
-                <div className="mt-2 text-lg font-semibold text-slate-100">{typeof val === 'number' ? val.toLocaleString() : String(val)}</div>
-              </div>
-            ))
-          )}
-        </div>
-      );
-    }
-
-    if (reportType === 'revenue') {
-      const rows = report.routes || [];
-      return (
-        <div className="overflow-x-auto rounded-xl border border-slate-700">
-          <table className="min-w-full divide-y divide-slate-700 bg-slate-950 text-sm">
-            <thead className="bg-slate-900/80 text-slate-300">
-              <tr>
-                <th className="px-4 py-3 text-left font-semibold">Route</th>
-                <th className="px-4 py-3 text-left font-semibold">Total Revenue</th>
-                <th className="px-4 py-3 text-left font-semibold">Online</th>
-                <th className="px-4 py-3 text-left font-semibold">Cash</th>
-                <th className="px-4 py-3 text-left font-semibold">Trips</th>
-                <th className="px-4 py-3 text-left font-semibold">Tickets</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800 text-slate-200">
-              {rows.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="px-4 py-6 text-center text-slate-400">No route revenue data in this date range.</td>
-                </tr>
-              ) : (
-                rows.map((row) => (
-                  <tr key={row.route_id || row.route_name} className="hover:bg-slate-900/70">
-                    <td className="px-4 py-3 font-medium text-slate-100">{row.route_name || `Route ${row.route_id}`}</td>
-                    <td className="px-4 py-3">{asCurrency(row.total_revenue)}</td>
-                    <td className="px-4 py-3">{asCurrency(row.online_revenue)}</td>
-                    <td className="px-4 py-3">{asCurrency(row.onsite_revenue)}</td>
-                    <td className="px-4 py-3">{Number(row.total_trips || 0)}</td>
-                    <td className="px-4 py-3">{Number(row.total_tickets || 0)}</td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-
+      <div>
         <aside className="rounded-2xl border border-white/5 bg-[#0a0e1a] p-3">
           <div className="mb-3 flex items-center justify-between">
             <h3 className="text-[2rem] font-bold text-white">Live Tracking</h3>
