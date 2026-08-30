@@ -1,8 +1,10 @@
+import { useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Eye, EyeOff, Lock, Mail, MoveLeft, Route, ShieldCheck, TrainFront, TriangleAlert } from 'lucide-react';
 import { useLogin } from '../../../api/hooks/Passenger/login';
 
 export default function LoginPage() {
+  const otpRefs = useRef([]);
   const {
     form,
     errors,
@@ -24,6 +26,34 @@ export default function LoginPage() {
     handleResendOtp,
     cancelOtp,
   } = useLogin();
+
+  // Derive individual digit slots from the single otp string.
+  const otpDigits = Array.from({ length: 6 }, (_, i) => otp[i] ?? '');
+
+  const commitOtpDigit = (index, value) => {
+    const cleaned = value.replace(/\D/g, '').slice(-1);
+    const next = otpDigits.slice();
+    next[index] = cleaned;
+    const combined = next.join('');
+    setOtp(combined);
+    if (cleaned && index < 5) otpRefs.current[index + 1]?.focus();
+    if (combined.length === 6 && !next.includes('')) void handleVerifyOtp({ preventDefault: () => {} });
+  };
+
+  const handleOtpKeyDown = (index, e) => {
+    if (e.key === 'Backspace' && !otpDigits[index] && index > 0) otpRefs.current[index - 1]?.focus();
+    if (e.key === 'ArrowLeft'  && index > 0) otpRefs.current[index - 1]?.focus();
+    if (e.key === 'ArrowRight' && index < 5) otpRefs.current[index + 1]?.focus();
+  };
+
+  const handleOtpPaste = (e) => {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+    if (!pasted) return;
+    setOtp(pasted);
+    otpRefs.current[Math.min(5, pasted.length - 1)]?.focus();
+    if (pasted.length === 6) void handleVerifyOtp({ preventDefault: () => {} });
+  };
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-slate-950 px-4 py-8 text-slate-200 sm:px-6 lg:px-10">
@@ -98,21 +128,31 @@ export default function LoginPage() {
               )}
 
               <form className="space-y-4" onSubmit={handleVerifyOtp} noValidate>
-                <label className="block text-sm font-medium text-slate-300" htmlFor="otp-input">
-                  Verification Code
-                  <input
-                    id="otp-input"
-                    type="text"
-                    inputMode="numeric"
-                    maxLength={6}
-                    className="mt-1 h-14 w-full rounded-xl border border-slate-800 bg-slate-950 px-4 text-center font-mono text-2xl font-bold tracking-[0.6em] text-slate-100 outline-none placeholder:text-slate-600 focus:border-sky-400"
-                    placeholder="000000"
-                    value={otp}
-                    onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                    autoFocus
-                    autoComplete="one-time-code"
-                  />
-                </label>
+                <div>
+                  <label className="block text-sm font-medium text-slate-300" htmlFor="passenger-otp-box-0">
+                    Verification Code
+                  </label>
+                  <div className="mt-2 grid grid-cols-6 gap-2 sm:gap-3" onPaste={handleOtpPaste}>
+                    {otpDigits.map((digit, index) => (
+                      <input
+                        key={`passenger-otp-box-${index}`}
+                        id={`passenger-otp-box-${index}`}
+                        ref={(node) => { otpRefs.current[index] = node; }}
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        maxLength={1}
+                        value={digit}
+                        onChange={(e) => commitOtpDigit(index, e.target.value)}
+                        onKeyDown={(e) => handleOtpKeyDown(index, e)}
+                        className="h-14 rounded-xl border border-slate-800 bg-slate-950 text-center font-mono text-xl font-bold text-slate-100 outline-none focus:border-sky-400"
+                        autoComplete={index === 0 ? 'one-time-code' : 'off'}
+                        autoFocus={index === 0}
+                        aria-label={`OTP digit ${index + 1}`}
+                      />
+                    ))}
+                  </div>
+                </div>
 
                 <button
                   type="submit"
