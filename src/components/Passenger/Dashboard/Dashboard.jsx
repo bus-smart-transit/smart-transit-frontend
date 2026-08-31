@@ -424,10 +424,22 @@ export default function Dashboard() {
     }
 
     if (visibleTab === 'map') {
+      // Find fleet_id from any currently boarded ticket so MapView can highlight it
+      const boardedTicket = tickets.find((t) => String(t?.status).toLowerCase() === 'boarded');
+      const trackedFleetId = boardedTicket?.trip?.fleet_route?.fleet_id
+        ?? boardedTicket?.trip?.fleetRoute?.fleet_id
+        ?? null;
+
       return (
         <div className="passenger-map-wrap">
+          {trackedFleetId && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', marginBottom: '8px', borderRadius: '10px', background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)', color: '#fbbf24', fontSize: '13px', fontWeight: 600 }}>
+              <span>🚌</span>
+              You are currently on a trip — your bus is highlighted on the map
+            </div>
+          )}
           <Suspense fallback={tabFallback}>
-            <MapView role="passenger" />
+            <MapView role="passenger" trackedFleetId={trackedFleetId} />
           </Suspense>
         </div>
       );

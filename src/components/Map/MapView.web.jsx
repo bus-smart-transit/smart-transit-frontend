@@ -4,8 +4,9 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import { loadMapLib } from './mapDependencies';
 import PassengerService from '../../api/PassengerService/PassengerService';
 import { haversineM, lerp, lerpAngle } from '../../utils/geo';
+import { Navigation } from 'lucide-react';
 
-export default function MapView({ role = "passenger" }) {
+export default function MapView({ role = "passenger", trackedFleetId = null }) {
   const mapContainer = useRef(null);
   const map = useRef(null);
   const mapLibRef = useRef(null);
@@ -35,6 +36,7 @@ export default function MapView({ role = "passenger" }) {
   const [nearestFleet, setNearestFleet] = useState(null);
   const [selectedFleetId, setSelectedFleetId] = useState(null);
   const [showSidebar, setShowSidebar] = useState(false);
+  const [isTracking, setIsTracking] = useState(false);
 
   const [lng] = useState(125.6047);
   const [lat] = useState(7.0707);
@@ -344,6 +346,36 @@ export default function MapView({ role = "passenger" }) {
     };
   }, [clearFleetMarkers, clearRouteStopMarkers, refreshFleetLocations, role]);
 
+  // ── Track My Bus: center + highlight when trackedFleetId changes ───────────
+  useEffect(() => {
+    if (!trackedFleetId || !map.current) return;
+
+    const focusFleet = () => {
+      const entry = fleetMarkersMapRef.current.get(trackedFleetId);
+      if (!entry) return;
+      const { marker, innerEl } = entry;
+      const lngLat = marker.getLngLat();
+
+      // Fly to the bus
+      map.current.flyTo({ center: [lngLat.lng, lngLat.lat], zoom: 15, speed: 1.2 });
+
+      // Add a pulsing amber ring to distinguish the tracked bus
+      const circle = innerEl.querySelector('circle');
+      if (circle) {
+        circle.setAttribute('fill', '#f59e0b');
+        circle.setAttribute('stroke', '#fde68a');
+        circle.setAttribute('stroke-width', '3');
+      }
+      innerEl.style.filter = 'drop-shadow(0 0 8px rgba(245,158,11,0.8))';
+      setIsTracking(true);
+    };
+
+    // Attempt immediately, retry after next poll cycle if marker not yet rendered
+    focusFleet();
+    const retryId = setTimeout(focusFleet, 3000);
+    return () => clearTimeout(retryId);
+  }, [trackedFleetId]);
+
   const handlePinCurrentLocation = () => {
     const maplibregl = mapLibRef.current;
     if (!map.current || !maplibregl) {
@@ -540,6 +572,14 @@ export default function MapView({ role = "passenger" }) {
   return (
     <div className="relative h-[75vh] min-h-135 overflow-hidden rounded-2xl border border-slate-800 bg-slate-900">
       <div ref={mapContainer} className="h-full w-full" />
+
+      {/* Track My Bus banner */}
+      {isTracking && trackedFleetId && (
+        <div className="absolute bottom-4 left-1/2 z-20 -translate-x-1/2 flex items-center gap-2 rounded-full border border-amber-400/40 bg-slate-950/90 px-4 py-2 text-sm font-semibold text-amber-300 shadow-lg backdrop-blur-md">
+          <Navigation className="h-4 w-4 animate-pulse" />
+          Tracking your bus
+        </div>
+      )}
 
       <aside className="absolute left-4 top-4 z-10 w-[min(92vw,26rem)] rounded-2xl border border-slate-800 bg-slate-950/92 p-4 text-slate-200 shadow-2xl backdrop-blur-md">
         <h3 className="text-lg font-semibold text-slate-100">Where are you heading?</h3>

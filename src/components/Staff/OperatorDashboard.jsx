@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import StaffService from '../../api/StaffService/StaffService'
+import { loadMapLib } from '../Map/mapDependencies'
 import {
   ArrowDown,
   ArrowLeft,
@@ -344,8 +345,6 @@ const LOCATIONS = {
   'davao del sur': [6.7667, 125.3500],
 }
 
-const busIcon = null // placeholder — leaflet map removed from FleetMapView
-
 function normalizeLocation(name) {
   if (!name) return ''
   return name.toLowerCase().trim().replace(/\s+/g, ' ')
@@ -547,6 +546,12 @@ const LIVE_GPS_ZOOM = 14
 
 function FleetMapView({ selectedTrip, fleetTrips, onBack }) {
   const mapRef = useRef(null)
+  const mapContainerRef = useRef(null)
+  const mapLibRef = useRef(null)
+  const busMarkerRef = useRef(null)
+  const originMarkerRef = useRef(null)
+  const destMarkerRef = useRef(null)
+  const [mapReady, setMapReady] = useState(false)
   const liveTrips = fleetTrips
 
   const [activeTripId, setActiveTripId] = useState(selectedTrip.busId)
@@ -563,7 +568,7 @@ function FleetMapView({ selectedTrip, fleetTrips, onBack }) {
 
   const tripLocations = useMemo(() => getTripLocations(activeTrip), [activeTrip])
 
-  const { originName, destinationName, origin, destination } = tripLocations
+  const { origin, destination } = tripLocations
 
   const otherTrips = useMemo(
     () => liveTrips.filter((trip) => trip.busId !== activeTrip.busId),
@@ -652,10 +657,96 @@ function FleetMapView({ selectedTrip, fleetTrips, onBack }) {
 
   const handleLiveGpsClick = () => {
     if (!mapRef.current || !busPosition) return
-    mapRef.current.flyTo(busPosition, LIVE_GPS_ZOOM, { animate: true, duration: 1 })
+    mapRef.current.flyTo({
+      center: [busPosition[1], busPosition[0]],
+      zoom: LIVE_GPS_ZOOM,
+      speed: 1.5,
+    })
   }
 
-      return (
+  // Map initialisation (once)
+  useEffect(() => {
+    if (mapRef.current || !mapContainerRef.current) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const { default: maplibregl } = await loadMapLib()
+        if (cancelled || !mapContainerRef.current) return
+        mapLibRef.current = maplibregl
+        const center = mapCenter
+        const map = new maplibregl.Map({
+          container: mapContainerRef.current,
+          style: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json',
+          center: [center[1], center[0]],
+          zoom: 11,
+        })
+        map.once('load', () => {
+          if (cancelled) return
+          map.addSource('osrm-route', { type: 'geojson', data: { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: [] } } })
+          map.addLayer({ id: 'osrm-route-line', type: 'line', source: 'osrm-route', layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': '#38bdf8', 'line-width': 4, 'line-opacity': 0.75 } })
+          map.addSource('osrm-done', { type: 'geojson', data: { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: [] } } })
+          map.addLayer({ id: 'osrm-done-line', type: 'line', source: 'osrm-done', layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': '#22c55e', 'line-width': 4, 'line-opacity': 0.9 } })
+          setMapReady(true)
+        })
+        mapRef.current = map
+      } catch {
+        // silent — map tiles failed
+      }
+    })()
+    return () => {
+      cancelled = true
+      busMarkerRef.current = null
+      originMarkerRef.current = null
+      destMarkerRef.current = null
+      if (mapRef.current) { mapRef.current.remove(); mapRef.current = null }
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Update route polylines + markers whenever computed data changes
+  useEffect(() => {
+    if (!mapReady) return
+    const map = mapRef.current
+    const maplibregl = mapLibRef.current
+    if (!map || !maplibregl) return
+
+    // Route polyline
+    const routeCoords = roadRoute.map(([lat, lng]) => [lng, lat])
+    map.getSource('osrm-route')?.setData({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: routeCoords } })
+    if (routeCoords.length >= 2) {
+      const bounds = routeCoords.reduce((acc, c) => acc.extend(c), new maplibregl.LngLatBounds(routeCoords[0], routeCoords[0]))
+      map.fitBounds(bounds, { padding: 60, maxZoom: 14 })
+    }
+
+    // Completed portion
+    const doneCoords = completedRoute.map(([lat, lng]) => [lng, lat])
+    map.getSource('osrm-done')?.setData({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: doneCoords } })
+
+    // Origin marker
+    if (originMarkerRef.current) { originMarkerRef.current.remove(); originMarkerRef.current = null }
+    if (origin) {
+      originMarkerRef.current = new maplibregl.Marker({ color: '#22c55e' }).setLngLat([origin[1], origin[0]]).addTo(map)
+    }
+
+    // Destination marker
+    if (destMarkerRef.current) { destMarkerRef.current.remove(); destMarkerRef.current = null }
+    if (destination) {
+      destMarkerRef.current = new maplibregl.Marker({ color: '#ef4444' }).setLngLat([destination[1], destination[0]]).addTo(map)
+    }
+
+    // Bus position marker
+    if (busPosition) {
+      const lngLat = [busPosition[1], busPosition[0]]
+      if (busMarkerRef.current) {
+        busMarkerRef.current.setLngLat(lngLat)
+      } else {
+        const el = document.createElement('div')
+        el.style.cssText = 'width:18px;height:18px;background:#f59e0b;border:3px solid #fff;border-radius:50%;box-shadow:0 0 0 5px rgba(245,158,11,0.3);cursor:pointer'
+        busMarkerRef.current = new maplibregl.Marker({ element: el }).setLngLat(lngLat).addTo(map)
+      }
+    }
+  }, [mapReady, roadRoute, completedRoute, busPosition, origin, destination])
+
+  return (
     <section className="rounded-2xl border border-white/5 bg-[#0a0e1a] p-4 shadow-sm">
       <div className="mb-4 flex items-center justify-between">
         <button
@@ -666,9 +757,34 @@ function FleetMapView({ selectedTrip, fleetTrips, onBack }) {
           <ArrowLeft className="h-4 w-4" />
           Back
         </button>
+        <button
+          type="button"
+          onClick={handleLiveGpsClick}
+          disabled={!busPosition}
+          className="inline-flex items-center gap-2 rounded-lg border border-[#f59e0b]/30 bg-[#f59e0b]/10 px-3 py-1.5 text-sm font-medium text-[#f59e0b] shadow-sm transition hover:bg-[#f59e0b]/20 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <MapPin className="h-4 w-4" />
+          Live GPS
+        </button>
       </div>
 
-      <div>
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+        {/* MapLibre map panel */}
+        <div className="relative xl:col-span-2">
+          <div ref={mapContainerRef} style={{ height: '420px' }} className="w-full rounded-xl overflow-hidden" />
+          {routeLoading && (
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-xl bg-[#0f1729]/60">
+              <span className="text-sm text-white">Loading route&hellip;</span>
+            </div>
+          )}
+          {routeError && !routeLoading && roadRoute.length === 0 && (
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-xl bg-[#0f1729]/40">
+              <span className="text-sm text-amber-400">Route data unavailable</span>
+            </div>
+          )}
+        </div>
+
+        {/* Sidebar */}
         <aside className="rounded-2xl border border-white/5 bg-[#0a0e1a] p-3">
           <div className="mb-3 flex items-center justify-between">
             <h3 className="text-[2rem] font-bold text-white">Live Tracking</h3>

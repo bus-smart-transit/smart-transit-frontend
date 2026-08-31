@@ -42,7 +42,7 @@ export class BaseService {
     this.tokenKey = tokenKey;
   }
 
-  async request(url, method, params = {}) {
+  async request(url, method, params = {}, extraHeaders = {}) {
     const localToken = localStorage.getItem(this.tokenKey);
     const sessionToken = sessionStorage.getItem(this.tokenKey);
 
@@ -54,7 +54,7 @@ export class BaseService {
 
     const token = sessionToken || localToken;
 
-    const headers = {};
+    const headers = { ...extraHeaders };
     if (token) {
       headers.Authorization = `Bearer ${token}`;
     }

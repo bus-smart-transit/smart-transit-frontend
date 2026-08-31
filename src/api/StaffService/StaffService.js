@@ -27,6 +27,15 @@ class StaffService extends BaseService {
     return await this.request('/staff/2fa-preference', 'PATCH', { enabled });
   }
 
+  // Step-up re-authentication
+  async stepUpInitiate() {
+    return await this.request('/step-up/initiate', 'POST');
+  }
+
+  async stepUpVerify(otp) {
+    return await this.request('/step-up/verify', 'POST', { otp });
+  }
+
   async logout() {
     try {
       return await this.request('/staff/logout', 'DELETE');
@@ -270,8 +279,9 @@ class StaffService extends BaseService {
   }
 
   // ── Fare Rules ──
-  async createFareRule(fareData) {
-    return await this.request(`/operator/fare-rules`, 'POST', fareData);
+  async createFareRule(fareData, stepUpToken = null) {
+    const extraHeaders = stepUpToken ? { 'X-Step-Up-Token': stepUpToken } : {};
+    return await this.request(`/operator/fare-rules`, 'POST', fareData, extraHeaders);
   }
 
   // ── Admin: Stop Management ──
