@@ -1,5 +1,6 @@
 import { Navigate, Outlet } from 'react-router-dom';
 import { useState, useEffect } from 'react';
+import { TokenManager } from '../utils/TokenManager.js';
 
 // Base URL for API calls — must match the Vite proxy / backend origin.
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '/api';
@@ -18,8 +19,9 @@ async function validateStaffToken(token, role) {
     });
     return res.ok ? 'valid' : 'invalid';
   } catch {
-    // Network failure — fail safe: treat as invalid so the user stays on login.
-    return 'invalid';
+    // Network failure (e.g. CORS, offline) — treat as valid so we don't wipe
+    // a freshly-issued token just because the tunnel/backend is unreachable.
+    return 'valid';
   }
 }
 
@@ -36,8 +38,8 @@ export function StaffGuestRoute() {
   useEffect(() => {
     let cancelled = false;
 
-    const token = localStorage.getItem('staff_token') || sessionStorage.getItem('staff_token');
-    const role = localStorage.getItem('staff_role') || sessionStorage.getItem('staff_role');
+    const token = TokenManager.getStaffToken();
+    const role = TokenManager.getStaffRole();
 
     validateStaffToken(token, role).then((result) => {
       if (cancelled) return;
@@ -45,11 +47,7 @@ export function StaffGuestRoute() {
         setValidRole(role);
         setStatus('redirect');
       } else {
-        // Clear any stale credentials so they don't interfere with a fresh login.
-        localStorage.removeItem('staff_token');
-        localStorage.removeItem('staff_role');
-        sessionStorage.removeItem('staff_token');
-        sessionStorage.removeItem('staff_role');
+        TokenManager.clearStaffSession();
         setStatus('guest');
       }
     });
@@ -73,13 +71,24 @@ export function StaffGuestRoute() {
 }
 
 export function StaffProtectedRoute({ allowedRoles }) {
-  const [isAuth] = useState(() => {
-    const token = localStorage.getItem('staff_token') || sessionStorage.getItem('staff_token');
-    const role = localStorage.getItem('staff_role') || sessionStorage.getItem('staff_role');
+  const [isAuth, setIsAuth] = useState(() => {
+    const token = TokenManager.getStaffToken();
+    const role  = TokenManager.getStaffRole();
     if (!token) return false;
     if (allowedRoles && !allowedRoles.includes(role)) return false;
     return true;
   });
+
+  useEffect(() => {
+    const handleStorageChange = () => {
+      const token = TokenManager.getStaffToken();
+      const role  = TokenManager.getStaffRole();
+      const authorized = token && (!allowedRoles || allowedRoles.includes(role));
+      setIsAuth(!!authorized);
+    };
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, [allowedRoles]);
 
   return isAuth ? <Outlet /> : <Navigate to="/employee/login" replace />;
 }

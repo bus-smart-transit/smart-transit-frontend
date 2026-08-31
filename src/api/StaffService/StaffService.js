@@ -1,4 +1,5 @@
 import { BaseService } from '../BaseService';
+import { TokenManager } from '../../utils/TokenManager.js';
 
 const TOKEN_KEY = 'staff_token';
 
@@ -40,10 +41,7 @@ class StaffService extends BaseService {
     try {
       return await this.request('/staff/logout', 'DELETE');
     } finally {
-      localStorage.removeItem(TOKEN_KEY);
-      sessionStorage.removeItem(TOKEN_KEY);
-      localStorage.removeItem('staff_role');
-      sessionStorage.removeItem('staff_role');
+      TokenManager.clearStaffSession();
     }
   }
 

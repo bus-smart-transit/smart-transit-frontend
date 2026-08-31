@@ -174,7 +174,7 @@ export default function DriverDashboard() {
       if (!document.hidden) {
         void refreshPairingStatus();
       }
-    }, 12000);
+    }, 30000); // Poll every 30 seconds (reduced from 12s to avoid excessive API calls)
 
     return () => clearInterval(timer);
   }, [pairing.paired, refreshPairingStatus]);
@@ -211,6 +211,11 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [actionMsg, setActionMsg] = useState('');
+  const [actionInFlight, setActionInFlight] = useState(false);
+  const [confirmComplete, setConfirmComplete] = useState(false);
+  const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
+  const [saving2fa, setSaving2fa] = useState(false);
+  const [msg2fa, setMsg2fa] = useState('');
   const [gpsActive, setGpsActive] = useState(false);
   const isPaired = pairing?.paired === true;
   const pairingReason = pairing?.reason || 'Waiting for pairing with your Conductor before enabling session-synced features.';
@@ -244,7 +249,12 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
         StaffService.getCurrentTrip(),
         StaffService.getDriverTrips(),
       ]);
-      if (profileRes.status === 'fulfilled') setProfile(profileRes.value?.data);
+      if (profileRes.status === 'fulfilled') {
+        setProfile(profileRes.value?.data);
+        if (typeof profileRes.value?.data?.user?.two_factor_enabled === 'boolean') {
+          setTwoFactorEnabled(profileRes.value.data.user.two_factor_enabled);
+        }
+      }
       if (tripRes.status === 'fulfilled') setTrip(tripRes.value?.data);
       if (tripsRes.status === 'fulfilled') setAssignedTrips(tripsRes.value?.data ?? []);
     } catch {
@@ -342,10 +352,14 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
       { enableHighAccuracy: true, maximumAge: 10000 }
     );
 
-    // Push to backend every 10 seconds — only if moved > 30m since last send
+    // Push to backend every 10 seconds — only if moved > 30m since last send.
+    // Backoff: after 3 consecutive failures pause 30s before retrying.
     const MIN_DISTANCE_M = 30;
+    let consecutiveFailures = 0;
+    let backoffUntil = 0;
     const sendPing = async () => {
       if (!lastGpsRef.current) return;
+      if (Date.now() < backoffUntil) return; // in backoff window — skip
       const last = lastSentGpsRef.current;
       if (last) {
         const dLat = lastGpsRef.current.latitude - last.latitude;
@@ -361,8 +375,13 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
           lastGpsRef.current.speed_kmh ?? null,
         );
         lastSentGpsRef.current = { latitude: lastGpsRef.current.latitude, longitude: lastGpsRef.current.longitude };
+        consecutiveFailures = 0; // reset on success
       } catch {
-        // Ignore — network hiccups should not surface as errors during a trip
+        consecutiveFailures++;
+        if (consecutiveFailures >= 3) {
+          backoffUntil = Date.now() + 30000; // pause 30s after 3 failures
+          consecutiveFailures = 0;
+        }
       }
     };
 
@@ -503,14 +522,33 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
       setActionMsg(pairingReason);
       return;
     }
-
+    if (action === 'complete') {
+      setConfirmComplete(true);
+      return;
+    }
+    setActionInFlight(true);
     try {
       if (action === 'depart') await StaffService.departTrip(trip.trip_id);
-      if (action === 'complete') await StaffService.completeTrip(trip.trip_id);
       setActionMsg(`Trip ${action} action completed.`);
       void loadData();
     } catch (err) {
       setActionMsg(err.message);
+    } finally {
+      setActionInFlight(false);
+    }
+  };
+
+  const handleConfirmedComplete = async () => {
+    setConfirmComplete(false);
+    setActionInFlight(true);
+    try {
+      await StaffService.completeTrip(trip.trip_id);
+      setActionMsg('Trip completed successfully.');
+      void loadData();
+    } catch (err) {
+      setActionMsg(err.message);
+    } finally {
+      setActionInFlight(false);
     }
   };
 
@@ -562,77 +600,72 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                   : 'Account';
 
   return (
-    <div className="grid min-h-screen grid-cols-1 bg-slate-950 text-slate-200 lg:grid-cols-[280px_1fr]">
-      <aside className="flex flex-col justify-between border-b border-slate-800 bg-slate-900/70 p-4 lg:border-b-0 lg:border-r">
+    <div className="grid min-h-screen grid-cols-1 bg-slate-100 text-slate-900 lg:grid-cols-[260px_1fr]">
+      {/* Sidebar */}
+      <aside className="flex flex-col justify-between bg-[#0D1B2A] p-4 lg:min-h-screen">
         <div>
-          <div className="mb-4 inline-flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm font-semibold text-slate-100">
-            <Bus className="h-4 w-4 text-sky-400" />
-            Driver Portal
+          {/* Brand */}
+          <div className="mb-6 flex items-center gap-3 px-2 pt-2">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-teal-500">
+              <Bus className="h-5 w-5 text-white" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-white leading-none">SMARTTRANSIT</p>
+              <p className="text-xs text-slate-400">Driver Portal</p>
+            </div>
           </div>
 
-          {profile && (
-            <div className="mb-4 overflow-hidden rounded-2xl border border-slate-800 bg-slate-900">
-              <div className="h-1.5 bg-linear-to-r from-blue-500 via-indigo-500 to-sky-400" />
-              <div className="p-3">
-                <div className="flex items-center gap-3">
-                  <div className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-linear-to-br from-blue-600 to-indigo-600 font-semibold text-white">
-                    {(profile.name || 'D')[0].toUpperCase()}
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-slate-100">{profile.name}</p>
-                    <p className="text-xs text-slate-500">Driver</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          <nav className="relative mt-4 flex flex-col gap-1 pl-3">
-            <div className="absolute bottom-2 left-1.75 top-2 w-px bg-slate-800" aria-hidden="true" />
+          <nav className="flex flex-col gap-0.5">
             {NAV_ITEMS.map((item) => {
               const Icon = item.icon;
               const isActive = activeTab === item.key;
               return (
                 <button
                   key={item.key}
-                  className="group relative flex items-center gap-3 rounded-lg py-2.5 pl-5 pr-3 text-sm font-medium"
-                  onClick={() => {
-                    setActiveTab(item.key);
-                    setActionMsg('');
-                  }}
+                  className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+                    isActive
+                      ? 'bg-teal-500 text-white'
+                      : 'text-slate-400 hover:bg-white/10 hover:text-white'
+                  }`}
+                  onClick={() => { setActiveTab(item.key); setActionMsg(''); }}
                 >
-                  <span
-                    className={[
-                      'absolute left-0 top-1/2 h-2.5 w-2.5 -translate-y-1/2 rounded-full border transition',
-                      isActive
-                        ? 'border-sky-400 bg-sky-400 shadow-[0_0_0_3px_rgba(56,189,248,0.25)]'
-                        : 'border-slate-600 bg-slate-950 group-hover:border-slate-400',
-                    ].join(' ')}
-                    aria-hidden="true"
-                  />
-                  <Icon className={isActive ? 'h-4 w-4 text-sky-400' : 'h-4 w-4 text-slate-500 group-hover:text-slate-300'} />
-                  <span className={isActive ? 'text-white' : 'text-slate-400 group-hover:text-slate-200'}>{item.label}</span>
+                  <Icon className="h-4 w-4 shrink-0" />
+                  {item.label}
                 </button>
               );
             })}
           </nav>
         </div>
 
-        <button
-          className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-900 bg-red-950/30 px-3 py-2 text-sm font-semibold text-red-300 transition hover:bg-red-950/50"
-          onClick={handleLogout}
-        >
-          <LogOut className="h-4 w-4" />
-          Sign Out
-        </button>
+        {/* Bottom: profile + logout */}
+        <div className="space-y-3">
+          {profile && (
+            <div className="flex items-center gap-3 rounded-xl bg-white/10 px-3 py-2.5">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-teal-500 text-sm font-bold text-white">
+                {(profile.name || 'D')[0].toUpperCase()}
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-white">{profile.name}</p>
+                <p className="text-xs text-slate-400">Driver</p>
+              </div>
+            </div>
+          )}
+          <button
+            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-red-400 hover:bg-white/10 hover:text-red-300 transition"
+            onClick={handleLogout}
+          >
+            <LogOut className="h-4 w-4" />
+            Sign Out
+          </button>
+        </div>
       </aside>
 
-      <main className="p-4 sm:p-6">
-        <header className="mb-4 flex flex-wrap items-center justify-between gap-3">
+      <main className="min-h-screen bg-white p-4 sm:p-6">
+        <header className="mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
           <div>
-            <h1 className="text-xl font-bold text-slate-100">{pageTitle}</h1>
-            <p className="font-data text-xs text-slate-500">
-              {new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+            <h1 className="text-2xl font-bold text-slate-900">{pageTitle}</h1>
+            <p className="text-xs text-slate-500">
+              {new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} — Davao City
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -672,16 +705,16 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
           </div>
         </header>
 
-        {loading && <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 text-sm text-slate-400">Loading driver workspace...</div>}
+        {loading && <div className="rounded-xl border border-slate-200 bg-slate-50 p-6 text-sm text-slate-500">Loading driver workspace...</div>}
         {error && (
-          <div className="mb-4 inline-flex items-center gap-2 rounded-xl border border-red-900 bg-red-950/40 px-3 py-2 text-sm text-red-300">
-            <AlertTriangle className="h-4 w-4" />
+          <div className="mb-4 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
             {error}
           </div>
         )}
         {actionMsg && (
-          <div className="mb-4 inline-flex items-center gap-2 rounded-xl border border-emerald-900 bg-emerald-950/40 px-3 py-2 text-sm text-emerald-300">
-            <CheckCircle2 className="h-4 w-4" />
+          <div className="mb-4 flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-700">
+            <CheckCircle2 className="h-4 w-4 shrink-0" />
             {actionMsg}
           </div>
         )}
@@ -739,63 +772,78 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
 
         {!loading && activeTab === 'dashboard' && isPaired && !showNoCurrentTripState && (
           <section className="grid gap-4 xl:grid-cols-4 md:grid-cols-2">
-            <article className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
-              <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Today's Trip</p>
-              <h3 className="mt-2 text-lg font-semibold text-slate-100">{currentRoute?.route_name || `Route ${trip?.fleet_route_id ?? '-'}`}</h3>
-              <p className="mt-1 text-sm text-slate-400">{currentRoute?.origin || '-'} to {currentRoute?.destination || '-'}</p>
-              <button className="mt-3 text-sm font-semibold text-sky-400 hover:text-sky-300" onClick={() => setActiveTab('assigned')}>View details</button>
+            <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Today's Trip</p>
+              <h3 className="mt-2 text-lg font-bold text-slate-900">{currentRoute?.route_name || `Route ${trip?.fleet_route_id ?? '-'}`}</h3>
+              <p className="mt-1 text-sm text-slate-500">{currentRoute?.origin || '-'} → {currentRoute?.destination || '-'}</p>
+              <button className="mt-3 text-sm font-semibold text-teal-600 hover:text-teal-700 flex items-center gap-1" onClick={() => setActiveTab('assigned')}>View Details →</button>
             </article>
 
-            <article className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
-              <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Next Stop</p>
-              <h3 className="mt-2 text-lg font-semibold text-slate-100">{nextStop?.stop_name ?? nextStop?.name ?? 'No pending stop'}</h3>
-              <p className="mt-1 inline-flex items-center gap-1 text-sm text-slate-400"><Clock3 className="h-3.5 w-3.5" /> ETA {formatTripSchedule(trip)}</p>
+            <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Next Stop</p>
+              <h3 className="mt-2 text-lg font-bold text-slate-900">{nextStop?.stop_name ?? nextStop?.name ?? 'No pending stop'}</h3>
+              <p className="mt-1 inline-flex items-center gap-1 text-sm text-slate-500"><Clock3 className="h-3.5 w-3.5" /> ETA {formatTripSchedule(trip)}</p>
+              <button className="mt-3 text-sm font-semibold text-teal-600 hover:text-teal-700" onClick={() => setActiveTab('journey')}>View Journey →</button>
             </article>
 
-            <article className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
-              <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Trip Progress</p>
-              <h3 className="font-data mt-2 text-lg font-semibold text-slate-100">{tripProgress}%</h3>
-              <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-slate-800">
-                <div className="h-full rounded-full bg-linear-to-r from-blue-500 to-sky-400" style={{ width: `${tripProgress}%` }} />
+            <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Trip Progress</p>
+              <h3 className="font-data mt-2 text-3xl font-bold text-slate-900">{tripProgress}%</h3>
+              <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-slate-100">
+                <div className="h-full rounded-full bg-teal-500 transition-all" style={{ width: `${tripProgress}%` }} />
               </div>
-              <p className="mt-2 text-sm text-slate-400">{journeyStatusLabel}</p>
+              <p className="mt-2 text-sm text-slate-500">{journeyStatusLabel}</p>
             </article>
 
-            <article className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
-              <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Journey Status</p>
-              <h3 className="mt-2 text-lg font-semibold capitalize text-slate-100">{trip?.status || 'No active trip'}</h3>
-              <p className="mt-1 text-sm text-slate-400">{trip?.status === 'completed' ? 'Journey completed successfully' : 'Use quick actions to control trip flow'}</p>
+            <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Journey Status</p>
+              <div className="mt-2 flex items-center gap-2">
+                {trip?.status === 'completed' ? (
+                  <CheckCircle2 className="h-7 w-7 text-teal-500" />
+                ) : (
+                  <div className="h-7 w-7 rounded-full border-2 border-amber-400 flex items-center justify-center">
+                    <div className="h-2.5 w-2.5 rounded-full bg-amber-400" />
+                  </div>
+                )}
+                <h3 className="text-base font-bold capitalize text-slate-900">{trip?.status || 'Idle'}</h3>
+              </div>
+              <p className="mt-1 text-sm text-slate-500">{trip?.status === 'completed' ? 'Journey Completed Successfully' : 'Manage trip via Quick Actions'}</p>
+              <button className="mt-3 text-sm font-semibold text-teal-600 hover:text-teal-700" onClick={() => setActiveTab('trip')}>View Summary →</button>
             </article>
 
-            <article className="rounded-2xl border border-slate-800 bg-slate-900 p-4 md:col-span-2 xl:col-span-2">
+            <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm md:col-span-2 xl:col-span-2">
+              <h4 className="mb-3 text-base font-bold text-slate-900">Quick Actions</h4>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <button className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-teal-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-teal-600 disabled:opacity-50" onClick={() => handleTripAction('depart')} disabled={actionInFlight || !isPaired || trip?.status !== 'boarding'}>
+                  ▶ Start Trip
+                </button>
+                <button className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50" onClick={loadData}>
+                  ↻ Receive Route Updates
+                </button>
+                <button className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50" onClick={() => handleTripAction('complete')} disabled={actionInFlight || !isPaired || !['departed', 'in-progress'].includes(trip?.status)}>
+                  ■ End Trip
+                </button>
+              </div>
+            </article>
+
+            <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm md:col-span-2 xl:col-span-2">
               <div className="mb-3 flex items-center justify-between">
-                <h4 className="text-base font-semibold text-slate-100">Quick Actions</h4>
+                <h4 className="text-base font-bold text-slate-900">Quick Notifications</h4>
+                <button className="text-xs font-medium text-teal-600 hover:text-teal-700">View All</button>
               </div>
-              <div className="flex flex-wrap gap-2">
-                <button className="rounded-xl bg-sky-500 px-3 py-2 text-xs font-semibold text-slate-950 transition hover:bg-sky-400 disabled:opacity-50" onClick={() => handleTripAction('depart')} disabled={!isPaired || trip?.status !== 'boarding'}>
-                  Start Trip
-                </button>
-                <button className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-xs font-semibold text-slate-300 transition hover:border-slate-500" onClick={loadData}>
-                  Receive Route Updates
-                </button>
-                <button className="rounded-xl border border-red-900 bg-red-950/30 px-3 py-2 text-xs font-semibold text-red-300 transition hover:bg-red-950/50 disabled:opacity-50" onClick={() => handleTripAction('complete')} disabled={!isPaired || !['departed', 'in-progress'].includes(trip?.status)}>
-                  End Trip
-                </button>
-              </div>
-            </article>
-
-            <article className="rounded-2xl border border-slate-800 bg-slate-900 p-4 md:col-span-2 xl:col-span-2">
-              <div className="mb-3 flex items-center justify-between">
-                <h4 className="text-base font-semibold text-slate-100">Quick Notifications</h4>
-              </div>
-              <div className="space-y-2">
+              <div className="divide-y divide-slate-100">
                 {notifications.map((notice, idx) => (
-                  <div key={idx} className={`flex items-start justify-between gap-3 rounded-xl border px-3 py-2 ${notice.tone === 'danger' ? 'border-red-900 bg-red-950/30' : notice.tone === 'warn' ? 'border-amber-900 bg-amber-950/30' : 'border-sky-900 bg-sky-950/30'}`}>
-                    <div>
-                      <p className="text-sm font-semibold text-slate-100">{notice.title}</p>
-                      <p className="text-xs text-slate-400">{notice.note}</p>
+                  <div key={idx} className="flex items-start justify-between gap-3 py-2.5">
+                    <div className="flex items-start gap-2.5">
+                      <span className={`mt-0.5 h-2.5 w-2.5 shrink-0 rounded-full ${
+                        notice.tone === 'danger' ? 'bg-red-500' : notice.tone === 'warn' ? 'bg-amber-400' : 'bg-teal-400'
+                      }`} />
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900">{notice.title}</p>
+                        <p className="text-xs text-slate-500">{notice.note}</p>
+                      </div>
                     </div>
-                    <small className="font-data text-xs text-slate-500">{notice.time}</small>
+                    <small className="shrink-0 text-xs text-slate-400">{notice.time}</small>
                   </div>
                 ))}
               </div>
@@ -804,38 +852,42 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
         )}
 
         {!loading && activeTab === 'assigned' && (
-          <section className="rounded-2xl border border-slate-800 bg-slate-900 p-4 sm:p-6">
+          <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm">
             <div className="mb-4 flex items-center justify-between">
-              <h4 className="text-base font-semibold text-slate-100">Today's Assigned Routes</h4>
-              <span className="font-data text-xs text-slate-500">{assignedTrips.length} trip(s)</span>
+              <h4 className="text-base font-bold text-slate-900">Today's Assigned Routes</h4>
+              <span className="text-xs text-slate-400">{new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</span>
             </div>
             {assignedTrips.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-slate-800 bg-slate-950 p-5 text-sm text-slate-400">No assigned trips for today.</div>
+              <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-5 text-sm text-slate-500">No assigned trips for today.</div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full min-w-175 text-left text-sm">
                   <thead>
-                    <tr className="border-b border-slate-800 text-xs uppercase tracking-[0.16em] text-slate-500">
-                      <th className="py-3">Route ID</th>
-                      <th className="py-3">Route</th>
-                      <th className="py-3">Departure</th>
-                      <th className="py-3">Destination</th>
+                    <tr className="border-b border-slate-100 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      <th className="py-3 pr-4">Route ID</th>
+                      <th className="py-3 pr-4">Route</th>
+                      <th className="py-3 pr-4">Departure Time</th>
+                      <th className="py-3 pr-4">Destination</th>
                       <th className="py-3">Status</th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className="divide-y divide-slate-100">
                     {assignedTrips.map((item) => (
                       <tr
                         key={item.trip_id}
-                        className="border-b border-slate-800/70 cursor-pointer hover:bg-slate-900/60 transition-colors"
+                        className="cursor-pointer hover:bg-slate-50 transition-colors"
                         onClick={() => setTripDetailsModal(item)}
                         title="Click for trip details"
                       >
-                        <td className="py-3 font-data text-slate-400">RTE-{item.trip_id}</td>
-                        <td className="py-3 text-slate-200">{item.fleet_route?.route?.origin || '-'} to {item.fleet_route?.route?.destination || '-'}</td>
-                        <td className="py-3 font-data text-slate-300">{formatTripSchedule(item)}</td>
-                        <td className="py-3 text-slate-300">{item.fleet_route?.route?.destination || '-'}</td>
-                        <td className="py-3"><span className="rounded-full border border-slate-700 px-2 py-1 text-xs capitalize" style={{ color: STATUS_COLOR[item.status] || '#64748b' }}>{item.status}</span></td>
+                        <td className="py-3 pr-4 font-data text-slate-500">RTE-{item.trip_id}</td>
+                        <td className="py-3 pr-4 font-semibold text-slate-900">{item.fleet_route?.route?.origin || '-'} → {item.fleet_route?.route?.destination || '-'}</td>
+                        <td className="py-3 pr-4 font-data text-slate-600">{formatTripSchedule(item)}</td>
+                        <td className="py-3 pr-4 text-slate-600">{item.fleet_route?.route?.destination || '-'}</td>
+                        <td className="py-3">
+                          <span className="rounded-full px-2.5 py-1 text-xs font-semibold" style={{ background: `${STATUS_COLOR[item.status] || '#64748b'}20`, color: STATUS_COLOR[item.status] || '#64748b' }}>
+                            {(item.status || 'pending').toUpperCase()}
+                          </span>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -936,23 +988,23 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
 
         {!loading && activeTab === 'earnings' && isPaired && !showNoCurrentTripState && (
           <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            <article className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
-              <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Total Fare Collected</p>
-              <h3 className="font-data mt-2 text-2xl font-bold text-slate-100">
-                PHP {earnings ? Number(earnings.total_fare).toFixed(2) : '—'}
+            <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Total Fare Collected</p>
+              <h3 className="font-data mt-2 text-2xl font-bold text-slate-900">
+                ₱{earnings ? Number(earnings.total_fare).toFixed(2) : '0.00'}
               </h3>
-              <p className="mt-1 text-sm text-slate-400">{earnings?.passenger_count ?? 0} passengers</p>
+              <p className="mt-1 text-sm text-slate-500">{earnings?.passenger_count ?? 0} passengers</p>
             </article>
-            <article className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
-              <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Onsite (Cash)</p>
-              <h3 className="font-data mt-2 text-2xl font-bold text-emerald-300">
-                PHP {earnings ? Number(earnings.onsite_amount).toFixed(2) : '—'}
+            <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Cash Payments</p>
+              <h3 className="font-data mt-2 text-2xl font-bold text-teal-600">
+                ₱{earnings ? Number(earnings.onsite_amount).toFixed(2) : '0.00'}
               </h3>
             </article>
-            <article className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
-              <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Online (PayMongo)</p>
-              <h3 className="font-data mt-2 text-2xl font-bold text-sky-300">
-                PHP {earnings ? Number(earnings.online_amount).toFixed(2) : '—'}
+            <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Digital Payments</p>
+              <h3 className="font-data mt-2 text-2xl font-bold text-blue-600">
+                ₱{earnings ? Number(earnings.online_amount).toFixed(2) : '0.00'}
               </h3>
             </article>
             <article className="rounded-2xl border border-slate-800 bg-slate-900 p-4 md:col-span-2 xl:col-span-3">
@@ -978,19 +1030,21 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
         )}
 
         {!loading && activeTab === 'alerts' && (
-          <section className="rounded-2xl border border-slate-800 bg-slate-900 p-4 sm:p-6">
-            <div className="mb-3 flex items-center justify-between">
-              <h4 className="text-base font-semibold text-slate-100">Traffic Alerts</h4>
-              <button className="rounded-lg border border-slate-700 bg-slate-950 px-2.5 py-1.5 text-xs font-semibold text-slate-300 transition hover:border-slate-500">Mark all as read</button>
+          <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm">
+            <div className="mb-4 flex items-center justify-between">
+              <h4 className="text-base font-bold text-slate-900">Traffic Alerts</h4>
+              <button className="text-xs font-medium text-teal-600 hover:text-teal-700">Mark all as read</button>
             </div>
-            <div className="space-y-2">
+            <div className="space-y-3">
               {notifications.map((notice, idx) => (
-                <div key={idx} className={`flex items-start justify-between gap-3 rounded-xl border px-3 py-2 ${notice.tone === 'danger' ? 'border-red-900 bg-red-950/30' : notice.tone === 'warn' ? 'border-amber-900 bg-amber-950/30' : 'border-sky-900 bg-sky-950/30'}`}>
+                <div key={idx} className={`flex items-start justify-between gap-3 rounded-lg border-l-4 bg-slate-50 px-4 py-3 ${
+                  notice.tone === 'danger' ? 'border-red-500' : notice.tone === 'warn' ? 'border-amber-400' : 'border-teal-400'
+                }`}>
                   <div>
-                    <p className="text-sm font-semibold text-slate-100">{notice.title}</p>
-                    <p className="text-xs text-slate-400">{notice.note}</p>
+                    <p className="text-sm font-semibold text-slate-900">{notice.title}</p>
+                    <p className="text-xs text-slate-500 mt-0.5">{notice.note}</p>
                   </div>
-                  <small className="font-data text-xs text-slate-500">{notice.time}</small>
+                  <small className="shrink-0 text-xs text-slate-400">{notice.time}</small>
                 </div>
               ))}
             </div>
@@ -1013,23 +1067,34 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
 
         {!loading && activeTab === 'trip' && isPaired && !showNoCurrentTripState && (
           <section className="grid gap-4 lg:grid-cols-2">
-            <article className="rounded-2xl border border-slate-800 bg-slate-900 p-4 sm:p-6">
-              <div className="mb-3 flex items-center justify-between">
-                <h4 className="text-base font-semibold text-slate-100">Current Trip Summary</h4>
-                <span className="rounded-full border border-slate-700 px-2 py-1 text-xs capitalize" style={{ color: STATUS_COLOR[trip?.status] || '#64748b' }}>{trip?.status || 'idle'}</span>
+            <article className="rounded-xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm">
+              <div className="mb-4 flex items-center justify-between">
+                <h4 className="text-base font-bold text-slate-900">Trip Status</h4>
+                <button
+                  className="rounded-lg bg-red-500 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-red-600 disabled:opacity-50"
+                  onClick={() => handleTripAction('complete')}
+                  disabled={actionInFlight || !isPaired || !['departed', 'in-progress'].includes(trip?.status)}
+                >
+                  End Trip
+                </button>
               </div>
-              <div className="space-y-3 text-sm">
-                <div className="flex items-center justify-between"><span className="text-slate-500">Total Distance</span><strong className="font-data text-slate-100">{stops[stops.length - 1]?.distance_from_origin_km ?? 0} km</strong></div>
-                <div className="flex items-center justify-between"><span className="text-slate-500">Travel Time</span><strong className="font-data text-slate-100">1h 10m</strong></div>
-                <div className="flex items-center justify-between"><span className="text-slate-500">Average Speed</span><strong className="font-data text-slate-100">38 km/h</strong></div>
-                <div className="flex items-center justify-between"><span className="text-slate-500">Trip Progress</span><strong className="font-data text-slate-100">{tripProgress}%</strong></div>
+              <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">Current Trip Summary</p>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                {[{label:'Total Distance', value: `${stops[stops.length-1]?.distance_from_origin_km ?? 0} km`}, {label:'Total Time', value:'1h 10m'}, {label:'Average Speed', value:'38 km/h'}, {label:'Total Stops', value: String(stops.length)}].map(({label, value}) => (
+                  <div key={label} className="rounded-lg bg-slate-50 p-3">
+                    <p className="text-xs text-slate-500">{label}</p>
+                    <p className="mt-1 font-data text-lg font-bold text-slate-900">{value}</p>
+                  </div>
+                ))}
               </div>
-              <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-slate-800">
-                <div className="h-full rounded-full bg-linear-to-r from-blue-500 to-sky-400" style={{ width: `${tripProgress}%` }} />
-              </div>
-              <div className="mt-4 flex flex-wrap gap-2">
-                <button className="rounded-xl bg-sky-500 px-3 py-2 text-xs font-semibold text-slate-950 transition hover:bg-sky-400 disabled:opacity-50" onClick={() => handleTripAction('depart')} disabled={!isPaired || trip?.status !== 'boarding'}>Start Trip</button>
-                <button className="rounded-xl border border-red-900 bg-red-950/30 px-3 py-2 text-xs font-semibold text-red-300 transition hover:bg-red-950/50 disabled:opacity-50" onClick={() => handleTripAction('complete')} disabled={!isPaired || !['departed', 'in-progress'].includes(trip?.status)}>End Trip</button>
+              <div className="mt-4">
+                <div className="mb-1 flex items-center justify-between text-xs">
+                  <span className="font-medium text-slate-600">Trip Progress</span>
+                  <span className="font-data font-bold text-slate-900">{tripProgress}%</span>
+                </div>
+                <div className="h-2.5 overflow-hidden rounded-full bg-slate-100">
+                  <div className="h-full rounded-full bg-teal-500 transition-all" style={{ width: `${tripProgress}%` }} />
+                </div>
               </div>
             </article>
 
@@ -1121,9 +1186,53 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                 <div className="flex items-center justify-between"><span className="text-slate-500">Date</span><strong className="font-data text-slate-100">{formatDateTime(pin?.pin_date || trip?.trip_date)}</strong></div>
               </div>
             </article>
+
+            <article className="rounded-2xl border border-slate-800 bg-slate-900 p-4 sm:p-6">
+              <h4 className="mb-3 text-base font-semibold text-slate-100">Security & 2FA</h4>
+              <div className="space-y-3 text-sm">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-slate-300 font-medium">Two-Factor Authentication</p>
+                    <p className="text-xs text-slate-500 mt-0.5">Require OTP verification on every login.</p>
+                  </div>
+                  <label className="relative inline-flex cursor-pointer items-center">
+                    <input type="checkbox" className="sr-only peer" checked={twoFactorEnabled}
+                      onChange={async (e) => {
+                        const enabled = e.target.checked;
+                        setTwoFactorEnabled(enabled); setSaving2fa(true); setMsg2fa('');
+                        try {
+                          await StaffService.setTwoFactorPreference(enabled);
+                          setMsg2fa(enabled ? '2FA enabled.' : '2FA disabled.');
+                        } catch (err) { setTwoFactorEnabled(!enabled); setMsg2fa(err?.message || 'Failed to update.'); }
+                        finally { setSaving2fa(false); }
+                      }} disabled={saving2fa} />
+                    <div className="h-6 w-11 rounded-full bg-slate-700 peer-checked:bg-teal-500 peer-focus:ring-2 peer-focus:ring-teal-400 transition-colors after:absolute after:top-0.5 after:left-[2px] after:h-5 after:w-5 after:rounded-full after:bg-white after:shadow after:transition-all peer-checked:after:translate-x-full" />
+                  </label>
+                </div>
+                {msg2fa && <p className={`text-xs rounded px-2 py-1 ${msg2fa.toLowerCase().includes('fail') ? 'bg-red-900/30 text-red-300' : 'bg-teal-900/30 text-teal-300'}`}>{msg2fa}</p>}
+              </div>
+            </article>
           </section>
         )}
       </main>
+
+      {/* ── End Trip Confirmation Modal ───────────────────────────────── */}
+      {confirmComplete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-sm rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl">
+            <h3 className="mb-2 text-base font-bold text-slate-100">End Trip?</h3>
+            <p className="mb-4 text-sm text-slate-400">This will finalize the trip and all stop/occupancy data. <strong className="text-amber-300">This cannot be undone.</strong></p>
+            <dl className="mb-4 grid grid-cols-2 gap-2 rounded-lg bg-slate-800 p-3 text-sm">
+              <div><dt className="text-xs text-slate-500">Trip ID</dt><dd className="font-semibold text-slate-100">#{trip?.trip_id}</dd></div>
+              <div><dt className="text-xs text-slate-500">Route</dt><dd className="font-semibold text-slate-100">{trip?.fleet_route?.route?.route_name || '-'}</dd></div>
+            </dl>
+            <div className="flex gap-2">
+              <button type="button" onClick={() => setConfirmComplete(false)} className="flex-1 rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800">Cancel</button>
+              <button type="button" onClick={handleConfirmedComplete} className="flex-1 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700">Yes, End Trip</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Suggestion: Trip details modal ───────────────────────────────── */}
       {tripDetailsModal && (() => {

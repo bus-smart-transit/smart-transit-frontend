@@ -7,8 +7,11 @@ import {
   Camera,
   Calendar,
   CheckCircle2,
+  Clock,
+  Download,
   KeyRound,
   LogOut,
+  Play,
   QrCode,
   RefreshCw,
   Ticket,
@@ -24,13 +27,13 @@ import useOnsiteReceiptPrinter from '../../api/hooks/Staff/useOnsiteReceiptPrint
 import PairingScreen from './PairingScreen';
 
 const NAV_ITEMS = [
-  { key: 'trip', label: 'Current Trip', icon: Bus },
-  { key: 'assigned', label: 'Assigned Trips', icon: Calendar },
-  { key: 'occupancy', label: 'Occupancy', icon: BarChart3 },
+  { key: 'trip', label: 'Start', icon: Play },
+  { key: 'occupancy', label: 'Ticketing', icon: Ticket },
   { key: 'scan', label: 'Scan Ticket', icon: QrCode },
+  { key: 'earnings', label: 'End Shift', icon: BarChart3 },
   { key: 'passengers', label: 'Passengers', icon: Users },
-  { key: 'earnings', label: 'Earnings', icon: TrendingUp },
   { key: 'pin', label: 'Daily PIN', icon: KeyRound },
+  { key: 'account', label: 'Account', icon: UserCheck },
 ];
 
 const UUID_PATTERN = /[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i;
@@ -198,6 +201,8 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   const [actionMsg, setActionMsg] = useState('');
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
   const [saving2fa, setSaving2fa] = useState(false);
+  const [checkoutInFlight, setCheckoutInFlight] = useState(false);
+  const [confirmCheckout, setConfirmCheckout] = useState(false);
   const isPaired = pairing?.paired === true;
   const pairingReason = pairing?.reason || 'Waiting for pairing with your Driver before live trip features unlock.';
   const hasActiveTrip = isCurrentOrSameDayTrip(trip);
@@ -555,7 +560,13 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
       );
 
       scannerStreamRef.current = qrScanner;
-      await qrScanner.start();
+      // Race: abort if camera takes > 10s to initialise (e.g. pending permission dialog)
+      await Promise.race([
+        qrScanner.start(),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Camera initialisation timed out (10s). Check camera permissions.')), 10000)
+        ),
+      ]);
 
       // Guard: scanner may have been stopped while start() was awaiting (e.g. tab change)
       if (!scannerStreamRef.current) return;
@@ -617,6 +628,12 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
       return;
     }
 
+    setConfirmCheckout(true);
+  };
+
+  const handleConfirmedOnsiteCheckout = async () => {
+    setConfirmCheckout(false);
+    setCheckoutInFlight(true);
     try {
       const res = await StaffService.checkoutOnsite({
         items: [
@@ -649,6 +666,8 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     } catch (err) {
       setOnsiteReceipt(null);
       setActionMsg(err.message || 'Failed to record onsite checkout.');
+    } finally {
+      setCheckoutInFlight(false);
     }
   };
 
@@ -674,143 +693,131 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
 
   const pageTitle =
     activeTab === 'trip'
-      ? 'Current Trip'
-      : activeTab === 'assigned'
-        ? 'Assigned Trips'
-        : activeTab === 'occupancy'
-          ? 'Trip Occupancy'
-          : activeTab === 'scan'
-            ? 'Scan Ticket'
-            : activeTab === 'passengers'
-              ? 'Current Passengers'
-              : activeTab === 'earnings'
-                ? 'Trip Earnings'
-                : 'Daily PIN Verification';
+      ? 'Start Shift'
+      : activeTab === 'occupancy'
+        ? 'Ticketing'
+        : activeTab === 'scan'
+          ? 'Scan Ticket'
+          : activeTab === 'passengers'
+            ? 'Passengers'
+            : activeTab === 'earnings'
+              ? 'End of Shift'
+              : 'Daily PIN';
 
   return (
-    <div className="grid min-h-screen grid-cols-1 bg-slate-950 text-slate-200 lg:grid-cols-[280px_1fr]">
-      <aside className="flex flex-col justify-between border-b border-slate-800 bg-slate-900/70 p-4 lg:border-b-0 lg:border-r">
+    <div className="grid min-h-screen grid-cols-1 bg-slate-100 lg:grid-cols-[240px_1fr]">
+      {/* Sidebar */}
+      <aside className="flex flex-col justify-between bg-[#0D1B2A] p-4 lg:min-h-screen">
         <div>
-          <div className="mb-4 inline-flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm font-semibold text-slate-100">
-            <Ticket className="h-4 w-4 text-sky-400" />
-            Conductor Portal
+          {/* Brand */}
+          <div className="mb-2 px-2 pt-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Bus Operator</p>
+            <div className="mt-1 flex items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-500 shrink-0">
+                <Bus className="h-4 w-4 text-white" />
+              </div>
+              <p className="text-sm font-bold text-white leading-tight">Chauffeur Portal</p>
+            </div>
           </div>
 
-          {profile && (
-            <div className="mb-4 rounded-2xl border border-slate-800 bg-slate-900 p-3">
-              <div className="flex items-center gap-3">
-                <div className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-linear-to-br from-blue-600 to-indigo-600 font-semibold text-white">
-                  {(profile.name || 'C')[0].toUpperCase()}
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-slate-100">{profile.name}</p>
-                  <p className="text-xs text-slate-500">Conductor</p>
-                </div>
-              </div>
+          <div className="my-3 border-t border-white/10" />
 
-              <div className="mt-3 rounded-xl border border-slate-800 bg-slate-950 p-2.5">
-                <div className="flex items-center justify-between gap-2">
-                  <div>
-                    <p className="text-xs font-semibold text-slate-200">Login 2FA</p>
-                    <p className="text-[11px] text-slate-500">OTP required on sign-in</p>
-                  </div>
-                  <label className="inline-flex items-center gap-1.5 text-[11px] text-slate-300">
-                    <input
-                      type="checkbox"
-                      checked={twoFactorEnabled}
-                      onChange={handleTwoFactorToggle}
-                      disabled={saving2fa}
-                    />
-                    {twoFactorEnabled ? 'On' : 'Off'}
-                  </label>
-                </div>
-              </div>
-            </div>
-          )}
-
-          <nav className="relative mt-4 flex flex-col gap-1 pl-3">
-            <div className="absolute bottom-2 left-1.75 top-2 w-px bg-slate-800" aria-hidden="true" />
+          <nav className="flex flex-col gap-0.5">
             {NAV_ITEMS.map((item) => {
               const Icon = item.icon;
               const isActive = activeTab === item.key;
               return (
                 <button
                   key={item.key}
-                  className="group relative flex items-center gap-3 rounded-lg py-2.5 pl-5 pr-3 text-sm font-medium"
+                  className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+                    isActive
+                      ? 'bg-teal-500 text-white'
+                      : 'text-slate-400 hover:bg-white/10 hover:text-white'
+                  }`}
                   onClick={() => {
                     setActiveTab(item.key);
                     setActionMsg('');
                     setScanResult(null);
                   }}
                 >
-                  <span
-                    className={[
-                      'absolute left-0 top-1/2 h-2.5 w-2.5 -translate-y-1/2 rounded-full border transition',
-                      isActive
-                        ? 'border-sky-400 bg-sky-400 shadow-[0_0_0_3px_rgba(56,189,248,0.25)]'
-                        : 'border-slate-600 bg-slate-950 group-hover:border-slate-400',
-                    ].join(' ')}
-                    aria-hidden="true"
-                  />
-                  <Icon className={isActive ? 'h-4 w-4 text-sky-400' : 'h-4 w-4 text-slate-500 group-hover:text-slate-300'} />
-                  <span className={isActive ? 'text-white' : 'text-slate-400 group-hover:text-slate-200'}>{item.label}</span>
+                  <Icon className="h-4 w-4 shrink-0" />
+                  {item.label}
                 </button>
               );
             })}
           </nav>
         </div>
 
-        <button
-          className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-900 bg-red-950/30 px-3 py-2 text-sm font-semibold text-red-300 transition hover:bg-red-950/50"
-          onClick={handleLogout}
-        >
-          <LogOut className="h-4 w-4" />
-          Sign Out
-        </button>
+        {/* Bottom: profile + logout */}
+        <div className="space-y-3">
+          {profile && (
+            <div className="flex items-center gap-3 rounded-xl bg-white/10 px-3 py-2.5">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-teal-500 text-sm font-bold text-white">
+                {(profile.name || 'C')[0].toUpperCase()}
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-white">{profile.name}</p>
+                <p className="text-xs text-slate-400">Chauffeur</p>
+              </div>
+            </div>
+          )}
+          <button
+            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-red-400 hover:bg-white/10 hover:text-red-300 transition"
+            onClick={handleLogout}
+          >
+            <LogOut className="h-4 w-4" />
+            Sign Out
+          </button>
+        </div>
       </aside>
 
-      <main className="p-4 sm:p-6">
-        <header className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <h1 className="text-xl font-bold text-slate-100">{pageTitle}</h1>
+      <main className="min-h-screen bg-white p-4 sm:p-6">
+        <header className="mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900">{pageTitle}</h1>
+            <p className="text-xs text-slate-500">
+              {new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+            </p>
+          </div>
           <div className="flex items-center gap-2">
             <span
               className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${
                 pairing.loading
-                  ? 'border-slate-700 bg-slate-900 text-slate-400'
+                  ? 'border-slate-200 bg-slate-100 text-slate-500'
                   : isPaired
-                    ? 'border-emerald-700 bg-emerald-950/40 text-emerald-300'
-                    : 'border-amber-700 bg-amber-950/40 text-amber-300'
+                    ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                    : 'border-amber-200 bg-amber-50 text-amber-700'
               }`}
             >
-              {pairing.loading ? 'Checking pairing...' : isPaired ? 'Paired' : 'Not paired'}
+              {pairing.loading ? 'Checking...' : isPaired ? '● Paired' : '○ Not paired'}
             </span>
             <button
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-semibold text-slate-300 transition hover:border-slate-500"
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
               onClick={loadData}
             >
               <RefreshCw className="h-3.5 w-3.5" />
               Refresh
             </button>
-            {actionMsg && <span className="rounded-xl border border-emerald-900 bg-emerald-950/40 px-3 py-2 text-xs text-emerald-300">{actionMsg}</span>}
+            {actionMsg && <span className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">{actionMsg}</span>}
           </div>
         </header>
 
-        {loading && <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 text-sm text-slate-400">Loading dashboard data...</div>}
+        {loading && <div className="rounded-xl border border-slate-200 bg-slate-50 p-6 text-sm text-slate-500">Loading dashboard data...</div>}
         {error && (
-          <div className="mb-4 inline-flex items-center gap-2 rounded-xl border border-red-900 bg-red-950/40 px-3 py-2 text-sm text-red-300">
-            <AlertCircle className="h-4 w-4" />
+          <div className="mb-4 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700">
+            <AlertCircle className="h-4 w-4 shrink-0" />
             {error}
           </div>
         )}
 
         {showNoCurrentTripState && (
-          <section className="rounded-2xl border border-dashed border-slate-800 bg-slate-900 p-6">
-            <h3 className="text-lg font-semibold text-slate-100">No Current Trip Available</h3>
-            <p className="mt-2 text-sm text-slate-400">
+          <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+            <h3 className="text-lg font-bold text-slate-900">No Current Trip Available</h3>
+            <p className="mt-2 text-sm text-slate-500">
               You currently do not have an active or same-day trip assignment.
             </p>
             {upcomingTrip ? (
-              <p className="mt-3 text-sm text-sky-300">
+              <p className="mt-3 text-sm text-teal-600">
                 Upcoming trip: {upcomingTrip?.fleet_route?.route?.origin || '-'} to {upcomingTrip?.fleet_route?.route?.destination || '-'} on {formatTripSchedule(upcomingTrip)}.
               </p>
             ) : (
@@ -819,42 +826,83 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
               </p>
             )}
             <button
-              className="mt-4 rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-xs font-semibold text-slate-300 transition hover:border-slate-500"
-              onClick={() => setActiveTab('assigned')}
+              className="mt-4 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
+              onClick={() => setActiveTab('occupancy')}
             >
-              View Assigned Trips
+              Go to Ticketing
             </button>
           </section>
         )}
 
         {!loading && activeTab === 'trip' && !isPaired && (
-          <section className="rounded-2xl border border-amber-800 bg-amber-950/20 p-6">
-            <h3 className="text-lg font-semibold text-amber-300">Current trip is locked</h3>
-            <p className="mt-2 text-sm text-amber-200/90">{pairingReason}</p>
+          <section className="rounded-xl border border-amber-200 bg-amber-50 p-6">
+            <h3 className="text-lg font-bold text-amber-800">Pairing required to start shift</h3>
+            <p className="mt-2 text-sm text-amber-700">{pairingReason}</p>
           </section>
         )}
 
         {!loading && activeTab === 'trip' && isPaired && !showNoCurrentTripState && (
-          <section className="grid gap-4 md:grid-cols-2">
-            {!trip ? (
-              <article className="rounded-2xl border border-dashed border-slate-800 bg-slate-900 p-6">
-                <h3 className="text-lg font-semibold text-slate-100">No Active Trip</h3>
-                <p className="mt-2 text-sm text-slate-500">No trip currently assigned.</p>
-              </article>
-            ) : (
-              <article className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
-                <div className="mb-4 flex items-center justify-between">
-                  <h3 className="text-lg font-semibold text-slate-100">Trip #{trip.trip_id}</h3>
-                  <span className="rounded-full border border-sky-500/40 bg-sky-500/10 px-3 py-1 text-xs text-sky-300">{trip.status}</span>
+          <section className="mx-auto max-w-2xl">
+            {/* Welcome heading */}
+            <div className="mb-6 text-center">
+              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-teal-50">
+                <CheckCircle2 className="h-6 w-6 text-teal-500" />
+              </div>
+              <h2 className="font-display text-2xl font-bold text-slate-900">
+                Welcome back, Chauffeur {profile?.name?.split(' ')[0] ?? 'John'}!
+              </h2>
+              <p className="mt-2 text-sm text-slate-500">
+                Please review your fleet assignment and partner details before starting your shift today.
+              </p>
+            </div>
+
+            {/* Assignment cards */}
+            <div className="grid gap-4 sm:grid-cols-2">
+              {/* Fleet card */}
+              <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+                <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">Assigned Vehicle / Fleet Number</p>
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-teal-50">
+                    <Bus className="h-5 w-5 text-teal-600" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-slate-900">{trip?.fleet_route?.fleet?.plate_number ?? 'Bus #1'}</p>
+                    <p className="text-xs text-slate-500">{trip?.fleet_route?.fleet?.make ?? 'Assigned Fleet'}</p>
+                  </div>
                 </div>
-                <div className="space-y-3 text-sm">
-                  <div className="flex items-center justify-between"><span className="text-slate-500">Schedule</span><strong className="font-data text-slate-100">{formatTripSchedule(trip)}</strong></div>
-                  <div className="flex items-center justify-between"><span className="text-slate-500">Seated Passengers</span><strong className="font-data text-slate-100">{trip.current_seated_capacity ?? 0}</strong></div>
-                  <div className="flex items-center justify-between"><span className="text-slate-500">Standing Passengers</span><strong className="font-data text-slate-100">{trip.current_standing_capacity ?? 0}</strong></div>
-                  <div className="flex items-center justify-between"><span className="text-slate-500">Total Occupancy</span><strong className="font-data text-slate-100">{trip.total_occupancy ?? 0}</strong></div>
+              </div>
+
+              {/* Trip info card */}
+              <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+                <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">Current Trip Info</p>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Route</span>
+                    <span className="font-semibold text-slate-900">{trip?.fleet_route?.route?.route_name ?? '-'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Status</span>
+                    <span className="font-semibold capitalize text-teal-600">{trip?.status ?? '-'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Schedule</span>
+                    <span className="font-data text-slate-700">{formatTripSchedule(trip)}</span>
+                  </div>
                 </div>
-              </article>
-            )}
+              </div>
+            </div>
+
+            {/* Start shift button */}
+            <div className="mt-6 text-center">
+              <button
+                className="inline-flex items-center gap-2 rounded-lg bg-teal-500 px-8 py-3 text-sm font-bold text-white transition hover:bg-teal-600"
+                onClick={() => setActiveTab('occupancy')}
+              >
+                CONFIRM &amp; START SHIFT
+                <Play className="h-4 w-4" />
+              </button>
+              <p className="mt-3 text-xs text-slate-400">This will take you to the Ticketing screen</p>
+            </div>
           </section>
         )}
 
@@ -884,17 +932,36 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
         )}
 
         {!loading && activeTab === 'occupancy' && !isPaired && (
-          <section className="rounded-2xl border border-amber-800 bg-amber-950/20 p-6">
-            <h3 className="text-lg font-semibold text-amber-300">Occupancy view is locked</h3>
-            <p className="mt-2 text-sm text-amber-200/90">{pairingReason}</p>
+          <section className="rounded-xl border border-amber-200 bg-amber-50 p-6">
+            <h3 className="text-lg font-bold text-amber-800">Ticketing is locked</h3>
+            <p className="mt-2 text-sm text-amber-700">{pairingReason}</p>
           </section>
         )}
 
         {!loading && activeTab === 'occupancy' && isPaired && !showNoCurrentTripState && (
-          <section className="max-w-2xl">
+          <section className="max-w-4xl">
+            {/* Bus + Passenger Load Header */}
+            {occupancy && (
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div className="flex items-center gap-3">
+                  <Bus className="h-5 w-5 text-teal-600" />
+                  <span className="font-bold text-slate-900">{trip?.fleet_route?.fleet?.plate_number ?? 'Bus 001'}</span>
+                </div>
+                <div className="flex flex-1 items-center gap-3">
+                  <span className="shrink-0 text-xs text-slate-500">Passenger load</span>
+                  <div className="flex-1 overflow-hidden rounded-full bg-slate-100 h-2.5">
+                    <div
+                      className="h-full rounded-full bg-teal-500 transition-all"
+                      style={{ width: `${occTotalCap > 0 ? Math.round(((occSeated + occStanding) / occTotalCap) * 100) : 0}%` }}
+                    />
+                  </div>
+                  <span className="shrink-0 font-data text-xs font-semibold text-slate-700">{occSeated + occStanding}/{occTotalCap}</span>
+                </div>
+              </div>
+            )}
             {!occupancy ? (
-              <article className="rounded-2xl border border-dashed border-slate-800 bg-slate-900 p-6">
-                <h3 className="text-lg font-semibold text-slate-100">No Occupancy Data</h3>
+              <article className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-6">
+                <h3 className="text-lg font-bold text-slate-900">No Occupancy Data</h3>
               </article>
             ) : (
               <article className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
@@ -926,24 +993,35 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
         )}
 
         {!loading && activeTab === 'scan' && !isPaired && (
-          <section className="rounded-2xl border border-amber-800 bg-amber-950/20 p-6">
-            <h3 className="text-lg font-semibold text-amber-300">Ticket scanning is locked</h3>
-            <p className="mt-2 text-sm text-amber-200/90">{pairingReason}</p>
+          <section className="rounded-xl border border-amber-200 bg-amber-50 p-6">
+            <h3 className="text-lg font-bold text-amber-800">Ticket scanning is locked</h3>
+            <p className="mt-2 text-sm text-amber-700">{pairingReason}</p>
           </section>
         )}
 
         {!loading && activeTab === 'scan' && isPaired && (
           <section className="grid gap-4 lg:grid-cols-2">
-            <article className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
-              <h3 className="text-lg font-semibold text-slate-100">Scan QR Ticket</h3>
-              <p className="mt-2 text-sm text-slate-500">Use smartphone camera scanning, or enter ticket UUID manually.</p>
+            <article className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+              <div className="mb-4 flex items-center justify-between">
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">Digital Form / QR Scanner</h3>
+                  <p className="mt-0.5 text-xs text-slate-500">Scan the QR code below the scanner. Scanned tickets will appear on the right.</p>
+                </div>
+                <button
+                  type="button"
+                  className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100"
+                  onClick={stopScanner}
+                >
+                  Reset
+                </button>
+              </div>
 
-              <div className="mt-4 rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-                <div className="mb-3 flex flex-wrap items-center gap-2">
+              <div className="rounded-xl border-2 border-dashed border-slate-200 bg-slate-50">
+                <div className="mb-3 flex flex-wrap items-center gap-2 p-3 pb-0">
                   {!scannerRunning ? (
                     <button
                       type="button"
-                      className="inline-flex items-center gap-2 rounded-xl border border-emerald-700 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-300 transition hover:bg-emerald-500/20"
+                      className="flex items-center gap-2 rounded-lg bg-teal-500 px-3 py-2 text-xs font-semibold text-white transition hover:bg-teal-600"
                       onClick={() => void startScanner()}
                     >
                       <Camera className="h-4 w-4" />
@@ -952,7 +1030,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                   ) : (
                     <button
                       type="button"
-                      className="inline-flex items-center gap-2 rounded-xl border border-amber-700 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-300 transition hover:bg-amber-500/20"
+                      className="flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 transition hover:bg-amber-100"
                       onClick={stopScanner}
                     >
                       <Camera className="h-4 w-4" />
@@ -1124,11 +1202,11 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
 
                 <button
                   type="button"
-                  className="inline-flex items-center gap-2 rounded-xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400"
+                  className="inline-flex items-center gap-2 rounded-xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400 disabled:opacity-60"
                   onClick={handleOnsiteCheckout}
-                  disabled={!hasActiveTrip || !isPaired}
+                  disabled={checkoutInFlight || !hasActiveTrip || !isPaired}
                 >
-                  Record Cash Checkout
+                  {checkoutInFlight ? 'Processing…' : 'Record Cash Checkout'}
                 </button>
 
                 <button
@@ -1230,56 +1308,89 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
         )}
 
         {!loading && activeTab === 'earnings' && !isPaired && (
-          <section className="rounded-2xl border border-amber-800 bg-amber-950/20 p-6">
-            <h3 className="text-lg font-semibold text-amber-300">Earnings locked</h3>
-            <p className="mt-2 text-sm text-amber-200/90">{pairingReason}</p>
+          <section className="rounded-xl border border-amber-200 bg-amber-50 p-6">
+            <h3 className="text-lg font-bold text-amber-800">End Shift locked</h3>
+            <p className="mt-2 text-sm text-amber-700">{pairingReason}</p>
           </section>
         )}
 
         {!loading && activeTab === 'earnings' && isPaired && showNoCurrentTripState && (
-          <div className="rounded-2xl border border-dashed border-slate-800 bg-slate-900 p-6 text-sm text-slate-400">No active trip. Earnings are only available during an active trip.</div>
+          <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-6 text-sm text-slate-500">No active trip. Shift summary is available during an active trip.</div>
         )}
 
         {!loading && activeTab === 'earnings' && isPaired && !showNoCurrentTripState && (
-          <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            <article className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
-              <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Total Fare Collected</p>
-              <h3 className="font-data mt-2 text-2xl font-bold text-slate-100">
-                PHP {earnings ? Number(earnings.total_fare).toFixed(2) : '—'}
-              </h3>
-              <p className="mt-1 text-sm text-slate-400">{earnings?.passenger_count ?? 0} passengers</p>
-            </article>
-            <article className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
-              <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Onsite (Cash)</p>
-              <h3 className="font-data mt-2 text-2xl font-bold text-emerald-300">
-                PHP {earnings ? Number(earnings.onsite_amount).toFixed(2) : '—'}
-              </h3>
-            </article>
-            <article className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
-              <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Online (PayMongo)</p>
-              <h3 className="font-data mt-2 text-2xl font-bold text-sky-300">
-                PHP {earnings ? Number(earnings.online_amount).toFixed(2) : '—'}
-              </h3>
-            </article>
-            <article className="rounded-2xl border border-slate-800 bg-slate-900 p-4 md:col-span-2 xl:col-span-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Average Fare</p>
-                  <p className="font-data mt-1 text-lg font-semibold text-slate-100">
-                    PHP {earnings ? Number(earnings.average_fare).toFixed(2) : '—'} per passenger
-                  </p>
-                </div>
-                <button
-                  className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-xs font-semibold text-slate-300 transition hover:border-slate-500"
-                  onClick={loadEarnings}
-                >
-                  <RefreshCw className="inline h-3.5 w-3.5 mr-1" />Refresh
+          <section>
+            {/* Shift Summary Header */}
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <h2 className="font-display text-lg font-bold text-slate-900">Shift Summary</h2>
+              <div className="flex gap-2">
+                <button className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50">
+                  <Download className="h-3.5 w-3.5" />
+                  Download Summary Report
+                </button>
+                <button className="rounded-lg bg-teal-500 px-3 py-2 text-xs font-semibold text-white transition hover:bg-teal-600">
+                  Verify &amp; End Shift
                 </button>
               </div>
-              <p className="mt-2 text-xs text-slate-500">
-                Computed server-side from verified payment records. Only boarded/alighted passengers are counted.
-              </p>
-            </article>
+            </div>
+
+            {/* Stats row */}
+            <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4">
+              <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                <p className="text-xs text-slate-400">Total Revenue</p>
+                <p className="font-data mt-1 text-xl font-bold text-slate-900">₱{earnings ? Number(earnings.total_fare).toFixed(2) : '0.00'}</p>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                <p className="text-xs text-slate-400">Fare Collected</p>
+                <p className="font-data mt-1 text-xl font-bold text-slate-900">₱{earnings ? Number(earnings.onsite_amount).toFixed(2) : '0.00'}</p>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                <p className="text-xs text-slate-400">Digital Payments</p>
+                <p className="font-data mt-1 text-xl font-bold text-slate-900">₱{earnings ? Number(earnings.online_amount).toFixed(2) : '0.00'}</p>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                <p className="text-xs text-slate-400">Passengers</p>
+                <p className="font-data mt-1 text-xl font-bold text-slate-900">{earnings?.passenger_count ?? 0}</p>
+              </div>
+            </div>
+
+            {/* Trip breakdown */}
+            <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
+              <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+                <p className="text-sm font-bold text-slate-900">Trip Breakdown</p>
+                <button className="text-xs text-teal-600 hover:text-teal-700" onClick={loadEarnings}>Refresh</button>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-96 text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-100 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                      <th className="px-4 py-3">Trip No</th>
+                      <th className="px-4 py-3">Route</th>
+                      <th className="px-4 py-3">Entry Time</th>
+                      <th className="px-4 py-3">Exit Time</th>
+                      <th className="px-4 py-3">Fare Paid</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {earnings?.trips && earnings.trips.length > 0 ? (
+                      earnings.trips.map((t, i) => (
+                        <tr key={t.trip_id ?? i}>
+                          <td className="px-4 py-3 font-data text-slate-500">TRP-{String(t.trip_id ?? i + 1).padStart(3, '0')}</td>
+                          <td className="px-4 py-3 text-slate-900">{t.origin ?? '-'} → {t.destination ?? '-'}</td>
+                          <td className="px-4 py-3 font-data text-slate-600">{toCompactTime(t.entry_time) || '-'}</td>
+                          <td className="px-4 py-3 font-data text-slate-600">{toCompactTime(t.exit_time) || '-'}</td>
+                          <td className="px-4 py-3 font-data font-semibold text-teal-600">₱{Number(t.fare ?? 0).toFixed(2)}</td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={5} className="px-4 py-6 text-center text-slate-400 text-xs">No trip breakdown available yet.</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </section>
         )}
 
@@ -1296,8 +1407,8 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
             />
 
             {isPaired && !showNoCurrentTripState && (
-              <article className="max-w-xl rounded-2xl border border-slate-800 bg-slate-900 p-6">
-                <h3 className="text-lg font-semibold text-slate-100">Verify Daily PIN</h3>
+              <article className="max-w-xl rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+                <h3 className="text-lg font-bold text-slate-900">Verify Daily PIN</h3>
                 <p className="mt-1 text-xs text-slate-500">Manual PIN verification uses the same assignment checks and trip context.</p>
                 <div className="mt-4 flex gap-2">
                   <input
@@ -1327,7 +1438,69 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
             )}
           </section>
         )}
+
+        {!loading && activeTab === 'account' && (
+          <section className="grid gap-4 lg:grid-cols-2">
+            <article className="rounded-2xl border border-slate-800 bg-slate-900 p-4 sm:p-6">
+              <h4 className="mb-3 text-base font-semibold text-slate-100">Profile Information</h4>
+              <div className="mb-4 flex flex-col items-center rounded-xl border border-slate-800 bg-slate-950 p-4 text-center">
+                <div className="inline-flex h-16 w-16 items-center justify-center rounded-full bg-linear-to-br from-emerald-600 to-teal-600 text-2xl font-bold text-white">
+                  {(profile?.name || 'C')[0].toUpperCase()}
+                </div>
+                <h3 className="mt-2 text-lg font-semibold text-slate-100">{profile?.name || 'Conductor'}</h3>
+                <p className="text-xs text-slate-500">Verified Conductor</p>
+              </div>
+              <div className="space-y-3 text-sm">
+                <div className="flex items-center justify-between"><span className="text-slate-500">Email</span><strong className="text-slate-100">{profile?.user?.email || profile?.email || '-'}</strong></div>
+                <div className="flex items-center justify-between"><span className="text-slate-500">Conductor ID</span><strong className="font-data text-slate-100">{profile?.company_user_id || '-'}</strong></div>
+                <div className="flex items-center justify-between"><span className="text-slate-500">Status</span><strong className="text-emerald-300">Active</strong></div>
+              </div>
+            </article>
+
+            <article className="rounded-2xl border border-slate-800 bg-slate-900 p-4 sm:p-6">
+              <h4 className="mb-3 text-base font-semibold text-slate-100">Security & 2FA</h4>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-slate-400">Two-Factor Authentication</span>
+                  <button
+                    onClick={() => handleTwoFactorToggle()}
+                    className={`rounded-lg px-3 py-1 text-xs font-semibold transition ${
+                      twoFactorEnabled
+                        ? 'bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30'
+                        : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                    }`}
+                  >
+                    {twoFactorEnabled ? 'Enabled' : 'Disabled'}
+                  </button>
+                </div>
+                {actionMsg && (
+                  <p className={`text-xs ${actionMsg.includes('enabled') ? 'text-emerald-400' : 'text-sky-400'}`}>
+                    {actionMsg}
+                  </p>
+                )}
+              </div>
+            </article>
+          </section>
+        )}
       </main>
+
+      {/* ── Onsite Checkout Confirmation Modal ─────────────────────── */}
+      {confirmCheckout && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-sm rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl">
+            <h3 className="mb-2 text-base font-bold text-slate-100">Record Cash Payment?</h3>
+            <p className="mb-4 text-sm text-slate-400">This will create a payment record. <strong className="text-amber-300">This cannot be undone.</strong></p>
+            <dl className="mb-4 grid grid-cols-2 gap-2 rounded-lg bg-slate-800 p-3 text-sm">
+              <div><dt className="text-xs text-slate-500">Seat Type</dt><dd className="font-semibold text-slate-100 capitalize">{onsiteForm.seat_type}</dd></div>
+              <div><dt className="text-xs text-slate-500">Trip ID</dt><dd className="font-semibold text-slate-100">#{trip?.trip_id}</dd></div>
+            </dl>
+            <div className="flex gap-2">
+              <button type="button" onClick={() => setConfirmCheckout(false)} className="flex-1 rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800">Cancel</button>
+              <button type="button" onClick={handleConfirmedOnsiteCheckout} className="flex-1 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700">Confirm Payment</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -18,8 +18,7 @@ function PassengerRouteFallback() {
 
 const GUEST_ROUTES = [
     { path: 'signup', element: <SignUpPage /> },
-    { path: 'login', element: <LoginPage /> },
-    { path: 'landingpage', element: <LandingPage /> }
+    { path: 'login', element: <LoginPage /> }
 ]
 
 export default function PassengerBaseRouter() {

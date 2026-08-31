@@ -1,2391 +1,739 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import StaffService from '../../api/StaffService/StaffService'
-import { loadMapLib } from '../Map/mapDependencies'
 import {
-  ArrowDown,
-  ArrowLeft,
-  ArrowUp,
-  Bus,
-  Calendar,
-  Check,
-  Clock,
-  LayoutDashboard,
-  LogOut,
-  Minus,
-  MapPin,
-  PieChart,
-  Plus,
-  Settings,
-  ShieldCheck,
-  TrendingDown,
-  TrendingUp,
-  User,
-  Users,
-  X,
+  LayoutDashboard, Bus, MapPin, Clock, PieChart, Users, Settings,
+  LogOut, AlertCircle, Plus, Eye, RefreshCw, Shield, UserCheck,
+  X, ChevronDown, ChevronUp, Loader2,
 } from 'lucide-react'
 
-
-async function safeJsonFetch(url, options) {
-  let res
-  try {
-    res = await fetch(url, options)
-  } catch (networkErr) {
-    throw new Error(
-      `Could not reach ${url}. Check your connection or that the server is running.`,
-      { cause: networkErr },
-    )
-  }
-
-  const contentType = res.headers.get('content-type') || ''
-
-  if (!res.ok) {
-    throw new Error(`Request to ${url} failed (status ${res.status}).`)
-  }
-
-  if (!contentType.includes('application/json')) {
-    throw new Error(`Request to ${url} did not return JSON. The endpoint may not exist yet.`)
-  }
-
-  try {
-    return await res.json()
-  } catch (parseErr) {
-    throw new Error(`Request to ${url} returned invalid JSON.`, { cause: parseErr })
-  }
+const fmt = (v) => {
+  if (v == null) return '-'
+  const n = Number(v)
+  return Number.isNaN(n) ? String(v) : `₱${n.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
+}
+const fmtDate = (v) => {
+  if (!v) return '-'
+  const d = new Date(String(v).includes('T') ? v : v + 'T00:00')
+  if (Number.isNaN(d.getTime())) return v
+  return d.toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' })
+}
+const STATUS_CHIP = {
+  scheduled:     'bg-slate-100 text-slate-700',
+  boarding:      'bg-blue-100 text-blue-700',
+  departed:      'bg-amber-100 text-amber-700',
+  'in-progress': 'bg-amber-100 text-amber-700',
+  completed:     'bg-emerald-100 text-emerald-700',
+  cancelled:     'bg-red-100 text-red-700',
 }
 
-/* =============================================================================
-   Sidebar
-   ========================================================================== */
-
-const navItems = [
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'fleets', label: 'Fleets', icon: Bus },
-  { id: 'routes', label: 'Routes', icon: MapPin },
-  { id: 'schedule', label: 'Schedule', icon: Clock },
-  { id: 'reports', label: 'Financial Reports', icon: PieChart },
-  { id: 'staff', label: 'Staff', icon: Users },
+const NAV = [
+  { id: 'dashboard',  label: 'Dashboard',  icon: LayoutDashboard },
+  { id: 'drivers',    label: 'Drivers',    icon: Users },
+  { id: 'conductors', label: 'Conductors', icon: UserCheck },
+  { id: 'fleets',     label: 'Fleets',     icon: Bus },
+  { id: 'routes',     label: 'Routes',     icon: MapPin },
+  { id: 'trips',      label: 'Trips',      icon: Clock },
+  { id: 'reports',    label: 'Reports',    icon: PieChart },
+  { id: 'account',    label: 'Account',    icon: Settings },
 ]
 
-function Sidebar({ activeTab, onTabChange }) {
-  const settingsActive = activeTab === 'settings'
-
+function Sidebar({ activeTab, onTabChange, onLogout }) {
   return (
-    <aside className="flex w-[220px] shrink-0 flex-col bg-[#0a0e1a] px-4 py-8 border-r border-white/5">
-      <div className="mb-10 flex justify-center">
-        <Bus className="h-14 w-14 text-white" strokeWidth={1.5} />
+    <aside className="flex w-[220px] shrink-0 flex-col bg-[#0D1B2A] px-4 py-8">
+      <div className="mb-10 flex items-center gap-2 px-2">
+        <Bus className="h-7 w-7 text-teal-500" strokeWidth={1.5} />
+        <span className="text-base font-bold text-white">SmartTransit</span>
       </div>
-
       <nav className="flex flex-1 flex-col gap-1">
-        {navItems.map(({ id, label, icon: Icon }) => {
-          const active = activeTab === id
-          return (
-            <button
-              key={id}
-              type="button"
-              onClick={() => onTabChange(id)}
-              className={`relative flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium transition-colors ${
-                active
-                  ? 'bg-white/10 text-white'
-                  : 'text-white/70 hover:bg-white/5 hover:text-white'
-              }`}
-            >
-              {active && (
-                <span className="absolute -left-4 top-1/2 h-8 w-1 -translate-y-1/2 rounded-r bg-[#3b82f6]" />
-              )}
-              <Icon className="h-5 w-5 shrink-0" strokeWidth={1.75} />
-              {label}
-            </button>
-          )
-        })}
+        {NAV.map(({ id, label, icon: Icon }) => (
+          <button key={id} type="button" onClick={() => onTabChange(id)}
+            className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+              activeTab === id ? 'bg-teal-500 text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+            }`}>
+            <Icon className="h-4 w-4 shrink-0" strokeWidth={1.75} />
+            {label}
+          </button>
+        ))}
       </nav>
-
-      <button
-        type="button"
-        onClick={() => onTabChange('settings')}
-        className={`relative mt-auto flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium transition-colors ${
-          settingsActive
-            ? 'bg-white/10 text-white'
-            : 'text-white/70 hover:bg-white/5 hover:text-white'
-        }`}
-      >
-        {settingsActive && (
-          <span className="absolute -left-4 top-1/2 h-8 w-1 -translate-y-1/2 rounded-r bg-[#3b82f6]" />
-        )}
-        <Settings className="h-5 w-5 shrink-0" strokeWidth={1.75} />
-        Settings
+      <button type="button" onClick={onLogout}
+        className="mt-4 flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-red-400 hover:bg-red-900/20 transition-colors">
+        <LogOut className="h-4 w-4 shrink-0" />Logout
       </button>
     </aside>
   )
 }
 
-/* =============================================================================
-   Account Settings
-   ========================================================================== */
-
-function AccountSettings({ user, onLogout }) {
-  const displayName = user?.name ?? 'Admin User'
-  const displayEmail = user?.email ?? 'admin@example.com'
-
+function Modal({ title, onClose, children }) {
   return (
-    <>
-      <header className="rounded-xl bg-[#0f1729] px-8 py-5 shadow-sm border border-white/5">
-        <h1 className="text-2xl font-bold text-white">Settings</h1>
-      </header>
-
-      <section className="rounded-xl bg-[#0f1729] p-6 shadow-sm border border-white/5">
-        <h2 className="mb-5 text-lg font-bold text-white">Account</h2>
-
-        <div className="flex items-center gap-4 rounded-lg border border-white/5 bg-white/[0.03] p-4">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#3b82f6]/15">
-            <User className="h-6 w-6 text-[#3b82f6]" />
-          </div>
-          <div>
-            <p className="text-sm font-semibold text-white">{displayName}</p>
-            <p className="text-sm text-gray-400">{displayEmail}</p>
-          </div>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+      <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
+        <div className="mb-4 flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-slate-900">{title}</h3>
+          <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600"><X className="h-5 w-5" /></button>
         </div>
-      </section>
-
-      <section className="rounded-xl bg-[#0f1729] p-6 shadow-sm border border-white/5">
-        <h2 className="mb-5 text-lg font-bold text-white">Security</h2>
-
-        <div className="mb-4 flex items-center gap-3 rounded-lg border border-white/5 bg-white/[0.03] p-4">
-          <ShieldCheck className="h-5 w-5 text-gray-400" />
-          <div>
-            <p className="text-sm font-medium text-white">Session</p>
-            <p className="text-sm text-gray-400">
-              You're currently signed in on this device.
-            </p>
-          </div>
-        </div>
-
-        <button
-          className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20 rounded-lg transition font-medium"
-          onClick={onLogout}
-        >
-          <LogOut size={18} /> Sign Out
-        </button>
-      </section>
-    </>
-  )
-}
-
-/* =============================================================================
-   Dashboard Header
-   ========================================================================== */
-
-const statusStyles = {
-  Arrived: 'text-gray-300',
-  Ongoing: 'text-blue-400',
-  Upcoming: 'text-gray-300',
-}
-
-function StatCard({ label, value, highlight = false }) {
-  return (
-    <div className="flex flex-col items-center justify-center rounded-xl bg-[#0f1729] px-6 py-8 shadow-sm border border-white/5">
-      <p className="mb-2 text-sm text-gray-400">{label}</p>
-      <p
-        className={`text-xl font-semibold ${
-          highlight ? 'text-[#3b82f6]' : 'text-white'
-        }`}
-      >
-        {value}
-      </p>
+        {children}
+      </div>
     </div>
   )
 }
 
-function TripsTable({ trips }) {
+function Field({ label, type = 'text', value, onChange, required, placeholder, children }) {
   return (
-    <section className="rounded-xl bg-[#0f1729] p-6 shadow-sm border border-white/5">
-      <h2 className="mb-5 text-lg font-bold text-white">Trips Today</h2>
-
-      <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-sm">
-          <thead>
-            <tr className="bg-white/5">
-              <th className="px-4 py-3 text-center font-semibold text-gray-300">
-                Bus ID
-              </th>
-              <th className="px-4 py-3 text-left font-semibold text-gray-300">
-                Route
-              </th>
-              <th className="px-4 py-3 text-center font-semibold text-gray-300">
-                Departure Time
-              </th>
-              <th className="px-4 py-3 text-center font-semibold text-gray-300">
-                Type Of Service
-              </th>
-              <th className="px-4 py-3 text-center font-semibold text-gray-300">
-                Status
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {trips.map((trip, index) => (
-              <tr
-                key={`${trip.busId}-${index}`}
-                className={index % 2 === 0 ? 'bg-transparent' : 'bg-white/[0.03]'}
-              >
-                <td className="px-4 py-3 text-center text-gray-300">
-                  {trip.busId}
-                </td>
-                <td className="px-4 py-3 text-left text-gray-300">
-                  {trip.route}
-                </td>
-                <td className="px-4 py-3 text-center text-gray-300">
-                  {trip.departureTime}
-                </td>
-                <td className="px-4 py-3 text-center text-gray-300">
-                  {trip.serviceType}
-                </td>
-                <td
-                  className={`px-4 py-3 text-center font-medium ${statusStyles[trip.status]}`}
-                >
-                  {trip.status}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </section>
-  )
-}
-
-function DashboardHeader({
-  title = 'Dashboard',
-  stats = [],
-  trips = [],
-  isDashboardView = false,
-}) {
-  const formattedDate = new Date().toLocaleDateString('en-US', {
-    month: 'long',
-    day: 'numeric',
-    year: 'numeric',
-  })
-
-  return (
-    <>
-      <header className="flex items-center justify-between rounded-xl bg-[#0f1729] px-8 py-5 shadow-sm border border-white/5">
-        <h1 className="text-2xl font-bold text-white">{title}</h1>
-        <p className="text-sm text-gray-400">{formattedDate}</p>
-      </header>
-
-      {isDashboardView ? (
-        <>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            {stats.map((stat) => (
-              <StatCard key={stat.label} {...stat} />
-            ))}
-          </div>
-
-          <TripsTable trips={trips} />
-        </>
-      ) : null}
-    </>
-  )
-}
-
-/* =============================================================================
-   Fleets Panel + Fleet Map View
-   ========================================================================== */
-
-function FleetTripCard({ trip, onViewMap }) {
-  return (
-    <article className="rounded-2xl bg-[#0f1729] p-3 shadow-sm border border-white/5">
-      <div className="mb-3 flex items-center gap-3 rounded-xl bg-white/5 px-4 py-3">
-        <Bus className="h-9 w-9 text-[#3b82f6]" strokeWidth={1.75} />
-        <div className="text-white">
-          <p className="text-xl font-semibold leading-tight">{trip.route}</p>
-          <p className="text-sm text-gray-400">{trip.busId}</p>
-          <p className="text-sm text-gray-400">{trip.departureTime}</p>
-        </div>
-      </div>
-
-      <div className="mb-3">
-        <div className="mb-1 flex justify-end">
-          <span className="text-xs font-semibold text-[#3b82f6]">{trip.status}</span>
-        </div>
-        <div className="h-4 rounded-full bg-white/5 p-0.5">
-          <div
-            className="h-full rounded-full bg-[#3b82f6]"
-            style={{ width: `${trip.progress * 100}%` }}
-          />
-        </div>
-      </div>
-
-      <button
-        type="button"
-        onClick={() => onViewMap(trip)}
-        className="w-full rounded-full bg-[#1a2540] py-1.5 text-lg font-semibold text-white transition hover:bg-[#233258]"
-      >
-        View Map
-      </button>
-    </article>
-  )
-}
-
-const LOCATIONS = {
-  davao: [7.0736, 125.6128],
-  'davao city': [7.0736, 125.6128],
-  tagum: [7.4475, 125.8078],
-  'tagum city': [7.4475, 125.8078],
-  mati: [6.9551, 126.2165],
-  'mati city': [6.9551, 126.2165],
-  boston: [7.8617, 126.3689],
-  carmen: [7.3606, 125.7068],
-  malita: [6.4108, 125.6114],
-  'santo tomas': [7.5336, 125.6239],
-  'santo tomas davao del norte': [7.5336, 125.6239],
-  panabo: [7.3081, 125.6842],
-  digos: [6.7498, 125.3572],
-  samal: [7.0731, 125.7089],
-  'davao del sur': [6.7667, 125.3500],
-}
-
-function normalizeLocation(name) {
-  if (!name) return ''
-  return name.toLowerCase().trim().replace(/\s+/g, ' ')
-}
-
-function getLocationCoordinates(name) {
-  const normalized = normalizeLocation(name)
-  if (LOCATIONS[normalized]) {
-    return LOCATIONS[normalized]
-  }
-  const key = Object.keys(LOCATIONS).find(
-    (location) => normalized.includes(location) || location.includes(normalized),
-  )
-  if (key) {
-    return LOCATIONS[key]
-  }
-  return null
-}
-
-function getTripLocations(trip) {
-  if (trip.origin && trip.destination) {
-    return {
-      originName: trip.origin,
-      destinationName: trip.destination,
-      origin: getLocationCoordinates(trip.origin),
-      destination: getLocationCoordinates(trip.destination),
-    }
-  }
-
-  if (trip.route) {
-    const parts = trip.route.split(/\s[-–—]\s/)
-
-    if (parts.length >= 2) {
-      const originName = parts[0].trim()
-      const destinationName = parts.slice(1).join(' - ').trim()
-
-      return {
-        originName,
-        destinationName,
-        origin: getLocationCoordinates(originName),
-        destination: getLocationCoordinates(destinationName),
-      }
-    }
-  }
-
-  return {
-    originName: 'Unknown',
-    destinationName: 'Unknown',
-    origin: null,
-    destination: null,
-  }
-}
-
-function getPointAlongRoute(route, progress) {
-  if (!route || route.length === 0) {
-    return null
-  }
-  if (route.length === 1) {
-    return route[0]
-  }
-
-  const safeProgress = Math.max(0, Math.min(1, Number(progress) || 0))
-  const distances = []
-  let totalDistance = 0
-
-  for (let i = 0; i < route.length - 1; i++) {
-    const start = route[i]
-    const end = route[i + 1]
-    const distance = Math.sqrt(
-      Math.pow(end[0] - start[0], 2) + Math.pow(end[1] - start[1], 2),
-    )
-    distances.push(distance)
-    totalDistance += distance
-  }
-
-  const targetDistance = totalDistance * safeProgress
-  let accumulatedDistance = 0
-
-  for (let i = 0; i < distances.length; i++) {
-    const segmentDistance = distances[i]
-
-    if (accumulatedDistance + segmentDistance >= targetDistance) {
-      const distanceIntoSegment = targetDistance - accumulatedDistance
-      const segmentProgress =
-        segmentDistance === 0 ? 0 : distanceIntoSegment / segmentDistance
-
-      const start = route[i]
-      const end = route[i + 1]
-
-      return [
-        start[0] + (end[0] - start[0]) * segmentProgress,
-        start[1] + (end[1] - start[1]) * segmentProgress,
-      ]
-    }
-
-    accumulatedDistance += segmentDistance
-  }
-
-  return route[route.length - 1]
-}
-
-function getCompletedRoute(route, progress) {
-  if (!route || route.length === 0) {
-    return []
-  }
-  if (route.length === 1) {
-    return route
-  }
-
-  const safeProgress = Math.max(0, Math.min(1, Number(progress) || 0))
-
-  if (safeProgress <= 0) {
-    return [route[0]]
-  }
-  if (safeProgress >= 1) {
-    return route
-  }
-
-  const distances = []
-  let totalDistance = 0
-
-  for (let i = 0; i < route.length - 1; i++) {
-    const start = route[i]
-    const end = route[i + 1]
-    const distance = Math.sqrt(
-      Math.pow(end[0] - start[0], 2) + Math.pow(end[1] - start[1], 2),
-    )
-    distances.push(distance)
-    totalDistance += distance
-  }
-
-  const targetDistance = totalDistance * safeProgress
-  let accumulatedDistance = 0
-  const completed = [route[0]]
-
-  for (let i = 0; i < distances.length; i++) {
-    const segmentDistance = distances[i]
-
-    if (accumulatedDistance + segmentDistance >= targetDistance) {
-      const distanceIntoSegment = targetDistance - accumulatedDistance
-      const segmentProgress =
-        segmentDistance === 0 ? 0 : distanceIntoSegment / segmentDistance
-
-      const start = route[i]
-      const end = route[i + 1]
-
-      completed.push([
-        start[0] + (end[0] - start[0]) * segmentProgress,
-        start[1] + (end[1] - start[1]) * segmentProgress,
-      ])
-
-      break
-    }
-
-    completed.push(route[i + 1])
-    accumulatedDistance += segmentDistance
-  }
-
-  return completed
-}
-
-
-function TrackingRow({ trip, active, onSelect }) {
-  const progress = Math.max(0, Math.min(1, Number(trip.progress) || 0))
-
-  return (
-    <article
-      onClick={() => onSelect?.(trip)}
-      role={onSelect ? 'button' : undefined}
-      tabIndex={onSelect ? 0 : undefined}
-      onKeyDown={(event) => {
-        if (!onSelect) return
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault()
-          onSelect(trip)
-        }
-      }}
-      className={`rounded-2xl bg-[#0f1729] border border-white/5 px-3 py-2 shadow-sm transition ${
-        onSelect ? 'cursor-pointer hover:bg-white/[0.03]' : ''
-      } ${active ? 'ring-2 ring-[#f59e0b]' : ''}`}
-    >
-      <div className="mb-1 flex items-center justify-between text-[0.95rem] text-gray-300">
-        <span>{trip.route}</span>
-        <span>{trip.busId}</span>
-        <span className="text-sm font-semibold text-[#3b82f6]">{trip.status}</span>
-      </div>
-
-      <div className="h-2 rounded-full bg-white/5">
-        <div
-          className="h-full rounded-full bg-[#3b82f6]"
-          style={{ width: `${progress * 100}%` }}
-        />
-      </div>
-    </article>
-  )
-}
-
-const LIVE_GPS_ZOOM = 14
-
-function FleetMapView({ selectedTrip, fleetTrips, onBack }) {
-  const mapRef = useRef(null)
-  const mapContainerRef = useRef(null)
-  const mapLibRef = useRef(null)
-  const busMarkerRef = useRef(null)
-  const originMarkerRef = useRef(null)
-  const destMarkerRef = useRef(null)
-  const [mapReady, setMapReady] = useState(false)
-  const liveTrips = fleetTrips
-
-  const [activeTripId, setActiveTripId] = useState(selectedTrip.busId)
-  const [syncedTripId, setSyncedTripId] = useState(selectedTrip.busId)
-  if (selectedTrip.busId !== syncedTripId) {
-    setSyncedTripId(selectedTrip.busId)
-    setActiveTripId(selectedTrip.busId)
-  }
-
-  const activeTrip = useMemo(
-    () => liveTrips.find((trip) => trip.busId === activeTripId) || selectedTrip,
-    [liveTrips, activeTripId, selectedTrip],
-  )
-
-  const tripLocations = useMemo(() => getTripLocations(activeTrip), [activeTrip])
-
-  const { origin, destination } = tripLocations
-
-  const otherTrips = useMemo(
-    () => liveTrips.filter((trip) => trip.busId !== activeTrip.busId),
-    [liveTrips, activeTrip.busId],
-  )
-
-  const [roadRoute, setRoadRoute] = useState([])
-  const [routeLoading, setRouteLoading] = useState(false)
-  const [routeError, setRouteError] = useState(false)
-
-  useEffect(() => {
-    let cancelled = false
-
-    async function loadRoadRoute() {
-      if (!origin || !destination) {
-        setRoadRoute([])
-        setRouteError(true)
-        setRouteLoading(false)
-        return
-      }
-
-      setRouteLoading(true)
-      setRouteError(false)
-      setRoadRoute([])
-
-      try {
-        const start = `${origin[1]},${origin[0]}`
-        const end = `${destination[1]},${destination[0]}`
-
-        const url =
-          `https://router.project-osrm.org/route/v1/driving/` +
-          `${start};${end}` +
-          `?overview=full&geometries=geojson`
-
-        const response = await fetch(url)
-
-        if (!response.ok) {
-          throw new Error('OSRM request failed')
-        }
-
-        const data = await response.json()
-
-        if (data.code !== 'Ok' || !data.routes || data.routes.length === 0) {
-          throw new Error('No road route found')
-        }
-
-        const coordinates = data.routes[0].geometry.coordinates.map(
-          ([longitude, latitude]) => [latitude, longitude],
-        )
-
-        if (!cancelled) {
-          setRoadRoute(coordinates)
-        }
-      } catch (error) {
-        console.error('Unable to load road route:', error)
-
-        if (!cancelled) {
-          setRouteError(true)
-          setRoadRoute([])
-        }
-      } finally {
-        if (!cancelled) {
-          setRouteLoading(false)
-        }
-      }
-    }
-
-    loadRoadRoute()
-
-    return () => {
-      cancelled = true
-    }
-  }, [origin, destination])
-
-  const busPosition = useMemo(
-    () => getPointAlongRoute(roadRoute, activeTrip.progress),
-    [roadRoute, activeTrip.progress],
-  )
-
-  const completedRoute = useMemo(
-    () => getCompletedRoute(roadRoute, activeTrip.progress),
-    [roadRoute, activeTrip.progress],
-  )
-
-  const mapCenter = origin || [7.0736, 125.6128]
-
-  const handleLiveGpsClick = () => {
-    if (!mapRef.current || !busPosition) return
-    mapRef.current.flyTo({
-      center: [busPosition[1], busPosition[0]],
-      zoom: LIVE_GPS_ZOOM,
-      speed: 1.5,
-    })
-  }
-
-  // Map initialisation (once)
-  useEffect(() => {
-    if (mapRef.current || !mapContainerRef.current) return
-    let cancelled = false
-    ;(async () => {
-      try {
-        const { default: maplibregl } = await loadMapLib()
-        if (cancelled || !mapContainerRef.current) return
-        mapLibRef.current = maplibregl
-        const center = mapCenter
-        const map = new maplibregl.Map({
-          container: mapContainerRef.current,
-          style: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json',
-          center: [center[1], center[0]],
-          zoom: 11,
-        })
-        map.once('load', () => {
-          if (cancelled) return
-          map.addSource('osrm-route', { type: 'geojson', data: { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: [] } } })
-          map.addLayer({ id: 'osrm-route-line', type: 'line', source: 'osrm-route', layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': '#38bdf8', 'line-width': 4, 'line-opacity': 0.75 } })
-          map.addSource('osrm-done', { type: 'geojson', data: { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: [] } } })
-          map.addLayer({ id: 'osrm-done-line', type: 'line', source: 'osrm-done', layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': '#22c55e', 'line-width': 4, 'line-opacity': 0.9 } })
-          setMapReady(true)
-        })
-        mapRef.current = map
-      } catch {
-        // silent — map tiles failed
-      }
-    })()
-    return () => {
-      cancelled = true
-      busMarkerRef.current = null
-      originMarkerRef.current = null
-      destMarkerRef.current = null
-      if (mapRef.current) { mapRef.current.remove(); mapRef.current = null }
-    }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Update route polylines + markers whenever computed data changes
-  useEffect(() => {
-    if (!mapReady) return
-    const map = mapRef.current
-    const maplibregl = mapLibRef.current
-    if (!map || !maplibregl) return
-
-    // Route polyline
-    const routeCoords = roadRoute.map(([lat, lng]) => [lng, lat])
-    map.getSource('osrm-route')?.setData({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: routeCoords } })
-    if (routeCoords.length >= 2) {
-      const bounds = routeCoords.reduce((acc, c) => acc.extend(c), new maplibregl.LngLatBounds(routeCoords[0], routeCoords[0]))
-      map.fitBounds(bounds, { padding: 60, maxZoom: 14 })
-    }
-
-    // Completed portion
-    const doneCoords = completedRoute.map(([lat, lng]) => [lng, lat])
-    map.getSource('osrm-done')?.setData({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: doneCoords } })
-
-    // Origin marker
-    if (originMarkerRef.current) { originMarkerRef.current.remove(); originMarkerRef.current = null }
-    if (origin) {
-      originMarkerRef.current = new maplibregl.Marker({ color: '#22c55e' }).setLngLat([origin[1], origin[0]]).addTo(map)
-    }
-
-    // Destination marker
-    if (destMarkerRef.current) { destMarkerRef.current.remove(); destMarkerRef.current = null }
-    if (destination) {
-      destMarkerRef.current = new maplibregl.Marker({ color: '#ef4444' }).setLngLat([destination[1], destination[0]]).addTo(map)
-    }
-
-    // Bus position marker
-    if (busPosition) {
-      const lngLat = [busPosition[1], busPosition[0]]
-      if (busMarkerRef.current) {
-        busMarkerRef.current.setLngLat(lngLat)
-      } else {
-        const el = document.createElement('div')
-        el.style.cssText = 'width:18px;height:18px;background:#f59e0b;border:3px solid #fff;border-radius:50%;box-shadow:0 0 0 5px rgba(245,158,11,0.3);cursor:pointer'
-        busMarkerRef.current = new maplibregl.Marker({ element: el }).setLngLat(lngLat).addTo(map)
-      }
-    }
-  }, [mapReady, roadRoute, completedRoute, busPosition, origin, destination])
-
-  return (
-    <section className="rounded-2xl border border-white/5 bg-[#0a0e1a] p-4 shadow-sm">
-      <div className="mb-4 flex items-center justify-between">
-        <button
-          type="button"
-          onClick={onBack}
-          className="inline-flex items-center gap-2 rounded-lg bg-[#0f1729] px-3 py-1.5 text-sm font-medium text-white shadow-sm transition hover:bg-[#1a2540] border border-white/5"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back
-        </button>
-        <button
-          type="button"
-          onClick={handleLiveGpsClick}
-          disabled={!busPosition}
-          className="inline-flex items-center gap-2 rounded-lg border border-[#f59e0b]/30 bg-[#f59e0b]/10 px-3 py-1.5 text-sm font-medium text-[#f59e0b] shadow-sm transition hover:bg-[#f59e0b]/20 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          <MapPin className="h-4 w-4" />
-          Live GPS
-        </button>
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-        {/* MapLibre map panel */}
-        <div className="relative xl:col-span-2">
-          <div ref={mapContainerRef} style={{ height: '420px' }} className="w-full rounded-xl overflow-hidden" />
-          {routeLoading && (
-            <div className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-xl bg-[#0f1729]/60">
-              <span className="text-sm text-white">Loading route&hellip;</span>
-            </div>
-          )}
-          {routeError && !routeLoading && roadRoute.length === 0 && (
-            <div className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-xl bg-[#0f1729]/40">
-              <span className="text-sm text-amber-400">Route data unavailable</span>
-            </div>
-          )}
-        </div>
-
-        {/* Sidebar */}
-        <aside className="rounded-2xl border border-white/5 bg-[#0a0e1a] p-3">
-          <div className="mb-3 flex items-center justify-between">
-            <h3 className="text-[2rem] font-bold text-white">Live Tracking</h3>
-            <span className="rounded-full bg-white/5 px-5 py-1 text-xl font-semibold text-gray-300">
-              Status
-            </span>
-          </div>
-
-          <div className="mb-6">
-            <TrackingRow trip={activeTrip} active />
-          </div>
-
-          <h4 className="mb-3 text-[2rem] font-bold text-white">Other Trips</h4>
-
-          <div className="space-y-3">
-            {otherTrips.map((trip) => (
-              <TrackingRow
-                key={`${trip.route}-${trip.busId}`}
-                trip={trip}
-                onSelect={(selected) => setActiveTripId(selected.busId)}
-              />
-            ))}
-          </div>
-        </aside>
-      </div>
-    </section>
-  )
-}
-
-function FleetsPanel({ fleetTrips }) {
-  const [selectedTrip, setSelectedTrip] = useState(null)
-
-  if (selectedTrip) {
-    return (
-      <FleetMapView
-        selectedTrip={selectedTrip}
-        fleetTrips={fleetTrips}
-        onBack={() => setSelectedTrip(null)}
-      />
-    )
-  }
-
-  return (
-    <section className="rounded-2xl border border-white/5 bg-[#0a0e1a] p-4 shadow-sm">
-      <h2 className="mb-4 text-[2rem] font-bold text-white">Fleets Trips</h2>
-
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-        {fleetTrips.map((trip) => (
-          <FleetTripCard
-            key={`${trip.route}-${trip.busId}`}
-            trip={trip}
-            onViewMap={setSelectedTrip}
-          />
-        ))}
-      </div>
-    </section>
-  )
-}
-
-/* =============================================================================
-   Reports Panel (Financial Auditing)
-   ========================================================================== */
-
-function toDateKey(date) {
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
-
-const MONTH_NAMES = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December',
-]
-
-function CalendarDatePicker({ selectedDate, onSelect }) {
-  const [open, setOpen] = useState(false)
-  const [viewMonth, setViewMonth] = useState(
-    new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1)
-  )
-
-  const formattedDate = selectedDate.toLocaleDateString('en-US', {
-    month: 'long',
-    day: 'numeric',
-    year: 'numeric',
-  })
-
-  const daysInMonth = new Date(
-    viewMonth.getFullYear(),
-    viewMonth.getMonth() + 1,
-    0
-  ).getDate()
-  const firstWeekday = new Date(
-    viewMonth.getFullYear(),
-    viewMonth.getMonth(),
-    1
-  ).getDay()
-
-  const cells = [
-    ...Array.from({ length: firstWeekday }, () => null),
-    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
-  ]
-
-  const changeMonth = (delta) => {
-    setViewMonth(new Date(viewMonth.getFullYear(), viewMonth.getMonth() + delta, 1))
-  }
-
-  const handleMonthChange = (event) => {
-    setViewMonth(new Date(viewMonth.getFullYear(), Number(event.target.value), 1))
-  }
-
-  const handleYearChange = (event) => {
-    setViewMonth(new Date(Number(event.target.value), viewMonth.getMonth(), 1))
-  }
-
-  const pickDay = (day) => {
-    const picked = new Date(viewMonth.getFullYear(), viewMonth.getMonth(), day)
-    onSelect(picked)
-    setOpen(false)
-  }
-
-  const currentYear = new Date().getFullYear()
-  const yearOptions = Array.from({ length: 21 }, (_, i) => currentYear - 10 + i)
-
-  return (
-    <div className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen((prev) => !prev)}
-        className="inline-flex items-center gap-2 rounded-full border border-[#3b82f6]/30 bg-white/5 px-4 py-2 text-sm text-gray-300 transition-colors hover:bg-white/10"
-      >
-        <Calendar className="h-4 w-4 text-gray-400" />
-        {formattedDate}
-      </button>
-
-      {open && (
-        <>
-          <div
-            className="fixed inset-0 z-10"
-            onClick={() => setOpen(false)}
-          />
-          <div className="absolute right-0 z-20 mt-2 w-72 rounded-xl border border-white/10 bg-[#0f1729] p-4 shadow-lg">
-            <div className="mb-3 flex items-center justify-between gap-2">
-              <button
-                type="button"
-                onClick={() => changeMonth(-1)}
-                className="rounded-md px-2 py-1 text-sm text-gray-400 hover:bg-white/10 hover:text-white"
-              >
-                ‹
-              </button>
-
-              <div className="flex flex-1 items-center justify-center gap-1.5">
-                <select
-                  value={viewMonth.getMonth()}
-                  onChange={handleMonthChange}
-                  className="rounded-md border border-white/10 bg-[#1a2438] px-1.5 py-1 text-xs font-semibold text-white outline-none focus:border-[#3b82f6] focus:ring-1 focus:ring-[#3b82f6]"
-                >
-                  {MONTH_NAMES.map((name, index) => (
-                    <option key={name} value={index} className="bg-[#1a2438]">
-                      {name}
-                    </option>
-                  ))}
-                </select>
-
-                <select
-                  value={viewMonth.getFullYear()}
-                  onChange={handleYearChange}
-                  className="rounded-md border border-white/10 bg-[#1a2438] px-1.5 py-1 text-xs font-semibold text-white outline-none focus:border-[#3b82f6] focus:ring-1 focus:ring-[#3b82f6]"
-                >
-                  {yearOptions.map((year) => (
-                    <option key={year} value={year} className="bg-[#1a2438]">
-                      {year}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => changeMonth(1)}
-                className="rounded-md px-2 py-1 text-sm text-gray-400 hover:bg-white/10 hover:text-white"
-              >
-                ›
-              </button>
-            </div>
-
-            <div className="mb-1 grid grid-cols-7 gap-1 text-center text-[11px] font-medium text-gray-500">
-              {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
-                <span key={`${d}-${i}`}>{d}</span>
-              ))}
-            </div>
-
-            <div className="grid grid-cols-7 gap-1">
-              {cells.map((day, i) => {
-                if (day === null) return <span key={`empty-${i}`} />
-                const cellDate = new Date(
-                  viewMonth.getFullYear(),
-                  viewMonth.getMonth(),
-                  day
-                )
-                const isSelected = toDateKey(cellDate) === toDateKey(selectedDate)
-                const isToday = toDateKey(cellDate) === toDateKey(new Date())
-                return (
-                  <button
-                    key={day}
-                    type="button"
-                    onClick={() => pickDay(day)}
-                    className={`aspect-square rounded-md text-xs transition-colors ${
-                      isSelected
-                        ? 'bg-[#3b82f6] font-semibold text-white'
-                        : isToday
-                        ? 'border border-[#3b82f6]/50 text-gray-200'
-                        : 'text-gray-300 hover:bg-white/10'
-                    }`}
-                  >
-                    {day}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-        </>
+    <div>
+      <label className="mb-1 block text-sm font-medium text-slate-700">{label}{required && <span className="text-red-500 ml-1">*</span>}</label>
+      {children ?? (
+        <input type={type} value={value} onChange={onChange} required={required} placeholder={placeholder}
+          className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500" />
       )}
     </div>
   )
 }
 
-function ReportStatCard({ label, value }) {
-  return (
-    <article className="flex flex-col items-center justify-center rounded-xl bg-[#0f1729] px-6 py-8 shadow-sm border border-white/5">
-      <p className="mb-2 text-sm text-gray-400">{label}</p>
-      <p className="text-xl font-semibold text-white">{value}</p>
-    </article>
-  )
-}
-
-function ReportsPanel() {
-  const [selectedDate, setSelectedDate] = useState(new Date())
-  const [financialRows, setFinancialRows] = useState([])
-  const [isLoading, setIsLoading] = useState(true)
-
-  useEffect(() => {
-    let cancelled = false
-
-    async function loadFinancialData() {
-      setIsLoading(true)
-
-      try {
-        const data = await safeJsonFetch(`/api/trips?date=${toDateKey(selectedDate)}`)
-        const rows = Array.isArray(data) ? data : data?.data ?? []
-
-        if (!cancelled) {
-          setFinancialRows(
-            rows.map((row) => {
-              const cashPayments = Number(row.cashPayments ?? row.cash_payments ?? 0)
-              const digitalPayments = Number(row.digitalPayments ?? row.digital_payments ?? 0)
-              return {
-                busId: row.busId ?? row.bus_id ?? '—',
-                route:
-                  row.route ??
-                  (row.departure && row.destination ? `${row.departure} - ${row.destination}` : '—'),
-                serviceType: row.serviceType ?? row.service_type ?? '—',
-                cashPayments,
-                digitalPayments,
-                totalRevenue: row.totalRevenue ?? row.total_revenue ?? cashPayments + digitalPayments,
-                passengers: Number(row.passengers ?? row.passenger_count ?? 0),
-              }
-            }),
-          )
-        }
-      } catch (err) {
-        if (!cancelled) {
-          console.error('Unable to load financial data:', err)
-          setFinancialRows([])
-        }
-      } finally {
-        if (!cancelled) setIsLoading(false)
-      }
-    }
-
-    loadFinancialData()
-
-    return () => {
-      cancelled = true
-    }
-  }, [selectedDate])
-
-  const financialStats = useMemo(() => {
-    const cashPayments = financialRows.reduce((sum, row) => sum + row.cashPayments, 0)
-    const digitalPayments = financialRows.reduce((sum, row) => sum + row.digitalPayments, 0)
-    const totalPassengers = financialRows.reduce((sum, row) => sum + row.passengers, 0)
-    const totalRevenue = cashPayments + digitalPayments
-
-    const currency = (value) =>
-      `₱${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-
-    return [
-      { label: 'Cash Payments', value: currency(cashPayments) },
-      { label: 'Digital Payments', value: currency(digitalPayments) },
-      { label: 'Total Trips Profit', value: currency(totalRevenue) },
-      { label: 'Total Passengers', value: `${totalPassengers} Passengers` },
-    ]
-  }, [financialRows])
+function DashboardTab({ trips, drivers, conductors, fleets }) {
+  const total     = trips.length
+  const active    = trips.filter(t => ['departed','in-progress','boarding'].includes(t.status)).length
+  const completed = trips.filter(t => t.status === 'completed').length
+  const revenue   = trips.filter(t => t.status === 'completed').reduce((s, t) => s + Number(t.total_revenue ?? 0), 0)
+  const recent    = [...trips].sort((a,b) => new Date(b.trip_date) - new Date(a.trip_date)).slice(0, 5)
 
   return (
-    <>
-      <header className="flex items-center justify-between rounded-xl bg-[#0f1729] px-8 py-5 shadow-sm border border-white/5">
-        <h1 className="text-2xl font-bold text-white">Financial Auditing</h1>
-        <CalendarDatePicker selectedDate={selectedDate} onSelect={setSelectedDate} />
-      </header>
-
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {financialStats.map((stat) => (
-          <ReportStatCard key={stat.label} {...stat} />
+    <div className="space-y-6">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        {[
+          { label: 'Total Trips',   value: total,       color: 'text-slate-900' },
+          { label: 'Active Now',    value: active,      color: 'text-blue-600' },
+          { label: 'Completed',     value: completed,   color: 'text-emerald-600' },
+          { label: 'Revenue (all)', value: fmt(revenue),color: 'text-teal-600' },
+        ].map(({ label, value, color }) => (
+          <div key={label} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</p>
+            <p className={`mt-1 text-2xl font-bold ${color}`}>{value}</p>
+          </div>
         ))}
       </div>
-
-      <section className="rounded-xl bg-[#0f1729] p-6 shadow-sm border border-white/5">
-        <h2 className="mb-5 text-lg font-bold text-white">
-          Trips Schedule —{' '}
-          {selectedDate.toLocaleDateString('en-US', {
-            month: 'long',
-            day: 'numeric',
-            year: 'numeric',
-          })}
-        </h2>
-
-        {isLoading ? (
-          <p className="py-6 text-center text-sm text-gray-400">Loading...</p>
-        ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-sm">
-            <thead>
-              <tr className="bg-white/5">
-                <th className="px-4 py-3 text-center font-semibold text-gray-300">Bus ID</th>
-                <th className="px-4 py-3 text-left font-semibold text-gray-300">Route</th>
-                <th className="px-4 py-3 text-center font-semibold text-gray-300">
-                  Type Of Service
-                </th>
-                <th className="px-4 py-3 text-center font-semibold text-gray-300">
-                  Cash Payments
-                </th>
-                <th className="px-4 py-3 text-center font-semibold text-gray-300">
-                  Digital Payments
-                </th>
-                <th className="px-4 py-3 text-center font-semibold text-gray-300">
-                  Total Revenue
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {financialRows.map((row, index) => (
-                <tr
-                  key={`${row.busId}-${index}`}
-                  className={index % 2 === 0 ? 'bg-transparent' : 'bg-white/[0.03]'}
-                >
-                  <td className="px-4 py-3 text-center text-gray-300">{row.busId}</td>
-                  <td className="px-4 py-3 text-left text-gray-300">{row.route}</td>
-                  <td className="px-4 py-3 text-center text-gray-300">{row.serviceType}</td>
-                  <td className="px-4 py-3 text-center text-gray-300">
-                    ₱{row.cashPayments.toLocaleString()}
-                  </td>
-                  <td className="px-4 py-3 text-center text-gray-300">
-                    ₱{row.digitalPayments.toLocaleString()}
-                  </td>
-                  <td className="px-4 py-3 text-center text-gray-300">
-                    ₱{row.totalRevenue.toLocaleString()}
-                  </td>
+      <div className="grid grid-cols-3 gap-4">
+        {[['Drivers', drivers.length],['Conductors', conductors.length],['Fleets', fleets.length]].map(([label, value]) => (
+          <div key={label} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</p>
+            <p className="mt-1 text-2xl font-bold text-slate-900">{value}</p>
+          </div>
+        ))}
+      </div>
+      <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h2 className="mb-4 text-base font-semibold text-slate-900">Recent Trips</h2>
+        {recent.length === 0 ? <p className="text-sm text-slate-400">No trips found.</p> : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-100">
+                  {['Trip ID','Date','Route','Fleet','Status','Revenue'].map(h => (
+                    <th key={h} className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{h}</th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {recent.map(t => (
+                  <tr key={t.trip_id} className="border-b border-slate-50 hover:bg-slate-50">
+                    <td className="px-4 py-2 font-mono text-xs text-slate-700">#{t.trip_id}</td>
+                    <td className="px-4 py-2 text-slate-600">{fmtDate(t.trip_date)}</td>
+                    <td className="px-4 py-2 text-slate-700">{t.fleet_route?.route?.route_name || '-'}</td>
+                    <td className="px-4 py-2 text-slate-700">{t.fleet_route?.fleet?.plate_number || '-'}</td>
+                    <td className="px-4 py-2">
+                      <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_CHIP[t.status] ?? 'bg-slate-100 text-slate-600'}`}>{t.status}</span>
+                    </td>
+                    <td className="px-4 py-2 text-slate-700">{fmt(t.total_revenue)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
-      </section>
-    </>
-  )
-}
-
-/* =============================================================================
-   Routes Panel (Analytical Reports)
-   ========================================================================== */
-
-function adherenceTone(value) {
-  if (value >= 90) {
-    return {
-      text: 'text-emerald-400',
-      bg: 'bg-emerald-500/10',
-      bar: 'bg-emerald-500',
-    }
-  }
-
-  if (value >= 80) {
-    return {
-      text: 'text-amber-400',
-      bg: 'bg-amber-500/10',
-      bar: 'bg-amber-500',
-    }
-  }
-
-  return {
-    text: 'text-rose-400',
-    bg: 'bg-rose-500/10',
-    bar: 'bg-rose-500',
-  }
-}
-
-function TrendBadge({ trend }) {
-  if (trend === undefined || trend === null) {
-    return null
-  }
-
-  const isUp = trend > 0
-  const isFlat = trend === 0
-
-  const Icon = isFlat
-    ? Minus
-    : isUp
-      ? TrendingUp
-      : TrendingDown
-
-  const color = isFlat
-    ? 'text-gray-400'
-    : isUp
-      ? 'text-emerald-400'
-      : 'text-rose-400'
-
-  return (
-    <span
-      className={`inline-flex items-center gap-1 text-[0.95rem] font-semibold ${color}`}
-    >
-      <Icon size={16} strokeWidth={2.5} />
-
-      {isFlat ? '0%' : `${isUp ? '+' : ''}${trend}%`}
-    </span>
-  )
-}
-
-function RouteStatCard({ stat }) {
-  return (
-    <article className="rounded-xl border border-white/5 bg-[#0f1729] px-5 py-4 shadow-sm">
-      <div className="mb-2 flex items-center justify-between">
-        <p
-          className={`text-[1.05rem] font-bold tracking-tight ${
-            stat.highlight
-              ? 'text-[#3b82f6]'
-              : 'text-gray-400'
-          }`}
-        >
-          {stat.label}
-        </p>
-
-        <TrendBadge trend={stat.trend} />
       </div>
-
-      <p className="text-[2rem] font-semibold leading-tight text-white">
-        {stat.value}
-      </p>
-    </article>
+    </div>
   )
 }
 
-function PeakHoursCard({ hours = [] }) {
-  return (
-    <article className="rounded-xl border border-white/5 bg-[#0f1729] px-5 py-4 shadow-sm">
-      <p className="mb-3 text-[1.05rem] font-bold tracking-tight text-gray-400">
-        Peak Hours
-      </p>
+function StaffListTab({ role, items, onRefresh, onCreateAccount }) {
+  const [showModal, setShowModal] = useState(false)
+  const [form, setForm] = useState({ username: '', email: '', password: '' })
+  const [saving, setSaving] = useState(false)
+  const [msg, setMsg] = useState('')
 
-      {hours.length === 0 ? (
-        <p className="text-sm text-gray-500">No peak hour data available.</p>
-      ) : (
-        <div className="flex flex-col gap-2">
-          {hours.map((hour) => (
-            <span
-              key={hour}
-              className="w-fit rounded-full bg-white/5 px-3 py-1.5 text-[0.9rem] font-semibold text-gray-300"
-            >
-              {hour}
-            </span>
-          ))}
-        </div>
-      )}
-    </article>
-  )
-}
-
-function RouteAdherenceTable({ rows = [] }) {
-  const [sortDir, setSortDir] = useState('asc')
-  const [query, setQuery] = useState('')
-
-  const parsed = useMemo(
-    () =>
-      rows.map((row) => ({
-        ...row,
-        adherenceNum: parseFloat(row.adherence) || 0,
-      })),
-    [rows]
-  )
-
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase()
-
-    if (!q) {
-      return parsed
-    }
-
-    return parsed.filter((row) => {
-      const driver = String(row.driver ?? '').toLowerCase()
-      const busId = String(row.busId ?? '').toLowerCase()
-      const trip = String(row.trip ?? '').toLowerCase()
-
-      return (
-        driver.includes(q) ||
-        busId.includes(q) ||
-        trip.includes(q)
-      )
-    })
-  }, [parsed, query])
-
-  const sorted = useMemo(() => {
-    const copy = [...filtered]
-
-    copy.sort((a, b) =>
-      sortDir === 'asc'
-        ? a.adherenceNum - b.adherenceNum
-        : b.adherenceNum - a.adherenceNum
-    )
-
-    return copy
-  }, [filtered, sortDir])
-
-  const toggleSort = () => {
-    setSortDir((current) =>
-      current === 'asc' ? 'desc' : 'asc'
-    )
+  const handleCreate = async (e) => {
+    e.preventDefault(); setSaving(true); setMsg('')
+    try {
+      await onCreateAccount({ ...form, role })
+      setMsg(`${role.charAt(0).toUpperCase() + role.slice(1)} account created.`)
+      setForm({ username: '', email: '', password: '' }); setShowModal(false); onRefresh()
+    } catch (err) { setMsg(err?.message || 'Failed to create account.') }
+    finally { setSaving(false) }
   }
 
   return (
-    <section className="rounded-xl border border-white/5 bg-[#0f1729] p-5 shadow-sm">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-[1.5rem] font-bold text-white">
-            Driver Route Adherence
-          </h2>
-
-          <p className="text-[0.9rem] text-gray-400">
-            Last 7 days · {sorted.length} drivers
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <input
-            type="text"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search driver, bus, trip"
-            className="w-48 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-[0.9rem] text-white placeholder:text-gray-500 outline-none focus:border-[#3b82f6] focus:ring-1 focus:ring-[#3b82f6]"
-          />
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-bold text-slate-900 capitalize">{role}s</h2>
+        <div className="flex gap-2">
+          <button type="button" onClick={onRefresh} className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50">
+            <RefreshCw className="h-4 w-4" /> Refresh
+          </button>
+          <button type="button" onClick={() => { setShowModal(true); setMsg('') }} className="flex items-center gap-1.5 rounded-lg bg-teal-600 px-3 py-2 text-sm font-semibold text-white hover:bg-teal-700">
+            <Plus className="h-4 w-4" /> Add {role.charAt(0).toUpperCase() + role.slice(1)}
+          </button>
         </div>
       </div>
-
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[420px] border-collapse text-[1rem]">
-          <thead>
-            <tr className="border-b border-white/10 text-left text-gray-400">
-              <th className="px-3 py-2 text-[0.85rem] font-semibold uppercase tracking-wide">
-                Driver
-              </th>
-
-              <th className="px-3 py-2 text-[0.85rem] font-semibold uppercase tracking-wide">
-                Bus-ID
-              </th>
-
-              <th className="px-3 py-2 text-[0.85rem] font-semibold uppercase tracking-wide">
-                Trip
-              </th>
-
-              <th className="px-3 py-2 text-right text-[0.85rem] font-semibold uppercase tracking-wide">
-                <button
-                  type="button"
-                  onClick={toggleSort}
-                  className="inline-flex items-center gap-1 text-gray-400 hover:text-white"
-                  aria-label="Sort adherence"
-                >
-                  Adherence
-
-                  {sortDir === 'asc' ? (
-                    <ArrowUp size={13} />
-                  ) : (
-                    <ArrowDown size={13} />
-                  )}
-                </button>
-              </th>
+      {msg && <p className="rounded-lg bg-teal-50 border border-teal-200 px-4 py-2 text-sm text-teal-800">{msg}</p>}
+      <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+        <table className="w-full text-sm">
+          <thead className="bg-slate-50">
+            <tr className="border-b border-slate-200">
+              {['Username','Email','Role','Joined'].map(h => (
+                <th key={h} className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{h}</th>
+              ))}
             </tr>
           </thead>
-
           <tbody>
-            {sorted.map((row, index) => {
-              const tone = adherenceTone(row.adherenceNum)
-
-              return (
-                <tr
-                  key={`${row.driver}-${row.busId}-${index}`}
-                  className="border-b border-white/5 last:border-0"
-                >
-                  <td className="px-3 py-2.5 font-medium text-white">
-                    {row.driver}
+            {items.length === 0
+              ? <tr><td colSpan={4} className="px-5 py-8 text-center text-sm text-slate-400">No {role}s found.</td></tr>
+              : items.map(d => (
+                <tr key={d.user_id ?? d.id} className="border-b border-slate-100 hover:bg-slate-50">
+                  <td className="px-5 py-3 font-medium text-slate-900">{d.username}</td>
+                  <td className="px-5 py-3 text-slate-600">{d.email}</td>
+                  <td className="px-5 py-3">
+                    <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-700 capitalize">{d.role}</span>
                   </td>
-
-                  <td className="px-3 py-2.5 text-gray-400">
-                    {row.busId}
-                  </td>
-
-                  <td className="px-3 py-2.5 text-gray-400">
-                    {row.trip}
-                  </td>
-
-                  <td className="px-3 py-2.5 text-right">
-                    <span
-                      className={`inline-block min-w-[3.5rem] rounded-full px-2.5 py-1 text-center text-[0.9rem] font-bold ${tone.text} ${tone.bg}`}
-                    >
-                      {row.adherence}
-                    </span>
-                  </td>
+                  <td className="px-5 py-3 text-slate-500">{fmtDate(d.created_at)}</td>
                 </tr>
-              )
-            })}
-
-            {sorted.length === 0 && (
-              <tr>
-                <td
-                  colSpan={4}
-                  className="px-3 py-6 text-center text-gray-500"
-                >
-                  No drivers match "{query}".
-                </td>
-              </tr>
-            )}
+              ))
+            }
           </tbody>
         </table>
       </div>
-
-      <div className="mt-4 flex flex-wrap items-center gap-4 text-[0.85rem] text-gray-400">
-        <span className="flex items-center gap-1.5">
-          <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
-          90%+
-        </span>
-
-        <span className="flex items-center gap-1.5">
-          <span className="h-2.5 w-2.5 rounded-full bg-amber-500" />
-          80–89%
-        </span>
-
-        <span className="flex items-center gap-1.5">
-          <span className="h-2.5 w-2.5 rounded-full bg-rose-500" />
-          Below 80%
-        </span>
-      </div>
-    </section>
-  )
-}
-
-function PeakDemandHours({ hours = [] }) {
-  if (hours.length === 0) {
-    return (
-      <section className="rounded-xl border border-white/5 bg-[#0f1729] p-5 shadow-sm">
-        <div className="mb-4">
-          <h2 className="text-[1.5rem] font-bold text-white">
-            Peak Demand Hours
-          </h2>
-
-          <p className="text-[0.9rem] text-gray-400">
-            Passengers by time block, today
-          </p>
-        </div>
-
-        <p className="text-gray-500">
-          No demand data available.
-        </p>
-      </section>
-    )
-  }
-
-  const max = Math.max(
-    ...hours.map((hour) => Number(hour.value) || 0)
-  )
-
-  return (
-    <section className="rounded-xl border border-white/5 bg-[#0f1729] p-5 shadow-sm">
-      <div className="mb-4">
-        <h2 className="text-[1.5rem] font-bold text-white">
-          Peak Demand Hours
-        </h2>
-
-        <p className="text-[0.9rem] text-gray-400">
-          Passengers by time block, today
-        </p>
-      </div>
-
-      <div className="space-y-3">
-        {hours.map((hour, index) => {
-          const value = Number(hour.value) || 0
-          const isPeak = value === max
-
-          return (
-            <div
-              key={`${hour.label}-${index}`}
-              className="grid grid-cols-[4.5rem_1fr_3.5rem] items-center gap-3"
-            >
-              <p
-                className={`text-[0.95rem] ${
-                  isPeak
-                    ? 'font-bold text-white'
-                    : 'text-gray-400'
-                }`}
-              >
-                {hour.label}
-              </p>
-
-              <div className="h-3.5 overflow-hidden rounded-full bg-white/5">
-                <div
-                  className={`h-full rounded-full ${
-                    isPeak
-                      ? 'bg-[#3b82f6]'
-                      : 'bg-[#f4c400]'
-                  }`}
-                  style={{
-                    width: `${Math.max(
-                      0,
-                      Math.min(value * 100, 100)
-                    )}%`,
-                  }}
-                />
-              </div>
-
-              <p
-                className={`text-right text-[0.9rem] tabular-nums ${
-                  isPeak
-                    ? 'font-bold text-white'
-                    : 'text-gray-400'
-                }`}
-              >
-                {hour.passengers ??
-                  `${Math.round(value * 100)}%`}
-              </p>
+      {showModal && (
+        <Modal title={`Create ${role.charAt(0).toUpperCase() + role.slice(1)} Account`} onClose={() => setShowModal(false)}>
+          <form className="space-y-4" onSubmit={handleCreate}>
+            <Field label="Username" value={form.username} onChange={e => setForm(p => ({...p, username: e.target.value}))} required placeholder="juan_dela_cruz" />
+            <Field label="Email" type="email" value={form.email} onChange={e => setForm(p => ({...p, email: e.target.value}))} required placeholder="juan@example.com" />
+            <Field label="Password" type="password" value={form.password} onChange={e => setForm(p => ({...p, password: e.target.value}))} required placeholder="Minimum 8 characters" />
+            {msg && <p className="text-sm text-red-600">{msg}</p>}
+            <div className="flex justify-end gap-2 pt-2">
+              <button type="button" onClick={() => setShowModal(false)} className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50">Cancel</button>
+              <button type="submit" disabled={saving} className="flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-60">
+                {saving && <Loader2 className="h-4 w-4 animate-spin" />}Create Account
+              </button>
             </div>
-          )
-        })}
-      </div>
-    </section>
-  )
-}
-
-const DEFAULT_ROUTE_STAT_SHELLS = [
-  { label: 'Total Trips' },
-  { label: 'Avg Daily Passengers' },
-  { label: 'Route Adherence' },
-]
-
-function RoutesPanel({
-  routeStats = DEFAULT_ROUTE_STAT_SHELLS,
-  routeAdherenceRows = [],
-  peakDemandHours = [],
-  peakHours = [],
-}) {
-  return (
-    <section className="rounded-2xl bg-[#0a0e1a] p-4">
-      <header className="mb-4 flex items-center rounded-xl border border-white/5 bg-[#0f1729] px-5 py-4 shadow-sm">
-        <div>
-          <h1 className="text-[1.75rem] font-bold text-white">
-            Analytical Reports
-          </h1>
-
-          <p className="text-[0.9rem] text-gray-400">
-            Route performance and demand insights
-          </p>
-        </div>
-      </header>
-
-      <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {routeStats
-          .filter((stat) => stat.label !== 'Peak Hours')
-          .map((stat) => (
-            <RouteStatCard
-              key={stat.label}
-              stat={stat}
-            />
-          ))}
-
-        <PeakHoursCard hours={peakHours} />
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.2fr_1fr]">
-        <RouteAdherenceTable
-          rows={routeAdherenceRows}
-        />
-
-        <PeakDemandHours
-          hours={peakDemandHours}
-        />
-      </div>
-    </section>
-  )
-}
-
-/* =============================================================================
-   Schedule Panel + Add Trip Modal
-   ========================================================================== */
-
-function ScheduleStatCard({ label, value, highlight = false }) {
-  return (
-    <article className="flex flex-col items-center justify-center rounded-xl bg-[#131a2e] px-6 py-8 shadow-sm">
-      <p className="mb-2 text-sm text-gray-400">{label}</p>
-      <p
-        className={`text-xl font-semibold ${
-          highlight ? 'text-[#4d8eff]' : 'text-gray-100'
-        }`}
-      >
-        {value}
-      </p>
-    </article>
-  )
-}
-
-const emptyTripForm = {
-  busId: '',
-  departure: '',
-  destination: '',
-  driver: '',
-  chauffeur: '',
-  departureTime: '',
-  serviceType: 'Aircon',
-}
-
-function AddTripModal({ onClose, onAdd, staff }) {
-  const [form, setForm] = useState(emptyTripForm)
-
-  const drivers = staff.filter(
-    (member) => member.position === 'Driver'
-  )
-
-  const chauffeurs = staff.filter(
-    (member) => member.position === 'Chauffeur'
-  )
-
-  function handleChange(event) {
-    const { name, value } = event.target
-
-    setForm((prev) => ({
-      ...prev,
-      [name]: value,
-    }))
-  }
-
-  function handleSubmit(event) {
-    event.preventDefault()
-
-    if (
-      !form.busId ||
-      !form.departure ||
-      !form.destination ||
-      !form.driver ||
-      !form.chauffeur ||
-      !form.departureTime
-    ) {
-      return
-    }
-
-    onAdd({
-      busId: form.busId,
-      departure: form.departure,
-      destination: form.destination,
-      route: `${form.departure} - ${form.destination}`,
-      driver: form.driver,
-      chauffeur: form.chauffeur,
-      departureTime: form.departureTime,
-      serviceType: form.serviceType,
-      status: 'Upcoming',
-    })
-
-    onClose()
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="w-full max-w-lg rounded-2xl bg-[#131a2e] p-6 shadow-xl">
-        <div className="mb-6 flex items-center justify-between">
-          <h2 className="text-xl font-bold text-gray-100">
-            Add Trip
-          </h2>
-
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg p-1 text-gray-400 transition-colors hover:bg-white/5 hover:text-gray-200"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
-        <form
-          onSubmit={handleSubmit}
-          className="space-y-4"
-        >
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <label className="block">
-              <span className="mb-1 block text-sm font-medium text-gray-400">
-                Bus ID
-              </span>
-
-              <input
-                type="text"
-                name="busId"
-                value={form.busId}
-                onChange={handleChange}
-                placeholder="e.g. B-107"
-                className="w-full rounded-lg border border-gray-700 bg-[#0d1220] px-3 py-2 text-sm text-gray-100 outline-none placeholder:text-gray-500 focus:border-[#4d8eff] focus:ring-1 focus:ring-[#4d8eff]"
-              />
-            </label>
-
-            <label className="block">
-              <span className="mb-1 block text-sm font-medium text-gray-400">
-                Departure Time
-              </span>
-
-              <input
-                type="text"
-                name="departureTime"
-                value={form.departureTime}
-                onChange={handleChange}
-                placeholder="e.g. 5:00 AM"
-                className="w-full rounded-lg border border-gray-700 bg-[#0d1220] px-3 py-2 text-sm text-gray-100 outline-none placeholder:text-gray-500 focus:border-[#4d8eff] focus:ring-1 focus:ring-[#4d8eff]"
-              />
-            </label>
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <label className="block">
-              <span className="mb-1 block text-sm font-medium text-gray-400">
-                Departure
-              </span>
-
-              <input
-                type="text"
-                name="departure"
-                value={form.departure}
-                onChange={handleChange}
-                placeholder="e.g. Davao City"
-                className="w-full rounded-lg border border-gray-700 bg-[#0d1220] px-3 py-2 text-sm text-gray-100 outline-none placeholder:text-gray-500 focus:border-[#4d8eff] focus:ring-1 focus:ring-[#4d8eff]"
-              />
-            </label>
-
-            <label className="block">
-              <span className="mb-1 block text-sm font-medium text-gray-400">
-                Destination
-              </span>
-
-              <input
-                type="text"
-                name="destination"
-                value={form.destination}
-                onChange={handleChange}
-                placeholder="e.g. Cateel"
-                className="w-full rounded-lg border border-gray-700 bg-[#0d1220] px-3 py-2 text-sm text-gray-100 outline-none placeholder:text-gray-500 focus:border-[#4d8eff] focus:ring-1 focus:ring-[#4d8eff]"
-              />
-            </label>
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <label className="block">
-              <span className="mb-1 block text-sm font-medium text-gray-400">
-                Driver
-              </span>
-
-              <select
-                name="driver"
-                value={form.driver}
-                onChange={handleChange}
-                className="w-full rounded-lg border border-gray-700 bg-[#0d1220] px-3 py-2 text-sm text-gray-100 outline-none focus:border-[#4d8eff] focus:ring-1 focus:ring-[#4d8eff]"
-              >
-                <option value="">
-                  Select Driver
-                </option>
-
-                {drivers.map((member) => (
-                  <option
-                    key={member.staffId}
-                    value={member.name}
-                  >
-                    {member.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="block">
-              <span className="mb-1 block text-sm font-medium text-gray-400">
-                Chauffeur
-              </span>
-
-              <select
-                name="chauffeur"
-                value={form.chauffeur}
-                onChange={handleChange}
-                className="w-full rounded-lg border border-gray-700 bg-[#0d1220] px-3 py-2 text-sm text-gray-100 outline-none focus:border-[#4d8eff] focus:ring-1 focus:ring-[#4d8eff]"
-              >
-                <option value="">
-                  Select Chauffeur
-                </option>
-
-                {chauffeurs.map((member) => (
-                  <option
-                    key={member.staffId}
-                    value={member.name}
-                  >
-                    {member.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-
-          <label className="block">
-            <span className="mb-1 block text-sm font-medium text-gray-400">
-              Type Of Service
-            </span>
-
-            <select
-              name="serviceType"
-              value={form.serviceType}
-              onChange={handleChange}
-              className="w-full rounded-lg border border-gray-700 bg-[#0d1220] px-3 py-2 text-sm text-gray-100 outline-none focus:border-[#4d8eff] focus:ring-1 focus:ring-[#4d8eff]"
-            >
-              <option value="Aircon">
-                Aircon
-              </option>
-
-              <option value="Non-Aircon">
-                Non-Aircon
-              </option>
-            </select>
-          </label>
-
-          <div className="flex justify-end gap-3 pt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-lg border border-gray-700 px-5 py-2 text-sm font-medium text-gray-300 transition-colors hover:bg-white/5"
-            >
-              Cancel
-            </button>
-
-            <button
-              type="submit"
-              className="rounded-lg bg-[#4d8eff] px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-[#3b7de0]"
-            >
-              Add Trip
-            </button>
-          </div>
-        </form>
-      </div>
+          </form>
+        </Modal>
+      )}
     </div>
   )
 }
 
-function SchedulePanel({ scheduleStats, initialTrips, staff }) {
-  const [trips, setTrips] = useState(initialTrips)
-  const [showAddTrip, setShowAddTrip] = useState(false)
-
-  const formattedDate = new Date().toLocaleDateString('en-US', {
-    month: 'long',
-    day: 'numeric',
-    year: 'numeric',
-  })
-
-  function handleAddTrip(trip) {
-    setTrips((prev) => [...prev, trip])
-  }
-
+function FleetsTab({ fleets, onRefresh }) {
   return (
-    <>
-      <header className="flex items-center justify-between rounded-xl bg-[#131a2e] px-8 py-5 shadow-sm">
-        <h1 className="text-2xl font-bold text-gray-100">Trip Schedule</h1>
-        <p className="text-sm text-gray-400">{formattedDate}</p>
-      </header>
-
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        {scheduleStats.map((stat) => (
-          <ScheduleStatCard key={stat.label} {...stat} />
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-bold text-slate-900">Fleet Management</h2>
+        <button type="button" onClick={onRefresh} className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50">
+          <RefreshCw className="h-4 w-4" /> Refresh
+        </button>
+      </div>
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+        {[
+          { label: 'Total Units', value: fleets.length },
+          { label: 'Fleet Types', value: [...new Set(fleets.map(f => f.fleet_type).filter(Boolean))].join(', ') || '-' },
+          { label: 'Active', value: fleets.filter(f => f.status === 'active').length },
+        ].map(({ label, value }) => (
+          <div key={label} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</p>
+            <p className="mt-1 text-xl font-bold text-slate-900">{value}</p>
+          </div>
         ))}
       </div>
-
-      <section className="rounded-xl bg-[#131a2e] p-6 shadow-sm">
-        <div className="mb-5 flex items-center justify-between">
-          <h2 className="text-lg font-bold text-gray-100">Schedule</h2>
-          <button
-            type="button"
-            onClick={() => setShowAddTrip(true)}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-[#4d8eff]/40 bg-transparent px-4 py-2 text-sm font-medium text-[#4d8eff] transition-colors hover:bg-[#4d8eff]/10"
-          >
-            <Plus className="h-4 w-4" />
-            Add Trip
-          </button>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-sm">
-            <thead>
-              <tr className="bg-[#0d1220]">
-                <th className="px-4 py-3 text-center font-semibold text-gray-300">
-                  Bus ID
-                </th>
-                <th className="px-4 py-3 text-left font-semibold text-gray-300">
-                  Route
-                </th>
-                <th className="px-4 py-3 text-left font-semibold text-gray-300">
-                  Driver
-                </th>
-                <th className="px-4 py-3 text-left font-semibold text-gray-300">
-                  Chauffeur
-                </th>
-                <th className="px-4 py-3 text-center font-semibold text-gray-300">
-                  Departure Time
-                </th>
-                <th className="px-4 py-3 text-center font-semibold text-gray-300">
-                  Type Of Service
-                </th>
-                <th className="px-4 py-3 text-center font-semibold text-gray-300">
-                  Status
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {trips.map((trip, index) => (
-                <tr
-                  key={`${trip.busId}-${index}`}
-                  className={index % 2 === 0 ? 'bg-[#131a2e]' : 'bg-[#0f1526]'}
-                >
-                  <td className="px-4 py-3 text-center text-gray-300">{trip.busId}</td>
-                  <td className="px-4 py-3 text-left text-gray-300">{trip.route}</td>
-                  <td className="px-4 py-3 text-left text-gray-300">{trip.driver}</td>
-                  <td className="px-4 py-3 text-left text-gray-300">{trip.chauffeur}</td>
-                  <td className="px-4 py-3 text-center text-gray-300">
-                    {trip.departureTime}
-                  </td>
-                  <td className="px-4 py-3 text-center text-gray-300">
-                    {trip.serviceType}
-                  </td>
-                  <td className={`px-4 py-3 text-center font-medium ${
-                    trip.status === 'Ongoing' ? 'text-[#4d8eff]' : 'text-gray-300'
-                  }`}>
-                    {trip.status}
-                  </td>
-                </tr>
+      <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+        <table className="w-full text-sm">
+          <thead className="bg-slate-50">
+            <tr className="border-b border-slate-200">
+              {['Fleet ID','Plate No.','Type','Capacity','Status'].map(h => (
+                <th key={h} className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{h}</th>
               ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      {showAddTrip ? (
-        <AddTripModal
-          onClose={() => setShowAddTrip(false)}
-          onAdd={handleAddTrip}
-          staff={staff}
-        />
-      ) : null}
-    </>
-  )
-}
-
-/* =============================================================================
-   Staff Panel + Add Staff Modal
-   ========================================================================== */
-
-const emptyStaffForm = {
-  firstName: '',
-  lastName: '',
-  middleName: '',
-  position: '',
-  contactNumber: '',
-  email: '',
-}
-
-function AddStaffModal({ onClose, onAdd, nextStaffId }) {
-  const [form, setForm] = useState(emptyStaffForm)
-
-  function handleChange(event) {
-    const { name, value } = event.target
-    setForm((prev) => ({ ...prev, [name]: value }))
-  }
-
-  function handleSubmit(event) {
-    event.preventDefault()
-    if (!form.firstName || !form.lastName || !form.position || !form.contactNumber || !form.email) {
-      return
-    }
-
-    const name = [form.firstName, form.middleName, form.lastName]
-      .filter(Boolean)
-      .join(' ')
-
-    onAdd({
-      staffId: nextStaffId,
-      name,
-      position: form.position,
-      contactNumber: form.contactNumber,
-      email: form.email,
-      status: 'Active',
-    })
-    onClose()
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="w-full max-w-md rounded-2xl bg-[#0f1729] border border-white/10 p-6 shadow-xl">
-        <div className="mb-6 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <User className="h-5 w-5 text-gray-300" />
-            <h2 className="text-xl font-bold text-white">Add New Staff</h2>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg p-1 text-gray-400 transition-colors hover:bg-white/10 hover:text-gray-200"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <label className="block">
-            <span className="mb-1 block text-sm font-medium text-gray-400">First Name</span>
-            <input
-              type="text"
-              name="firstName"
-              value={form.firstName}
-              onChange={handleChange}
-              placeholder="Juan"
-              className="w-full rounded-lg border border-white/10 bg-[#1a2438] px-3 py-2.5 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-[#00a8cc] focus:ring-1 focus:ring-[#00a8cc]"
-            />
-          </label>
-
-          <label className="block">
-            <span className="mb-1 block text-sm font-medium text-gray-400">Last Name</span>
-            <input
-              type="text"
-              name="lastName"
-              value={form.lastName}
-              onChange={handleChange}
-              placeholder="dela Cruz"
-              className="w-full rounded-lg border border-white/10 bg-[#1a2438] px-3 py-2.5 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-[#00a8cc] focus:ring-1 focus:ring-[#00a8cc]"
-            />
-          </label>
-
-          <label className="block">
-            <span className="mb-1 block text-sm font-medium text-gray-400">Middle Name</span>
-            <input
-              type="text"
-              name="middleName"
-              value={form.middleName}
-              onChange={handleChange}
-              placeholder="Middle Name"
-              className="w-full rounded-lg border border-white/10 bg-[#1a2438] px-3 py-2.5 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-[#00a8cc] focus:ring-1 focus:ring-[#00a8cc]"
-            />
-          </label>
-
-          <label className="block">
-            <span className="mb-1 block text-sm font-medium text-gray-400">Position</span>
-            <select
-              name="position"
-              value={form.position}
-              onChange={handleChange}
-              className="w-full rounded-lg border border-white/10 bg-[#1a2438] px-3 py-2.5 text-sm text-gray-100 outline-none focus:border-[#00a8cc] focus:ring-1 focus:ring-[#00a8cc]"
-            >
-              <option value="" className="bg-[#1a2438]">Select Position</option>
-              <option value="Driver" className="bg-[#1a2438]">Driver</option>
-              <option value="Chauffeur" className="bg-[#1a2438]">Chauffeur</option>
-            </select>
-          </label>
-
-          <label className="block">
-            <span className="mb-1 block text-sm font-medium text-gray-400">
-              Contact Number
-            </span>
-            <input
-              type="text"
-              name="contactNumber"
-              value={form.contactNumber}
-              onChange={handleChange}
-              placeholder="09XX XXX XXXX"
-              className="w-full rounded-lg border border-white/10 bg-[#1a2438] px-3 py-2.5 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-[#00a8cc] focus:ring-1 focus:ring-[#00a8cc]"
-            />
-          </label>
-
-          <label className="block">
-            <span className="mb-1 block text-sm font-medium text-gray-400">Email</span>
-            <input
-              type="email"
-              name="email"
-              value={form.email}
-              onChange={handleChange}
-              placeholder="staff@example.com"
-              className="w-full rounded-lg border border-white/10 bg-[#1a2438] px-3 py-2.5 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-[#00a8cc] focus:ring-1 focus:ring-[#00a8cc]"
-            />
-          </label>
-
-          <div className="flex justify-end gap-3 pt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-lg border border-white/10 px-5 py-2 text-sm font-medium text-gray-300 transition-colors hover:bg-white/5"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-[#00a8cc]/40 bg-transparent px-5 py-2 text-sm font-medium text-[#00a8cc] transition-colors hover:bg-[#00a8cc]/10"
-            >
-              <Check className="h-4 w-4" />
-              Save Staff
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  )
-}
-
-function StaffPanel({ initialStaff }) {
-  const [staff, setStaff] = useState(initialStaff)
-  const [showAddStaff, setShowAddStaff] = useState(false)
-
-  function getNextStaffId() {
-    const maxId = staff.reduce((max, member) => {
-      const num = parseInt(member.staffId.replace('S', ''), 10)
-      return num > max ? num : max
-    }, 200)
-    return `S${maxId + 1}`
-  }
-
-  function handleAddStaff(member) {
-    setStaff((prev) => [...prev, member])
-  }
-
-  return (
-    <>
-      <header className="rounded-xl bg-[#0f1729] px-8 py-5 shadow-sm border border-white/5">
-        <h1 className="text-2xl font-bold text-white">Staff Management</h1>
-      </header>
-
-      <section className="rounded-xl bg-[#0f1729] p-6 shadow-sm border border-white/5">
-        <div className="mb-5 flex items-center justify-between">
-          <h2 className="text-lg font-bold text-white">Personnel</h2>
-          <button
-            type="button"
-            onClick={() => setShowAddStaff(true)}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-[#00a8cc]/40 bg-transparent px-4 py-2 text-sm font-medium text-[#00a8cc] transition-colors hover:bg-[#00a8cc]/10"
-          >
-            <Plus className="h-4 w-4" />
-            Add Staff
-          </button>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-sm">
-            <thead>
-              <tr className="bg-[#1a2438]">
-                <th className="px-4 py-3 text-center font-semibold text-gray-300">
-                  Staff ID
-                </th>
-                <th className="px-4 py-3 text-left font-semibold text-gray-300">
-                  Staff Name
-                </th>
-                <th className="px-4 py-3 text-center font-semibold text-gray-300">
-                  Position
-                </th>
-                <th className="px-4 py-3 text-center font-semibold text-gray-300">
-                  Contact Number
-                </th>
-                <th className="px-4 py-3 text-left font-semibold text-gray-300">
-                  Email
-                </th>
-                <th className="px-4 py-3 text-center font-semibold text-gray-300">
-                  Status
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {staff.map((member, index) => (
-                <tr
-                  key={member.staffId}
-                  className={`border-b border-white/5 ${
-                    index % 2 === 0 ? 'bg-[#0f1729]' : 'bg-[#141d33]'
-                  }`}
-                >
-                  <td className="px-4 py-3 text-center text-gray-300">
-                    {member.staffId}
-                  </td>
-                  <td className="px-4 py-3 text-left text-gray-300">{member.name}</td>
-                  <td className="px-4 py-3 text-center text-gray-300">
-                    {member.position}
-                  </td>
-                  <td className="px-4 py-3 text-center text-gray-300">
-                    {member.contactNumber}
-                  </td>
-                  <td className="px-4 py-3 text-left text-gray-300">{member.email}</td>
-                  <td className="px-4 py-3 text-center font-medium">
-                    <span
-                      className={
-                        member.status === 'Active'
-                          ? 'text-[#00a8cc] font-semibold'
-                          : 'text-gray-400 font-semibold'
-                      }
-                    >
-                      {member.status}
+            </tr>
+          </thead>
+          <tbody>
+            {fleets.length === 0
+              ? <tr><td colSpan={5} className="px-5 py-8 text-center text-sm text-slate-400">No fleets found.</td></tr>
+              : fleets.map(f => (
+                <tr key={f.fleet_id} className="border-b border-slate-100 hover:bg-slate-50">
+                  <td className="px-5 py-3 font-mono text-xs text-slate-600">#{f.fleet_id}</td>
+                  <td className="px-5 py-3 font-semibold text-slate-900">{f.plate_number}</td>
+                  <td className="px-5 py-3 text-slate-600 capitalize">{f.fleet_type || '-'}</td>
+                  <td className="px-5 py-3 text-slate-600">{f.capacity ?? '-'}</td>
+                  <td className="px-5 py-3">
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${f.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
+                      {f.status || 'unknown'}
                     </span>
                   </td>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      {showAddStaff ? (
-        <AddStaffModal
-          onClose={() => setShowAddStaff(false)}
-          onAdd={handleAddStaff}
-          nextStaffId={getNextStaffId()}
-        />
-      ) : null}
-    </>
+              ))
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
   )
 }
 
-
-/* =============================================================================
-   Dashboard Panel
-   ========================================================================== */
-
-function todayDateKey() {
-  const now = new Date()
-  const year = now.getFullYear()
-  const month = String(now.getMonth() + 1).padStart(2, '0')
-  const day = String(now.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
+function RoutesTab({ routes, onRefresh }) {
+  const [expanded, setExpanded] = useState(null)
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-bold text-slate-900">Routes</h2>
+        <button type="button" onClick={onRefresh} className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50">
+          <RefreshCw className="h-4 w-4" /> Refresh
+        </button>
+      </div>
+      <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+        <table className="w-full text-sm">
+          <thead className="bg-slate-50">
+            <tr className="border-b border-slate-200">
+              {['ID','Name','Origin','Destination','Stops',''].map((h,i) => (
+                <th key={i} className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {routes.length === 0
+              ? <tr><td colSpan={6} className="px-5 py-8 text-center text-sm text-slate-400">No routes found.</td></tr>
+              : routes.map(r => (
+                <>
+                  <tr key={r.route_id} className="border-b border-slate-100 hover:bg-slate-50">
+                    <td className="px-5 py-3 font-mono text-xs text-slate-600">#{r.route_id}</td>
+                    <td className="px-5 py-3 font-semibold text-slate-900">{r.route_name}</td>
+                    <td className="px-5 py-3 text-slate-600">{r.origin || '-'}</td>
+                    <td className="px-5 py-3 text-slate-600">{r.destination || '-'}</td>
+                    <td className="px-5 py-3 text-slate-600">{r.route_stops?.length ?? 0}</td>
+                    <td className="px-5 py-3">
+                      <button type="button" onClick={() => setExpanded(expanded === r.route_id ? null : r.route_id)} className="text-teal-600 hover:text-teal-700">
+                        {expanded === r.route_id ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                      </button>
+                    </td>
+                  </tr>
+                  {expanded === r.route_id && r.route_stops?.length > 0 && (
+                    <tr key={`${r.route_id}-stops`} className="bg-slate-50">
+                      <td colSpan={6} className="px-8 py-3">
+                        <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Stops</p>
+                        <ol className="flex flex-wrap gap-2">
+                          {r.route_stops.sort((a,b) => a.stop_order - b.stop_order).map((rs, idx) => (
+                            <li key={rs.route_stop_id ?? idx} className="rounded-full bg-white border border-slate-200 px-3 py-1 text-xs text-slate-700">
+                              {idx+1}. {rs.stop?.stop_name || `Stop #${rs.stop_id}`}
+                            </li>
+                          ))}
+                        </ol>
+                      </td>
+                    </tr>
+                  )}
+                </>
+              ))
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
 }
 
-function normalizeTripStatus(status) {
-  const value = String(status ?? '').toLowerCase()
-  if (value.includes('arriv') || value.includes('complet') || value.includes('done')) return 'Arrived'
-  if (value.includes('ongoing') || value.includes('progress') || value.includes('active')) return 'Ongoing'
-  return 'Upcoming'
-}
-
-function isBusActive(bus) {
-  const value = String(bus?.status ?? '').toLowerCase()
-  return value === 'active' || value === 'available' || value === 'operational' || value === 'ok'
-}
-
-function currencyPHP(value) {
-  return `₱${Number(value || 0).toLocaleString('en-US', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`
-}
-
-function DashboardPanel() {
-  const [buses, setBuses] = useState([])
-  const [trips, setTrips] = useState([])
-  const [isLoading, setIsLoading] = useState(true)
+function TripsTab({ trips, drivers, conductors, onRefresh }) {
+  const [showModal, setShowModal]   = useState(false)
+  const [selectedTrip, setSelectedTrip] = useState(null)
+  const [assignModal, setAssignModal]   = useState(null)
+  const [confirmComplete, setConfirmComplete] = useState(null) // trip object pending confirmation
+  const [form, setForm]             = useState({ fleet_route_id: '', trip_date: '', notes: '' })
+  const [assignId, setAssignId]     = useState('')
+  const [saving, setSaving]         = useState(false)
+  const [actionInFlight, setActionInFlight] = useState(null) // tripId currently being actioned
+  const [msg, setMsg]               = useState('')
+  const [fleetRoutes, setFleetRoutes] = useState([])
 
   useEffect(() => {
-    let cancelled = false
-
-    async function loadDashboardData() {
-      setIsLoading(true)
-
-      try {
-        const [busesData, tripsData] = await Promise.all([
-          safeJsonFetch('/api/buses'),
-          safeJsonFetch(`/api/trips?date=${todayDateKey()}`),
-        ])
-
-        if (!cancelled) {
-          setBuses(Array.isArray(busesData) ? busesData : busesData?.data ?? [])
-          setTrips(Array.isArray(tripsData) ? tripsData : tripsData?.data ?? [])
-        }
-      } catch (err) {
-        if (!cancelled) {
-          console.error('Unable to load dashboard data:', err)
-          setBuses([])
-          setTrips([])
-        }
-      } finally {
-        if (!cancelled) setIsLoading(false)
-      }
-    }
-
-    loadDashboardData()
-
-    return () => {
-      cancelled = true
-    }
+    StaffService.getOperatorFleetRoutes().then(r => setFleetRoutes(r?.data ?? [])).catch(() => {})
   }, [])
 
-  const normalizedTrips = useMemo(
-    () =>
-      trips.map((trip) => ({
-        busId: trip.busId ?? trip.bus_id ?? trip.busID ?? '—',
-        route:
-          trip.route ??
-          (trip.departure && trip.destination ? `${trip.departure} - ${trip.destination}` : '—'),
-        departureTime: trip.departureTime ?? trip.departure_time ?? '—',
-        serviceType: trip.serviceType ?? trip.service_type ?? '—',
-        status: normalizeTripStatus(trip.status),
-        revenue:
-          trip.totalRevenue ??
-          trip.total_revenue ??
-          (Number(trip.cashPayments ?? trip.cash_payments ?? 0) +
-            Number(trip.digitalPayments ?? trip.digital_payments ?? 0)),
-        passengers: Number(trip.passengers ?? trip.passengerCount ?? trip.passenger_count ?? 0),
-      })),
-    [trips],
-  )
-
-  const stats = useMemo(() => {
-    const activeBuses = buses.filter(isBusActive).length
-    const totalRevenue = normalizedTrips.reduce((sum, trip) => sum + Number(trip.revenue || 0), 0)
-    const totalPassengers = normalizedTrips.reduce((sum, trip) => sum + Number(trip.passengers || 0), 0)
-
-    return [
-      { label: 'Active Buses', value: isLoading ? '' : activeBuses },
-      { label: 'Trips Today', value: isLoading ? '' : normalizedTrips.length },
-      { label: "Today's Revenue", value: isLoading ? '' : currencyPHP(totalRevenue), highlight: true },
-      { label: 'Total Passengers', value: isLoading ? '' : `${totalPassengers.toLocaleString()} Passengers` },
-    ]
-  }, [buses, normalizedTrips, isLoading])
-
-  return (
-    <>
-      <DashboardHeader title="Dashboard" stats={stats} trips={normalizedTrips} isDashboardView />
-
-      {!isLoading && normalizedTrips.length === 0 && (
-        <p className="-mt-2 text-center text-sm text-gray-500">No trips found for today.</p>
-      )}
-    </>
-  )
-}
-
-/* =============================================================================
-   Operator Dashboard
-   ========================================================================== */
-
-export default function OperatorDashboard({ user }) {
-  const navigate = useNavigate()
-  const [activeTab, setActiveTab] = useState('dashboard')
-
-  const handleLogout = async () => {
-    await StaffService.logout('operator').catch(() => {})
-    navigate('/employee/login', { replace: true })
+  const handleSchedule = async (e) => {
+    e.preventDefault(); setSaving(true); setMsg('')
+    try {
+      await StaffService.scheduleTrip(form)
+      setMsg('Trip scheduled.'); setForm({ fleet_route_id: '', trip_date: '', notes: '' }); setShowModal(false); onRefresh()
+    } catch (err) { setMsg(err?.message || 'Failed.') }
+    finally { setSaving(false) }
   }
 
-  const renderPanel = () => {
-    switch (activeTab) {
-      case 'dashboard':
-        return <DashboardPanel />
-      case 'fleets':
-        return <FleetsPanel fleetTrips={[]} />
-      case 'routes':
-        return (
-          <RoutesPanel
-            routeAdherenceRows={[]}
-            peakDemandHours={[]}
-          />
-        )
-      case 'schedule':
-        return (
-          <SchedulePanel
-            scheduleStats={[]}
-            initialTrips={[]}
-            staff={[]}
-          />
-        )
-      case 'reports':
-        return <ReportsPanel />
-      case 'staff':
-        return <StaffPanel initialStaff={[]} />
-      case 'settings':
-        return <AccountSettings user={user} onLogout={handleLogout} />
-      default:
-        return null
+  const handleAssign = async (e) => {
+    e.preventDefault(); setSaving(true); setMsg('')
+    try {
+      if (assignModal.type === 'driver') await StaffService.assignDriver(assignModal.trip.trip_id, Number(assignId))
+      else await StaffService.assignConductor(assignModal.trip.trip_id, Number(assignId))
+      setMsg('Assigned.'); setAssignModal(null); onRefresh()
+    } catch (err) { setMsg(err?.message || 'Failed.') }
+    finally { setSaving(false) }
+  }
+
+  const handleAction = async (tripId, action) => {
+    if (action === 'complete') {
+      const trip = trips.find(t => t.trip_id === tripId)
+      setConfirmComplete(trip)
+      return
     }
+    setActionInFlight(tripId)
+    try {
+      if (action === 'boarding') await StaffService.startBoarding(tripId)
+      else if (action === 'depart') await StaffService.operatorDepartTrip(tripId)
+      onRefresh()
+    } catch (err) { setMsg(err?.message || 'Action failed.') }
+    finally { setActionInFlight(null) }
   }
 
+  const handleConfirmedComplete = async () => {
+    const tripId = confirmComplete.trip_id
+    setConfirmComplete(null)
+    setActionInFlight(tripId)
+    try {
+      await StaffService.operatorCompleteTrip(tripId)
+      onRefresh()
+    } catch (err) { setMsg(err?.message || 'Failed to complete trip.') }
+    finally { setActionInFlight(null) }
+  }
+
+  const sorted = [...trips].sort((a,b) => new Date(b.trip_date) - new Date(a.trip_date))
+
   return (
-    <div className="flex min-h-screen bg-[#0a0e1a]">
-      <Sidebar activeTab={activeTab} onTabChange={setActiveTab} />
-      <main className="flex-1 space-y-4 p-6">{renderPanel()}</main>
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-bold text-slate-900">Trips</h2>
+        <div className="flex gap-2">
+          <button type="button" onClick={onRefresh} className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50">
+            <RefreshCw className="h-4 w-4" /> Refresh
+          </button>
+          <button type="button" onClick={() => { setShowModal(true); setMsg('') }} className="flex items-center gap-1.5 rounded-lg bg-teal-600 px-3 py-2 text-sm font-semibold text-white hover:bg-teal-700">
+            <Plus className="h-4 w-4" /> Schedule Trip
+          </button>
+        </div>
+      </div>
+      {msg && <p className="rounded-lg bg-teal-50 border border-teal-200 px-4 py-2 text-sm text-teal-800">{msg}</p>}
+      <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50">
+              <tr className="border-b border-slate-200">
+                {['ID','Date','Route','Fleet','Driver','Conductor','Status','Actions'].map(h => (
+                  <th key={h} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 whitespace-nowrap">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.length === 0
+                ? <tr><td colSpan={8} className="px-5 py-8 text-center text-sm text-slate-400">No trips found.</td></tr>
+                : sorted.map(t => {
+                  const driverName = t.driver?.username || t.driver?.email || null
+                  const conductorName = t.conductor?.username || t.conductor?.email || null
+                  return (
+                    <tr key={t.trip_id} className="border-b border-slate-100 hover:bg-slate-50">
+                      <td className="px-4 py-3 font-mono text-xs text-slate-600">#{t.trip_id}</td>
+                      <td className="px-4 py-3 text-slate-700 whitespace-nowrap">{fmtDate(t.trip_date)}</td>
+                      <td className="px-4 py-3 text-slate-700 max-w-[120px] truncate">{t.fleet_route?.route?.route_name || '-'}</td>
+                      <td className="px-4 py-3 text-slate-700">{t.fleet_route?.fleet?.plate_number || '-'}</td>
+                      <td className="px-4 py-3">
+                        {driverName ? <span className="text-slate-700">{driverName}</span>
+                          : <button type="button" onClick={() => { setAssignModal({ trip: t, type: 'driver' }); setAssignId(''); setMsg('') }} className="text-xs text-teal-600 hover:underline">Assign</button>}
+                      </td>
+                      <td className="px-4 py-3">
+                        {conductorName ? <span className="text-slate-700">{conductorName}</span>
+                          : <button type="button" onClick={() => { setAssignModal({ trip: t, type: 'conductor' }); setAssignId(''); setMsg('') }} className="text-xs text-teal-600 hover:underline">Assign</button>}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`rounded-full px-2 py-0.5 text-xs font-semibold whitespace-nowrap ${STATUS_CHIP[t.status] ?? 'bg-slate-100 text-slate-600'}`}>{t.status}</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex gap-1">
+                          {t.status === 'scheduled'    && <button type="button" onClick={() => handleAction(t.trip_id,'boarding')} disabled={actionInFlight === t.trip_id} className="rounded px-2 py-1 text-xs bg-blue-100 text-blue-700 hover:bg-blue-200 disabled:opacity-50">{actionInFlight === t.trip_id ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Board'}</button>}
+                          {t.status === 'boarding'     && <button type="button" onClick={() => handleAction(t.trip_id,'depart')} disabled={actionInFlight === t.trip_id} className="rounded px-2 py-1 text-xs bg-amber-100 text-amber-700 hover:bg-amber-200 disabled:opacity-50">{actionInFlight === t.trip_id ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Depart'}</button>}
+                          {['departed','in-progress'].includes(t.status) && <button type="button" onClick={() => handleAction(t.trip_id,'complete')} disabled={actionInFlight === t.trip_id} className="rounded px-2 py-1 text-xs bg-emerald-100 text-emerald-700 hover:bg-emerald-200 disabled:opacity-50">Complete</button>}
+                          <button type="button" onClick={() => setSelectedTrip(t)} className="rounded px-2 py-1 text-xs bg-slate-100 text-slate-600 hover:bg-slate-200"><Eye className="h-3.5 w-3.5" /></button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {showModal && (
+        <Modal title="Schedule Trip" onClose={() => setShowModal(false)}>
+          <form className="space-y-4" onSubmit={handleSchedule}>
+            <Field label="Fleet Route" required>
+              <select value={form.fleet_route_id} onChange={e => setForm(p => ({...p, fleet_route_id: e.target.value}))} required className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500">
+                <option value="">Select a fleet route…</option>
+                {fleetRoutes.map(fr => (
+                  <option key={fr.fleet_route_id} value={fr.fleet_route_id}>{fr.fleet?.plate_number} — {fr.route?.route_name}</option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Trip Date" type="date" value={form.trip_date} onChange={e => setForm(p => ({...p, trip_date: e.target.value}))} required />
+            <Field label="Notes (optional)" value={form.notes} onChange={e => setForm(p => ({...p, notes: e.target.value}))} placeholder="Any notes…" />
+            {msg && <p className="text-sm text-red-600">{msg}</p>}
+            <div className="flex justify-end gap-2 pt-2">
+              <button type="button" onClick={() => setShowModal(false)} className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50">Cancel</button>
+              <button type="submit" disabled={saving} className="flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-60">
+                {saving && <Loader2 className="h-4 w-4 animate-spin" />}Schedule
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {assignModal && (
+        <Modal title={`Assign ${assignModal.type} to Trip #${assignModal.trip.trip_id}`} onClose={() => setAssignModal(null)}>
+          <form className="space-y-4" onSubmit={handleAssign}>
+            <Field label={`Select ${assignModal.type}`} required>
+              <select value={assignId} onChange={e => setAssignId(e.target.value)} required className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500">
+                <option value="">Choose…</option>
+                {(assignModal.type === 'driver' ? drivers : conductors).map(p => (
+                  <option key={p.user_id} value={p.user_id}>{p.username} ({p.email})</option>
+                ))}
+              </select>
+            </Field>
+            {msg && <p className="text-sm text-red-600">{msg}</p>}
+            <div className="flex justify-end gap-2 pt-2">
+              <button type="button" onClick={() => setAssignModal(null)} className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50">Cancel</button>
+              <button type="submit" disabled={saving} className="flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-60">
+                {saving && <Loader2 className="h-4 w-4 animate-spin" />}Assign
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {confirmComplete && (
+        <Modal title="Complete Trip?" onClose={() => setConfirmComplete(null)}>
+          <div className="space-y-4">
+            <p className="text-sm text-slate-600">This will finalize the trip and record all earnings. <strong>This cannot be undone.</strong></p>
+            <dl className="grid grid-cols-2 gap-2 rounded-lg bg-slate-50 p-3 text-sm">
+              <div><dt className="text-xs text-slate-400">Trip ID</dt><dd className="font-semibold text-slate-900">#{confirmComplete.trip_id}</dd></div>
+              <div><dt className="text-xs text-slate-400">Route</dt><dd className="font-semibold text-slate-900">{confirmComplete.fleet_route?.route?.route_name || '-'}</dd></div>
+              <div><dt className="text-xs text-slate-400">Fleet</dt><dd className="font-semibold text-slate-900">{confirmComplete.fleet_route?.fleet?.plate_number || '-'}</dd></div>
+              <div><dt className="text-xs text-slate-400">Date</dt><dd className="font-semibold text-slate-900">{fmtDate(confirmComplete.trip_date)}</dd></div>
+            </dl>
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setConfirmComplete(null)} className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50">Cancel</button>
+              <button type="button" onClick={handleConfirmedComplete} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700">Yes, Complete Trip</button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {selectedTrip && (
+        <Modal title={`Trip #${selectedTrip.trip_id} Details`} onClose={() => setSelectedTrip(null)}>
+          <dl className="grid grid-cols-2 gap-3 text-sm">
+            {[['Date', fmtDate(selectedTrip.trip_date)],['Status', selectedTrip.status],['Route', selectedTrip.fleet_route?.route?.route_name],['Fleet', selectedTrip.fleet_route?.fleet?.plate_number],['Driver', selectedTrip.driver?.username || 'Unassigned'],['Conductor', selectedTrip.conductor?.username || 'Unassigned'],['Revenue', fmt(selectedTrip.total_revenue)]].map(([label, value]) => (
+              <div key={label}>
+                <dt className="text-xs font-medium uppercase tracking-wide text-slate-400">{label}</dt>
+                <dd className="mt-0.5 font-semibold text-slate-900">{value || '-'}</dd>
+              </div>
+            ))}
+          </dl>
+        </Modal>
+      )}
     </div>
   )
 }
+
+function ReportsTab({ fleets }) {
+  const [selectedFleet, setSelectedFleet] = useState('')
+  const [reportType, setReportType]       = useState('financial')
+  const [report, setReport]               = useState(null)
+  const [loading, setLoading]             = useState(false)
+  const [msg, setMsg]                     = useState('')
+
+  const fetchReport = async () => {
+    if (!selectedFleet) { setMsg('Please select a fleet first.'); return }
+    setLoading(true); setMsg(''); setReport(null)
+    try {
+      let res
+      if (reportType === 'financial')  res = await StaffService.getFinancialReport(selectedFleet)
+      else if (reportType === 'revenue')   res = await StaffService.getRevenueByRoute(selectedFleet)
+      else if (reportType === 'adherence') res = await StaffService.getRouteAdherence(selectedFleet)
+      else if (reportType === 'occupancy') res = await StaffService.getOccupancyTrends(selectedFleet)
+      else if (reportType === 'daily')     res = await StaffService.getDailySummary(selectedFleet)
+      else if (reportType === 'channels')  res = await StaffService.getPaymentChannels(selectedFleet)
+      setReport(res?.data ?? res)
+    } catch (err) { setMsg(err?.message || 'Failed to load report.') }
+    finally { setLoading(false) }
+  }
+
+  return (
+    <div className="space-y-5">
+      <h2 className="text-xl font-bold text-slate-900">Fleet Reports</h2>
+      <div className="flex flex-wrap gap-3">
+        <div className="flex-1 min-w-[160px]">
+          <label className="mb-1 block text-xs font-medium text-slate-600">Fleet</label>
+          <select value={selectedFleet} onChange={e => setSelectedFleet(e.target.value)} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-teal-500">
+            <option value="">Select fleet…</option>
+            {fleets.map(f => <option key={f.fleet_id} value={f.fleet_id}>{f.plate_number}</option>)}
+          </select>
+        </div>
+        <div className="flex-1 min-w-[160px]">
+          <label className="mb-1 block text-xs font-medium text-slate-600">Report Type</label>
+          <select value={reportType} onChange={e => setReportType(e.target.value)} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-teal-500">
+            <option value="financial">Financial Audit</option>
+            <option value="revenue">Revenue by Route</option>
+            <option value="adherence">Route Adherence</option>
+            <option value="occupancy">Occupancy Trends</option>
+            <option value="daily">Daily Summary</option>
+            <option value="channels">Payment Channels</option>
+          </select>
+        </div>
+        <div className="flex items-end">
+          <button type="button" onClick={fetchReport} disabled={loading} className="flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-60">
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eye className="h-4 w-4" />}
+            Run Report
+          </button>
+        </div>
+      </div>
+      {msg && <p className="rounded-lg bg-red-50 border border-red-200 px-4 py-2 text-sm text-red-700">{msg}</p>}
+      {report && (
+        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <pre className="overflow-x-auto whitespace-pre-wrap text-xs text-slate-700">{JSON.stringify(report, null, 2)}</pre>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function AccountTab({ profile, twoFactorEnabled, onToggle2FA, saving2fa, msg2fa }) {
+  const user  = profile?.user ?? {}
+  const staff = profile ?? {}
+  return (
+    <div className="max-w-xl space-y-5">
+      <h2 className="text-xl font-bold text-slate-900">Account</h2>
+      <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm space-y-4">
+        <div className="flex items-center gap-4">
+          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-teal-600 text-xl font-bold text-white">
+            {(user.username || user.email || 'O')[0].toUpperCase()}
+          </div>
+          <div>
+            <p className="font-semibold text-slate-900">{user.username || 'Operator'}</p>
+            <p className="text-sm text-slate-500">{user.email}</p>
+          </div>
+        </div>
+        <dl className="space-y-2 text-sm">
+          {[['Role', user.role],['Joined', fmtDate(user.created_at)],['Company ID', staff.company_user_id]].map(([label, value]) => (
+            <div key={label} className="flex items-center justify-between border-t border-slate-100 pt-2">
+              <dt className="text-slate-500">{label}</dt>
+              <dd className="font-medium text-slate-900">{value || '-'}</dd>
+            </div>
+          ))}
+        </dl>
+      </div>
+      <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="flex items-start gap-3">
+          <Shield className="mt-0.5 h-5 w-5 shrink-0 text-teal-600" />
+          <div className="flex-1">
+            <p className="font-semibold text-slate-900">Two-Factor Authentication</p>
+            <p className="mt-0.5 text-sm text-slate-500">Operator accounts always require OTP on login. Toggle to enforce 2FA for all sessions.</p>
+          </div>
+          <label className="relative inline-flex cursor-pointer items-center">
+            <input type="checkbox" className="sr-only peer" checked={twoFactorEnabled} onChange={onToggle2FA} disabled={saving2fa} />
+            <div className="h-6 w-11 rounded-full bg-slate-200 peer-checked:bg-teal-500 peer-focus:ring-2 peer-focus:ring-teal-400 transition-colors after:absolute after:top-0.5 after:left-[2px] after:h-5 after:w-5 after:rounded-full after:bg-white after:shadow after:transition-all peer-checked:after:translate-x-full" />
+          </label>
+        </div>
+        {msg2fa && (
+          <p className={`mt-3 rounded-lg px-3 py-2 text-sm ${msg2fa.toLowerCase().includes('fail') ? 'bg-red-50 text-red-700' : 'bg-teal-50 text-teal-700'}`}>{msg2fa}</p>
+        )}
+      </div>
+    </div>
+  )
+}
+
+export default function OperatorDashboard() {
+  const navigate = useNavigate()
+  const [activeTab, setActiveTab]   = useState('dashboard')
+  const [loading, setLoading]       = useState(true)
+  const [profile, setProfile]       = useState(null)
+  const [trips, setTrips]           = useState([])
+  const [drivers, setDrivers]       = useState([])
+  const [conductors, setConductors] = useState([])
+  const [fleets, setFleets]         = useState([])
+  const [routes, setRoutes]         = useState([])
+  const [twoFactorEnabled, setTwoFactorEnabled] = useState(false)
+  const [saving2fa, setSaving2fa]               = useState(false)
+  const [msg2fa, setMsg2fa]                     = useState('')
+
+  const load = useCallback(async () => {
+    try {
+      const [profRes, tripsRes, driversRes, conductorsRes, fleetsRes, routesRes] = await Promise.allSettled([
+        StaffService.getProfile('operator'),
+        StaffService.getOperatorTrips(),
+        StaffService.getOperatorDrivers(),
+        StaffService.getOperatorConductors(),
+        StaffService.getOperatorFleets(),
+        StaffService.getOperatorRoutes(),
+      ])
+      if (profRes.status === 'fulfilled') {
+        const p = profRes.value?.data ?? profRes.value
+        setProfile(p)
+        if (typeof p?.user?.two_factor_enabled === 'boolean') setTwoFactorEnabled(p.user.two_factor_enabled)
+      } else { navigate('/employee/login'); return }
+      if (tripsRes.status === 'fulfilled')      setTrips(Array.isArray(tripsRes.value?.data) ? tripsRes.value.data : [])
+      if (driversRes.status === 'fulfilled')    setDrivers(Array.isArray(driversRes.value?.data) ? driversRes.value.data : [])
+      if (conductorsRes.status === 'fulfilled') setConductors(Array.isArray(conductorsRes.value?.data) ? conductorsRes.value.data : [])
+      if (fleetsRes.status === 'fulfilled')     setFleets(Array.isArray(fleetsRes.value?.data) ? fleetsRes.value.data : [])
+      if (routesRes.status === 'fulfilled')     setRoutes(Array.isArray(routesRes.value?.data) ? routesRes.value.data : [])
+    } finally { setLoading(false) }
+  }, [navigate])
+
+  useEffect(() => { load() }, [load])
+
+  const handleToggle2FA = async (e) => {
+    const enabled = e.target.checked
+    setTwoFactorEnabled(enabled); setSaving2fa(true); setMsg2fa('')
+    try {
+      await StaffService.setTwoFactorPreference(enabled)
+      setMsg2fa(enabled ? '2FA enabled for your account.' : '2FA disabled for your account.')
+    } catch (err) { setTwoFactorEnabled(!enabled); setMsg2fa(err?.message || 'Failed to update 2FA preference.') }
+    finally { setSaving2fa(false) }
+  }
+
+  const handleLogout = async () => {
+    try { await StaffService.logout() } catch {}
+    navigate('/employee/login')
+  }
+
+  if (loading) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-slate-50">
+        <div className="flex items-center gap-2 text-slate-500"><Loader2 className="h-5 w-5 animate-spin" /> Loading dashboard…</div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex h-screen overflow-hidden bg-slate-50">
+      <Sidebar activeTab={activeTab} onTabChange={setActiveTab} onLogout={handleLogout} />
+      <main className="flex-1 overflow-y-auto p-6">
+        {activeTab === 'dashboard'  && <DashboardTab trips={trips} drivers={drivers} conductors={conductors} fleets={fleets} />}
+        {activeTab === 'drivers'    && <StaffListTab role="driver" items={drivers} onRefresh={load} onCreateAccount={d => StaffService.createEmployeeAccount(d)} />}
+        {activeTab === 'conductors' && <StaffListTab role="conductor" items={conductors} onRefresh={load} onCreateAccount={d => StaffService.createEmployeeAccount(d)} />}
+        {activeTab === 'fleets'     && <FleetsTab fleets={fleets} onRefresh={load} />}
+        {activeTab === 'routes'     && <RoutesTab routes={routes} onRefresh={load} />}
+        {activeTab === 'trips'      && <TripsTab trips={trips} drivers={drivers} conductors={conductors} onRefresh={load} />}
+        {activeTab === 'reports'    && <ReportsTab fleets={fleets} />}
+        {activeTab === 'account'    && <AccountTab profile={profile} twoFactorEnabled={twoFactorEnabled} onToggle2FA={handleToggle2FA} saving2fa={saving2fa} msg2fa={msg2fa} />}
+      </main>
+    </div>
+  )
+}
+

@@ -1,4 +1,5 @@
 import api from "../services/api.js";
+import { TokenManager } from "../utils/TokenManager.js";
 
 const HTTP_ERROR_MESSAGES = {
   400: "Bad Request. Please check your input parameters.",
@@ -17,8 +18,8 @@ function handleApiError(error, tokenKey) {
 
   // Auto-clear stale token on 401 so the user gets redirected to login
   if (status === 401 && tokenKey) {
-    localStorage.removeItem(tokenKey);
-    sessionStorage.removeItem(tokenKey);
+    if (tokenKey === 'staff_token') TokenManager.clearStaffSession();
+    else TokenManager.clearPassengerToken();
   }
 
   if (status === 422 && responseData?.errors) {
@@ -43,16 +44,9 @@ export class BaseService {
   }
 
   async request(url, method, params = {}, extraHeaders = {}) {
-    const localToken = localStorage.getItem(this.tokenKey);
-    const sessionToken = sessionStorage.getItem(this.tokenKey);
-
-    // Staff token recovery: session token is usually from the most recent login.
-    // If both storages hold different values, prefer session and normalize both.
-    if (this.tokenKey === 'staff_token' && sessionToken && localToken && sessionToken !== localToken) {
-      localStorage.setItem(this.tokenKey, sessionToken);
-    }
-
-    const token = sessionToken || localToken;
+    const token = this.tokenKey === 'staff_token'
+      ? TokenManager.getStaffToken()
+      : TokenManager.getPassengerToken();
 
     const headers = { ...extraHeaders };
     if (token) {
@@ -75,37 +69,6 @@ export class BaseService {
       const response = await api(config);
       return response.data;
     } catch (error) {
-      // Staff role-token mismatch recovery: if first attempt used local token and
-      // backend returned role-based 403, retry once with session token.
-      const status = error?.response?.status;
-      const message = String(error?.response?.data?.message || '').toLowerCase();
-      const canRetryWithSession =
-        this.tokenKey === 'staff_token' &&
-        status === 403 &&
-        message.includes('access denied') &&
-        !!sessionToken &&
-        !!localToken &&
-        sessionToken !== localToken &&
-        token === localToken;
-
-      if (canRetryWithSession) {
-        const retryConfig = {
-          ...config,
-          headers: {
-            ...headers,
-            Authorization: `Bearer ${sessionToken}`,
-          },
-        };
-
-        try {
-          const retryResponse = await api(retryConfig);
-          localStorage.setItem(this.tokenKey, sessionToken);
-          return retryResponse.data;
-        } catch (retryError) {
-          handleApiError(retryError, this.tokenKey);
-        }
-      }
-
       handleApiError(error, this.tokenKey);
     }
   }

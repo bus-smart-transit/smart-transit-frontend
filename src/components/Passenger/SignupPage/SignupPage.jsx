@@ -45,59 +45,77 @@ export default function SignUpPage() {
   ];
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-slate-950 px-4 py-8 text-slate-200 sm:px-6 lg:px-10">
-      <div className="pointer-events-none absolute -left-24 top-0 h-72 w-72 rounded-full bg-blue-500/15 blur-3xl" aria-hidden="true" />
-      <div className="pointer-events-none absolute -right-20 bottom-0 h-72 w-72 rounded-full bg-cyan-500/10 blur-3xl" aria-hidden="true" />
-
-      <div className="relative mx-auto grid w-full max-w-6xl overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 lg:grid-cols-[1.1fr_1fr]">
-        <section className="flex flex-col border-b border-slate-800 bg-slate-950/70 p-6 sm:p-8 lg:border-b-0 lg:border-r">
-          <Link to="/" className="inline-flex items-center gap-2 text-base font-semibold text-slate-100">
-            <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-700 bg-slate-900 text-sky-300">
-              <TrainFront className="h-5 w-5" />
-            </span>
-            SMARTTRANSIT
+    <div className="min-h-screen bg-slate-50 flex flex-col lg:grid lg:grid-cols-[1fr_1fr]">
+      {/* Left Side: Branding */}
+      <div className="hidden lg:flex flex-col justify-between bg-slate-900 px-8 py-12 text-white">
+        <div>
+          <Link to="/" className="inline-flex items-center gap-3 mb-12">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-teal-500">
+              <TrainFront className="h-6 w-6" />
+            </div>
+            <span className="font-display text-xl">SmartTransit</span>
           </Link>
 
-          <div className="my-auto py-8">
-            <span className="inline-flex items-center gap-2 rounded-full border border-sky-500/30 bg-sky-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-sky-300">
+          <div className="max-w-sm space-y-4">
+            <span className="inline-flex items-center gap-2 rounded-full bg-teal-500/20 border border-teal-500/50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-teal-300">
               <Shield className="h-3.5 w-3.5" />
               Passenger Registration
             </span>
-            <h2 className="mt-4 text-3xl font-bold text-slate-100">Create your account</h2>
-            <p className="mt-3 text-sm text-slate-400">
+            <h1 className="font-display text-4xl leading-tight">
+              Join SmartTransit
+            </h1>
+            <p className="text-slate-400 text-lg leading-relaxed">
               Register once to unlock real-time trip tracking, e-tickets, and travel history.
             </p>
+          </div>
+        </div>
 
-            <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-900 p-5">
-              <div className="relative flex items-center gap-4 pl-3">
-                <div className="absolute left-4 top-1/2 h-px w-24 -translate-y-1/2 bg-slate-800" aria-hidden="true" />
-                <div className="relative z-10 flex items-center gap-2 rounded-full bg-slate-900 pr-2">
-                  <span
-                    className={`inline-flex h-7 w-7 items-center justify-center rounded-full border text-xs font-semibold ${step >= 1 ? 'border-sky-400 bg-sky-400 text-slate-950' : 'border-slate-700 text-slate-500'}`}
-                  >
-                    1
-                  </span>
-                  <span className="text-xs text-slate-400">Info</span>
-                </div>
-                <div className="relative z-10 flex items-center gap-2 rounded-full bg-slate-900 pr-2">
-                  <span
-                    className={`inline-flex h-7 w-7 items-center justify-center rounded-full border text-xs font-semibold ${step >= 2 ? 'border-sky-400 bg-sky-400 text-slate-950' : 'border-slate-700 text-slate-500'}`}
-                  >
-                    2
-                  </span>
-                  <span className="text-xs text-slate-400">Security</span>
-                </div>
+        {/* Step indicator on left side */}
+        <div className="space-y-4">
+          <p className="text-sm font-semibold uppercase tracking-wide text-slate-400">
+            Registration Steps
+          </p>
+          {[
+            { num: 1, label: 'Personal Information', desc: 'Your name, email and contact' },
+            { num: 2, label: 'Account Security', desc: 'Set a strong password' },
+          ].map(({ num, label, desc }) => (
+            <div key={num} className={`flex items-center gap-3 ${step >= num ? 'opacity-100' : 'opacity-40'}`}>
+              <span className={`flex h-9 w-9 items-center justify-center rounded-full text-sm font-bold ${step >= num ? 'bg-teal-500 text-white' : 'bg-slate-800 text-slate-500'}`}>
+                {step > num ? <Check className="h-4 w-4" /> : num}
+              </span>
+              <div>
+                <p className="text-sm font-semibold text-slate-100">{label}</p>
+                <p className="text-xs text-slate-500">{desc}</p>
               </div>
             </div>
-          </div>
-        </section>
+          ))}
+        </div>
 
-        <section className="p-6 sm:p-8">
-          <div className="mb-6">
-            <h1 className="text-2xl font-bold text-slate-100">
+        <p className="text-xs text-slate-500">
+          © {new Date().getFullYear()} SmartTransit. Davao Region XI.
+        </p>
+      </div>
+
+      {/* Right Side: Form */}
+      <div className="flex flex-col justify-center px-4 py-8 sm:px-6 lg:px-8">
+        <div className="w-full max-w-sm mx-auto lg:mx-0">
+          {/* Mobile header */}
+          <div className="mb-8 lg:hidden">
+            <Link to="/" className="inline-flex items-center gap-2">
+              <TrainFront className="h-6 w-6 text-teal-600" />
+              <span className="font-display text-slate-900">SmartTransit</span>
+            </Link>
+          </div>
+
+          <div className="mb-8">
+            <span className="inline-flex items-center gap-2 rounded-full bg-sky-50 border border-sky-200 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-sky-700">
+              <Shield className="h-3.5 w-3.5" />
+              {step === 1 ? 'Step 1 of 2' : 'Step 2 of 2'}
+            </span>
+            <h2 className="font-display text-3xl text-slate-950 mt-4">
               {step === 1 ? 'Personal Information' : 'Account Security'}
-            </h1>
-            <p className="mt-1 text-sm text-slate-500">
+            </h2>
+            <p className="text-slate-600 mt-2 text-sm">
               {step === 1
                 ? 'Fill in your passenger details to continue.'
                 : 'Set a strong password and complete registration.'}
@@ -105,129 +123,78 @@ export default function SignUpPage() {
           </div>
 
           {error && (
-            <div className="mb-4 inline-flex w-full items-center gap-2 rounded-xl border border-red-900 bg-red-950/40 px-3 py-2 text-sm text-red-300" role="alert">
-              <TriangleAlert className="h-4 w-4" />
-              {error}
+            <div className="mb-4 flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3">
+              <TriangleAlert className="h-5 w-5 text-red-600 shrink-0" />
+              <p className="text-sm font-medium text-red-900">{error}</p>
             </div>
           )}
           {success && (
-            <div className="mb-4 inline-flex w-full items-center gap-2 rounded-xl border border-emerald-900 bg-emerald-950/40 px-3 py-2 text-sm text-emerald-300" role="status">
-              <Check className="h-4 w-4" />
-              {success}
+            <div className="mb-4 flex items-center gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3">
+              <Check className="h-5 w-5 text-emerald-600 shrink-0" />
+              <p className="text-sm font-medium text-emerald-900">{success}</p>
             </div>
           )}
 
           {step === 1 && (
             <form className="space-y-4" onSubmit={handleStep1} noValidate id="signup-step1-form">
               <div className="grid gap-4 sm:grid-cols-2">
-                <label className="block text-sm font-medium text-slate-300" htmlFor="signup-firstName">
-                  First Name
-                  <div className="mt-1 flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-950 px-3 focus-within:border-sky-400">
-                    <UserRound className="h-4 w-4 text-slate-500" />
-                    <input
-                      id="signup-firstName"
-                      type="text"
-                      className="h-11 w-full bg-transparent text-sm text-slate-100 outline-none placeholder:text-slate-500"
-                      placeholder="Juan"
-                      value={form.firstName}
-                      onChange={e => update('firstName', e.target.value)}
-                      autoComplete="given-name"
-                    />
+                <div>
+                  <label className="block text-sm font-medium text-slate-900 mb-1.5" htmlFor="signup-firstName">First Name</label>
+                  <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 focus-within:ring-2 focus-within:ring-teal-500 focus-within:border-transparent pointer-events-auto cursor-text">
+                    <UserRound className="h-4 w-4 text-slate-400 shrink-0" />
+                    <input id="signup-firstName" type="text" className="h-11 w-full bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400 cursor-text pointer-events-auto" placeholder="Juan" value={form.firstName} onChange={e => update('firstName', e.target.value)} autoComplete="given-name" />
                   </div>
-                  {errors.firstName && <span className="mt-1 block text-xs text-red-400">{errors.firstName}</span>}
-                </label>
-
-                <label className="block text-sm font-medium text-slate-300" htmlFor="signup-lastName">
-                  Last Name
-                  <div className="mt-1 flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-950 px-3 focus-within:border-sky-400">
-                    <UserRound className="h-4 w-4 text-slate-500" />
-                    <input
-                      id="signup-lastName"
-                      type="text"
-                      className="h-11 w-full bg-transparent text-sm text-slate-100 outline-none placeholder:text-slate-500"
-                      placeholder="Dela Cruz"
-                      value={form.lastName}
-                      onChange={e => update('lastName', e.target.value)}
-                      autoComplete="family-name"
-                    />
+                  {errors.firstName && <p className="mt-1 text-xs text-red-600">{errors.firstName}</p>}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-900 mb-1.5" htmlFor="signup-lastName">Last Name</label>
+                  <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 focus-within:ring-2 focus-within:ring-teal-500 focus-within:border-transparent pointer-events-auto cursor-text">
+                    <UserRound className="h-4 w-4 text-slate-400 shrink-0" />
+                    <input id="signup-lastName" type="text" className="h-11 w-full bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400 cursor-text pointer-events-auto" placeholder="Dela Cruz" value={form.lastName} onChange={e => update('lastName', e.target.value)} autoComplete="family-name" />
                   </div>
-                  {errors.lastName && <span className="mt-1 block text-xs text-red-400">{errors.lastName}</span>}
-                </label>
+                  {errors.lastName && <p className="mt-1 text-xs text-red-600">{errors.lastName}</p>}
+                </div>
               </div>
 
-              <label className="block text-sm font-medium text-slate-300" htmlFor="signup-email">
-                Email Address
-                <div className="mt-1 flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-950 px-3 focus-within:border-sky-400">
-                  <Mail className="h-4 w-4 text-slate-500" />
-                  <input
-                    id="signup-email"
-                    type="email"
-                    className="h-11 w-full bg-transparent text-sm text-slate-100 outline-none placeholder:text-slate-500"
-                    placeholder="juan@example.com"
-                    value={form.email}
-                    onChange={e => update('email', e.target.value)}
-                    autoComplete="email"
-                  />
+              <div>
+                <label className="block text-sm font-medium text-slate-900 mb-1.5" htmlFor="signup-email">Email Address</label>
+                <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 focus-within:ring-2 focus-within:ring-teal-500 focus-within:border-transparent pointer-events-auto cursor-text">
+                  <Mail className="h-4 w-4 text-slate-400 shrink-0" />
+                  <input id="signup-email" type="email" className="h-11 w-full bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400 cursor-text pointer-events-auto" placeholder="juan@example.com" value={form.email} onChange={e => update('email', e.target.value)} autoComplete="email" />
                 </div>
-                {errors.email && <span className="mt-1 block text-xs text-red-400">{errors.email}</span>}
-              </label>
+                {errors.email && <p className="mt-1 text-xs text-red-600">{errors.email}</p>}
+              </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
-                <label className="block text-sm font-medium text-slate-300" htmlFor="signup-phone">
-                  Phone
-                  <div className="mt-1 flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-950 px-3 focus-within:border-sky-400">
-                    <Phone className="h-4 w-4 text-slate-500" />
-                    <input
-                      id="signup-phone"
-                      type="tel"
-                      className="font-data h-11 w-full bg-transparent text-sm text-slate-100 outline-none placeholder:text-slate-500"
-                      placeholder="+63 9XX XXX XXXX"
-                      value={form.phone}
-                      onChange={e => update('phone', e.target.value)}
-                      autoComplete="tel"
-                    />
+                <div>
+                  <label className="block text-sm font-medium text-slate-900 mb-1.5" htmlFor="signup-phone">Phone</label>
+                  <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 focus-within:ring-2 focus-within:ring-teal-500 focus-within:border-transparent pointer-events-auto cursor-text">
+                    <Phone className="h-4 w-4 text-slate-400 shrink-0" />
+                    <input id="signup-phone" type="tel" className="font-data h-11 w-full bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400 cursor-text pointer-events-auto" placeholder="+63 9XX XXX XXXX" value={form.phone} onChange={e => update('phone', e.target.value)} autoComplete="tel" />
                   </div>
-                  {errors.phone && <span className="mt-1 block text-xs text-red-400">{errors.phone}</span>}
-                </label>
-
-                <label className="block text-sm font-medium text-slate-300" htmlFor="signup-dob">
-                  Date of Birth
-                  <div className="mt-1 flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-950 px-3 focus-within:border-sky-400">
-                    <Calendar className="h-4 w-4 text-slate-500" />
-                    <input
-                      id="signup-dob"
-                      type="date"
-                      className="font-data h-11 w-full bg-transparent text-sm text-slate-100 outline-none"
-                      value={form.dateOfBirth}
-                      onChange={e => update('dateOfBirth', e.target.value)}
-                      max={new Date().toISOString().split('T')[0]}
-                    />
+                  {errors.phone && <p className="mt-1 text-xs text-red-600">{errors.phone}</p>}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-900 mb-1.5" htmlFor="signup-dob">Date of Birth</label>
+                  <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 focus-within:ring-2 focus-within:ring-teal-500 focus-within:border-transparent pointer-events-auto cursor-text">
+                    <Calendar className="h-4 w-4 text-slate-400 shrink-0" />
+                    <input id="signup-dob" type="date" className="font-data h-11 w-full bg-transparent text-sm text-slate-900 outline-none cursor-text pointer-events-auto" value={form.dateOfBirth} onChange={e => update('dateOfBirth', e.target.value)} max={new Date().toISOString().split('T')[0]} />
                   </div>
-                  {errors.dateOfBirth && <span className="mt-1 block text-xs text-red-400">{errors.dateOfBirth}</span>}
-                </label>
+                  {errors.dateOfBirth && <p className="mt-1 text-xs text-red-600">{errors.dateOfBirth}</p>}
+                </div>
               </div>
 
-              <label className="block text-sm font-medium text-slate-300" htmlFor="signup-address">
-                Address <span className="text-xs text-slate-500">(optional)</span>
-                <div className="mt-1 flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-950 px-3 focus-within:border-sky-400">
-                  <MapPin className="h-4 w-4 text-slate-500" />
-                  <input
-                    id="signup-address"
-                    type="text"
-                    className="h-11 w-full bg-transparent text-sm text-slate-100 outline-none placeholder:text-slate-500"
-                    placeholder="123 Rizal St, Davao City"
-                    value={form.address}
-                    onChange={e => update('address', e.target.value)}
-                    autoComplete="street-address"
-                  />
+              <div>
+                <label className="block text-sm font-medium text-slate-900 mb-1.5" htmlFor="signup-address">
+                  Address <span className="text-xs text-slate-400">(optional)</span>
+                </label>
+                <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 focus-within:ring-2 focus-within:ring-teal-500 focus-within:border-transparent pointer-events-auto cursor-text">
+                  <MapPin className="h-4 w-4 text-slate-400 shrink-0" />
+                  <input id="signup-address" type="text" className="h-11 w-full bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400 cursor-text pointer-events-auto" placeholder="123 Rizal St, Davao City" value={form.address} onChange={e => update('address', e.target.value)} autoComplete="street-address" />
                 </div>
-              </label>
+              </div>
 
-              <button
-                type="submit"
-                className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-500"
-                id="signup-next-btn"
-              >
+              <button type="submit" className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-teal-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-teal-700" id="signup-next-btn">
                 Continue to Security
                 <ArrowRight className="h-4 w-4" />
               </button>
@@ -236,25 +203,12 @@ export default function SignUpPage() {
 
           {step === 2 && (
             <form className="space-y-4" onSubmit={handleSubmit} noValidate id="signup-step2-form">
-              <label className="block text-sm font-medium text-slate-300" htmlFor="signup-password">
-                Password
-                <div className="mt-1 flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-950 px-3 focus-within:border-sky-400">
-                  <Lock className="h-4 w-4 text-slate-500" />
-                  <input
-                    id="signup-password"
-                    type={showPassword ? 'text' : 'password'}
-                    className="h-11 w-full bg-transparent text-sm text-slate-100 outline-none placeholder:text-slate-500"
-                    placeholder="Create a strong password"
-                    value={form.password}
-                    onChange={e => update('password', e.target.value)}
-                    autoComplete="new-password"
-                  />
-                  <button
-                    type="button"
-                    className="text-slate-500 transition hover:text-slate-300"
-                    onClick={() => setShowPassword(!showPassword)}
-                    aria-label={showPassword ? 'Hide password' : 'Show password'}
-                  >
+              <div>
+                <label className="block text-sm font-medium text-slate-900 mb-1.5" htmlFor="signup-password">Password</label>
+                <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 focus-within:ring-2 focus-within:ring-teal-500 focus-within:border-transparent pointer-events-auto cursor-text">
+                  <Lock className="h-4 w-4 text-slate-400 shrink-0" />
+                  <input id="signup-password" type={showPassword ? 'text' : 'password'} className="h-11 w-full bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400 cursor-text pointer-events-auto" placeholder="Create a strong password" value={form.password} onChange={e => update('password', e.target.value)} autoComplete="new-password" />
+                  <button type="button" className="text-slate-400 hover:text-slate-600 transition" onClick={() => setShowPassword(!showPassword)} aria-label={showPassword ? 'Hide password' : 'Show password'}>
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
@@ -266,79 +220,50 @@ export default function SignUpPage() {
                     </div>
                     <div className="grid grid-cols-5 gap-1">
                       {[1, 2, 3, 4, 5].map((i) => (
-                        <div key={i} className="h-1.5 rounded" style={{ background: i <= strength ? si.color : '#1e293b' }} />
+                        <div key={i} className="h-1.5 rounded" style={{ background: i <= strength ? si.color : '#e2e8f0' }} />
                       ))}
                     </div>
                   </div>
                 )}
-                {errors.password && <span className="mt-1 block text-xs text-red-400">{errors.password}</span>}
-              </label>
+                {errors.password && <p className="mt-1 text-xs text-red-600">{errors.password}</p>}
+              </div>
 
-              <label className="block text-sm font-medium text-slate-300" htmlFor="signup-confirm">
-                Confirm Password
-                <div className="mt-1 flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-950 px-3 focus-within:border-sky-400">
-                  <Lock className="h-4 w-4 text-slate-500" />
-                  <input
-                    id="signup-confirm"
-                    type={showConfirm ? 'text' : 'password'}
-                    className="h-11 w-full bg-transparent text-sm text-slate-100 outline-none placeholder:text-slate-500"
-                    placeholder="Repeat your password"
-                    value={form.confirmPassword}
-                    onChange={e => update('confirmPassword', e.target.value)}
-                    autoComplete="new-password"
-                  />
-                  <button
-                    type="button"
-                    className="text-slate-500 transition hover:text-slate-300"
-                    onClick={() => setShowConfirm(!showConfirm)}
-                    aria-label={showConfirm ? 'Hide confirm password' : 'Show confirm password'}
-                  >
+              <div>
+                <label className="block text-sm font-medium text-slate-900 mb-1.5" htmlFor="signup-confirm">Confirm Password</label>
+                <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 focus-within:ring-2 focus-within:ring-teal-500 focus-within:border-transparent pointer-events-auto cursor-text">
+                  <Lock className="h-4 w-4 text-slate-400 shrink-0" />
+                  <input id="signup-confirm" type={showConfirm ? 'text' : 'password'} className="h-11 w-full bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400 cursor-text pointer-events-auto" placeholder="Repeat your password" value={form.confirmPassword} onChange={e => update('confirmPassword', e.target.value)} autoComplete="new-password" />
+                  <button type="button" className="text-slate-400 hover:text-slate-600 transition" onClick={() => setShowConfirm(!showConfirm)} aria-label={showConfirm ? 'Hide confirm password' : 'Show confirm password'}>
                     {showConfirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
-                {errors.confirmPassword && <span className="mt-1 block text-xs text-red-400">{errors.confirmPassword}</span>}
-              </label>
+                {errors.confirmPassword && <p className="mt-1 text-xs text-red-600">{errors.confirmPassword}</p>}
+              </div>
 
               <div className="grid gap-2 sm:grid-cols-2">
                 {passwordHints.map((hint) => (
-                  <div key={hint.label} className={`inline-flex items-center gap-2 text-xs ${hint.check ? 'text-emerald-400' : 'text-slate-500'}`}>
+                  <div key={hint.label} className={`inline-flex items-center gap-2 text-xs ${hint.check ? 'text-teal-600' : 'text-slate-400'}`}>
                     <Check className="h-3.5 w-3.5" />
                     {hint.label}
                   </div>
                 ))}
               </div>
 
-              <label className="inline-flex cursor-pointer items-start gap-2 text-sm text-slate-400" htmlFor="signup-terms">
-                <input
-                  id="signup-terms"
-                  type="checkbox"
-                  className="mt-0.5 h-4 w-4 rounded border-slate-700 bg-slate-900 text-sky-500"
-                  checked={form.agreeTerms}
-                  onChange={e => update('agreeTerms', e.target.checked)}
-                />
+              <label className="inline-flex cursor-pointer items-start gap-2 text-sm text-slate-600" htmlFor="signup-terms">
+                <input id="signup-terms" type="checkbox" className="mt-0.5 h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500" checked={form.agreeTerms} onChange={e => update('agreeTerms', e.target.checked)} />
                 <span>
-                  I agree to the <a href="#" className="text-sky-400 hover:text-sky-300">Terms of Service</a> and{' '}
-                  <a href="#" className="text-sky-400 hover:text-sky-300">Privacy Policy</a>.
+                  I agree to the <a href="#" className="text-teal-600 hover:text-teal-700 font-medium">Terms of Service</a> and{' '}
+                  <a href="#" className="text-teal-600 hover:text-teal-700 font-medium">Privacy Policy</a>.
                 </span>
               </label>
-              {errors.agreeTerms && <span className="-mt-2 block text-xs text-red-400">{errors.agreeTerms}</span>}
+              {errors.agreeTerms && <p className="-mt-2 text-xs text-red-600">{errors.agreeTerms}</p>}
 
               <div className="flex gap-3">
-                <button
-                  type="button"
-                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm font-semibold text-slate-200 transition hover:border-slate-500"
-                  onClick={() => setStep(1)}
-                  id="signup-back-btn"
-                >
+                <button type="button" className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50" onClick={() => setStep(1)} id="signup-back-btn">
                   <ArrowLeft className="h-4 w-4" />
                   Back
                 </button>
-                <button
-                  type="submit"
-                  className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
-                  disabled={isLoading}
-                  id="signup-submit-btn"
-                >
+                <button type="submit" className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-teal-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-60" disabled={isLoading} id="signup-submit-btn">
                   {isLoading ? (
                     <>
                       <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" aria-hidden="true" />
@@ -352,11 +277,11 @@ export default function SignUpPage() {
             </form>
           )}
 
-          <p className="mt-6 text-center text-sm text-slate-500">
+          <p className="mt-6 text-center text-sm text-slate-600">
             Already have an account?{' '}
-            <Link to="/passenger/login" className="font-medium text-sky-400 hover:text-sky-300" id="switch-to-login">Sign in</Link>
+            <Link to="/passenger/login" className="font-semibold text-teal-600 hover:text-teal-700" id="switch-to-login">Sign in</Link>
           </p>
-        </section>
+        </div>
       </div>
     </div>
   );

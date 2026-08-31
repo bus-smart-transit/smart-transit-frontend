@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+﻿import { useEffect, useRef, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -15,6 +15,7 @@ import {
   Users,
 } from 'lucide-react';
 import StaffService from '../../api/StaffService/StaffService';
+import { TokenManager } from '../../utils/TokenManager.js';
 
 const ROLES = [
   { value: 'driver', label: 'Driver', icon: Bus, desc: 'Manage trips and route navigation' },
@@ -97,15 +98,8 @@ export default function StaffLoginPage() {
 
         const resolvedRole = role || selectedRole;
 
-        localStorage.removeItem('staff_token');
-        localStorage.removeItem('staff_role');
-        sessionStorage.removeItem('staff_token');
-        sessionStorage.removeItem('staff_role');
-
-        sessionStorage.setItem('staff_token', token);
-        sessionStorage.setItem('staff_role', resolvedRole);
-        localStorage.setItem('staff_token', token);
-        localStorage.setItem('staff_role', resolvedRole);
+        TokenManager.clearStaffSession();
+        TokenManager.setStaffSession(token, resolvedRole);
 
         navigate(`/employee/${resolvedRole}/dashboard`);
       }
@@ -137,10 +131,7 @@ export default function StaffLoginPage() {
       if (!token) throw new Error('Token missing after OTP verification.');
 
       const resolvedRole = role || selectedRole;
-      sessionStorage.setItem('staff_token', token);
-      sessionStorage.setItem('staff_role', resolvedRole);
-      localStorage.setItem('staff_token', token);
-      localStorage.setItem('staff_role', resolvedRole);
+      TokenManager.setStaffSession(token, resolvedRole);
       navigate(`/employee/${resolvedRole}/dashboard`);
     } catch (err) {
       setOtpError(err?.message || 'Incorrect or expired code. Please try again.');
@@ -226,32 +217,45 @@ export default function StaffLoginPage() {
   const activeRole = ROLES.find((r) => r.value === selectedRole);
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-slate-950 px-4 py-8 text-slate-200 sm:px-6 lg:px-10">
-      <div className="pointer-events-none absolute -left-24 top-0 h-80 w-80 rounded-full bg-blue-500/10 blur-3xl" aria-hidden="true" />
-      <div className="pointer-events-none absolute -right-24 bottom-0 h-80 w-80 rounded-full bg-cyan-500/10 blur-3xl" aria-hidden="true" />
+    <div className="min-h-screen bg-slate-100 flex flex-col lg:grid lg:grid-cols-[1fr_1.2fr]">
+      {/* Left panel â€” dark navy branding */}
+      <div className="hidden lg:flex flex-col items-center justify-center bg-[#0D1B2A] px-8 py-12 text-white">
+        <div className="flex flex-col items-center text-center gap-5 max-w-xs">
+          {/* Bus icon */}
+          <div className="flex h-24 w-24 items-center justify-center rounded-2xl bg-[#142333] border border-white/10">
+            <Bus className="h-14 w-14 text-white" />
+          </div>
+          <div>
+            <h1 className="font-display text-3xl font-bold tracking-wide">SMARTTRANSIT</h1>
+            <p className="mt-1 text-base text-slate-400">{activeRole?.label ?? 'Staff'} Portal</p>
+          </div>
+          <p className="text-sm text-slate-400 italic">Drive Smart. Ride Safe.</p>
+        </div>
+      </div>
 
-      <div className="relative mx-auto grid w-full max-w-6xl overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 lg:grid-cols-[1.1fr_1fr]">
-        <section className="flex flex-col border-b border-slate-800 bg-slate-950/70 p-6 sm:p-8 lg:border-b-0 lg:border-r">
-          <Link to="/" className="inline-flex items-center gap-2 text-base font-semibold text-slate-100">
-            <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-700 bg-slate-900 text-sky-300">
-              <Bus className="h-5 w-5" />
-            </span>
-            BUS OPERATOR PORTAL
-          </Link>
+      {/* Right panel â€” form */}
+      <div className="flex flex-col items-center justify-center min-h-screen px-6 py-10 bg-white lg:px-12">
+        <div className="w-full max-w-sm">
+          {/* Mobile logo */}
+          <div className="mb-8 flex items-center gap-3 lg:hidden">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#0D1B2A]">
+              <Bus className="h-6 w-6 text-white" />
+            </div>
+            <div>
+              <p className="font-display font-bold text-slate-900 leading-none">SMARTTRANSIT</p>
+              <p className="text-xs text-slate-500">{activeRole?.label ?? 'Staff'} Portal</p>
+            </div>
+          </div>
 
-          <div className="my-auto py-8">
-            <span className="inline-flex items-center gap-2 rounded-full border border-sky-500/30 bg-sky-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-sky-300">
-              <Shield className="h-3.5 w-3.5" />
-              Fleet Management Access
-            </span>
-            <h2 className="mt-4 text-3xl font-bold text-slate-100">Secure Staff Login</h2>
-            <p className="mt-3 text-sm text-slate-400">
-              Sign in with your operator-assigned credentials to access role-specific transit controls.
-            </p>
+          {!otpRequired ? (
+            <>
+              <div className="mb-8">
+                <h2 className="font-display text-3xl font-bold text-slate-900">Welcome Back!</h2>
+                <p className="mt-1.5 text-sm text-slate-500">Sign in to continue to your account</p>
+              </div>
 
-            <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-900 p-4">
-              <p className="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Choose role</p>
-              <div className="space-y-2">
+              {/* Role selector (compact) */}
+              <div className="mb-6 flex gap-2">
                 {ROLES.map((role) => {
                   const Icon = role.icon;
                   const active = role.value === selectedRole;
@@ -260,54 +264,133 @@ export default function StaffLoginPage() {
                       key={role.value}
                       type="button"
                       onClick={() => setSelectedRole(role.value)}
-                      className={`w-full rounded-xl border px-3 py-3 text-left transition ${
+                      className={`flex-1 flex flex-col items-center gap-1 rounded-xl border py-2.5 text-xs font-semibold transition ${
                         active
-                          ? 'border-sky-400 bg-sky-500/10'
-                          : 'border-slate-800 bg-slate-950 hover:border-slate-700'
+                          ? 'border-teal-500 bg-teal-50 text-teal-700'
+                          : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'
                       }`}
                     >
-                      <div className="flex items-start gap-3">
-                        <span className={`inline-flex h-8 w-8 items-center justify-center rounded-lg border ${active ? 'border-sky-400/50 bg-sky-500/20 text-sky-300' : 'border-slate-700 text-slate-500'}`}>
-                          <Icon className="h-4 w-4" />
-                        </span>
-                        <div>
-                          <p className={`text-sm font-semibold ${active ? 'text-slate-100' : 'text-slate-300'}`}>{role.label}</p>
-                          <p className="text-xs text-slate-500">{role.desc}</p>
-                        </div>
-                      </div>
+                      <Icon className="h-4 w-4" />
+                      {role.label}
                     </button>
                   );
                 })}
               </div>
-            </div>
-          </div>
 
-          <Link to="/passenger/login" className="inline-flex items-center gap-2 text-sm text-slate-500 transition hover:text-slate-300">
-            <ArrowLeft className="h-4 w-4" />
-            Passenger Login
-          </Link>
-        </section>
-
-        <section className="p-6 sm:p-8">
-          {otpRequired ? (
-            <>
-              <div className="mb-6">
-                <h1 className="text-2xl font-bold text-slate-100">Verify your identity</h1>
-                <p className="mt-1 text-sm text-slate-500">A 6-digit code was sent to <span className="font-medium text-slate-300">{otpEmailMasked}</span>.</p>
-                <p className="mt-1 text-xs text-slate-500">Code expires in {ttlMinutes}:{ttlSeconds}</p>
-              </div>
-
-              {otpError && (
-                <div className="mb-4 inline-flex w-full items-center gap-2 rounded-xl border border-red-900 bg-red-950/40 px-3 py-2 text-sm text-red-300" role="alert">
-                  <TriangleAlert className="h-4 w-4" />
-                  {otpError}
+              {error && (
+                <div className="mb-4 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5">
+                  <TriangleAlert className="h-4 w-4 text-red-500 shrink-0" />
+                  <p className="text-sm text-red-700">{error}</p>
                 </div>
               )}
 
-              <form onSubmit={handleVerifyOtp} className="space-y-4" noValidate>
+              <form onSubmit={handleSubmit} className="space-y-5" noValidate>
+                {/* Email / Driver ID */}
                 <div>
-                  <label className="block text-sm font-medium text-slate-300" htmlFor="staff-otp-box-0">Verification Code</label>
-                  <div className="mt-2 grid grid-cols-6 gap-2 sm:gap-3" onPaste={handleOtpPaste}>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5" htmlFor="staff-email">
+                    Email or Driver ID
+                  </label>
+                  <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 focus-within:ring-2 focus-within:ring-teal-500 focus-within:border-transparent transition pointer-events-auto">
+                    <IdCard className="h-4 w-4 text-slate-400 shrink-0" />
+                    <input
+                      id="staff-email"
+                      type="email"
+                      className="h-11 w-full bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400 cursor-text pointer-events-auto"
+                      placeholder="Enter your email or driver ID"
+                      value={form.email}
+                      onChange={(e) => update('email', e.target.value)}
+                      autoFocus
+                    />
+                  </div>
+                  {errors.email && <p className="mt-1 text-xs text-red-600">{errors.email}</p>}
+                </div>
+
+                {/* Password */}
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5" htmlFor="staff-password">
+                    Password
+                  </label>
+                  <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 focus-within:ring-2 focus-within:ring-teal-500 focus-within:border-transparent transition pointer-events-auto">
+                    <KeyRound className="h-4 w-4 text-slate-400 shrink-0" />
+                    <input
+                      id="staff-password"
+                      type={showPassword ? 'text' : 'password'}
+                      className="h-11 w-full bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400 cursor-text pointer-events-auto"
+                      placeholder="Enter your password"
+                      value={form.password}
+                      onChange={(e) => update('password', e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      className="text-slate-400 hover:text-slate-600 transition"
+                      onClick={() => setShowPassword((s) => !s)}
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                  {errors.password && <p className="mt-1 text-xs text-red-600">{errors.password}</p>}
+                </div>
+
+                {/* Remember me + Forgot */}
+                <div className="flex items-center justify-between text-sm">
+                  <label className="flex items-center gap-2 cursor-pointer text-slate-600">
+                    <input type="checkbox" className="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500" />
+                    Remember me
+                  </label>
+                  <a href="#" className="text-teal-600 hover:text-teal-700 font-medium">Forgot password?</a>
+                </div>
+
+                {/* Test credentials hint */}
+                <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs text-slate-500">
+                  <span className="font-semibold text-slate-700">Test: </span>
+                  {selectedRole}@smarttransit.com / password123
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full rounded-lg bg-[#0D1B2A] py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={isLoading}
+                >
+                  {isLoading ? (
+                    <span className="inline-flex items-center gap-2 justify-center">
+                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                      Signing in...
+                    </span>
+                  ) : 'Sign In'}
+                </button>
+              </form>
+
+              <p className="mt-6 text-center text-xs text-slate-400">
+                By continuing, you agree to the{' '}
+                <a href="#" className="text-teal-600 hover:underline">Terms and Conditions</a>.
+              </p>
+            </>
+          ) : (
+            /* OTP verification */
+            <>
+              <div className="mb-8">
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-teal-50 mb-4">
+                  <Shield className="h-6 w-6 text-teal-600" />
+                </div>
+                <h2 className="font-display text-2xl font-bold text-slate-900">Verify your identity</h2>
+                <p className="mt-1.5 text-sm text-slate-500">
+                  A 6-digit code was sent to <strong>{otpEmailMasked}</strong>
+                </p>
+                <p className="mt-1 text-xs text-slate-400">Code expires in {ttlMinutes}:{ttlSeconds}</p>
+              </div>
+
+              {otpError && (
+                <div className="mb-4 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5">
+                  <TriangleAlert className="h-4 w-4 text-red-500 shrink-0" />
+                  <p className="text-sm text-red-700">{otpError}</p>
+                </div>
+              )}
+
+              <form onSubmit={handleVerifyOtp} className="space-y-5" noValidate>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-3">Verification Code</label>
+                  <div className="grid grid-cols-6 gap-2" onPaste={handleOtpPaste}>
                     {otpDigits.map((digit, index) => (
                       <input
                         key={`staff-otp-box-${index}`}
@@ -320,7 +403,7 @@ export default function StaffLoginPage() {
                         value={digit}
                         onChange={(event) => commitOtpDigit(index, event.target.value)}
                         onKeyDown={(event) => handleOtpKeyDown(index, event)}
-                        className="h-14 rounded-xl border border-slate-800 bg-slate-950 text-center font-mono text-xl font-bold text-slate-100 outline-none focus:border-sky-400"
+                        className="h-12 rounded-lg border-2 border-slate-200 text-center text-lg font-bold text-slate-900 outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-500/20"
                         autoComplete={index === 0 ? 'one-time-code' : 'off'}
                         autoFocus={index === 0}
                         aria-label={`OTP digit ${index + 1}`}
@@ -331,120 +414,34 @@ export default function StaffLoginPage() {
 
                 <button
                   type="submit"
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="w-full rounded-lg bg-[#0D1B2A] py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
                   disabled={isLoading || otp.length !== 6}
                 >
                   {isLoading ? (
-                    <>
-                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" aria-hidden="true" />
+                    <span className="inline-flex items-center gap-2 justify-center">
+                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
                       Verifying...
-                    </>
-                  ) : (
-                    'Confirm Code'
-                  )}
+                    </span>
+                  ) : 'Confirm Code'}
                 </button>
               </form>
 
-              <div className="mt-4 flex items-center justify-between text-sm text-slate-500">
+              <div className="mt-4 flex items-center justify-between text-sm">
                 <button
                   type="button"
                   onClick={handleResendOtp}
                   disabled={isLoading || resendCooldown > 0}
-                  className="text-sky-400 transition hover:text-sky-300 disabled:opacity-50"
+                  className="text-teal-600 hover:text-teal-700 font-medium disabled:opacity-50"
                 >
                   {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend code'}
                 </button>
-                <button type="button" onClick={cancelOtp} className="hover:text-slate-300">← Back to login</button>
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="mb-6">
-                <h1 className="text-2xl font-bold text-slate-100">Sign In as {activeRole?.label}</h1>
-                <p className="mt-1 text-sm text-slate-500">Use your company credentials to continue.</p>
-              </div>
-
-              {error && (
-                <div className="mb-4 inline-flex w-full items-center gap-2 rounded-xl border border-red-900 bg-red-950/40 px-3 py-2 text-sm text-red-300" role="alert">
-                  <TriangleAlert className="h-4 w-4" />
-                  {error}
-                </div>
-              )}
-
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <label className="block text-sm font-medium text-slate-300">
-                  Bus Operator ID
-                  <div className="mt-1 flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-950 px-3 focus-within:border-sky-400">
-                    <IdCard className="h-4 w-4 text-slate-500" />
-                    <input
-                      type="email"
-                      className="h-11 w-full bg-transparent text-sm text-slate-100 outline-none placeholder:text-slate-500"
-                      placeholder={`${selectedRole}@smarttransit.com`}
-                      value={form.email}
-                      onChange={(e) => update('email', e.target.value)}
-                      autoFocus
-                    />
-                  </div>
-                  {errors.email && <span className="mt-1 block text-xs text-red-400">{errors.email}</span>}
-                </label>
-
-                <label className="block text-sm font-medium text-slate-300">
-                  Password
-                  <div className="mt-1 flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-950 px-3 focus-within:border-sky-400">
-                    <KeyRound className="h-4 w-4 text-slate-500" />
-                    <input
-                      type={showPassword ? 'text' : 'password'}
-                      className="h-11 w-full bg-transparent text-sm text-slate-100 outline-none placeholder:text-slate-500"
-                      placeholder="Enter password"
-                      value={form.password}
-                      onChange={(e) => update('password', e.target.value)}
-                    />
-                    <button
-                      type="button"
-                      className="text-slate-500 transition hover:text-slate-300"
-                      onClick={() => setShowPassword((s) => !s)}
-                      aria-label={showPassword ? 'Hide password' : 'Show password'}
-                    >
-                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
-                  </div>
-                  {errors.password && <span className="mt-1 block text-xs text-red-400">{errors.password}</span>}
-                </label>
-
-                <div className="rounded-xl border border-slate-800 bg-slate-950 p-3 text-xs text-slate-400">
-                  <p className="mb-1 inline-flex items-center gap-1 font-semibold text-slate-300">
-                    <BadgeCheck className="h-3.5 w-3.5 text-sky-400" />
-                    Test Credentials
-                  </p>
-                  <p className="font-data inline-flex items-center gap-2">
-                    <Mail className="h-3.5 w-3.5 text-slate-500" />
-                    {selectedRole}@smarttransit.com
-                  </p>
-                  <p className="font-data mt-1">password123</p>
-                </div>
-
-                <button
-                  type="submit"
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
-                  disabled={isLoading}
-                >
-                  {isLoading ? (
-                    <>
-                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" aria-hidden="true" />
-                      Sending code...
-                    </>
-                  ) : (
-                    `Sign In as ${activeRole?.label}`
-                  )}
+                <button type="button" onClick={cancelOtp} className="text-slate-500 hover:text-slate-700">
+                  â† Back to login
                 </button>
-              </form>
-
-              <p className="mt-4 text-right text-sm">
-                <a href="#" className="text-sky-400 hover:text-sky-300">Contact Dispatcher</a>
-              </p>
+              </div>
             </>
           )}
-        </section>
+        </div>
       </div>
     </div>
   );
