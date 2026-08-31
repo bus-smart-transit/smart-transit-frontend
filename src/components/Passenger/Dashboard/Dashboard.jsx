@@ -389,7 +389,7 @@ export default function Dashboard() {
   const [updating2fa, setUpdating2fa] = useState(false);
   const [twoFactorMsg, setTwoFactorMsg] = useState('');
 
-  const twoFactorEnabled = twoFactorOverride ?? profile?.user?.two_factor_enabled ?? true;
+  const twoFactorEnabled = twoFactorOverride ?? profile?.user?.two_factor_enabled ?? false;
 
   const handleTwoFactorToggle = async (event) => {
     const enabled = event.target.checked;
@@ -575,15 +575,19 @@ export default function Dashboard() {
                 <p style={{ margin: 0, fontSize: '0.9rem', fontWeight: 700, color: '#e2e8f0' }}>Login 2FA</p>
                 <p style={{ margin: '4px 0 0', fontSize: '0.78rem', color: '#94a3b8' }}>Require a 6-digit OTP during sign-in.</p>
               </div>
-              <label style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', cursor: updating2fa ? 'not-allowed' : 'pointer' }}>
-                <input
-                  type="checkbox"
-                  checked={twoFactorEnabled}
-                  onChange={handleTwoFactorToggle}
-                  disabled={updating2fa}
-                />
-                <span style={{ fontSize: '0.8rem', color: '#cbd5e1' }}>{twoFactorEnabled ? 'Enabled' : 'Disabled'}</span>
-              </label>
+              {profile ? (
+                <label style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', cursor: updating2fa ? 'not-allowed' : 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={twoFactorEnabled}
+                    onChange={handleTwoFactorToggle}
+                    disabled={updating2fa}
+                  />
+                  <span style={{ fontSize: '0.8rem', color: '#cbd5e1' }}>{twoFactorEnabled ? 'Enabled' : 'Disabled'}</span>
+                </label>
+              ) : (
+                <span style={{ fontSize: '0.8rem', color: '#475569' }}>Loading…</span>
+              )}
             </div>
             {twoFactorMsg && <p style={{ margin: '10px 0 0', fontSize: '0.78rem', color: '#7dd3fc' }}>{twoFactorMsg}</p>}
           </div>
