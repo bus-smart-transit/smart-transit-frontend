@@ -11,10 +11,18 @@ class PassengerService extends RoleAuthServiceBase {
 
   async requestPasswordReset(payload) {
     return await this.request(
-      `/${this.endpointBase}/password-reset`,
+      `/${this.endpointBase}/forgot-password`,
       "POST",
       payload,
     );
+  }
+
+  async forgotPassword(payload) {
+    return await this.request(`/${this.endpointBase}/forgot-password`, "POST", payload);
+  }
+
+  async resetPassword(payload) {
+    return await this.request(`/${this.endpointBase}/reset-password`, "POST", payload);
   }
 
   async getTickets() {

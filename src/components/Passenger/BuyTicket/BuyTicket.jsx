@@ -108,8 +108,11 @@ export default function BuyTicket({ onTicketPurchased }) {
     routeWarning,
     rewardPointsToApply,
     selectedRoute,
+    selectedFleetType,
     selectedStops,
     selectedTrip,
+    seatTypeOptions,
+    seatTypePolicyNote,
     setDestinationQuery,
     stopLabel,
     success,
@@ -382,7 +385,7 @@ export default function BuyTicket({ onTicketPurchased }) {
               <div className="buy-inline-group">
                 <label>Seat Type</label>
                 <div className="buy-toggle-row">
-                  {['seated', 'standing'].map((type) => (
+                  {seatTypeOptions.map((type) => (
                     <label key={type}>
                       <input
                         type="radio"
@@ -395,6 +398,7 @@ export default function BuyTicket({ onTicketPurchased }) {
                     </label>
                   ))}
                 </div>
+                {seatTypePolicyNote && <p style={{ color: '#94a3b8', marginTop: '6px', fontSize: '0.78rem' }}>{seatTypePolicyNote}</p>}
               </div>
 
               <div className="buy-inline-group">
@@ -625,6 +629,7 @@ export default function BuyTicket({ onTicketPurchased }) {
               <div className="buy-summary-grid">
                 <div><span>Route</span><strong>{selectedRoute?.origin || '-'} to {selectedRoute?.destination || '-'}</strong></div>
                 <div><span>Seat Type</span><strong>{form.seat_type}</strong></div>
+                <div><span>Fleet Type</span><strong style={{ textTransform: 'capitalize' }}>{selectedFleetType || 'public'}</strong></div>
                 <div><span>Payment</span><strong>{form.payment_channel}</strong></div>
                 <div><span>Unit Fare</span><strong>PHP {fare ? Number(unitFare).toFixed(2) : '0.00'}</strong></div>
                 <div><span>Quantity</span><strong>{totalTickets}</strong></div>

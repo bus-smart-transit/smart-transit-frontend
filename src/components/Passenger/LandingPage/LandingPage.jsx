@@ -5,6 +5,7 @@ import Footer from './Footer';
 import LandingHero from './LandingHero';
 import TripResultsSection from './TripResultsSection';
 import WhyRideSection from './WhyRideSection';
+import PublicTrackingSection from './PublicTrackingSection';
 import PassengerService from '../../../api/PassengerService/PassengerService';
 
 export default function LandingPage() {
@@ -43,8 +44,9 @@ export default function LandingPage() {
   }, []);
 
   const handleBookSeat = useCallback((trip) => {
-    // Redirect to login with trip state — authenticated flow handles booking
-    navigate('/passenger/login', { state: { redirectToBuy: true, tripId: trip?.id } });
+    const tripId = trip?.trip_id ?? trip?.id;
+    const query = tripId ? `?trip_id=${encodeURIComponent(String(tripId))}` : '';
+    navigate(`/passenger/book${query}`, { state: { tripId } });
   }, [navigate]);
 
   return (
@@ -63,6 +65,8 @@ export default function LandingPage() {
             onBookSeat={handleBookSeat}
           />
         )}
+
+        <PublicTrackingSection />
 
         {!hasSearched && <WhyRideSection />}
       </main>

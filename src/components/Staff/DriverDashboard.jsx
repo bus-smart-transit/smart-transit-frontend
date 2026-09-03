@@ -19,9 +19,11 @@ import StaffService from '../../api/StaffService/StaffService';
 import PairingScreen from './PairingScreen';
 import DriverNavigationMap from './DriverNavigationMap';
 import { haversineM } from '../../utils/geo';
+import { fetchTrafficStatus } from '../../services/trafficService';
 
 const STATUS_COLOR = {
   scheduled: '#64748b',
+  delayed: '#e11d48',
   boarding: '#3b82f6',
   departed: '#f59e0b',
   'in-progress': '#f59e0b',
@@ -171,16 +173,16 @@ export default function DriverDashboard() {
       return undefined;
     }
     const timer = setInterval(() => {
-      if (!document.hidden) {
+      if (!document.hidden && navigator.onLine) {
         void refreshPairingStatus();
       }
-    }, 30000); // Poll every 30 seconds (reduced from 12s to avoid excessive API calls)
+    }, 90000); // Poll every 90 seconds while unpaired.
 
     return () => clearInterval(timer);
   }, [pairing.paired, refreshPairingStatus]);
 
   const handleLogout = async () => {
-    await StaffService.logout('driver').catch(() => {});
+    await StaffService.logoutDriver().catch(() => {});
     navigate('/employee/login');
   };
 
@@ -217,6 +219,14 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   const [saving2fa, setSaving2fa] = useState(false);
   const [msg2fa, setMsg2fa] = useState('');
   const [gpsActive, setGpsActive] = useState(false);
+  const [lastGps, setLastGps] = useState(null);
+  const [trafficStatus, setTrafficStatus] = useState({
+    level: 'normal',
+    label: 'Normal flow',
+    etaMinutes: 8,
+    delayMinutes: 0,
+    suggestion: 'Continue current route and keep monitoring the next stop.',
+  });
   const isPaired = pairing?.paired === true;
   const pairingReason = pairing?.reason || 'Waiting for pairing with your Conductor before enabling session-synced features.';
   const hasActiveTrip = isCurrentOrSameDayTrip(trip);
@@ -336,12 +346,14 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
 
     const pushLocation = (position) => {
       const { latitude, longitude, heading, speed } = position.coords;
-      lastGpsRef.current = {
+      const nextLocation = {
         latitude,
         longitude,
         heading: Number.isFinite(heading) ? heading : undefined,
         speed_kmh: Number.isFinite(speed) ? Number((speed * 3.6).toFixed(1)) : undefined,
       };
+      lastGpsRef.current = nextLocation;
+      setLastGps(nextLocation);
       setGpsActive(true);
     };
 
@@ -528,6 +540,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     }
     setActionInFlight(true);
     try {
+      if (action === 'boarding') await StaffService.startBoardingTrip(trip.trip_id);
       if (action === 'depart') await StaffService.departTrip(trip.trip_id);
       setActionMsg(`Trip ${action} action completed.`);
       void loadData();
@@ -554,6 +567,41 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
 
   const handleLogout = onLogout;
 
+  useEffect(() => {
+    const pos = lastGps;
+    const targetStop = nextStop ?? stops[0];
+    if (!pos || !targetStop || !Number.isFinite(Number(targetStop.latitude)) || !Number.isFinite(Number(targetStop.longitude))) {
+      return;
+    }
+
+    const distanceM = haversineM(
+      Number(pos.latitude),
+      Number(pos.longitude),
+      Number(targetStop.latitude),
+      Number(targetStop.longitude)
+    );
+
+    let cancelled = false;
+    void (async () => {
+      const nextStatus = await fetchTrafficStatus({
+        currentLat: pos.latitude,
+        currentLng: pos.longitude,
+        nextStop: targetStop,
+        route: currentRoute,
+      });
+      if (!cancelled) {
+        setTrafficStatus({
+          ...nextStatus,
+          etaMinutes: nextStatus.etaMinutes || Math.max(2, Math.round(distanceM / 280)),
+        });
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentRoute, lastGps, nextStop, stops]);
+
   const notifications = [
     {
       title: trip?.status === 'boarding' ? 'Trip Ready for Departure' : 'Trip Status Updated',
@@ -563,14 +611,14 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     },
     {
       title: nextStop ? `Next stop: ${nextStop.stop_name ?? nextStop.name ?? 'Pending stop'}` : 'Route on schedule',
-      note: nextStop ? 'Proceed when safe and acknowledge upon arrival.' : 'All available stops are acknowledged.',
-      tone: 'warn',
+      note: nextStop ? `ETA ${trafficStatus.etaMinutes} min • ${trafficStatus.label.toLowerCase()}` : 'All available stops are acknowledged.',
+      tone: trafficStatus.level === 'heavy' ? 'warn' : 'info',
       time: 'Updated',
     },
     {
-      title: 'Route update available',
-      note: 'Keep navigation and alerts in sync before departure.',
-      tone: 'info',
+      title: trafficStatus.level === 'heavy' ? 'Traffic alert' : 'Route update available',
+      note: trafficStatus.suggestion,
+      tone: trafficStatus.level === 'heavy' ? 'warn' : 'info',
       time: 'Today',
     },
   ];
@@ -814,8 +862,11 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
             <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm md:col-span-2 xl:col-span-2">
               <h4 className="mb-3 text-base font-bold text-slate-900">Quick Actions</h4>
               <div className="flex flex-col gap-2 sm:flex-row">
-                <button className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-teal-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-teal-600 disabled:opacity-50" onClick={() => handleTripAction('depart')} disabled={actionInFlight || !isPaired || trip?.status !== 'boarding'}>
-                  ▶ Start Trip
+                <button className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50" onClick={() => handleTripAction('boarding')} disabled={actionInFlight || !isPaired || !['scheduled', 'delayed'].includes(String(trip?.status || '').toLowerCase())}>
+                  ○ Start Boarding
+                </button>
+                <button className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-teal-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-teal-600 disabled:opacity-50" onClick={() => handleTripAction('depart')} disabled={actionInFlight || !isPaired || !['boarding', 'scheduled', 'delayed'].includes(String(trip?.status || '').toLowerCase())}>
+                  ▶ Depart
                 </button>
                 <button className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50" onClick={loadData}>
                   ↻ Receive Route Updates
@@ -823,6 +874,41 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                 <button className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50" onClick={() => handleTripAction('complete')} disabled={actionInFlight || !isPaired || !['departed', 'in-progress'].includes(trip?.status)}>
                   ■ End Trip
                 </button>
+              </div>
+            </article>
+
+            <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm md:col-span-2 xl:col-span-2">
+              <div className="mb-4 flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Route health</p>
+                  <h4 className="text-base font-bold text-slate-900">Traffic & ETA</h4>
+                </div>
+                <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.15em] ${
+                  trafficStatus.level === 'heavy'
+                    ? 'bg-red-100 text-red-700'
+                    : trafficStatus.level === 'moderate'
+                      ? 'bg-amber-100 text-amber-700'
+                      : 'bg-emerald-100 text-emerald-700'
+                }`}>
+                  {trafficStatus.label}
+                </span>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-3">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-500">ETA</p>
+                  <p className="mt-2 font-data text-2xl font-bold text-slate-900">{trafficStatus.etaMinutes} min</p>
+                  <p className="mt-1 text-xs text-slate-500">to next stop</p>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-500">Delay</p>
+                  <p className="mt-2 font-data text-2xl font-bold text-slate-900">{trafficStatus.delayMinutes} min</p>
+                  <p className="mt-1 text-xs text-slate-500">route impact</p>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-500">Advice</p>
+                  <p className="mt-2 text-sm font-semibold text-slate-800 leading-5">{trafficStatus.suggestion}</p>
+                </div>
               </div>
             </article>
 
@@ -950,11 +1036,23 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
           </section>
         )}
 
+        {!loading && activeTab === 'navigation' && isPaired && showNoCurrentTripState && upcomingTrip && (
+          <section className="grid gap-4 lg:grid-cols-2">
+            <article className="rounded-2xl border border-slate-800 bg-slate-900 p-4 sm:p-6 lg:col-span-2">
+              <h4 className="mb-2 text-base font-semibold text-slate-100">Upcoming Route Preview</h4>
+              <p className="mb-3 text-xs text-slate-400">
+                This is your next assigned route map so you can prepare before your shift starts.
+              </p>
+              <DriverNavigationMap trip={upcomingTrip} stops={[]} lastGpsRef={lastGpsRef} routeGeometry={null} />
+            </article>
+          </section>
+        )}
+
         {!loading && activeTab === 'navigation' && isPaired && !showNoCurrentTripState && (
           <section className="grid gap-4 lg:grid-cols-2">
             <article className="rounded-2xl border border-slate-800 bg-slate-900 p-4 sm:p-6 lg:col-span-2">
               <h4 className="mb-3 text-base font-semibold text-slate-100">Route Navigation</h4>
-              <DriverNavigationMap trip={trip} stops={stops} lastGpsRef={lastGpsRef} />
+              <DriverNavigationMap trip={trip} stops={stops} lastGpsRef={lastGpsRef} routeGeometry={trafficStatus?.routeGeometry} />
             </article>
 
             <article className="rounded-2xl border border-slate-800 bg-slate-900 p-4 sm:p-6">
@@ -1201,12 +1299,12 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                         const enabled = e.target.checked;
                         setTwoFactorEnabled(enabled); setSaving2fa(true); setMsg2fa('');
                         try {
-                          await StaffService.setTwoFactorPreference(enabled);
+                          await StaffService.setTwoFactorPreference(enabled, 'driver');
                           setMsg2fa(enabled ? '2FA enabled.' : '2FA disabled.');
                         } catch (err) { setTwoFactorEnabled(!enabled); setMsg2fa(err?.message || 'Failed to update.'); }
                         finally { setSaving2fa(false); }
                       }} disabled={saving2fa} />
-                    <div className="h-6 w-11 rounded-full bg-slate-700 peer-checked:bg-teal-500 peer-focus:ring-2 peer-focus:ring-teal-400 transition-colors after:absolute after:top-0.5 after:left-[2px] after:h-5 after:w-5 after:rounded-full after:bg-white after:shadow after:transition-all peer-checked:after:translate-x-full" />
+                    <div className="h-6 w-11 rounded-full bg-slate-700 peer-checked:bg-teal-500 peer-focus:ring-2 peer-focus:ring-teal-400 transition-colors after:absolute after:top-0.5 after:left-0.5 after:h-5 after:w-5 after:rounded-full after:bg-white after:shadow after:transition-all peer-checked:after:translate-x-full" />
                   </label>
                 </div>
                 {msg2fa && <p className={`text-xs rounded px-2 py-1 ${msg2fa.toLowerCase().includes('fail') ? 'bg-red-900/30 text-red-300' : 'bg-teal-900/30 text-teal-300'}`}>{msg2fa}</p>}

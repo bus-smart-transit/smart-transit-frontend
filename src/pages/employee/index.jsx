@@ -3,6 +3,8 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { StaffGuestRoute, StaffProtectedRoute } from '../../components/StaffAuthGuard';
 
 const StaffLoginPage = lazy(() => import('../../components/Staff/StaffLoginPage'));
+const StaffForgotPasswordPage = lazy(() => import('../../components/Staff/StaffForgotPasswordPage'));
+const StaffResetPasswordPage = lazy(() => import('../../components/Staff/StaffResetPasswordPage'));
 const DriverDashboard = lazy(() => import('../../components/Staff/DriverDashboard'));
 const ConductorDashboard = lazy(() => import('../../components/Staff/ConductorDashboard'));
 const OperatorDashboard = lazy(() => import('../../components/Staff/OperatorDashboard'));
@@ -21,6 +23,8 @@ export default function EmployeeBaseRouter() {
 			<Routes>
 				<Route element={<StaffGuestRoute />}>
 					<Route path="login" element={<StaffLoginPage />} />
+					<Route path="forgot-password" element={<StaffForgotPasswordPage />} />
+					<Route path="reset-password" element={<StaffResetPasswordPage />} />
 				</Route>
 
 				<Route element={<StaffProtectedRoute allowedRoles={["driver"]} />}>

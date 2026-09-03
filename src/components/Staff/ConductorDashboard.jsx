@@ -29,7 +29,6 @@ import PairingScreen from './PairingScreen';
 const NAV_ITEMS = [
   { key: 'trip', label: 'Start', icon: Play },
   { key: 'occupancy', label: 'Ticketing', icon: Ticket },
-  { key: 'scan', label: 'Scan Ticket', icon: QrCode },
   { key: 'earnings', label: 'End Shift', icon: BarChart3 },
   { key: 'passengers', label: 'Passengers', icon: Users },
   { key: 'pin', label: 'Daily PIN', icon: KeyRound },
@@ -159,7 +158,7 @@ export default function ConductorDashboard() {
   }, [refreshPairingStatus]);
 
   const handleLogout = async () => {
-    await StaffService.logout('conductor').catch(() => {});
+    await StaffService.logoutConductor().catch(() => {});
     navigate('/employee/login');
   };
 
@@ -189,12 +188,13 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   const [scannerBusy, setScannerBusy] = useState(false);
   const [scannerError, setScannerError] = useState('');
   const [scannerStatus, setScannerStatus] = useState('');
+  const [scannerPhase, setScannerPhase] = useState('idle');
+  const [showScannerModal, setShowScannerModal] = useState(false);
   const [onsiteReceipt, setOnsiteReceipt] = useState(null);
   const [onsiteForm, setOnsiteForm] = useState({
     origin_stop_id: '',
     destination_stop_id: '',
     seat_type: 'seated',
-    passenger_id: '',
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -203,6 +203,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   const [saving2fa, setSaving2fa] = useState(false);
   const [checkoutInFlight, setCheckoutInFlight] = useState(false);
   const [confirmCheckout, setConfirmCheckout] = useState(false);
+  const [startedShiftTripId, setStartedShiftTripId] = useState(null);
   const isPaired = pairing?.paired === true;
   const pairingReason = pairing?.reason || 'Waiting for pairing with your Driver before live trip features unlock.';
   const hasActiveTrip = isCurrentOrSameDayTrip(trip);
@@ -213,8 +214,9 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   const scannerBusyRef = useRef(false);
   const lastDetectedRef = useRef({ value: '', at: 0 });
   const upcomingTrip = getUpcomingTrip(assignedTrips);
-  const showNoCurrentTripState = !loading && isPaired && !hasActiveTrip && ['trip', 'occupancy', 'passengers', 'pin', 'scan'].includes(activeTab);
+  const showNoCurrentTripState = !loading && isPaired && !hasActiveTrip && ['trip', 'occupancy', 'passengers', 'pin'].includes(activeTab);
   const routeStops = trip?.fleet_route?.route?.route_stops || trip?.fleet_route?.route?.routeStops || [];
+  const shiftStarted = Boolean(trip?.trip_id) && Number(startedShiftTripId) === Number(trip?.trip_id);
   const groupedPassengers = usePassengersByTrip(passengers, trip);
   const { printOnsiteReceipt } = useOnsiteReceiptPrinter();
 
@@ -225,7 +227,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     setActionMsg('');
 
     try {
-      await StaffService.setTwoFactorPreference(enabled);
+      await StaffService.setTwoFactorPreference(enabled, 'conductor');
       setActionMsg(enabled ? '2FA enabled for your account.' : '2FA disabled for your account.');
     } catch (err) {
       setTwoFactorEnabled(!enabled);
@@ -403,35 +405,68 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   }, [activeTab, hasActiveTrip, isPaired, loadEarnings]);
 
   useEffect(() => {
-    if (activeTab !== 'scan') {
-      const timer = setTimeout(() => {
-        stopScanner();
-      }, 0);
-      return () => clearTimeout(timer);
+    if (showScannerModal) return undefined;
+    const timer = setTimeout(() => {
+      stopScanner();
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [showScannerModal, stopScanner]);
+
+  useEffect(() => {
+    if (!trip?.trip_id) {
+      setStartedShiftTripId(null);
+      return;
     }
-    return undefined;
-  }, [activeTab, stopScanner]);
+
+    const normalized = String(trip?.status || '').toLowerCase();
+    if (['boarding', 'departed', 'in-progress', 'completed'].includes(normalized)) {
+      setStartedShiftTripId(Number(trip.trip_id));
+    }
+  }, [trip?.trip_id, trip?.status]);
 
   useEffect(() => () => stopScanner(), [stopScanner]);
 
-  const handleScan = useCallback(async (scannedUuid = scanUuid) => {
+  const handleScan = useCallback(async (scannedUuid = scanUuid, options = {}) => {
+    const { manageBusy = true } = options;
     const ticketUuid = String(scannedUuid || '').trim();
+
+    if (manageBusy) {
+      scannerBusyRef.current = true;
+      setScannerBusy(true);
+    }
 
     if (!isPaired) {
       setScanResult({ success: false, msg: pairingReason });
+      setScannerStatus('Pairing is required before scanning.');
+      if (manageBusy) {
+        scannerBusyRef.current = false;
+        setScannerBusy(false);
+      }
       return;
     }
 
     if (!trip?.trip_id) {
       setScanResult({ success: false, msg: 'No active trip assigned. Ticket scanning is unavailable.' });
+      setScannerStatus('No active trip assigned for scanning.');
+      if (manageBusy) {
+        scannerBusyRef.current = false;
+        setScannerBusy(false);
+      }
       return;
     }
 
     if (!ticketUuid) {
       setScanResult({ success: false, msg: 'Please provide a ticket UUID before scanning.' });
+      setScannerStatus('Please provide a ticket UUID.');
+      if (manageBusy) {
+        scannerBusyRef.current = false;
+        setScannerBusy(false);
+      }
       return;
     }
 
+    setScannerStatus('Validating ticket...');
+    setScannerPhase('validating');
     setGroupScanResult(null);
     setScanResult(null);
     try {
@@ -439,38 +474,79 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
       setScanResult({ success: true, data: res?.data, msg: res?.message });
       setActionMsg('Ticket scanned successfully.');
       setScanUuid(ticketUuid);
+      setScannerPhase('success');
+      setScannerStatus('Ticket validated. Ready for next scan.');
       void loadOccupancy();
+      void loadPassengers();
+      void loadData();
     } catch (err) {
       setScanResult({ success: false, msg: err.message });
+      setScannerPhase('failed');
+      setScannerStatus('Ticket validation failed. Ready for next scan.');
+    } finally {
+      if (manageBusy) {
+        scannerBusyRef.current = false;
+        setScannerBusy(false);
+      }
     }
   }, [isPaired, loadOccupancy, pairingReason, scanUuid, trip?.trip_id]);
 
-  const handleGroupScan = useCallback(async (transactionRef) => {
+  const handleGroupScan = useCallback(async (transactionRef, options = {}) => {
+    const { manageBusy = true } = options;
+    if (manageBusy) {
+      scannerBusyRef.current = true;
+      setScannerBusy(true);
+    }
+
     if (!isPaired) {
       setGroupScanResult({ success: false, msg: pairingReason });
+      setScannerStatus('Pairing is required before group scanning.');
+      if (manageBusy) {
+        scannerBusyRef.current = false;
+        setScannerBusy(false);
+      }
       return;
     }
 
     if (!trip?.trip_id) {
       setGroupScanResult({ success: false, msg: 'No active trip assigned. Group scanning is unavailable.' });
+      setScannerStatus('No active trip assigned for group scanning.');
+      if (manageBusy) {
+        scannerBusyRef.current = false;
+        setScannerBusy(false);
+      }
       return;
     }
 
+    setScannerStatus('Validating group ticket...');
+    setScannerPhase('validating');
     setScanResult(null);
     setGroupScanResult(null);
     try {
       const res = await StaffService.scanGroupTickets(transactionRef);
       setGroupScanResult({ success: true, data: res?.data, msg: res?.message });
       setActionMsg(`${res?.data?.boarded_count ?? 0} ticket(s) boarded.`);
+      setScannerPhase('success');
+      setScannerStatus('Group ticket validated. Ready for next scan.');
       void loadOccupancy();
+      void loadPassengers();
+      void loadData();
     } catch (err) {
       setGroupScanResult({ success: false, msg: err.message });
+      setScannerPhase('failed');
+      setScannerStatus('Group ticket validation failed. Ready for next scan.');
+    } finally {
+      if (manageBusy) {
+        scannerBusyRef.current = false;
+        setScannerBusy(false);
+      }
     }
   }, [isPaired, loadOccupancy, pairingReason, trip?.trip_id]);
 
   const startScanner = useCallback(async () => {
     setScannerError('');
     setScannerStatus('');
+    setScannerPhase('idle');
     setScanResult(null);
 
     if (!trip?.trip_id) {
@@ -488,85 +564,124 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
       return;
     }
 
+    if (!window.isSecureContext) {
+      setScannerError('Camera access requires HTTPS or localhost. Please open this app in a secure context.');
+      return;
+    }
+
     if (!videoRef.current) {
       setScannerError('Scanner element is not ready. Please try again.');
       return;
     }
 
     try {
-      // Initialize QR Scanner with cross-browser support
-      const qrScanner = new QrScanner(
-        videoRef.current,
-        async (result) => {
-          const rawValue = result?.data;
-          if (!rawValue) return;
+      const hasCamera = await QrScanner.hasCamera();
+      if (!hasCamera) {
+        setScannerError('No camera device was detected for scanning.');
+        return;
+      }
 
-          if (scannerBusyRef.current) return;          // drop scan — one already in flight
-          scannerBusyRef.current = true;
-          setScannerBusy(true);
+      const cameraList = await QrScanner.listCameras(true).catch(() => []);
+      const preferredCamera = cameraList.find((camera) => /back|rear|environment/i.test(String(camera?.label || '')))?.id || 'environment';
 
-          // Prevent duplicate detections within 3 seconds
-          const now = Date.now();
-          const isRecentDuplicate =
-            lastDetectedRef.current.value === rawValue && now - lastDetectedRef.current.at < 3000;
-          if (isRecentDuplicate) {
-            scannerBusyRef.current = false;
-            setScannerBusy(false);
-            return;
-          }
+      const handleDecodedResult = async (result) => {
+        const rawValue = result?.data;
+        if (!rawValue) return;
 
-          lastDetectedRef.current = { value: rawValue, at: now };
-          setScannerStatus('⏳ Processing scan…');
+        if (scannerBusyRef.current) return;          // drop scan — one already in flight
+        scannerBusyRef.current = true;
+        setScannerBusy(true);
 
-          // Group QR path — encodes "grp:{transaction_reference}"
-          if (typeof rawValue === 'string' && rawValue.startsWith('grp:')) {
-            const transactionRef = rawValue.slice(4).trim();
-            setScannerStatus('Group QR detected. Boarding all tickets in this order...');
-            try {
-              await handleGroupScan(transactionRef);
-            } finally {
-              scannerBusyRef.current = false;
-              setScannerBusy(false);
-            }
-            return;
-          }
+        // Prevent duplicate detections within 3 seconds
+        const now = Date.now();
+        const isRecentDuplicate =
+          lastDetectedRef.current.value === rawValue && now - lastDetectedRef.current.at < 3000;
+        if (isRecentDuplicate) {
+          scannerBusyRef.current = false;
+          setScannerBusy(false);
+          return;
+        }
 
-          // Single ticket path
-          const parsedUuid = extractTicketUuid(rawValue);
-          if (!parsedUuid) {
-            setScannerStatus('QR detected, but no valid ticket UUID was found.');
-            scannerBusyRef.current = false;
-            setScannerBusy(false);
-            return;
-          }
+        lastDetectedRef.current = { value: rawValue, at: now };
+        setScannerPhase('captured');
+        setScannerStatus('⏳ Processing scan…');
 
-          setScanUuid(parsedUuid);
-          setScannerStatus(`QR captured: ${parsedUuid}. Validating ticket...`);
+        // Group QR path — encodes "grp:{transaction_reference}"
+        if (typeof rawValue === 'string' && rawValue.startsWith('grp:')) {
+          const transactionRef = rawValue.slice(4).trim();
+          setScannerStatus('Group QR detected. Boarding all tickets in this order...');
           try {
-            await handleScan(parsedUuid);
+              await handleGroupScan(transactionRef, { manageBusy: false });
           } finally {
             scannerBusyRef.current = false;
             setScannerBusy(false);
           }
-        },
+          return;
+        }
+
+        // Single ticket path
+        const parsedUuid = extractTicketUuid(rawValue);
+        if (!parsedUuid) {
+          setScannerStatus('QR detected, but no valid ticket UUID was found.');
+          scannerBusyRef.current = false;
+          setScannerBusy(false);
+          return;
+        }
+
+        setScanUuid(parsedUuid);
+        setScannerStatus(`QR captured: ${parsedUuid}. Validating ticket...`);
+        try {
+            await handleScan(parsedUuid, { manageBusy: false });
+        } finally {
+          scannerBusyRef.current = false;
+          setScannerBusy(false);
+        }
+      };
+
+      // Initialize QR Scanner with cross-browser support
+      let qrScanner = new QrScanner(
+        videoRef.current,
+        handleDecodedResult,
         {
           onDecodeError: () => {
             setScannerStatus('Scanning... keep QR centered and well-lit.');
           },
           maxScansPerSecond: 2,
-          preferredCamera: 'environment',
+          preferredCamera,
           workerPath: '/qr-scanner-worker.min.js',
         }
       );
 
+      try {
+        // Race: abort if camera takes > 10s to initialise (e.g. pending permission dialog)
+        await Promise.race([
+          qrScanner.start(),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Camera initialisation timed out (10s). Check camera permissions.')), 10000)
+          ),
+        ]);
+      } catch {
+        if (typeof qrScanner.destroy === 'function') qrScanner.destroy();
+        qrScanner = new QrScanner(
+          videoRef.current,
+          handleDecodedResult,
+          {
+            onDecodeError: () => {
+              setScannerStatus('Scanning... keep QR centered and well-lit.');
+            },
+            maxScansPerSecond: 2,
+            preferredCamera,
+          },
+        );
+        await Promise.race([
+          qrScanner.start(),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Camera initialisation timed out (10s). Check camera permissions.')), 10000)
+          ),
+        ]);
+      }
+
       scannerStreamRef.current = qrScanner;
-      // Race: abort if camera takes > 10s to initialise (e.g. pending permission dialog)
-      await Promise.race([
-        qrScanner.start(),
-        new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Camera initialisation timed out (10s). Check camera permissions.')), 10000)
-        ),
-      ]);
 
       // Guard: scanner may have been stopped while start() was awaiting (e.g. tab change)
       if (!scannerStreamRef.current) return;
@@ -642,7 +757,6 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
             seat_type: onsiteForm.seat_type,
             origin_stop_id: Number(onsiteForm.origin_stop_id),
             destination_stop_id: Number(onsiteForm.destination_stop_id),
-            passenger_id: onsiteForm.passenger_id ? Number(onsiteForm.passenger_id) : null,
           },
         ],
       });
@@ -659,7 +773,6 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
         origin_stop_id: '',
         destination_stop_id: '',
         seat_type: 'seated',
-        passenger_id: '',
       });
       void loadPassengers();
       void loadOccupancy();
@@ -690,15 +803,43 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   const occSeatedCap = Number(occupancy?.capacity?.seated ?? occupancy?.seated_capacity ?? 0);
   const occStandingCap = Number(occupancy?.capacity?.standing ?? occupancy?.standing_capacity ?? 0);
   const occTotalCap = Number(occupancy?.capacity?.total ?? occupancy?.total_capacity ?? 0);
+  const occupiedTotal = Math.max(0, occSeated + occStanding);
+  const fleetType = String(trip?.fleet_route?.fleet?.fleet_type || '').toLowerCase();
+  const seatsPerRow = fleetType.includes('mini') ? 3 : 4;
+  const seatedCapacity = occSeatedCap > 0
+    ? occSeatedCap
+    : Math.max(Math.round((occTotalCap || occupiedTotal || 24) * 0.7), 16);
+  const standingCapacity = occStandingCap > 0
+    ? occStandingCap
+    : Math.max((occTotalCap || occupiedTotal || 24) - seatedCapacity, 4);
+  const seatedRows = Math.ceil(seatedCapacity / seatsPerRow);
+
+  const buildRowSeats = (rowIndex) => {
+    const base = rowIndex * seatsPerRow;
+    const seats = Array.from({ length: seatsPerRow }).map((_, seatOffset) => {
+      const seatNumber = base + seatOffset + 1;
+      if (seatNumber > seatedCapacity) return null;
+      const occupied = seatNumber <= Math.min(occSeated, seatedCapacity);
+      return {
+        id: `seat-${seatNumber}`,
+        label: seatNumber,
+        occupied,
+      };
+    });
+
+    if (seatsPerRow === 4) {
+      return [seats[0], seats[1], 'aisle', seats[2], seats[3]];
+    }
+
+    return [seats[0], 'aisle', seats[1], seats[2]];
+  };
 
   const pageTitle =
     activeTab === 'trip'
       ? 'Start Shift'
       : activeTab === 'occupancy'
         ? 'Ticketing'
-        : activeTab === 'scan'
-          ? 'Scan Ticket'
-          : activeTab === 'passengers'
+        : activeTab === 'passengers'
             ? 'Passengers'
             : activeTab === 'earnings'
               ? 'End of Shift'
@@ -895,10 +1036,16 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
             {/* Start shift button */}
             <div className="mt-6 text-center">
               <button
-                className="inline-flex items-center gap-2 rounded-lg bg-teal-500 px-8 py-3 text-sm font-bold text-white transition hover:bg-teal-600"
-                onClick={() => setActiveTab('occupancy')}
+                className="inline-flex items-center gap-2 rounded-lg bg-teal-500 px-8 py-3 text-sm font-bold text-white transition hover:bg-teal-600 disabled:cursor-not-allowed disabled:opacity-60"
+                onClick={() => {
+                  if (trip?.trip_id) {
+                    setStartedShiftTripId(Number(trip.trip_id));
+                  }
+                  setActiveTab('occupancy');
+                }}
+                disabled={shiftStarted}
               >
-                CONFIRM &amp; START SHIFT
+                {shiftStarted ? 'SHIFT STARTED' : 'CONFIRM & START SHIFT'}
                 <Play className="h-4 w-4" />
               </button>
               <p className="mt-3 text-xs text-slate-400">This will take you to the Ticketing screen</p>
@@ -939,23 +1086,24 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
         )}
 
         {!loading && activeTab === 'occupancy' && isPaired && !showNoCurrentTripState && (
-          <section className="max-w-4xl">
+          <section className="max-w-5xl">
             {/* Bus + Passenger Load Header */}
             {occupancy && (
-              <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                <div className="flex items-center gap-3">
-                  <Bus className="h-5 w-5 text-teal-600" />
-                  <span className="font-bold text-slate-900">{trip?.fleet_route?.fleet?.plate_number ?? 'Bus 001'}</span>
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3">
+                <div>
+                  <p className="text-2xl font-bold text-slate-900">
+                    {trip?.fleet_route?.fleet?.plate_number ?? 'Bus 001'} - {trip?.fleet_route?.route?.route_name || `${trip?.fleet_route?.route?.origin || 'Route'} - ${trip?.fleet_route?.route?.destination || 'Pending'}`}
+                  </p>
                 </div>
                 <div className="flex flex-1 items-center gap-3">
-                  <span className="shrink-0 text-xs text-slate-500">Passenger load</span>
+                  <span className="shrink-0 text-xs text-slate-500">Passenger Load</span>
                   <div className="flex-1 overflow-hidden rounded-full bg-slate-100 h-2.5">
                     <div
-                      className="h-full rounded-full bg-teal-500 transition-all"
-                      style={{ width: `${occTotalCap > 0 ? Math.round(((occSeated + occStanding) / occTotalCap) * 100) : 0}%` }}
+                      className="h-full rounded-full bg-slate-500 transition-all"
+                      style={{ width: `${occTotalCap > 0 ? Math.round((occupiedTotal / occTotalCap) * 100) : 0}%` }}
                     />
                   </div>
-                  <span className="shrink-0 font-data text-xs font-semibold text-slate-700">{occSeated + occStanding}/{occTotalCap}</span>
+                  <span className="shrink-0 font-data text-xs font-semibold text-slate-700">{occupiedTotal} / {occTotalCap} seats</span>
                 </div>
               </div>
             )}
@@ -964,272 +1112,302 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                 <h3 className="text-lg font-bold text-slate-900">No Occupancy Data</h3>
               </article>
             ) : (
-              <article className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
-                <div className="mb-3 flex items-center justify-between">
-                  <h3 className="text-lg font-semibold text-slate-100">Live Occupancy</h3>
-                  <span className="font-data rounded-full border border-slate-700 bg-slate-950 px-3 py-1 text-xs text-slate-300">{capPct}% Full</span>
-                </div>
-                <div className="h-2.5 overflow-hidden rounded-full bg-slate-800">
-                  <div
-                    className="h-full rounded-full"
-                    style={{ width: `${capPct}%`, backgroundColor: capPct > 90 ? '#ef4444' : capPct > 70 ? '#f59e0b' : '#22c55e' }}
-                  />
-                </div>
-                <div className="mt-4 space-y-3 text-sm">
-                  <div className="flex items-center justify-between"><span className="text-slate-500">Seated</span><strong className="font-data text-slate-100">{occSeated} / {occSeatedCap}</strong></div>
-                  <div className="flex items-center justify-between"><span className="text-slate-500">Standing</span><strong className="font-data text-slate-100">{occStanding} / {occStandingCap}</strong></div>
-                  <div className="flex items-center justify-between"><span className="text-slate-500">Total Capacity</span><strong className="font-data text-slate-100">{occTotalCap}</strong></div>
-                </div>
-                <button
-                  className="mt-4 inline-flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-xs font-semibold text-slate-300 transition hover:border-slate-500"
-                  onClick={loadOccupancy}
-                >
-                  <RefreshCw className="h-3.5 w-3.5" />
-                  Refresh
-                </button>
-              </article>
-            )}
-          </section>
-        )}
-
-        {!loading && activeTab === 'scan' && !isPaired && (
-          <section className="rounded-xl border border-amber-200 bg-amber-50 p-6">
-            <h3 className="text-lg font-bold text-amber-800">Ticket scanning is locked</h3>
-            <p className="mt-2 text-sm text-amber-700">{pairingReason}</p>
-          </section>
-        )}
-
-        {!loading && activeTab === 'scan' && isPaired && (
-          <section className="grid gap-4 lg:grid-cols-2">
-            <article className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-              <div className="mb-4 flex items-center justify-between">
-                <div>
-                  <h3 className="text-base font-bold text-slate-900">Digital Form / QR Scanner</h3>
-                  <p className="mt-0.5 text-xs text-slate-500">Scan the QR code below the scanner. Scanned tickets will appear on the right.</p>
-                </div>
-                <button
-                  type="button"
-                  className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100"
-                  onClick={stopScanner}
-                >
-                  Reset
-                </button>
-              </div>
-
-              <div className="rounded-xl border-2 border-dashed border-slate-200 bg-slate-50">
-                <div className="mb-3 flex flex-wrap items-center gap-2 p-3 pb-0">
-                  {!scannerRunning ? (
-                    <button
-                      type="button"
-                      className="flex items-center gap-2 rounded-lg bg-teal-500 px-3 py-2 text-xs font-semibold text-white transition hover:bg-teal-600"
-                      onClick={() => void startScanner()}
-                    >
-                      <Camera className="h-4 w-4" />
-                      Start Camera Scanner
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      className="flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 transition hover:bg-amber-100"
-                      onClick={stopScanner}
-                    >
-                      <Camera className="h-4 w-4" />
-                      Stop Camera
-                    </button>
-                  )}
-
-                  <span className="text-xs text-slate-400">
-                    {scannerRunning ? 'Live scanner is active' : 'Scanner is idle'}
-                  </span>
-                </div>
-
-                <div className="relative overflow-hidden rounded-lg border border-slate-800 bg-slate-950">
-                  <video
-                    ref={videoRef}
-                    className="aspect-video w-full bg-slate-950 object-cover"
-                    muted
-                    playsInline
-                    autoPlay
-                  />
-                  {scannerBusy && (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-slate-950/80 backdrop-blur-sm">
-                      <div className="h-8 w-8 animate-spin rounded-full border-4 border-slate-700 border-t-sky-400" />
-                      <p className="text-xs font-semibold text-sky-300">Validating…</p>
+              <div className="grid gap-4 lg:grid-cols-[1.1fr_1fr]">
+                <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <h3 className="mb-3 text-2xl font-bold text-slate-900">SEAT LAYOUT</h3>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                    <div className="mb-3 inline-flex items-center gap-2 rounded-lg bg-slate-700 px-3 py-2 text-sm font-semibold text-white">
+                      <Users className="h-3.5 w-3.5" /> Driver
                     </div>
-                  )}
-                </div>
+                    <div className="max-h-115 overflow-y-auto pr-1">
+                      <div className="space-y-2">
+                        {Array.from({ length: seatedRows }).map((_, rowIndex) => (
+                          <div key={`row-${rowIndex}`} className="grid grid-cols-5 gap-2">
+                            {buildRowSeats(rowIndex).map((seatCell, cellIndex) => {
+                              if (seatCell === 'aisle') {
+                                return <div key={`aisle-${rowIndex}-${cellIndex}`} className="h-10 border-b border-dashed border-slate-300" />;
+                              }
 
-                {scannerStatus && <p className="mt-2 text-xs text-slate-400">{scannerStatus}</p>}
-                {scannerError && <p className="mt-2 text-xs text-red-300">{scannerError}</p>}
-              </div>
+                              if (!seatCell) {
+                                return <div key={`empty-${rowIndex}-${cellIndex}`} className="h-10" />;
+                              }
 
-              <div className="mt-4 flex gap-2">
-                <input
-                  type="text"
-                  placeholder="ticket-uuid-here"
-                  value={scanUuid}
-                  onChange={(e) => {
-                    setScanUuid(e.target.value);
-                    setScanResult(null);
-                    setGroupScanResult(null);
-                  }}
-                  className="font-data h-11 w-full rounded-xl border border-slate-800 bg-slate-950 px-3 text-sm text-slate-100 outline-none placeholder:text-slate-500 focus:border-sky-400"
-                />
-                <button
-                  className="inline-flex items-center gap-2 rounded-xl bg-sky-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-50"
-                  onClick={handleScan}
-                  disabled={scannerBusy}
-                >
-                  {scannerBusy
-                    ? <><div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-950/30 border-t-slate-950" />Validating…</>
-                    : <><QrCode className="h-4 w-4" />Scan</>}
-                </button>
-              </div>
+                              return (
+                                <div
+                                  key={seatCell.id}
+                                  className={`flex h-10 items-center justify-center rounded-lg text-xs font-semibold ${seatCell.occupied ? 'bg-slate-300 text-slate-700' : 'bg-emerald-500 text-white'}`}
+                                >
+                                  <Users className="h-3.5 w-3.5" />
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ))}
+                      </div>
 
-              {/* Single-ticket result */}
-              {scanResult && (
-                <div
-                  className={`mt-4 rounded-xl border px-4 py-3 text-sm ${
-                    scanResult.success
-                      ? 'border-emerald-900 bg-emerald-950/40 text-emerald-300'
-                      : 'border-red-900 bg-red-950/40 text-red-300'
-                  }`}
-                >
-                  <div className="flex items-start gap-2">
-                    {scanResult.success ? <CheckCircle2 className="mt-0.5 h-4 w-4" /> : <XCircle className="mt-0.5 h-4 w-4" />}
+                      <div className="mt-4 rounded-xl border border-slate-200 bg-white p-3">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Standing Capacity</p>
+                        <div className="mt-2 grid grid-cols-8 gap-1.5">
+                          {Array.from({ length: Math.min(standingCapacity, 24) }).map((_, index) => {
+                            const standingOccupied = index < Math.min(occStanding, standingCapacity);
+                            return (
+                              <div
+                                key={`standing-${index}`}
+                                className={`h-4 rounded-full ${standingOccupied ? 'bg-slate-400' : 'bg-emerald-400'}`}
+                                title={standingOccupied ? 'Standing occupied' : 'Standing available'}
+                              />
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="mt-3 flex flex-wrap items-center gap-4 text-xs text-slate-600">
+                      <span className="inline-flex items-center gap-2"><span className="h-3 w-3 rounded-full bg-slate-400" />Occupied</span>
+                      <span className="inline-flex items-center gap-2"><span className="h-3 w-3 rounded-full bg-emerald-500" />Available</span>
+                    </div>
+                  </div>
+                </article>
+
+                <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <h3 className="mb-4 text-2xl font-bold text-slate-900">Manual Cash Ticket</h3>
+
+                  <div className="space-y-3">
                     <div>
-                      <p className="font-semibold">{scanResult.msg}</p>
-                      {scanResult.success && scanResult.data && (
-                        <div className="mt-2 space-y-1 text-xs text-slate-300">
-                          <div>Destination: {scanResult.data.destination || 'N/A'}</div>
-                          <div>Seat Type: {scanResult.data.seat_type}</div>
-                          <div className="font-data">Amount: PHP {scanResult.data.amount}</div>
-                        </div>
+                      <label className="mb-1 block text-sm font-semibold text-slate-700">Select Origin</label>
+                      <select
+                        value={onsiteForm.origin_stop_id}
+                        onChange={(e) => setOnsiteForm((prev) => ({ ...prev, origin_stop_id: e.target.value }))}
+                        className="h-11 w-full rounded-lg border border-slate-300 bg-slate-800 px-3 text-sm text-white outline-none focus:border-teal-500"
+                      >
+                        <option value="">Select origin stop</option>
+                        {routeStops.map((stop) => (
+                          <option key={`onsite-origin-${stop.stop_id}`} value={stop.stop_id}>
+                            {stop?.stop?.stop_name || stop?.stop_name || `Stop ${stop.stop_id}`}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="mb-1 block text-sm font-semibold text-slate-700">Select Destination</label>
+                      <select
+                        value={onsiteForm.destination_stop_id}
+                        onChange={(e) => setOnsiteForm((prev) => ({ ...prev, destination_stop_id: e.target.value }))}
+                        className="h-11 w-full rounded-lg border border-slate-300 bg-slate-800 px-3 text-sm text-white outline-none focus:border-teal-500"
+                      >
+                        <option value="">Select destination stop</option>
+                        {routeStops.map((stop) => (
+                          <option key={`onsite-destination-${stop.stop_id}`} value={stop.stop_id}>
+                            {stop?.stop?.stop_name || stop?.stop_name || `Stop ${stop.stop_id}`}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="mb-1 block text-sm font-semibold text-slate-700">Passenger Type</label>
+                      <select
+                        value={onsiteForm.seat_type}
+                        onChange={(e) => setOnsiteForm((prev) => ({ ...prev, seat_type: e.target.value }))}
+                        className="h-11 w-full rounded-lg border border-slate-300 bg-slate-800 px-3 text-sm text-white outline-none focus:border-teal-500"
+                      >
+                        <option value="seated">Regular</option>
+                        <option value="standing">Standing</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="mb-1 block text-sm font-semibold text-slate-700">Fare Amount (PHP)</label>
+                      <input
+                        type="text"
+                        readOnly
+                        value={onsiteForm.origin_stop_id && onsiteForm.destination_stop_id ? 'Auto-computed on Generate Ticket' : 'Select origin and destination first'}
+                        className="h-11 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 text-sm text-slate-700 outline-none"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        className="rounded-lg bg-cyan-700 px-3 py-2 text-sm font-semibold text-white transition hover:bg-cyan-800 disabled:cursor-not-allowed disabled:opacity-60"
+                        onClick={handleOnsiteCheckout}
+                        disabled={checkoutInFlight || !hasActiveTrip || !isPaired}
+                      >
+                        {checkoutInFlight ? 'Processing...' : 'Generate Ticket'}
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                        onClick={() => setShowScannerModal(true)}
+                      >
+                        Scan Ticket
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
+                        onClick={loadOccupancy}
+                      >
+                        Refresh Load
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                        onClick={() => {
+                          const didPrint = printOnsiteReceipt({ receipt: onsiteReceipt, routeStops });
+                          if (!didPrint) {
+                            setActionMsg('No onsite checkout receipt available to print yet.');
+                          }
+                        }}
+                        disabled={!onsiteReceipt || !onsiteReceipt?.tickets?.length}
+                      >
+                        Print Last Ticket
+                      </button>
+                    </div>
+
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                      <p>Total capacity: {occTotalCap} seats</p>
+                      <p>Seated: {occSeated} / {occSeatedCap}</p>
+                      <p>Standing: {occStanding} / {occStandingCap}</p>
+                      {onsiteReceipt?.payment?.transaction_reference && (
+                        <p className="mt-1 text-slate-700">Last receipt: {onsiteReceipt.payment.transaction_reference}</p>
                       )}
                     </div>
                   </div>
-                </div>
-              )}
-
-              {/* Group-ticket result */}
-              {groupScanResult && (
-                <div
-                  className={`mt-4 rounded-xl border px-4 py-3 text-sm ${
-                    groupScanResult.success
-                      ? 'border-emerald-900 bg-emerald-950/40 text-emerald-300'
-                      : 'border-red-900 bg-red-950/40 text-red-300'
-                  }`}
-                >
-                  <div className="flex items-start gap-2">
-                    {groupScanResult.success ? <CheckCircle2 className="mt-0.5 h-4 w-4" /> : <XCircle className="mt-0.5 h-4 w-4" />}
-                    <div className="w-full">
-                      <p className="font-semibold">{groupScanResult.msg}</p>
-                      {groupScanResult.success && groupScanResult.data?.tickets?.length > 0 && (
-                        <div className="mt-2 space-y-1">
-                          {groupScanResult.data.tickets.map((t, i) => (
-                            <div
-                              key={t.ticket_uuid || i}
-                              className={`flex items-center justify-between rounded-lg px-3 py-1.5 text-xs ${
-                                t.skipped
-                                  ? 'bg-slate-800/50 text-slate-400'
-                                  : 'bg-emerald-900/30 text-emerald-300'
-                              }`}
-                            >
-                              <span>{t.passenger_name} → {t.destination || 'N/A'} ({t.seat_type})</span>
-                              <span className="font-semibold">
-                                {t.skipped ? t.skip_reason : 'Boarded'}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
-            </article>
-
-            <article className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
-              <h3 className="text-lg font-semibold text-slate-100">Onsite Checkout (Cash)</h3>
-              <p className="mt-2 text-sm text-slate-500">Record an onboard payment for passengers who pay in cash.</p>
-
-              <div className="mt-4 space-y-3">
-                <div className="grid grid-cols-2 gap-2">
-                  <select
-                    value={onsiteForm.origin_stop_id}
-                    onChange={(e) => setOnsiteForm((prev) => ({ ...prev, origin_stop_id: e.target.value }))}
-                    className="rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none focus:border-sky-400"
-                  >
-                    <option value="">Select origin stop</option>
-                    {routeStops.map((stop) => (
-                      <option key={`onsite-origin-${stop.stop_id}`} value={stop.stop_id}>
-                        {stop?.stop?.stop_name || stop?.stop_name || `Stop ${stop.stop_id}`}
-                      </option>
-                    ))}
-                  </select>
-                  <select
-                    value={onsiteForm.destination_stop_id}
-                    onChange={(e) => setOnsiteForm((prev) => ({ ...prev, destination_stop_id: e.target.value }))}
-                    className="rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none focus:border-sky-400"
-                  >
-                    <option value="">Select destination stop</option>
-                    {routeStops.map((stop) => (
-                      <option key={`onsite-destination-${stop.stop_id}`} value={stop.stop_id}>
-                        {stop?.stop?.stop_name || stop?.stop_name || `Stop ${stop.stop_id}`}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <select
-                    value={onsiteForm.seat_type}
-                    onChange={(e) => setOnsiteForm((prev) => ({ ...prev, seat_type: e.target.value }))}
-                    className="rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none focus:border-sky-400"
-                  >
-                    <option value="seated">Seated</option>
-                    <option value="standing">Standing</option>
-                  </select>
-                  <input
-                    type="number"
-                    min="1"
-                    placeholder="Passenger ID (optional)"
-                    value={onsiteForm.passenger_id}
-                    onChange={(e) => setOnsiteForm((prev) => ({ ...prev, passenger_id: e.target.value }))}
-                    className="rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none placeholder:text-slate-500 focus:border-sky-400"
-                  />
-                </div>
-
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-2 rounded-xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400 disabled:opacity-60"
-                  onClick={handleOnsiteCheckout}
-                  disabled={checkoutInFlight || !hasActiveTrip || !isPaired}
-                >
-                  {checkoutInFlight ? 'Processing…' : 'Record Cash Checkout'}
-                </button>
-
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-950 px-4 py-2 text-sm font-semibold text-slate-300 transition hover:border-slate-500 disabled:cursor-not-allowed disabled:opacity-60"
-                  onClick={() => {
-                    const didPrint = printOnsiteReceipt({ receipt: onsiteReceipt, routeStops });
-                    if (!didPrint) {
-                      setActionMsg('No onsite checkout receipt available to print yet.');
-                    }
-                  }}
-                  disabled={!onsiteReceipt || !onsiteReceipt?.tickets?.length}
-                >
-                  Print Last Onsite Ticket
-                </button>
-
-                {onsiteReceipt?.payment?.transaction_reference && (
-                  <p className="text-xs text-slate-400">
-                    Last receipt: {onsiteReceipt.payment.transaction_reference} ({onsiteReceipt.tickets?.length || 0} ticket/s)
-                  </p>
-                )}
+                </article>
               </div>
-            </article>
+            )}
+
+            {showScannerModal && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setShowScannerModal(false)}>
+                <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                  <div className="mb-4 flex items-center justify-between">
+                    <div>
+                      <h3 className="text-base font-bold text-slate-900">Scan Ticket</h3>
+                      <p className="text-xs text-slate-500">Use camera scanner or paste the ticket UUID manually.</p>
+                    </div>
+                    <button
+                      type="button"
+                      className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100"
+                      onClick={() => {
+                        stopScanner();
+                        setShowScannerModal(false);
+                      }}
+                    >
+                      Close
+                    </button>
+                  </div>
+
+                  <div className="rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 p-3">
+                    <div className="mb-3 flex flex-wrap items-center gap-2">
+                      {!scannerRunning ? (
+                        <button
+                          type="button"
+                          className="flex items-center gap-2 rounded-lg bg-teal-500 px-3 py-2 text-xs font-semibold text-white transition hover:bg-teal-600"
+                          onClick={() => void startScanner()}
+                        >
+                          <Camera className="h-4 w-4" />
+                          Start Camera Scanner
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 transition hover:bg-amber-100"
+                          onClick={stopScanner}
+                        >
+                          <Camera className="h-4 w-4" />
+                          Stop Camera
+                        </button>
+                      )}
+
+                      <span className="text-xs text-slate-500">
+                        {scannerRunning ? 'Live scanner is active' : 'Scanner is idle'}
+                      </span>
+                    </div>
+
+                    <div className="relative overflow-hidden rounded-lg border border-slate-800 bg-slate-950">
+                      <video
+                        ref={videoRef}
+                        className="aspect-video w-full bg-slate-950 object-cover"
+                        muted
+                        playsInline
+                        autoPlay
+                      />
+                      {scannerBusy && (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-slate-950/80 backdrop-blur-sm">
+                          <div className="h-8 w-8 animate-spin rounded-full border-4 border-slate-700 border-t-sky-400" />
+                          <p className="text-xs font-semibold text-sky-300">Validating...</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {scannerStatus && <p className="mt-2 text-xs text-slate-500">{scannerStatus}</p>}
+                    {scannerError && <p className="mt-2 text-xs text-red-600">{scannerError}</p>}
+                    <div className="mt-2 inline-flex rounded-full border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-600">
+                      {scannerPhase === 'idle' && 'Scanner idle'}
+                      {scannerPhase === 'captured' && 'QR captured'}
+                      {scannerPhase === 'validating' && 'Validating'}
+                      {scannerPhase === 'success' && 'Boarded'}
+                      {scannerPhase === 'failed' && 'Validation failed'}
+                    </div>
+                  </div>
+
+                  <div className="mt-4 flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="ticket-uuid-here"
+                      value={scanUuid}
+                      onChange={(e) => {
+                        setScanUuid(e.target.value);
+                        setScanResult(null);
+                        setGroupScanResult(null);
+                      }}
+                      className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-teal-500"
+                    />
+                    <button
+                      className="inline-flex items-center gap-2 rounded-xl bg-sky-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-50"
+                      onClick={handleScan}
+                      disabled={scannerBusy}
+                    >
+                      {scannerBusy
+                        ? <><div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-950/30 border-t-slate-950" />Validating...</>
+                        : <><QrCode className="h-4 w-4" />Scan</>}
+                    </button>
+                  </div>
+
+                  {scanResult && (
+                    <div
+                      className={`mt-4 rounded-xl border px-4 py-3 text-sm ${
+                        scanResult.success
+                          ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                          : 'border-red-200 bg-red-50 text-red-700'
+                      }`}
+                    >
+                      <p className="font-semibold">{scanResult.msg}</p>
+                    </div>
+                  )}
+
+                  {groupScanResult && (
+                    <div
+                      className={`mt-4 rounded-xl border px-4 py-3 text-sm ${
+                        groupScanResult.success
+                          ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                          : 'border-red-200 bg-red-50 text-red-700'
+                      }`}
+                    >
+                      <p className="font-semibold">{groupScanResult.msg || 'Group scan processed.'}</p>
+                      {groupScanResult.success && (
+                        <p className="mt-1 text-xs">
+                          Boarded {groupScanResult?.data?.boarded_count ?? 0} of {groupScanResult?.data?.total_tickets ?? 0} ticket(s).
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </section>
         )}
 
@@ -1462,16 +1640,16 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
               <div className="space-y-3">
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-slate-400">Two-Factor Authentication</span>
-                  <button
-                    onClick={() => handleTwoFactorToggle()}
-                    className={`rounded-lg px-3 py-1 text-xs font-semibold transition ${
-                      twoFactorEnabled
-                        ? 'bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30'
-                        : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-                    }`}
-                  >
-                    {twoFactorEnabled ? 'Enabled' : 'Disabled'}
-                  </button>
+                  <label className="relative inline-flex cursor-pointer items-center">
+                    <input
+                      type="checkbox"
+                      className="sr-only peer"
+                      checked={twoFactorEnabled}
+                      onChange={handleTwoFactorToggle}
+                      disabled={saving2fa}
+                    />
+                    <div className="h-6 w-11 rounded-full bg-slate-600 transition-colors peer-checked:bg-emerald-500 after:absolute after:left-0.5 after:top-0.5 after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-transform peer-checked:after:translate-x-5" />
+                  </label>
                 </div>
                 {actionMsg && (
                   <p className={`text-xs ${actionMsg.includes('enabled') ? 'text-emerald-400' : 'text-sky-400'}`}>

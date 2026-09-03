@@ -61,7 +61,7 @@ export default function LandingHero({ onSearch, searchState }) {
         <div className="mx-auto max-w-7xl">
           <div className="rounded-2xl bg-teal-500 p-6 shadow-xl">
             <h2 className="text-lg font-bold text-white">Book a Seat</h2>
-            <p className="mt-0.5 text-sm text-teal-100">Sign in required to complete booking</p>
+            <p className="mt-0.5 text-sm text-teal-100">Guest checkout is supported. Sign in for rewards and history.</p>
 
             <form onSubmit={handleSubmit} className="mt-4">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-end">

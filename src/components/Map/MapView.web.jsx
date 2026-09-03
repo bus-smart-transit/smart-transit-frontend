@@ -5,6 +5,7 @@ import { loadMapLib } from './mapDependencies';
 import PassengerService from '../../api/PassengerService/PassengerService';
 import { haversineM, lerp, lerpAngle } from '../../utils/geo';
 import { Navigation } from 'lucide-react';
+import { fetchTrafficStatus } from '../../services/trafficService';
 
 export default function MapView({ role = "passenger", trackedFleetId = null }) {
   const mapContainer = useRef(null);
@@ -34,6 +35,13 @@ export default function MapView({ role = "passenger", trackedFleetId = null }) {
   const [isCalculating, setIsCalculating] = useState(false);
   const [fleetLocations, setFleetLocations] = useState([]);
   const [nearestFleet, setNearestFleet] = useState(null);
+  const [nearestFleetEta, setNearestFleetEta] = useState({
+    level: 'idle',
+    label: 'No active bus selected',
+    etaMinutes: null,
+    delayMinutes: 0,
+    suggestion: 'Pin your location and find the nearest active bus to view ETA.',
+  });
   const [selectedFleetId, setSelectedFleetId] = useState(null);
   const [showSidebar, setShowSidebar] = useState(false);
   const [isTracking, setIsTracking] = useState(false);
@@ -415,6 +423,39 @@ export default function MapView({ role = "passenger", trackedFleetId = null }) {
     );
   };
 
+  useEffect(() => {
+    if (!currentCoords || !nearestFleet) {
+      setNearestFleetEta({
+        level: 'idle',
+        label: 'No active bus selected',
+        etaMinutes: null,
+        delayMinutes: 0,
+        suggestion: 'Pin your location and find the nearest active bus to view ETA.',
+      });
+      return;
+    }
+
+    let cancelled = false;
+    void (async () => {
+      const nextStatus = await fetchTrafficStatus({
+        currentLat: currentCoords.lat,
+        currentLng: currentCoords.lng,
+        nextStop: {
+          latitude: nearestFleet.latitude,
+          longitude: nearestFleet.longitude,
+        },
+      });
+
+      if (!cancelled) {
+        setNearestFleetEta(nextStatus);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentCoords, nearestFleet]);
+
   const findNearestFleet = async () => {
     const maplibregl = mapLibRef.current;
     if (!currentCoords || !map.current || !maplibregl) {
@@ -456,6 +497,13 @@ export default function MapView({ role = "passenger", trackedFleetId = null }) {
         );
         map.current.fitBounds(bounds, { padding: 80, maxZoom: 14 });
       } else {
+        setNearestFleetEta({
+          level: 'idle',
+          label: 'No active bus found',
+          etaMinutes: null,
+          delayMinutes: 0,
+          suggestion: 'No active trip is near your location right now.',
+        });
         alert('No active bus found within 25 km of your location. Check back when a trip is live.');
       }
     } catch {
@@ -648,7 +696,7 @@ export default function MapView({ role = "passenger", trackedFleetId = null }) {
         )}
 
         {role === 'passenger' && (
-          <div className="mt-3 rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-slate-400">
+          <div className="mt-3 space-y-2 rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-slate-400">
             <div className="flex items-center justify-between">
               <p>Live fleets tracked: <strong className="text-slate-200">{fleetLocations.length}</strong></p>
               <button
@@ -663,6 +711,11 @@ export default function MapView({ role = "passenger", trackedFleetId = null }) {
               Nearest: <strong className="text-slate-200">{nearestFleet?.plate_number || nearestFleet?.fleet_id || 'Not selected'}</strong>
               {nearestFleet?.distance_meters ? ` (${Number(nearestFleet.distance_meters).toFixed(0)} m)` : ''}
             </p>
+            <div className={`rounded-lg border px-2.5 py-2 ${nearestFleetEta.level === 'heavy' ? 'border-amber-500/50 bg-amber-500/10 text-amber-200' : nearestFleetEta.level === 'moderate' ? 'border-sky-500/50 bg-sky-500/10 text-sky-200' : nearestFleetEta.level === 'idle' ? 'border-slate-500/50 bg-slate-500/10 text-slate-200' : 'border-emerald-500/50 bg-emerald-500/10 text-emerald-200'}`}>
+              <p className="text-[10px] uppercase tracking-[0.16em] text-current/80">ETA to nearest bus</p>
+              <p className="mt-1 text-sm font-semibold text-white">{nearestFleetEta.etaMinutes == null ? 'Unavailable' : `${nearestFleetEta.etaMinutes} min`} • {nearestFleetEta.label}</p>
+              <p className="mt-1 text-[11px] text-current/90">{nearestFleetEta.suggestion}</p>
+            </div>
           </div>
         )}
       </aside>

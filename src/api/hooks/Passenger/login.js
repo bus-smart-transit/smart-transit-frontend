@@ -1,18 +1,31 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import PassengerService from "../../../api/PassengerService/PassengerService";
 import { useAuth } from "../../../api/hooks/useAuth"; // adjust path
 
 export function useLogin() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { login } = useAuth();
 
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
+  const [goToDashboardAfterLogin, setGoToDashboardAfterLogin] = useState(false);
   const [form, setForm] = useState({ email: "", password: "" });
   const [errors, setErrors] = useState({});
+
+  const resolvePostLoginPath = () => {
+    const state = location?.state ?? {};
+    if (state?.redirectToBuy) {
+      const tripId = state?.tripId;
+      return tripId
+        ? `/passenger/book?trip_id=${encodeURIComponent(String(tripId))}`
+        : '/passenger/book';
+    }
+    return goToDashboardAfterLogin ? '/passenger/dashboard' : '/';
+  };
 
   // OTP stage
   const [otpRequired, setOtpRequired] = useState(false);
@@ -64,7 +77,7 @@ export function useLogin() {
         const token = data?.token;
         if (!token) throw new Error("Authentication token missing from server response.");
         login(token, rememberMe);
-        navigate("/passenger/dashboard");
+        navigate(resolvePostLoginPath(), { replace: true });
       }
     } catch (err) {
       setError(err?.message || "Invalid email or password. Please try again.");
@@ -89,7 +102,7 @@ export function useLogin() {
       const token = response?.data?.token;
       if (!token) throw new Error("Token missing after OTP verification.");
       login(token, rememberMe);
-      navigate("/passenger/dashboard");
+      navigate(resolvePostLoginPath(), { replace: true });
     } catch (err) {
       setOtpError(err?.message || "Incorrect or expired code. Please try again.");
     } finally {
@@ -128,6 +141,8 @@ export function useLogin() {
     setShowPassword,
     rememberMe,
     setRememberMe,
+    goToDashboardAfterLogin,
+    setGoToDashboardAfterLogin,
     update,
     handleSubmit,
     // OTP

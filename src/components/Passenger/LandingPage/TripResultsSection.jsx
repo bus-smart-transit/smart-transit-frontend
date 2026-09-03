@@ -28,6 +28,8 @@ function TripCard({ trip, index, onBookSeat }) {
   const seatedLeft = trip.available_seated_capacity ?? trip.remaining_seated_capacity ?? 10;
   const standingLeft = trip.available_standing_capacity ?? trip.remaining_standing_capacity ?? 0;
   const totalLeft = seatedLeft + standingLeft;
+  const listedFare = Number(trip.fare ?? trip.base_fare ?? trip.fleet_route?.base_fare ?? NaN);
+  const hasListedFare = Number.isFinite(listedFare) && listedFare > 0;
 
   return (
     <div className="flex items-start gap-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-teal-200 hover:shadow-md">
@@ -61,9 +63,9 @@ function TripCard({ trip, index, onBookSeat }) {
       <div className="flex shrink-0 flex-col items-end gap-2">
         <div className="text-right">
           <p className="text-lg font-bold text-slate-900">
-            ₱{Number(trip.fare ?? trip.base_fare ?? trip.fleet_route?.base_fare ?? 50).toFixed(0)}
+            {hasListedFare ? `₱${listedFare.toFixed(0)}` : 'Dynamic Fare'}
           </p>
-          <p className="text-xs text-slate-400">per passenger</p>
+          <p className="text-xs text-slate-400">{hasListedFare ? 'per passenger' : 'quoted at checkout'}</p>
         </div>
         <div className="flex gap-2">
           <button
@@ -120,7 +122,7 @@ export default function TripResultsSection({ trips, loading, error, searchState,
           {!loading && displayTrips.length > 0 && (
             <button
               type="button"
-              onClick={() => navigate('/passenger/login', { state: { redirectToBuy: true } })}
+              onClick={() => navigate('/passenger/book')}
               className="rounded-lg bg-[#0D1B2A] px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700"
             >
               View All Trips

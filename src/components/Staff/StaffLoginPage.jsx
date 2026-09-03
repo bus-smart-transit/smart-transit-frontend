@@ -338,7 +338,7 @@ export default function StaffLoginPage() {
                     <input type="checkbox" className="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500" />
                     Remember me
                   </label>
-                  <a href="#" className="text-teal-600 hover:text-teal-700 font-medium">Forgot password?</a>
+                  <Link to="/employee/forgot-password" className="text-teal-600 hover:text-teal-700 font-medium">Forgot password?</Link>
                 </div>
 
                 {/* Test credentials hint */}

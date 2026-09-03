@@ -24,8 +24,20 @@ class StaffService extends BaseService {
     });
   }
 
-  async setTwoFactorPreference(enabled) {
-    return await this.request('/staff/2fa-preference', 'PATCH', { enabled });
+  async setTwoFactorPreference(enabled, role = null) {
+    const payload = { enabled };
+    const normalizedRole = typeof role === 'string' ? role.trim().toLowerCase() : '';
+    const hasRoleEndpoint = ['operator', 'driver', 'conductor', 'admin'].includes(normalizedRole);
+
+    if (hasRoleEndpoint) {
+      try {
+        return await this.request(`/${normalizedRole}/2fa-preference`, 'PATCH', payload);
+      } catch (err) {
+        if (this.getResponseStatus(err) !== 404) throw err;
+      }
+    }
+
+    return await this.request('/staff/2fa-preference', 'PATCH', payload);
   }
 
   // Step-up re-authentication
@@ -37,12 +49,53 @@ class StaffService extends BaseService {
     return await this.request('/step-up/verify', 'POST', { otp });
   }
 
-  async logout() {
+  async logout(role = null) {
+    const normalizedRole = typeof role === 'string' ? role.trim().toLowerCase() : '';
+    const roleScoped = ['driver', 'conductor', 'operator', 'admin'].includes(normalizedRole);
+    const endpoint = roleScoped ? `/${normalizedRole}/logout` : '/staff/logout';
+
     try {
-      return await this.request('/staff/logout', 'DELETE');
+      return await this.request(endpoint, 'DELETE');
+    } catch (err) {
+      if (roleScoped && this.getResponseStatus(err) === 404) {
+        return await this.request('/staff/logout', 'DELETE');
+      }
+      throw err;
     } finally {
       TokenManager.clearStaffSession();
     }
+  }
+
+  async logoutDriver() {
+    try {
+      return await this.request('/driver/logout', 'DELETE');
+    } finally {
+      TokenManager.clearStaffSession();
+    }
+  }
+
+  async logoutConductor() {
+    try {
+      return await this.request('/conductor/logout', 'DELETE');
+    } finally {
+      TokenManager.clearStaffSession();
+    }
+  }
+
+  async logoutOperator() {
+    try {
+      return await this.request('/operator/logout', 'DELETE');
+    } finally {
+      TokenManager.clearStaffSession();
+    }
+  }
+
+  async forgotPassword(payload) {
+    return await this.request('/staff/forgot-password', 'POST', payload);
+  }
+
+  async resetPassword(payload) {
+    return await this.request('/staff/reset-password', 'POST', payload);
   }
 
   async getProfile(role) {
@@ -77,6 +130,10 @@ class StaffService extends BaseService {
 
   async departTrip(tripId) {
     return await this.request(`/driver/trips/${tripId}/depart`, 'PATCH');
+  }
+
+  async startBoardingTrip(tripId) {
+    return await this.request(`/driver/trips/${tripId}/boarding`, 'PATCH');
   }
 
   async completeTrip(tripId) {
@@ -170,6 +227,10 @@ class StaffService extends BaseService {
     return await this.request('/operator/fleets', 'GET');
   }
 
+  async getFleetLocations() {
+    return await this.request('/fleet/locations', 'GET');
+  }
+
   async getOperatorRoutes() {
     return await this.request('/operator/routes', 'GET');
   }
@@ -190,8 +251,20 @@ class StaffService extends BaseService {
     return await this.request('/operator/stops', 'POST', stopData);
   }
 
+  async updateOperatorStop(stopId, stopData) {
+    return await this.request(`/operator/stops/${stopId}`, 'PUT', stopData);
+  }
+
+  async deleteOperatorStop(stopId) {
+    return await this.request(`/operator/stops/${stopId}`, 'DELETE');
+  }
+
   async addOperatorStopToRoute(routeId, stopData) {
     return await this.request(`/operator/routes/${routeId}/stops`, 'POST', stopData);
+  }
+
+  async removeOperatorStopFromRoute(routeId, routeStopId) {
+    return await this.request(`/operator/routes/${routeId}/stops/${routeStopId}`, 'DELETE');
   }
 
   async getOperatorFleetRoutes() {
@@ -220,6 +293,14 @@ class StaffService extends BaseService {
 
   async scheduleTrip(tripData) {
     return await this.request('/operator/trips', 'POST', tripData);
+  }
+
+  async saveDispatchDecision(tripId, payload) {
+    return await this.request(`/operator/trips/${tripId}/dispatch-decision`, 'PATCH', payload);
+  }
+
+  async getOperatorTripGpsHistory(tripId, params = {}) {
+    return await this.request(`/operator/trips/${tripId}/gps-history`, 'GET', params);
   }
 
   async getAvailableTrips() {

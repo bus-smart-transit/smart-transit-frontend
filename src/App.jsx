@@ -1,5 +1,6 @@
 import { Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider } from './api/hooks/contexts/AuthProvider';
 
 // DefaultLayout is retained for future public pages but not used by LandingPage,
 // which is now self-contained with its own Navbar and Footer.
@@ -7,6 +8,14 @@ const PassengerBaseRouter = lazy(() => import('./pages/passenger'));
 const EmployeeBaseRouter = lazy(() => import('./pages/employee'));
 const LandingPage = lazy(() => import('./components/Passenger/LandingPage/LandingPage'));
 const CheckoutReturn = lazy(() => import('./components/Passenger/CheckoutReturn/CheckoutReturn'));
+
+function LandingWithAuth() {
+  return (
+    <AuthProvider role="passenger">
+      <LandingPage />
+    </AuthProvider>
+  );
+}
 
 function RouteFallback() {
   return (
@@ -22,7 +31,7 @@ export default function App() {
       <Suspense fallback={<RouteFallback />}>
         <Routes>
           {/* LandingPage is self-contained — no layout wrapper needed */}
-          <Route path="/" element={<LandingPage />} />
+          <Route path="/" element={<LandingWithAuth />} />
 
           <Route path="/passenger/*" element={<PassengerBaseRouter />} />
           <Route path="/checkout/success" element={<CheckoutReturn />} />

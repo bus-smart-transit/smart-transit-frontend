@@ -15,10 +15,12 @@ export function ProtectedRoute({ role = "passenger" }) {
     return isAuthenticated ? <Outlet /> : <Navigate to={`/${role}/login`} replace />;
 }
 
-export function GuestRoute({ role = "passenger" }) {
+export function GuestRoute({ role = "passenger", authenticatedRedirectTo = null }) {
     const { isAuthenticated, isLoading } = useAuth(role);
 
     if (isLoading) return null;
 
-    return !isAuthenticated ? <Outlet /> : <Navigate to={`/${role}/dashboard`} replace />;
+    const redirectPath = authenticatedRedirectTo ?? `/${role}/dashboard`;
+
+    return !isAuthenticated ? <Outlet /> : <Navigate to={redirectPath} replace />;
 }

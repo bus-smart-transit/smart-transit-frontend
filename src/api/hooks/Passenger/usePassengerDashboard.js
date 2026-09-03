@@ -60,7 +60,7 @@ export default function usePassengerDashboard({ preloadMapView }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const { logout, user, isAuthenticated } = useAuth();
 
-  const [activeTab, setActiveTab] = useState('buy');
+  const [activeTab, setActiveTab] = useState('dashboard');
   const [menuOpen, setMenuOpen] = useState(false);
   const [profile, setProfile] = useState(null);
   const [tickets, setTickets] = useState([]);
@@ -415,8 +415,23 @@ export default function usePassengerDashboard({ preloadMapView }) {
     setMenuOpen(false);
   }, [isAuthenticated, loadPrivateData, navigate, preloadMapView]);
 
+  useEffect(() => {
+    const tabParam = String(searchParams.get('tab') || '').trim().toLowerCase();
+    if (!tabParam) return;
+
+    const allowed = new Set(['dashboard', 'buy', 'map', 'tickets', 'transactions', 'rewards', 'profile']);
+    if (!allowed.has(tabParam)) return;
+
+    if (PROTECTED_TABS.has(tabParam) && !isAuthenticated) {
+      setActiveTab('dashboard');
+      return;
+    }
+
+    setActiveTab(tabParam);
+  }, [isAuthenticated, searchParams]);
+
   const points = Number(profile?.reward_points ?? user?.reward_points ?? 0).toFixed(2);
-  const visibleTab = !isAuthenticated && PROTECTED_TABS.has(activeTab) ? 'buy' : activeTab;
+  const visibleTab = !isAuthenticated && PROTECTED_TABS.has(activeTab) ? 'dashboard' : activeTab;
 
   return {
     activeTab,

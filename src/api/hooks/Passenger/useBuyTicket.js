@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useLocation, useSearchParams } from 'react-router-dom';
 import PassengerService from '../../PassengerService/PassengerService';
 import useDropoffPicker from './useDropoffPicker';
 
@@ -133,6 +134,8 @@ const findNearestStop = (lat, lng, stops) => {
 };
 
 export default function useBuyTicket({ onTicketPurchased }) {
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
   const [trips, setTrips] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -159,6 +162,13 @@ export default function useBuyTicket({ onTicketPurchased }) {
   const processedCheckoutRef = useRef(new Set());
   const lastCheckoutEventTsRef = useRef(0);
   const pendingCheckoutRef = useRef(null);
+  const autoSelectedTripRef = useRef('');
+
+  const requestedTripId = useMemo(() => {
+    const qpTripId = String(searchParams.get('trip_id') || '').trim();
+    const stateTripId = String(location?.state?.tripId || '').trim();
+    return qpTripId || stateTripId || '';
+  }, [location?.state?.tripId, searchParams]);
 
   const [form, setForm] = useState({
     trip_id: '',
@@ -182,6 +192,19 @@ export default function useBuyTicket({ onTicketPurchased }) {
 
   const selectedTrip = trips.find((trip) => trip.trip_id === parseInt(form.trip_id, 10));
   const selectedRoute = selectedTrip?.fleet_route?.route || null;
+  const selectedFleetType = String(selectedTrip?.fleet_route?.fleet?.fleet_type || 'public').toLowerCase();
+  const selectedTripDateValue = selectedTrip?.trip_date ? toTripDateValue(selectedTrip?.trip_date) : '';
+  const todayDate = toDateInputValue();
+  const isAdvanceTrip = !!selectedTripDateValue && selectedTripDateValue > todayDate;
+  const allowStanding = selectedFleetType !== 'private' && !isAdvanceTrip;
+  const seatTypeOptions = allowStanding ? ['seated', 'standing'] : ['seated'];
+  const seatTypePolicyNote = selectedTrip
+    ? selectedFleetType === 'private'
+      ? 'Private fleets allow seated bookings only.'
+      : isAdvanceTrip
+        ? 'Standing is available only for same-day trips.'
+        : ''
+    : '';
   const selectedStops = useMemo(
     () => selectedRoute?.routeStops || selectedRoute?.route_stops || [],
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -667,6 +690,17 @@ export default function useBuyTicket({ onTicketPurchased }) {
   }, [isGuestCheckout]);
 
   useEffect(() => {
+    if (!selectedTrip) return;
+    if (seatTypeOptions.includes(form.seat_type)) return;
+
+    const timer = setTimeout(() => {
+      setForm((prev) => ({ ...prev, seat_type: 'seated' }));
+    }, 0);
+
+    return () => clearTimeout(timer);
+  }, [form.seat_type, seatTypeOptions, selectedTrip]);
+
+  useEffect(() => {
     if (form.booking_option === 'now' && form.booking_date !== toDateInputValue()) {
       const timer = setTimeout(() => {
         setForm((prev) => ({ ...prev, booking_date: toDateInputValue() }));
@@ -929,6 +963,21 @@ export default function useBuyTicket({ onTicketPurchased }) {
     }
   }, [clearDestinationPinnedLabel, handleChange, trips]);
 
+  useEffect(() => {
+    if (!requestedTripId || loading || trips.length === 0) return;
+    if (autoSelectedTripRef.current === requestedTripId) return;
+
+    const exists = trips.some((tripItem) => {
+      const tripIdentifier = String(tripItem?.trip_id ?? tripItem?.id ?? '');
+      return tripIdentifier === requestedTripId;
+    });
+
+    if (exists) {
+      handleTripSelect(requestedTripId);
+      autoSelectedTripRef.current = requestedTripId;
+    }
+  }, [handleTripSelect, loading, requestedTripId, trips]);
+
   const handleDropoffModeChange = useCallback((nextMode) => {
     setDropoffMode(nextMode);
     setFare(null);
@@ -1150,8 +1199,11 @@ export default function useBuyTicket({ onTicketPurchased }) {
     qrTickets,
     rewardPointsToApply,
     selectedRoute,
+    selectedFleetType,
     selectedStops,
     selectedTrip,
+    seatTypeOptions,
+    seatTypePolicyNote,
     setDestinationQuery,
     stopLabel,
     success,

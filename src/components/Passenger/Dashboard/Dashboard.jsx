@@ -1,8 +1,9 @@
 import { Suspense, lazy, useState } from 'react';
-import { Bell, Map, Ticket, User, LogOut, Gift, History, ShoppingCart, Menu } from 'lucide-react';
+import { Bell, Map, Ticket, User, LogOut, Gift, History, ShoppingCart, Menu, House } from 'lucide-react';
 import usePassengerDashboard from '../../../api/hooks/Passenger/usePassengerDashboard';
 import PassengerService from '../../../api/PassengerService/PassengerService';
 import TicketCard from '../Ticket/TicketCard';
+import PublicTrackingSection from '../LandingPage/PublicTrackingSection';
 import './PassengerPortal.css';
 
 const preloadMapView = () =>
@@ -11,16 +12,14 @@ const preloadMapView = () =>
     import('../../Map/MapView.web'),
   ]).then(([, mod]) => mod);
 
-const MapView = lazy(() => preloadMapView());
 const BuyTicket = lazy(() => import('../BuyTicket/BuyTicket'));
 
 const NAV_ITEMS = [
-  { key: 'buy', label: 'Home', icon: ShoppingCart, protected: false },
+  { key: 'dashboard', label: 'Dashboard', icon: ShoppingCart, protected: false },
+  { key: 'tickets', label: 'My Tickets', icon: Ticket, protected: true },
+  { key: 'transactions', label: 'Trip History', icon: History, protected: true },
+  { key: 'map', label: 'Track Bus', icon: Map, protected: false },
   { key: 'rewards', label: 'Rewards', icon: Gift, protected: true },
-  { key: 'tickets', label: 'My Ticket', icon: Ticket, protected: true },
-  { key: 'transactions', label: 'Transaction History', icon: History, protected: true },
-  { key: 'profile', label: 'My Profile', icon: User, protected: true },
-  { key: 'map', label: 'Live Map', icon: Map, protected: false },
 ];
 
 const PROTECTED_TABS = new Set(['tickets', 'rewards', 'transactions', 'profile']);
@@ -389,7 +388,11 @@ export default function Dashboard() {
   const [updating2fa, setUpdating2fa] = useState(false);
   const [twoFactorMsg, setTwoFactorMsg] = useState('');
 
-  const twoFactorEnabled = twoFactorOverride ?? profile?.user?.two_factor_enabled ?? false;
+  const twoFactorEnabled = twoFactorOverride
+    ?? profile?.user?.two_factor_enabled
+    ?? profile?.two_factor_enabled
+    ?? user?.two_factor_enabled
+    ?? false;
 
   const handleTwoFactorToggle = async (event) => {
     const enabled = event.target.checked;
@@ -408,7 +411,112 @@ export default function Dashboard() {
     }
   };
 
+  const homeStats = {
+    upcomingTrips: tickets.filter((t) => ['valid', 'issued'].includes(String(t?.status || '').toLowerCase())).length,
+    tripsCompleted: tickets.filter((t) => String(t?.status || '').toLowerCase() === 'alighted').length,
+    nearbyRoutes: new Set(tickets
+      .map((t) => t?.trip?.fleet_route?.route?.route_name)
+      .filter(Boolean)).size,
+  };
+
+  const recentBookings = transactions.slice(0, 4);
+  const upcomingTicket = tickets.find((t) => ['valid', 'issued', 'boarded'].includes(String(t?.status || '').toLowerCase())) || null;
+  const activeRoutes = [...new Set(tickets
+    .map((t) => t?.trip?.fleet_route?.route?.route_name)
+    .filter(Boolean))].slice(0, 5);
+
+  const rewardCatalog = [
+    { id: 'r1', title: 'P20 Fare Discount', desc: 'Use on any single trip within Davao Region XI.', cost: 100 },
+    { id: 'r2', title: 'Free Seat Reservation Fee', desc: 'Waives the reservation fee on your next booking.', cost: 150 },
+    { id: 'r3', title: 'P50 Fare Discount', desc: 'Use on any single trip within Davao Region XI.', cost: 250 },
+    { id: 'r4', title: 'Free One-Way Ticket (Ecoland ⇄ Digos)', desc: 'Redeem a full one-way fare on this route.', cost: 400 },
+  ];
+  const numericPoints = Number(profile?.reward_points ?? user?.reward_points ?? 0);
+
   const renderContent = () => {
+    if (visibleTab === 'dashboard') {
+      return (
+        <section className="passenger-dashboard">
+          <div className="passenger-dashboard-head">
+            <h2>Welcome, {profile?.name || user?.name || 'Passenger'}!</h2>
+            <p>{new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' })}</p>
+          </div>
+
+          <div className="passenger-kpi-row">
+            <article className="passenger-kpi-card"><strong>{homeStats.upcomingTrips}</strong><span>Upcoming Trips</span></article>
+            <article className="passenger-kpi-card"><strong>{homeStats.tripsCompleted}</strong><span>Trips Completed</span></article>
+            <article className="passenger-kpi-card"><strong>{homeStats.nearbyRoutes}</strong><span>Active Routes Nearby</span></article>
+          </div>
+
+          <div className="passenger-home-grid">
+            <section className="passenger-panel passenger-home-main">
+              <div className="passenger-panel-head"><h2>Upcoming Trip</h2></div>
+              {upcomingTicket ? (
+                <div className="passenger-upcoming-strip">
+                  <div>
+                    <p>{getOriginLabel(upcomingTicket)} → {getDestinationLabel(upcomingTicket)}</p>
+                    <span>{formatDateTime(upcomingTicket.valid_from || upcomingTicket.created_at)}</span>
+                  </div>
+                  <em>{String(upcomingTicket.status || 'confirmed')}</em>
+                </div>
+              ) : <p className="passenger-muted">No upcoming trip yet.</p>}
+
+              <div className="passenger-panel-head" style={{ marginTop: '14px' }}><h2>Bus Schedule</h2></div>
+              <table className="passenger-table">
+                <thead><tr><th>Route</th><th>Departure</th><th>Bus</th></tr></thead>
+                <tbody>
+                  {tickets.slice(0, 5).map((ticket, idx) => (
+                    <tr key={`sched-${ticket.ticket_id ?? idx}`}>
+                      <td>{getOriginLabel(ticket)} → {getDestinationLabel(ticket)}</td>
+                      <td>{formatDateTime(ticket.valid_from || ticket.created_at)}</td>
+                      <td>{ticket?.trip?.fleet_route?.fleet?.plate_number || '-'}</td>
+                    </tr>
+                  ))}
+                  {tickets.length === 0 && <tr><td colSpan={3}>No schedule data available yet.</td></tr>}
+                </tbody>
+              </table>
+
+              <div className="passenger-panel-head" style={{ marginTop: '14px' }}><h2>Recent Bookings</h2></div>
+              <table className="passenger-table">
+                <thead><tr><th>Route</th><th>Date</th><th>Amount</th><th>Status</th></tr></thead>
+                <tbody>
+                  {recentBookings.map((payment, idx) => (
+                    <tr key={`recent-${payment.payment_id ?? idx}`}>
+                      <td>{payment.route_summary || '-'}</td>
+                      <td>{formatDateTime(payment.paid_at)}</td>
+                      <td>PHP {Number(payment.amount ?? 0).toFixed(2)}</td>
+                      <td>{payment.status || '-'}</td>
+                    </tr>
+                  ))}
+                  {recentBookings.length === 0 && <tr><td colSpan={4}>No bookings yet.</td></tr>}
+                </tbody>
+              </table>
+            </section>
+
+            <aside className="passenger-home-side">
+              <section className="passenger-panel">
+                <div className="passenger-panel-head"><h2>Quick Actions</h2></div>
+                <div className="passenger-quick-actions">
+                  <button className="passenger-secondary-btn" onClick={() => handleTabChange({ key: 'buy', protected: false })}>Book a New Trip</button>
+                  <button className="passenger-secondary-btn" onClick={() => handleTabChange({ key: 'map', protected: false })}>Track My Bus</button>
+                  <button className="passenger-secondary-btn" onClick={() => handleTabChange({ key: 'tickets', protected: true })}>View My Tickets</button>
+                </div>
+              </section>
+
+              <section className="passenger-panel">
+                <div className="passenger-panel-head"><h2>Active Routes</h2></div>
+                {activeRoutes.length === 0 ? <p className="passenger-muted">No active routes found.</p> : (
+                  <ul className="passenger-routes-list">
+                    {activeRoutes.map((routeName) => <li key={routeName}>{routeName}</li>)}
+                  </ul>
+                )}
+              </section>
+            </aside>
+          </div>
+        </section>
+      );
+    }
+
     if (visibleTab === 'buy') {
       return (
         <Suspense fallback={tabFallback}>
@@ -424,24 +532,10 @@ export default function Dashboard() {
     }
 
     if (visibleTab === 'map') {
-      // Find fleet_id from any currently boarded ticket so MapView can highlight it
-      const boardedTicket = tickets.find((t) => String(t?.status).toLowerCase() === 'boarded');
-      const trackedFleetId = boardedTicket?.trip?.fleet_route?.fleet_id
-        ?? boardedTicket?.trip?.fleetRoute?.fleet_id
-        ?? null;
-
       return (
-        <div className="passenger-map-wrap">
-          {trackedFleetId && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', marginBottom: '8px', borderRadius: '10px', background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)', color: '#fbbf24', fontSize: '13px', fontWeight: 600 }}>
-              <span>🚌</span>
-              You are currently on a trip — your bus is highlighted on the map
-            </div>
-          )}
-          <Suspense fallback={tabFallback}>
-            <MapView role="passenger" trackedFleetId={trackedFleetId} />
-          </Suspense>
-        </div>
+        <section className="passenger-map-tab">
+          <PublicTrackingSection showHeader={false} compact />
+        </section>
       );
     }
 
@@ -525,22 +619,46 @@ export default function Dashboard() {
 
     if (visibleTab === 'rewards') {
       return (
-        <section className="passenger-grid-two">
-          <article className="passenger-highlight">
-            <h3>{profile?.name || user?.name || 'Passenger'}</h3>
-            <p>{profile?.user?.email || user?.email || ''}</p>
-          </article>
-          <article className="passenger-highlight">
-            <h3>Rewards Points</h3>
-            <p>{points}</p>
-          </article>
-          <article className="passenger-panel span-two">
-            <div className="passenger-panel-head">
-              <h2>Rewards Activity</h2>
+        <section className="passenger-rewards-page">
+          <article className="passenger-rewards-banner">
+            <div>
+              <p>Your Rewards Points</p>
+              <h2>{Number(numericPoints).toFixed(0)} pts</h2>
+              <span>Current Tier: Silver Rider</span>
             </div>
-            {rewards.length === 0 ? (
-              <p className="passenger-muted">No reward transactions found.</p>
-            ) : (
+            <div className="passenger-tier-meter">
+              <div className="passenger-tier-meter-bar"><span style={{ width: `${Math.min(100, (numericPoints / 500) * 100)}%` }} /></div>
+              <small>{Number(numericPoints).toFixed(0)} / 500 pts to Gold Rider</small>
+            </div>
+          </article>
+
+          <article className="passenger-panel">
+            <div className="passenger-panel-head"><h2>About Rewards</h2></div>
+            <p className="passenger-muted">Earn points every time you complete a paid trip with SmartTransit. Redeem points for fare discounts and booking perks.</p>
+          </article>
+
+          <article className="passenger-panel">
+            <div className="passenger-panel-head"><h2>Available Rewards</h2></div>
+            <div className="passenger-reward-catalog">
+              {rewardCatalog.map((item) => {
+                const canRedeem = numericPoints >= item.cost;
+                return (
+                  <div key={item.id} className="passenger-reward-catalog-item">
+                    <h3>{item.title}</h3>
+                    <p>{item.desc}</p>
+                    <div>
+                      <strong>{item.cost} pts</strong>
+                      <button type="button" disabled={!canRedeem}>{canRedeem ? 'Redeem' : 'Not enough points'}</button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </article>
+
+          <article className="passenger-panel">
+            <div className="passenger-panel-head"><h2>Rewards Activity</h2></div>
+            {rewards.length === 0 ? <p className="passenger-muted">No reward transactions found.</p> : (
               <div className="passenger-reward-list">
                 {rewards.map((reward, idx) => (
                   <div key={reward.reward_transaction_id ?? idx} className="passenger-reward-item">
@@ -602,6 +720,8 @@ export default function Dashboard() {
     <div className="passenger-shell">
       <aside className={`passenger-sidebar ${menuOpen ? 'open' : ''}`}>
         <button className="passenger-close" onClick={() => setMenuOpen(false)}>Close</button>
+        <div className="passenger-brand">SmartTransit</div>
+        <p className="passenger-nav-title">MAIN</p>
         <nav>
           {NAV_ITEMS.map(({ key, label, icon: Icon, protected: needsAuth }) => (
             <button
@@ -617,17 +737,23 @@ export default function Dashboard() {
           ))}
         </nav>
         <div className="passenger-sidebar-bottom">
-          {isAuthenticated ? (
-            <button className="passenger-nav-item" onClick={handleLogout}>
-              <LogOut size={16} />
-              <span>Logout</span>
-            </button>
-          ) : (
-            <button className="passenger-nav-item" onClick={() => navigate('/passenger/login')}>
-              <User size={16} />
-              <span>Sign In</span>
-            </button>
-          )}
+          <button className={`passenger-nav-item ${visibleTab === 'profile' ? 'active' : ''}`} onClick={() => handleTabChange({ key: 'profile', protected: true })}>
+            <User size={16} />
+            <span>Profile</span>
+          </button>
+          {isAuthenticated
+            ? (
+              <button className="passenger-nav-item" onClick={handleLogout}>
+                <LogOut size={16} />
+                <span>Logout</span>
+              </button>
+            )
+            : (
+              <button className="passenger-nav-item" onClick={() => navigate('/passenger/login')}>
+                <User size={16} />
+                <span>Sign In</span>
+              </button>
+            )}
         </div>
       </aside>
 
@@ -638,8 +764,13 @@ export default function Dashboard() {
           </button>
           <div className="passenger-logo">SmartTransit</div>
           <div className="passenger-top-actions">
+            <button type="button" className="passenger-landing-btn" onClick={() => navigate('/')}>
+              <House size={14} />
+              <span>Landing Page</span>
+            </button>
+            <span className="passenger-points-chip">{Number(points).toFixed(0)} pts</span>
             <Bell size={14} />
-            <span>{points} points</span>
+            <span className="passenger-avatar">J</span>
           </div>
         </header>
 

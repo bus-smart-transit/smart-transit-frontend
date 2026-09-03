@@ -1,6 +1,6 @@
 import { useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { Eye, EyeOff, Lock, Mail, Route, ShieldCheck, TrainFront, TriangleAlert, CheckCircle, Clock } from 'lucide-react';
+import { Lock, Mail, Route, ShieldCheck, TrainFront, TriangleAlert, CheckCircle, Clock } from 'lucide-react';
 import { useLogin } from '../../../api/hooks/Passenger/login';
 import Button from '../../ui/Button';
 import FormInput from '../../ui/FormInput';
@@ -13,10 +13,10 @@ export default function LoginPage() {
     errors,
     error,
     isLoading,
-    showPassword,
-    setShowPassword,
     rememberMe,
     setRememberMe,
+    goToDashboardAfterLogin,
+    setGoToDashboardAfterLogin,
     update,
     handleSubmit,
     // OTP
@@ -67,7 +67,7 @@ export default function LoginPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex flex-col lg:grid lg:grid-cols-[1fr_1fr] lg:gap-0">
+    <div className="min-h-screen bg-linear-to-br from-slate-50 to-blue-50 flex flex-col lg:grid lg:grid-cols-[1fr_1fr] lg:gap-0">
       {/* Left Side: Messaging & Benefits */}
       <div className="hidden lg:flex flex-col justify-between bg-slate-900 px-8 py-12 text-white">
         <div>
@@ -166,7 +166,7 @@ export default function LoginPage() {
 
                 <FormInput
                   label="Password"
-                  type={showPassword ? 'text' : 'password'}
+                  type="password"
                   required
                   placeholder="Enter your password"
                   icon={Lock}
@@ -187,10 +187,20 @@ export default function LoginPage() {
                     />
                     <span className="text-slate-700">Remember me</span>
                   </label>
-                  <Link to="/forgot-password" className="text-teal-600 hover:text-teal-700 font-medium">
+                  <Link to="/passenger/forgot-password" className="text-teal-600 hover:text-teal-700 font-medium">
                     Forgot password?
                   </Link>
                 </div>
+
+                <label className="flex items-start gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={goToDashboardAfterLogin}
+                    onChange={(e) => setGoToDashboardAfterLogin(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
+                  />
+                  <span>Go directly to passenger dashboard after login</span>
+                </label>
 
                 <Button
                   type="submit"

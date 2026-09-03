@@ -111,38 +111,73 @@ export default function PairingScreen({ role, onPaired, onLogout, paired = false
     setScannerError('');
     setResult(null);
     if (!videoRef.current) return;
+    if (!window.isSecureContext) {
+      setScannerError('Camera access requires HTTPS or localhost. Please open this app in a secure context.');
+      return;
+    }
+    if (!navigator?.mediaDevices?.getUserMedia) {
+      setScannerError('Camera API is not available on this browser/device. Use manual pairing instead.');
+      return;
+    }
 
     try {
-      const qrScanner = new QrScanner(
+      const hasCamera = await QrScanner.hasCamera();
+      if (!hasCamera) {
+        setScannerError('No camera device was detected. Use manual pairing instead.');
+        return;
+      }
+
+      const cameraList = await QrScanner.listCameras(true).catch(() => []);
+      const preferredCamera = cameraList.find((camera) => /back|rear|environment/i.test(String(camera?.label || '')))?.id || 'environment';
+
+      const onDecode = async (result) => {
+        const raw = result?.data;
+        if (!raw) return;
+        if (scannerBusyRef.current) return;
+
+        const now = Date.now();
+        if (lastScannedRef.current.value === raw && now - lastScannedRef.current.at < 3000) return;
+        lastScannedRef.current = { value: raw, at: now };
+
+        scannerBusyRef.current = true;
+        setScannerBusy(true);
+
+        try {
+          await submitPairing(raw, 'token');
+        } finally {
+          scannerBusyRef.current = false;
+          setScannerBusy(false);
+        }
+      };
+
+      let qrScanner = new QrScanner(
         videoRef.current,
-        async (result) => {
-          const raw = result?.data;
-          if (!raw) return;
-          if (scannerBusyRef.current) return;
-
-          const now = Date.now();
-          if (lastScannedRef.current.value === raw && now - lastScannedRef.current.at < 3000) return;
-          lastScannedRef.current = { value: raw, at: now };
-
-          scannerBusyRef.current = true;
-          setScannerBusy(true);
-
-          try {
-            await submitPairing(raw, 'token');
-          } finally {
-            scannerBusyRef.current = false;
-            setScannerBusy(false);
-          }
-        },
+        onDecode,
         {
           onDecodeError: () => {},
           maxScansPerSecond: 2,
-          preferredCamera: 'environment',
+          preferredCamera,
           workerPath: '/qr-scanner-worker.min.js',
         },
       );
+
+      try {
+        await qrScanner.start();
+      } catch {
+        if (typeof qrScanner.destroy === 'function') qrScanner.destroy();
+        qrScanner = new QrScanner(
+          videoRef.current,
+          onDecode,
+          {
+            onDecodeError: () => {},
+            maxScansPerSecond: 2,
+            preferredCamera,
+          },
+        );
+        await qrScanner.start();
+      }
+
       scannerRef.current = qrScanner;
-      await qrScanner.start();
       if (!scannerRef.current) return;
       setScannerRunning(true);
       setScannerStatus(`Camera active. Point at your ${partnerRole.toLowerCase()}'s QR code.`);

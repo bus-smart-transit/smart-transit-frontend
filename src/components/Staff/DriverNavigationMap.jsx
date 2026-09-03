@@ -18,7 +18,7 @@ const DRIVER_ROUTE_STOPS_LABEL_LAYER_ID = 'driver-route-stops-label-layer';
  * Race-condition fix: all drawing happens AFTER the MapLibre 'load' event fires,
  * not at component mount time (when map is still async-initialising).
  */
-export default function DriverNavigationMap({ trip, stops, lastGpsRef }) {
+export default function DriverNavigationMap({ trip, stops, lastGpsRef, routeGeometry = null }) {
   const mapContainer = useRef(null);
   const mapRef       = useRef(null);
   const mapLibRef    = useRef(null);
@@ -190,6 +190,49 @@ export default function DriverNavigationMap({ trip, stops, lastGpsRef }) {
   // Reading lastGpsRef at 1-second granularity is smooth because
   // watchPosition fires every few hundred ms on modern mobile — the ref is
   // always fresh, so 1 s intervals produce near-continuous movement.
+  useEffect(() => {
+    if (!mapReady || !routeGeometry || !mapRef.current || !mapLibRef.current) return;
+
+    const map = mapRef.current;
+    const maplibregl = mapLibRef.current;
+    const geometry = routeGeometry && routeGeometry.type === 'LineString' ? routeGeometry : null;
+    if (!geometry || !Array.isArray(geometry.coordinates) || geometry.coordinates.length < 2) return;
+
+    if (map.getLayer('driver-reroute-line')) map.removeLayer('driver-reroute-line');
+    if (map.getSource('driver-reroute-route')) map.removeSource('driver-reroute-route');
+
+    map.addSource('driver-reroute-route', {
+      type: 'geojson',
+      data: { type: 'Feature', properties: {}, geometry },
+    });
+
+    map.addLayer({
+      id: 'driver-reroute-line',
+      type: 'line',
+      source: 'driver-reroute-route',
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: {
+        'line-color': '#f59e0b',
+        'line-width': 5,
+        'line-dasharray': [2, 1],
+        'line-opacity': 0.9,
+      },
+    });
+
+    const bounds = geometry.coordinates.reduce(
+      (acc, coord) => acc.extend(coord),
+      new maplibregl.LngLatBounds(geometry.coordinates[0], geometry.coordinates[0])
+    );
+    if (map.getZoom() < 10) {
+      map.fitBounds(bounds, { padding: 60, maxZoom: 14 });
+    }
+
+    return () => {
+      if (map.getLayer('driver-reroute-line')) map.removeLayer('driver-reroute-line');
+      if (map.getSource('driver-reroute-route')) map.removeSource('driver-reroute-route');
+    };
+  }, [mapReady, routeGeometry]);
+
   useEffect(() => {
     if (!mapReady) return;
     const map = mapRef.current;
