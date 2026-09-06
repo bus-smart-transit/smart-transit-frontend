@@ -148,6 +148,18 @@ class StaffService extends BaseService {
     return await this.request('/driver/pin/verify', 'POST', { pin_code: pin });
   }
 
+  async getDriverShiftStatus() {
+    return await this.request('/driver/shift/status', 'GET');
+  }
+
+  async startDriverShift() {
+    return await this.request('/driver/shift/start', 'POST');
+  }
+
+  async endDriverShift() {
+    return await this.request('/driver/shift/end', 'POST');
+  }
+
   // ── Driver/Conductor Pairing ──
   async getPairingToken(role) {
     return await this.request(`/${role}/pairing-token`, 'GET');
@@ -184,6 +196,18 @@ class StaffService extends BaseService {
 
   async getConductorTrips() {
     return await this.request('/conductor/trips', 'GET');
+  }
+
+  async getConductorShiftStatus() {
+    return await this.request('/conductor/shift/status', 'GET');
+  }
+
+  async startConductorShift() {
+    return await this.request('/conductor/shift/start', 'POST');
+  }
+
+  async endConductorShift() {
+    return await this.request('/conductor/shift/end', 'POST');
   }
 
   async getTripOccupancy() {

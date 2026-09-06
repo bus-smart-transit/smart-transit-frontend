@@ -7,6 +7,110 @@ import { haversineM } from '../../../utils/geo';
 import { fetchTrafficStatus } from '../../../services/trafficService';
 
 const POLL_MS = 12000;
+const ROUTE_SOURCE_ID = 'public-track-route';
+const ROUTE_LAYER_ID = 'public-track-route-line';
+const ROUTE_GLOW_LAYER_ID = 'public-track-route-glow';
+
+const toFiniteCoord = (lat, lng) => {
+  const parsedLat = Number(lat);
+  const parsedLng = Number(lng);
+  if (!Number.isFinite(parsedLat) || !Number.isFinite(parsedLng)) return null;
+  return [parsedLng, parsedLat];
+};
+
+const extractStopCoords = (stops = []) => stops
+  .map((row) => toFiniteCoord(row?.latitude, row?.longitude))
+  .filter(Boolean);
+
+const toLineGeometry = (coordinates = []) => ({
+  type: 'LineString',
+  coordinates,
+});
+
+const fetchRoadPathFromOsrm = async (coordinates = []) => {
+  if (!Array.isArray(coordinates) || coordinates.length < 2) return null;
+
+  const encoded = coordinates.map(([lng, lat]) => `${lng},${lat}`).join(';');
+  const url = `https://router.project-osrm.org/route/v1/driving/${encoded}?overview=full&geometries=geojson&steps=false`;
+  const response = await fetch(url);
+  if (!response.ok) return null;
+
+  const data = await response.json();
+  const roadCoords = data?.routes?.[0]?.geometry?.coordinates;
+  if (!Array.isArray(roadCoords) || roadCoords.length < 2) return null;
+
+  return roadCoords;
+};
+
+const deriveStopProgress = (stops = [], fleetLat, fleetLng, lastAcknowledgedStopId, tripStatus) => {
+  const normalizedStops = (Array.isArray(stops) ? stops : [])
+    .map((row) => {
+      const stopLat = Number(row?.latitude);
+      const stopLng = Number(row?.longitude);
+      if (!Number.isFinite(stopLat) || !Number.isFinite(stopLng)) return null;
+      return {
+        ...row,
+        latitude: stopLat,
+        longitude: stopLng,
+        stop_order: Number(row?.stop_order ?? 0),
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.stop_order - b.stop_order);
+
+  if (normalizedStops.length === 0) return null;
+
+  const totalStops = normalizedStops.length;
+  const normalizedTripStatus = String(tripStatus || '').toLowerCase();
+  const acknowledgedId = Number(lastAcknowledgedStopId);
+
+  let completedStops = 0;
+  let nearestDistance = null;
+
+  if (normalizedTripStatus === 'completed') {
+    completedStops = totalStops;
+  } else if (Number.isFinite(acknowledgedId) && acknowledgedId > 0) {
+    const acknowledgedIndex = normalizedStops.findIndex((stop) => Number(stop?.stop_id) === acknowledgedId);
+    if (acknowledgedIndex >= 0) {
+      completedStops = acknowledgedIndex + 1;
+    }
+  }
+
+  if (completedStops === 0) {
+    const lat = Number(fleetLat);
+    const lng = Number(fleetLng);
+    if (Number.isFinite(lat) && Number.isFinite(lng)) {
+      let nearestIndex = 0;
+      nearestDistance = Number.POSITIVE_INFINITY;
+
+      normalizedStops.forEach((stop, idx) => {
+        const distance = haversineM(lat, lng, stop.latitude, stop.longitude);
+        if (distance < nearestDistance) {
+          nearestDistance = distance;
+          nearestIndex = idx;
+        }
+      });
+
+      completedStops = Math.min(totalStops, nearestIndex + 1);
+    }
+  }
+
+  completedStops = Math.max(0, Math.min(totalStops, completedStops));
+  const progressPercent = totalStops > 1
+    ? Math.round((Math.max(0, completedStops - 1) / (totalStops - 1)) * 100)
+    : 0;
+  const nextStop = completedStops >= totalStops
+    ? normalizedStops[totalStops - 1]
+    : normalizedStops[completedStops];
+
+  return {
+    completedStops,
+    totalStops,
+    progressPercent,
+    nextStopName: nextStop?.stop_name || 'Final stop',
+    nearestDistance,
+  };
+};
 
 function formatDistance(meters) {
   if (!Number.isFinite(Number(meters))) return '-';
@@ -20,6 +124,7 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
   const mapLibRef = useRef(null);
   const markersRef = useRef(new Map());
   const userMarkerRef = useRef(null);
+  const routeGeometryCacheRef = useRef(new Map());
 
   const [fleets, setFleets] = useState([]);
   const [selectedFleetId, setSelectedFleetId] = useState(null);
@@ -28,8 +133,68 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
   const [pinError, setPinError] = useState('');
   const [etaState, setEtaState] = useState({ label: 'Waiting for selected bus', etaMinutes: null });
   const [pollingEnabled, setPollingEnabled] = useState(true);
+  const [selectedRouteStops, setSelectedRouteStops] = useState([]);
+  const [routeProgress, setRouteProgress] = useState(null);
 
   const selectedFleet = fleets.find((row) => Number(row?.fleet_id) === Number(selectedFleetId)) || fleets[0] || null;
+
+  const clearRoutePath = useCallback(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    if (map.getLayer(ROUTE_LAYER_ID)) map.removeLayer(ROUTE_LAYER_ID);
+    if (map.getLayer(ROUTE_GLOW_LAYER_ID)) map.removeLayer(ROUTE_GLOW_LAYER_ID);
+    if (map.getSource(ROUTE_SOURCE_ID)) map.removeSource(ROUTE_SOURCE_ID);
+  }, []);
+
+  const drawRoutePath = useCallback((geometry) => {
+    const map = mapRef.current;
+    if (!map || !geometry || !Array.isArray(geometry.coordinates) || geometry.coordinates.length < 2) return;
+
+    const featureCollection = {
+      type: 'FeatureCollection',
+      features: [{
+        type: 'Feature',
+        properties: {},
+        geometry,
+      }],
+    };
+
+    const existingSource = map.getSource(ROUTE_SOURCE_ID);
+    if (existingSource) {
+      existingSource.setData(featureCollection);
+      return;
+    }
+
+    map.addSource(ROUTE_SOURCE_ID, {
+      type: 'geojson',
+      data: featureCollection,
+    });
+
+    map.addLayer({
+      id: ROUTE_GLOW_LAYER_ID,
+      type: 'line',
+      source: ROUTE_SOURCE_ID,
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: {
+        'line-color': '#22d3ee',
+        'line-width': 10,
+        'line-opacity': 0.25,
+      },
+    });
+
+    map.addLayer({
+      id: ROUTE_LAYER_ID,
+      type: 'line',
+      source: ROUTE_SOURCE_ID,
+      layout: { 'line-cap': 'round', 'line-join': 'round' },
+      paint: {
+        'line-color': '#0ea5e9',
+        'line-width': 5,
+        'line-opacity': 0.85,
+      },
+    });
+  }, []);
 
   const flyToFleet = useCallback((row) => {
     const map = mapRef.current;
@@ -66,11 +231,12 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
         userMarkerRef.current = null;
       }
       if (mapRef.current) {
+        clearRoutePath();
         mapRef.current.remove();
         mapRef.current = null;
       }
     };
-  }, []);
+  }, [clearRoutePath]);
 
   const refreshFleets = useCallback(async (manual = false) => {
     const map = mapRef.current;
@@ -86,9 +252,6 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
 
       if (rows.length === 0) {
         setSelectedFleetId(null);
-        if (!manual) {
-          setPollingEnabled(false);
-        }
       } else {
         setPollingEnabled(true);
       }
@@ -186,6 +349,11 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
           latitude: Number(selectedFleet.latitude),
           longitude: Number(selectedFleet.longitude),
         },
+        route: {
+          route_name: selectedFleet?.route_name,
+          origin: selectedFleet?.origin,
+          destination: selectedFleet?.destination,
+        },
       });
 
       if (!cancelled) {
@@ -197,6 +365,82 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
       cancelled = true;
     };
   }, [selectedFleet, userCoords]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const routeId = Number(selectedFleet?.route_id);
+    if (!Number.isFinite(routeId) || routeId <= 0) {
+      clearRoutePath();
+      setSelectedRouteStops([]);
+      return;
+    }
+
+    let cancelled = false;
+
+    const drawAssignedRoute = async () => {
+      const cached = routeGeometryCacheRef.current.get(routeId);
+      if (cached) {
+        setSelectedRouteStops(cached.stops || []);
+        drawRoutePath(cached.geometry);
+        return;
+      }
+
+      try {
+        const stopsRes = await PassengerService.getRouteStops(routeId);
+        const stops = Array.isArray(stopsRes?.data) ? stopsRes.data : [];
+        const stopCoords = extractStopCoords(stops);
+        if (stopCoords.length < 2) {
+          clearRoutePath();
+          return;
+        }
+
+        let geometry = toLineGeometry(stopCoords);
+        try {
+          const roadCoords = await fetchRoadPathFromOsrm(stopCoords);
+          if (roadCoords && roadCoords.length >= 2) {
+            geometry = toLineGeometry(roadCoords);
+          }
+        } catch {
+          // Stop-to-stop geometry remains as fallback when road routing fails.
+        }
+
+        routeGeometryCacheRef.current.set(routeId, { geometry, stops });
+        if (!cancelled) {
+          setSelectedRouteStops(stops);
+          drawRoutePath(geometry);
+        }
+      } catch {
+        if (!cancelled) {
+          clearRoutePath();
+          setSelectedRouteStops([]);
+        }
+      }
+    };
+
+    void drawAssignedRoute();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [clearRoutePath, drawRoutePath, selectedFleet?.route_id]);
+
+  useEffect(() => {
+    if (!selectedFleet || selectedRouteStops.length < 2) {
+      setRouteProgress(null);
+      return;
+    }
+
+    const progress = deriveStopProgress(
+      selectedRouteStops,
+      selectedFleet.latitude,
+      selectedFleet.longitude,
+      selectedFleet.last_acknowledged_stop_id,
+      selectedFleet.trip_status,
+    );
+    setRouteProgress(progress);
+  }, [selectedFleet, selectedRouteStops]);
 
   const handlePinLocation = () => {
     if (!navigator.geolocation) {
@@ -268,6 +512,8 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
       return a._distanceM - b._distanceM;
     });
 
+  const nextStopOrDestinationLabel = routeProgress?.nextStopName || selectedFleet?.destination || 'Route sync pending';
+
   return (
     <section className={compact ? 'bg-transparent px-0 py-0' : 'bg-white px-4 py-12 sm:px-6 lg:px-10'}>
       <div className="mx-auto max-w-7xl space-y-5">
@@ -313,11 +559,26 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
                 <p className="text-[11px] text-slate-500 capitalize">{selectedFleet?.trip_status || 'idle'}</p>
               </div>
               <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
-                <p className="text-[11px] uppercase tracking-widest text-slate-500">Fleet Type</p>
-                <p className="mt-1 inline-flex items-center gap-1 text-sm font-semibold text-slate-900"><Navigation className="h-3.5 w-3.5 text-teal-600" />{selectedFleet?.fleet_type || 'Unknown'}</p>
-                <p className="text-[11px] text-slate-500">{selectedFleet?.route_name || 'Route sync pending'}</p>
+                <p className="text-[11px] uppercase tracking-widest text-slate-500">Next Stop</p>
+                <p className="mt-1 inline-flex items-center gap-1 text-sm font-semibold text-slate-900"><Navigation className="h-3.5 w-3.5 text-teal-600" />{nextStopOrDestinationLabel}</p>
+                <p className="text-[11px] text-slate-500">{selectedFleet?.route_name || selectedFleet?.destination || 'Route sync pending'}</p>
               </div>
             </div>
+            {routeProgress && (
+              <div className="mt-3 rounded-lg border border-slate-200 bg-white px-3 py-3">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <p className="text-[11px] uppercase tracking-widest text-slate-500">Route Progress</p>
+                  <p className="text-xs font-semibold text-slate-700">{routeProgress.completedStops}/{routeProgress.totalStops} stops</p>
+                </div>
+                <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
+                  <div
+                    className="h-full rounded-full bg-linear-to-r from-cyan-400 to-sky-500"
+                    style={{ width: `${Math.max(0, Math.min(100, routeProgress.progressPercent))}%` }}
+                  />
+                </div>
+                <p className="mt-2 text-xs text-slate-600">Next stop: <span className="font-semibold text-slate-800">{routeProgress.nextStopName}</span></p>
+              </div>
+            )}
             {pinError && <p className="mt-2 text-xs font-medium text-red-600">{pinError}</p>}
           </article>
 
@@ -359,9 +620,9 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
                   >
                     <div className="flex items-start justify-between gap-2">
                       <p className="font-semibold text-slate-900">{row?.plate_number || `Fleet ${row?.fleet_id}`}</p>
-                      <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold capitalize text-slate-700">
+                      <span className="inline-flex max-w-48 items-center gap-1 truncate rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-700">
                         <Bus className="h-3 w-3" />
-                        {row?.fleet_type || 'Unknown'}
+                        {row?.destination || row?.route_name || 'Destination pending'}
                       </span>
                     </div>
                     <p className="mt-1 text-xs capitalize text-slate-600">{row?.trip_status || 'active'} • {formatDistance(row?._distanceM)}</p>

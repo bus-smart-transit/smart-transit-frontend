@@ -18,6 +18,12 @@ describe('trafficService', () => {
       json: async () => ({
         routes: [{
           summary: { duration: 660 },
+          segments: [{
+            steps: [
+              { name: 'Quirino Avenue', duration: 540 },
+              { name: 'Roxas Avenue', duration: 240 },
+            ],
+          }],
         }],
       }),
     });
@@ -45,6 +51,7 @@ describe('trafficService', () => {
     expect(requestUrl.searchParams.get('start')).toContain('125.615,7.087');
     expect(requestUrl.searchParams.get('end')).toContain('125.62,7.091');
     expect(requestUrl.searchParams.get('alternatives')).toBe('true');
+    expect(requestUrl.searchParams.get('instructions')).toBe('true');
 
     expect(result.level).toBe('moderate');
     expect(result.etaMinutes).toBe(11);
@@ -58,5 +65,8 @@ describe('trafficService', () => {
     expect(result.alternateRouteGeometry).toBeTruthy();
     expect(result.alternateRouteGeometry.type).toBe('LineString');
     expect(result.timeSavedMinutes).toBeGreaterThanOrEqual(0);
+    expect(Array.isArray(result.alerts)).toBe(true);
+    expect(result.alerts[0].road).toContain('Quirino');
+    expect(result.dataSource).toBe('ors');
   });
 });

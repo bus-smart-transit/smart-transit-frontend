@@ -96,9 +96,9 @@ export default function usePassengerDashboard({ preloadMapView }) {
     const stopName = pickStopName(ticket?.origin_stop) || pickStopName(ticket?.originStop);
     if (stopName) return stopName;
     if (ticket?.origin) return ticket.origin;
-    // Custom GPS pinpoint — show short coordinate label
+    // Custom GPS pinpoint fallback when no reverse-geocoded label exists.
     if (ticket?.origin_lat != null && ticket?.origin_lng != null) {
-      return `GPS Pickup (${Number(ticket.origin_lat).toFixed(4)}, ${Number(ticket.origin_lng).toFixed(4)})`;
+      return 'Custom pickup point';
     }
     return getRouteOriginFallback(ticket) || 'Route unavailable';
   }, []);
@@ -107,10 +107,9 @@ export default function usePassengerDashboard({ preloadMapView }) {
     const stopName = pickStopName(ticket?.destination_stop) || pickStopName(ticket?.destinationStop);
     if (stopName) return stopName;
     if (ticket?.destination) return ticket.destination;
-    // Custom GPS drop-off — show short coordinate label so the ticket is
-    // clearly distinct from a full-route terminal display.
+    // Custom GPS drop-off fallback when no reverse-geocoded label exists.
     if (ticket?.destination_lat != null && ticket?.destination_lng != null) {
-      return `Custom Drop-off (${Number(ticket.destination_lat).toFixed(4)}, ${Number(ticket.destination_lng).toFixed(4)})`;
+      return 'Custom drop-off point';
     }
     return getRouteDestinationFallback(ticket) || 'Route unavailable';
   }, []);

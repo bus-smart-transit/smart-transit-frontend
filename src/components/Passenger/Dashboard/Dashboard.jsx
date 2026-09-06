@@ -425,6 +425,20 @@ export default function Dashboard() {
     .map((t) => t?.trip?.fleet_route?.route?.route_name)
     .filter(Boolean))].slice(0, 5);
 
+  const getBookingLocationLabel = (payment, field) => {
+    const items = Array.isArray(payment?.items) ? payment.items : [];
+    if (items.length === 0) return '-';
+
+    const key = field === 'origin' ? 'origin_stop_name' : 'destination_stop_name';
+    const values = [...new Set(items
+      .map((item) => String(item?.[key] || '').trim())
+      .filter(Boolean))];
+
+    if (values.length === 0) return '-';
+    if (values.length === 1) return values[0];
+    return `${values[0]} +${values.length - 1} more`;
+  };
+
   const rewardCatalog = [
     { id: 'r1', title: 'P20 Fare Discount', desc: 'Use on any single trip within Davao Region XI.', cost: 100 },
     { id: 'r2', title: 'Free Seat Reservation Fee', desc: 'Waives the reservation fee on your next booking.', cost: 150 },
@@ -478,17 +492,18 @@ export default function Dashboard() {
 
               <div className="passenger-panel-head" style={{ marginTop: '14px' }}><h2>Recent Bookings</h2></div>
               <table className="passenger-table">
-                <thead><tr><th>Route</th><th>Date</th><th>Amount</th><th>Status</th></tr></thead>
+                <thead><tr><th>Origin</th><th>Destination</th><th>Date</th><th>Amount</th><th>Status</th></tr></thead>
                 <tbody>
                   {recentBookings.map((payment, idx) => (
                     <tr key={`recent-${payment.payment_id ?? idx}`}>
-                      <td>{payment.route_summary || '-'}</td>
+                      <td>{getBookingLocationLabel(payment, 'origin')}</td>
+                      <td>{getBookingLocationLabel(payment, 'destination')}</td>
                       <td>{formatDateTime(payment.paid_at)}</td>
                       <td>PHP {Number(payment.amount ?? 0).toFixed(2)}</td>
                       <td>{payment.status || '-'}</td>
                     </tr>
                   ))}
-                  {recentBookings.length === 0 && <tr><td colSpan={4}>No bookings yet.</td></tr>}
+                  {recentBookings.length === 0 && <tr><td colSpan={5}>No bookings yet.</td></tr>}
                 </tbody>
               </table>
             </section>
@@ -805,17 +820,33 @@ export default function Dashboard() {
                 {loadingTicketQr ? (
                   <p className="passenger-muted">Loading QR ticket...</p>
                 ) : (
-                  <TicketCard
-                    fromLabel={getOriginLabel(selectedTicket)}
-                    toLabel={getDestinationLabel(selectedTicket)}
-                    departureLabel={formatDateTime(selectedTicket.valid_from ?? selectedTicketQr?.valid_from)}
-                    seatLabel={selectedTicket.seat_type || '-'}
-                    routeLabel={`${getOriginLabel(selectedTicket)} to ${getDestinationLabel(selectedTicket)}`}
-                    qrUrl={selectedTicketQr?.qr_url || ''}
-                    statusLabel={selectedTicket.status || '-'}
-                    validLabel={formatDateTime(selectedTicket.valid_from ?? selectedTicketQr?.valid_from)}
-                    expiresLabel={formatDateTime(selectedTicket.expires_at ?? selectedTicketQr?.expires_at)}
-                  />
+                  <>
+                    <TicketCard
+                      fromLabel={getOriginLabel(selectedTicket)}
+                      toLabel={getDestinationLabel(selectedTicket)}
+                      departureLabel={formatDateTime(selectedTicket.valid_from ?? selectedTicketQr?.valid_from)}
+                      seatLabel={selectedTicket.seat_type || '-'}
+                      routeLabel={`${getOriginLabel(selectedTicket)} to ${getDestinationLabel(selectedTicket)}`}
+                      qrUrl={selectedTicketQr?.qr_url || ''}
+                      statusLabel={selectedTicket.status || '-'}
+                      validLabel={formatDateTime(selectedTicket.valid_from ?? selectedTicketQr?.valid_from)}
+                      expiresLabel={formatDateTime(selectedTicket.expires_at ?? selectedTicketQr?.expires_at)}
+                    />
+                    <div
+                      style={{
+                        marginTop: '10px',
+                        border: '1px solid rgba(148,163,184,0.2)',
+                        borderRadius: '10px',
+                        padding: '10px 12px',
+                        background: 'rgba(15,23,42,0.45)',
+                      }}
+                    >
+                      <p style={{ margin: 0, fontSize: '0.76rem', color: '#94a3b8' }}>Drop-off Location</p>
+                      <p style={{ margin: '4px 0 0', fontSize: '0.92rem', color: '#e2e8f0', fontWeight: 600 }}>
+                        {getDestinationLabel(selectedTicket)}
+                      </p>
+                    </div>
+                  </>
                 )}
               </div>
             </section>

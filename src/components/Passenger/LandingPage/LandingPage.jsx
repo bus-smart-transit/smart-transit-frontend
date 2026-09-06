@@ -26,15 +26,26 @@ export default function LandingPage() {
       if (date) params.trip_date = date;
       const res = await PassengerService.getAvailableTrips(params);
       const allTrips = Array.isArray(res) ? res : (res?.data ?? []);
-      // Filter by origin/destination text if provided
-      const filtered = allTrips.filter((t) => {
-        const origin = (t.fleet_route?.route?.origin_stop?.stop_name ?? t.fleet_route?.origin_stop_name ?? '').toLowerCase();
-        const dest = (t.fleet_route?.route?.destination_stop?.stop_name ?? t.fleet_route?.destination_stop_name ?? '').toLowerCase();
-        const fromMatch = !from || origin.includes(from.toLowerCase()) || from.toLowerCase().includes(origin.split(' ')[0]);
-        const toMatch = !to || dest.includes(to.toLowerCase()) || to.toLowerCase().includes(dest.split(' ')[0]);
+      const normalizedFrom = (from || '').trim().toLowerCase();
+      const normalizedTo = (to || '').trim().toLowerCase();
+      const sameDayOrFutureTrips = allTrips.filter((trip) => {
+        const tripDate = trip?.trip_date ? new Date(trip.trip_date) : null;
+        if (!tripDate || Number.isNaN(tripDate.getTime())) return true;
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        return tripDate >= today;
+      });
+      const filtered = sameDayOrFutureTrips.filter((t) => {
+        const route = t?.fleet_route?.route ?? {};
+        const origin = (route?.origin_stop?.stop_name ?? route?.origin ?? t.fleet_route?.origin_stop_name ?? '').toLowerCase();
+        const dest = (route?.destination_stop?.stop_name ?? route?.destination ?? t.fleet_route?.destination_stop_name ?? '').toLowerCase();
+        const originWords = origin.split(/\s+/).filter(Boolean);
+        const destWords = dest.split(/\s+/).filter(Boolean);
+        const fromMatch = !normalizedFrom || origin.includes(normalizedFrom) || originWords.some((word) => normalizedFrom.includes(word));
+        const toMatch = !normalizedTo || dest.includes(normalizedTo) || destWords.some((word) => normalizedTo.includes(word));
         return fromMatch && toMatch;
       });
-      setTrips(filtered.length > 0 ? filtered : allTrips);
+      setTrips(filtered.length > 0 || (!normalizedFrom && !normalizedTo) ? filtered : allTrips);
     } catch {
       setSearchError('Unable to load trips. Please try again.');
       setTrips([]);

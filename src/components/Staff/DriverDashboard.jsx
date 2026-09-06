@@ -107,18 +107,69 @@ const isCurrentOrSameDayTrip = (tripLike) => {
   return status !== 'completed' && status !== 'cancelled';
 };
 
+const toTripScheduleMs = (tripLike) => {
+  const dateValue = String(tripLike?.trip_date || '').trim();
+  if (!dateValue) return Number.NaN;
+  const match = dateValue.match(/^(\d{4}-\d{2}-\d{2})/);
+  const dateOnly = match ? match[1] : '';
+  if (!dateOnly) return Number.NaN;
+
+  const timeRaw = String(tripLike?.departure_time || tripLike?.fleet_route?.start_time || '00:00:00').trim();
+  const timeMatch = timeRaw.match(/^(\d{2}:\d{2})(?::\d{2})?$/);
+  const timeValue = timeMatch ? `${timeMatch[1]}:00` : '00:00:00';
+  return new Date(`${dateOnly}T${timeValue}`).getTime();
+};
+
 const getUpcomingTrip = (trips) => {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const nowMs = Date.now();
 
   return (trips || [])
     .filter((item) => {
-      const date = new Date(item?.trip_date);
-      if (Number.isNaN(date.getTime())) return false;
       const status = String(item?.status || '').toLowerCase();
-      return date >= today && status !== 'completed' && status !== 'cancelled';
+      if (status === 'completed' || status === 'cancelled') return false;
+
+      const scheduleMs = toTripScheduleMs(item);
+      if (!Number.isFinite(scheduleMs)) return false;
+      return scheduleMs >= nowMs;
     })
-    .sort((a, b) => new Date(a.trip_date).getTime() - new Date(b.trip_date).getTime())[0] || null;
+    .sort((a, b) => toTripScheduleMs(a) - toTripScheduleMs(b))[0] || null;
+};
+
+const deriveJourneyProgressFromStops = (stops = [], tripStatus) => {
+  const normalized = (Array.isArray(stops) ? stops : [])
+    .map((stop, idx) => ({
+      ...stop,
+      sequence: Number(stop?.sequence_number ?? stop?.stop_order ?? idx + 1),
+      is_acknowledged: Boolean(stop?.is_acknowledged),
+    }))
+    .sort((a, b) => a.sequence - b.sequence);
+
+  const totalStops = normalized.length;
+  const status = String(tripStatus || '').toLowerCase();
+
+  if (totalStops === 0) {
+    return {
+      totalStops: 0,
+      completedStops: status === 'completed' ? 1 : 0,
+      progressPercent: status === 'completed' ? 100 : 0,
+      nextStopName: null,
+    };
+  }
+
+  const acknowledgedCount = normalized.filter((stop) => stop.is_acknowledged).length;
+  const completedStops = status === 'completed' ? totalStops : acknowledgedCount;
+  const clampedCompleted = Math.max(0, Math.min(totalStops, completedStops));
+  const progressPercent = totalStops > 0
+    ? Math.round((clampedCompleted / totalStops) * 100)
+    : 0;
+  const nextStop = normalized.find((stop) => !stop.is_acknowledged) ?? null;
+
+  return {
+    totalStops,
+    completedStops: clampedCompleted,
+    progressPercent,
+    nextStopName: nextStop?.stop_name ?? nextStop?.name ?? null,
+  };
 };
 
 export default function DriverDashboard() {
@@ -200,6 +251,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   const navigateRef = useRef(navigate);
   useEffect(() => { navigateRef.current = navigate; }, [navigate]);
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [assignedTripFilter, setAssignedTripFilter] = useState('all');
   const [profile, setProfile] = useState(null);
   const [trip, setTrip] = useState(null);
   const [assignedTrips, setAssignedTrips] = useState([]);
@@ -209,6 +261,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   const [pinInput, setPinInput] = useState('');
   const [pinStatus, setPinStatus] = useState('');
   const [earnings, setEarnings] = useState(null);
+  const [shiftState, setShiftState] = useState({ openShift: null, latestShift: null, loading: false });
   const [tripDetailsModal, setTripDetailsModal] = useState(null); // suggestion: trip info modal
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -230,6 +283,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   const isPaired = pairing?.paired === true;
   const pairingReason = pairing?.reason || 'Waiting for pairing with your Conductor before enabling session-synced features.';
   const hasActiveTrip = isCurrentOrSameDayTrip(trip);
+  const hasOpenShift = Boolean(shiftState?.openShift && !shiftState?.openShift?.ended_at);
   const didBootstrap = useRef(false);
   const stopsLoadedRef = useRef(false);
   const upcomingTrip = getUpcomingTrip(assignedTrips);
@@ -243,21 +297,31 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   const currentRoute = trip?.fleet_route?.route;
   const currentFleet = trip?.fleet_route?.fleet;
   const nextStop = stops.find((stop) => !stop.is_acknowledged) ?? null;
+  const filteredAssignedTrips = assignedTrips.filter((item) => {
+    if (assignedTripFilter === 'all') return true;
+    const status = String(item?.status || '').toLowerCase();
+    if (assignedTripFilter === 'scheduled') {
+      return ['scheduled', 'delayed', 'boarding', 'departed', 'in-progress'].includes(status);
+    }
+    if (assignedTripFilter === 'completed') {
+      return status === 'completed';
+    }
+    return true;
+  });
 
-  const currentPassengers = Number(trip?.total_occupancy ?? 0);
-  const currentCapacity = Number(currentFleet?.capacity ?? 0);
-  const tripProgress = currentCapacity > 0
-    ? Math.min(100, Math.round((currentPassengers / currentCapacity) * 100))
-    : (trip?.status === 'completed' ? 100 : 35);
+  const stopProgress = deriveJourneyProgressFromStops(stops, trip?.status);
+  const tripProgress = stopProgress.progressPercent;
 
   const loadData = useCallback(async () => {
     setLoading(true);
     setError('');
+    setShiftState((prev) => ({ ...prev, loading: true }));
     try {
-      const [profileRes, tripRes, tripsRes] = await Promise.allSettled([
+      const [profileRes, tripRes, tripsRes, shiftRes] = await Promise.allSettled([
         StaffService.getProfile('driver'),
         StaffService.getCurrentTrip(),
         StaffService.getDriverTrips(),
+        StaffService.getDriverShiftStatus(),
       ]);
       if (profileRes.status === 'fulfilled') {
         setProfile(profileRes.value?.data);
@@ -267,8 +331,19 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
       }
       if (tripRes.status === 'fulfilled') setTrip(tripRes.value?.data);
       if (tripsRes.status === 'fulfilled') setAssignedTrips(tripsRes.value?.data ?? []);
+      if (shiftRes.status === 'fulfilled') {
+        const payload = shiftRes.value?.data ?? {};
+        setShiftState({
+          openShift: payload?.open_shift ?? null,
+          latestShift: payload?.latest_shift ?? null,
+          loading: false,
+        });
+      } else {
+        setShiftState((prev) => ({ ...prev, loading: false }));
+      }
     } catch {
       setError('Failed to load dashboard data.');
+      setShiftState((prev) => ({ ...prev, loading: false }));
     } finally {
       setLoading(false);
     }
@@ -360,7 +435,9 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     // Watch position continuously so lastGpsRef stays fresh
     gpsWatchRef.current = navigator.geolocation.watchPosition(
       pushLocation,
-      () => {}, // silent failure — no permission prompt spam
+      () => {
+        setGpsActive(false);
+      },
       { enableHighAccuracy: true, maximumAge: 10000 }
     );
 
@@ -397,6 +474,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
       }
     };
 
+    void sendPing();
     gpsIntervalRef.current = setInterval(() => { void sendPing(); }, 10000);
     return () => {
       navigator.geolocation?.clearWatch(gpsWatchRef.current);
@@ -480,6 +558,16 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     return () => clearTimeout(timer);
   }, [activeTab, hasActiveTrip, isPaired, loadEarnings]);
 
+  useEffect(() => {
+    if (activeTab !== 'earnings' || !hasActiveTrip || !isPaired) return undefined;
+
+    const intervalId = setInterval(() => {
+      void loadEarnings();
+    }, 15000);
+
+    return () => clearInterval(intervalId);
+  }, [activeTab, hasActiveTrip, isPaired, loadEarnings]);
+
   const handleVerifyPin = async () => {
     if (!trip?.trip_id) {
       setPinStatus('No active trip assigned. PIN verification is unavailable.');
@@ -511,13 +599,35 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   }, []);
 
   const handleAcknowledgeStop = async (stopId) => {
+    if (actionInFlight) {
+      return;
+    }
     if (!isPaired) {
       setActionMsg(pairingReason);
       return;
     }
+    if (!stopId) {
+      setActionMsg('Stop identifier is missing. Please refresh route data.');
+      return;
+    }
 
+    setActionInFlight(true);
     try {
       await StaffService.acknowledgeStop(stopId);
+      setStops((prev) => {
+        const target = (prev || []).find((stop) => Number(stop?.stop_id) === Number(stopId));
+        const targetSeq = Number(target?.sequence_number ?? target?.stop_order ?? Number.POSITIVE_INFINITY);
+        return (prev || []).map((stop) => {
+          const seq = Number(stop?.sequence_number ?? stop?.stop_order ?? Number.POSITIVE_INFINITY);
+          if (Number.isFinite(targetSeq) && Number.isFinite(seq) && seq <= targetSeq) {
+            return { ...stop, is_acknowledged: true };
+          }
+          if (Number(stop?.stop_id) === Number(stopId)) {
+            return { ...stop, is_acknowledged: true };
+          }
+          return stop;
+        });
+      });
       // Relay current GPS position immediately so passenger map
       // reflects the bus at this stop without waiting for the next ping.
       void pushLocationNow();
@@ -525,6 +635,8 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
       void loadStops();
     } catch (err) {
       setActionMsg(err.message);
+    } finally {
+      setActionInFlight(false);
     }
   };
 
@@ -532,6 +644,10 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     if (!trip) return;
     if (!isPaired && action === 'depart') {
       setActionMsg(pairingReason);
+      return;
+    }
+    if ((action === 'boarding' || action === 'depart') && !hasOpenShift) {
+      setActionMsg('Start your shift first.');
       return;
     }
     if (action === 'complete') {
@@ -546,6 +662,42 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
       void loadData();
     } catch (err) {
       setActionMsg(err.message);
+    } finally {
+      setActionInFlight(false);
+    }
+  };
+
+  const handleStartShift = async () => {
+    setActionInFlight(true);
+    try {
+      const res = await StaffService.startDriverShift();
+      const shift = res?.data?.shift ?? null;
+      setShiftState((prev) => ({
+        ...prev,
+        openShift: shift,
+        latestShift: shift,
+      }));
+      setActionMsg(res?.message || 'Driver shift started');
+    } catch (err) {
+      setActionMsg(err?.message || 'Unable to start shift right now.');
+    } finally {
+      setActionInFlight(false);
+    }
+  };
+
+  const handleEndShift = async () => {
+    setActionInFlight(true);
+    try {
+      const res = await StaffService.endDriverShift();
+      const shift = res?.data?.shift ?? null;
+      setShiftState((prev) => ({
+        ...prev,
+        openShift: null,
+        latestShift: shift,
+      }));
+      setActionMsg(res?.message || 'Driver shift ended');
+    } catch (err) {
+      setActionMsg(err?.message || 'Unable to end shift right now.');
     } finally {
       setActionInFlight(false);
     }
@@ -621,6 +773,12 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
       tone: trafficStatus.level === 'heavy' ? 'warn' : 'info',
       time: 'Today',
     },
+    ...((Array.isArray(trafficStatus?.alerts) ? trafficStatus.alerts : []).slice(0, 3).map((alert, idx) => ({
+      title: `${String(alert?.road || 'Route segment')} • ${String(alert?.etaMinutes || 0)} min`,
+      note: String(alert?.detail || 'Traffic segment update available.'),
+      tone: alert?.severity === 'danger' ? 'danger' : alert?.severity === 'warn' ? 'warn' : 'info',
+      time: idx === 0 ? 'Live' : 'Updated',
+    }))),
   ];
 
   const journeyStatusLabel =
@@ -719,6 +877,15 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
           <div className="flex items-center gap-2">
             <span
               className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${
+                hasOpenShift
+                  ? 'border-teal-200 bg-teal-50 text-teal-700'
+                  : 'border-slate-200 bg-slate-50 text-slate-600'
+              }`}
+            >
+              {shiftState.loading ? 'Checking shift...' : hasOpenShift ? 'Shift Active' : 'Shift Not Started'}
+            </span>
+            <span
+              className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${
                 pairing.loading
                   ? 'border-slate-700 bg-slate-900 text-slate-400'
                   : isPaired
@@ -743,6 +910,21 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                 {gpsActive ? 'GPS Live' : 'GPS…'}
               </span>
             )}
+            <button
+              className="inline-flex items-center gap-2 rounded-xl border border-teal-200 bg-teal-50 px-3 py-2 text-xs font-semibold text-teal-700 transition hover:bg-teal-100 disabled:opacity-60"
+              onClick={handleStartShift}
+              disabled={actionInFlight || !isPaired || !hasActiveTrip || hasOpenShift}
+              title={!isPaired ? 'Pairing is required before starting shift.' : undefined}
+            >
+              Start Shift
+            </button>
+            <button
+              className="inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 transition hover:bg-rose-100 disabled:opacity-60"
+              onClick={handleEndShift}
+              disabled={actionInFlight || !hasOpenShift}
+            >
+              End Shift
+            </button>
             <button
               className="inline-flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-semibold text-slate-300 transition hover:border-slate-500"
               onClick={loadData}
@@ -840,7 +1022,14 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
               <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-slate-100">
                 <div className="h-full rounded-full bg-teal-500 transition-all" style={{ width: `${tripProgress}%` }} />
               </div>
-              <p className="mt-2 text-sm text-slate-500">{journeyStatusLabel}</p>
+              <p className="mt-2 text-sm text-slate-500">
+                {stopProgress.totalStops > 0
+                  ? `${stopProgress.completedStops}/${stopProgress.totalStops} stops reached`
+                  : journeyStatusLabel}
+              </p>
+              {stopProgress.nextStopName && (
+                <p className="mt-1 text-xs text-slate-500">Next stop: {stopProgress.nextStopName}</p>
+              )}
             </article>
 
             <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -862,10 +1051,10 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
             <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm md:col-span-2 xl:col-span-2">
               <h4 className="mb-3 text-base font-bold text-slate-900">Quick Actions</h4>
               <div className="flex flex-col gap-2 sm:flex-row">
-                <button className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50" onClick={() => handleTripAction('boarding')} disabled={actionInFlight || !isPaired || !['scheduled', 'delayed'].includes(String(trip?.status || '').toLowerCase())}>
+                <button className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50" onClick={() => handleTripAction('boarding')} disabled={actionInFlight || !isPaired || !hasOpenShift || !['scheduled', 'delayed'].includes(String(trip?.status || '').toLowerCase())}>
                   ○ Start Boarding
                 </button>
-                <button className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-teal-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-teal-600 disabled:opacity-50" onClick={() => handleTripAction('depart')} disabled={actionInFlight || !isPaired || !['boarding', 'scheduled', 'delayed'].includes(String(trip?.status || '').toLowerCase())}>
+                <button className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-teal-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-teal-600 disabled:opacity-50" onClick={() => handleTripAction('depart')} disabled={actionInFlight || !isPaired || !hasOpenShift || !['boarding', 'scheduled', 'delayed'].includes(String(trip?.status || '').toLowerCase())}>
                   ▶ Depart
                 </button>
                 <button className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50" onClick={loadData}>
@@ -941,10 +1130,23 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
           <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm">
             <div className="mb-4 flex items-center justify-between">
               <h4 className="text-base font-bold text-slate-900">Today's Assigned Routes</h4>
-              <span className="text-xs text-slate-400">{new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</span>
+              <div className="flex items-center gap-2">
+                <label htmlFor="driver-assigned-filter" className="text-xs font-semibold uppercase tracking-wide text-slate-500">Filter</label>
+                <select
+                  id="driver-assigned-filter"
+                  value={assignedTripFilter}
+                  onChange={(event) => setAssignedTripFilter(event.target.value)}
+                  className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-700"
+                >
+                  <option value="all">All</option>
+                  <option value="scheduled">Scheduled</option>
+                  <option value="completed">Completed</option>
+                </select>
+                <span className="text-xs text-slate-400">{new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</span>
+              </div>
             </div>
-            {assignedTrips.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-5 text-sm text-slate-500">No assigned trips for today.</div>
+            {filteredAssignedTrips.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-5 text-sm text-slate-500">No trips match this filter.</div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full min-w-175 text-left text-sm">
@@ -958,7 +1160,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {assignedTrips.map((item) => (
+                    {filteredAssignedTrips.map((item) => (
                       <tr
                         key={item.trip_id}
                         className="cursor-pointer hover:bg-slate-50 transition-colors"
@@ -1007,7 +1209,11 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                       {stop.is_acknowledged ? (
                         <span className="text-xs font-semibold text-emerald-300">Reached</span>
                       ) : (
-                        <button className="rounded-lg bg-sky-500 px-2.5 py-1.5 text-xs font-semibold text-slate-950 transition hover:bg-sky-400" onClick={() => handleAcknowledgeStop(stop.route_stop_id ?? stop.stop_id)}>
+                        <button
+                          className="rounded-lg bg-sky-500 px-2.5 py-1.5 text-xs font-semibold text-slate-950 transition hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-60"
+                          onClick={() => handleAcknowledgeStop(stop.stop_id)}
+                          disabled={actionInFlight || !stop?.stop_id}
+                        >
                           Acknowledge
                         </button>
                       )}
@@ -1060,17 +1266,36 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
               {stops.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-slate-800 bg-slate-950 p-5 text-sm text-slate-400">No route details available.</div>
               ) : (
-                <div className="space-y-2">
-                  {stops.map((stop, idx) => (
-                    <div key={stop.stop_id ?? idx} className="flex items-center gap-3 rounded-xl border border-slate-800 bg-slate-950 px-3 py-2">
-                      <span className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-slate-700 text-xs font-semibold text-slate-300">{idx + 1}</span>
-                      <div>
-                        <p className="text-sm font-semibold text-slate-100">{stop.stop_name ?? stop.name ?? `Stop ${idx + 1}`}</p>
-                        <small className="font-data text-xs text-slate-500">{stop.distance_from_origin_km != null ? `${stop.distance_from_origin_km} km` : ''}</small>
-                      </div>
-                      {stop.is_acknowledged && <span className="ml-auto text-xs text-emerald-400">✓</span>}
+                <div className="space-y-3">
+                  <div className="rounded-xl border border-slate-800 bg-slate-950 px-3 py-3">
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <p className="text-[11px] uppercase tracking-widest text-slate-500">Route Progress</p>
+                      <p className="text-xs font-semibold text-slate-300">{stopProgress.completedStops}/{stopProgress.totalStops} stops acknowledged</p>
                     </div>
-                  ))}
+                    <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-800">
+                      <div
+                        className="h-full rounded-full bg-linear-to-r from-cyan-400 to-sky-500 transition-all"
+                        style={{ width: `${Math.max(0, Math.min(100, stopProgress.progressPercent))}%` }}
+                      />
+                    </div>
+                    {stopProgress.nextStopName && (
+                      <p className="mt-2 text-xs text-slate-400">Next stop: <span className="font-semibold text-slate-200">{stopProgress.nextStopName}</span></p>
+                    )}
+                  </div>
+
+                  {stops.map((stop, idx) => {
+                    const completed = Boolean(stop.is_acknowledged);
+                    return (
+                      <div key={stop.stop_id ?? idx} className={`flex items-center gap-3 rounded-xl border px-3 py-2 ${completed ? 'border-emerald-900 bg-emerald-950/20' : 'border-slate-800 bg-slate-950'}`}>
+                        <span className={`inline-flex h-6 w-6 items-center justify-center rounded-full border text-xs font-semibold ${completed ? 'border-emerald-600 text-emerald-300' : 'border-slate-700 text-slate-300'}`}>{idx + 1}</span>
+                        <div>
+                          <p className={`text-sm font-semibold ${completed ? 'text-emerald-200' : 'text-slate-100'}`}>{stop.stop_name ?? stop.name ?? `Stop ${idx + 1}`}</p>
+                          <small className="font-data text-xs text-slate-500">{stop.distance_from_origin_km != null ? `${stop.distance_from_origin_km} km` : ''}</small>
+                        </div>
+                        <span className={`ml-auto text-xs font-semibold ${completed ? 'text-emerald-300' : 'text-slate-500'}`}>{completed ? 'Reached' : 'Upcoming'}</span>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </article>
@@ -1188,11 +1413,18 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
               <div className="mt-4">
                 <div className="mb-1 flex items-center justify-between text-xs">
                   <span className="font-medium text-slate-600">Trip Progress</span>
-                  <span className="font-data font-bold text-slate-900">{tripProgress}%</span>
+                  <span className="font-data font-bold text-slate-900">
+                    {stopProgress.totalStops > 0
+                      ? `${stopProgress.completedStops}/${stopProgress.totalStops} stops`
+                      : `${tripProgress}%`}
+                  </span>
                 </div>
                 <div className="h-2.5 overflow-hidden rounded-full bg-slate-100">
                   <div className="h-full rounded-full bg-teal-500 transition-all" style={{ width: `${tripProgress}%` }} />
                 </div>
+                {stopProgress.nextStopName && (
+                  <p className="mt-2 text-xs text-slate-500">Next stop: {stopProgress.nextStopName}</p>
+                )}
               </div>
             </article>
 
@@ -1282,6 +1514,8 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                 <div className="flex items-center justify-between"><span className="text-slate-500">Route</span><strong className="text-slate-100">{pin?.route_name || currentRoute?.route_name || '-'}</strong></div>
                 <div className="flex items-center justify-between"><span className="text-slate-500">Fleet</span><strong className="font-data text-slate-100">{pin?.fleet_plate_number || currentFleet?.plate_number || '-'}</strong></div>
                 <div className="flex items-center justify-between"><span className="text-slate-500">Date</span><strong className="font-data text-slate-100">{formatDateTime(pin?.pin_date || trip?.trip_date)}</strong></div>
+                <div className="flex items-center justify-between"><span className="text-slate-500">Shift Started</span><strong className="font-data text-slate-100">{formatDateTime(shiftState?.latestShift?.started_at)}</strong></div>
+                <div className="flex items-center justify-between"><span className="text-slate-500">Shift Ended</span><strong className="font-data text-slate-100">{formatDateTime(shiftState?.latestShift?.ended_at)}</strong></div>
               </div>
             </article>
 

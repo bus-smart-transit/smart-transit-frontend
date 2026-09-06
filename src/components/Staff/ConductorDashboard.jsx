@@ -98,18 +98,32 @@ const isCurrentOrSameDayTrip = (tripLike) => {
   return status !== 'completed' && status !== 'cancelled';
 };
 
+const toTripScheduleMs = (tripLike) => {
+  const dateValue = String(tripLike?.trip_date || '').trim();
+  if (!dateValue) return Number.NaN;
+  const match = dateValue.match(/^(\d{4}-\d{2}-\d{2})/);
+  const dateOnly = match ? match[1] : '';
+  if (!dateOnly) return Number.NaN;
+
+  const timeRaw = String(tripLike?.departure_time || tripLike?.fleet_route?.start_time || '00:00:00').trim();
+  const timeMatch = timeRaw.match(/^(\d{2}:\d{2})(?::\d{2})?$/);
+  const timeValue = timeMatch ? `${timeMatch[1]}:00` : '00:00:00';
+  return new Date(`${dateOnly}T${timeValue}`).getTime();
+};
+
 const getUpcomingTrip = (trips) => {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const nowMs = Date.now();
 
   return (trips || [])
     .filter((item) => {
-      const date = new Date(item?.trip_date);
-      if (Number.isNaN(date.getTime())) return false;
       const status = String(item?.status || '').toLowerCase();
-      return date >= today && status !== 'completed' && status !== 'cancelled';
+      if (status === 'completed' || status === 'cancelled') return false;
+
+      const scheduleMs = toTripScheduleMs(item);
+      if (!Number.isFinite(scheduleMs)) return false;
+      return scheduleMs >= nowMs;
     })
-    .sort((a, b) => new Date(a.trip_date).getTime() - new Date(b.trip_date).getTime())[0] || null;
+    .sort((a, b) => toTripScheduleMs(a) - toTripScheduleMs(b))[0] || null;
 };
 
 export default function ConductorDashboard() {
@@ -173,6 +187,7 @@ export default function ConductorDashboard() {
 
 function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   const [activeTab, setActiveTab] = useState('trip');
+  const [assignedTripFilter, setAssignedTripFilter] = useState('all');
   const [profile, setProfile] = useState(null);
   const [trip, setTrip] = useState(null);
   const [assignedTrips, setAssignedTrips] = useState([]);
@@ -203,10 +218,11 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   const [saving2fa, setSaving2fa] = useState(false);
   const [checkoutInFlight, setCheckoutInFlight] = useState(false);
   const [confirmCheckout, setConfirmCheckout] = useState(false);
-  const [startedShiftTripId, setStartedShiftTripId] = useState(null);
+  const [shiftState, setShiftState] = useState({ openShift: null, latestShift: null, loading: false });
   const isPaired = pairing?.paired === true;
   const pairingReason = pairing?.reason || 'Waiting for pairing with your Driver before live trip features unlock.';
   const hasActiveTrip = isCurrentOrSameDayTrip(trip);
+  const hasOpenShift = Boolean(shiftState?.openShift && !shiftState?.openShift?.ended_at);
   const didBootstrap = useRef(false);
   const videoRef = useRef(null);
   const scannerStreamRef = useRef(null);
@@ -216,8 +232,19 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   const upcomingTrip = getUpcomingTrip(assignedTrips);
   const showNoCurrentTripState = !loading && isPaired && !hasActiveTrip && ['trip', 'occupancy', 'passengers', 'pin'].includes(activeTab);
   const routeStops = trip?.fleet_route?.route?.route_stops || trip?.fleet_route?.route?.routeStops || [];
-  const shiftStarted = Boolean(trip?.trip_id) && Number(startedShiftTripId) === Number(trip?.trip_id);
+  const shiftStarted = hasOpenShift;
   const groupedPassengers = usePassengersByTrip(passengers, trip);
+  const filteredAssignedTrips = assignedTrips.filter((item) => {
+    if (assignedTripFilter === 'all') return true;
+    const status = String(item?.status || '').toLowerCase();
+    if (assignedTripFilter === 'scheduled') {
+      return ['scheduled', 'delayed', 'boarding', 'departed', 'in-progress'].includes(status);
+    }
+    if (assignedTripFilter === 'completed') {
+      return status === 'completed';
+    }
+    return true;
+  });
   const { printOnsiteReceipt } = useOnsiteReceiptPrinter();
 
   const handleTwoFactorToggle = async (event) => {
@@ -291,11 +318,13 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   const loadData = useCallback(async () => {
     setLoading(true);
     setError('');
+    setShiftState((prev) => ({ ...prev, loading: true }));
     try {
-      const [profileRes, tripRes, tripsRes] = await Promise.allSettled([
+      const [profileRes, tripRes, tripsRes, shiftRes] = await Promise.allSettled([
         StaffService.getProfile('conductor'),
         StaffService.getConductorTrip(),
         StaffService.getConductorTrips(),
+        StaffService.getConductorShiftStatus(),
       ]);
       if (profileRes.status === 'fulfilled') {
         const nextProfile = profileRes.value?.data;
@@ -306,6 +335,18 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
       }
       if (tripRes.status === 'fulfilled') setTrip(tripRes.value?.data);
       if (tripsRes.status === 'fulfilled') setAssignedTrips(tripsRes.value?.data ?? []);
+      if (shiftRes.status === 'fulfilled') {
+        const payload = shiftRes.value?.data ?? {};
+        setShiftState({
+          openShift: payload?.open_shift ?? null,
+          latestShift: payload?.latest_shift ?? null,
+          loading: false,
+        });
+      } else {
+        setShiftState((prev) => ({ ...prev, loading: false }));
+      }
+    } catch {
+      setShiftState((prev) => ({ ...prev, loading: false }));
     } finally {
       setLoading(false);
     }
@@ -405,6 +446,16 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   }, [activeTab, hasActiveTrip, isPaired, loadEarnings]);
 
   useEffect(() => {
+    if (activeTab !== 'earnings' || !hasActiveTrip || !isPaired) return undefined;
+
+    const intervalId = setInterval(() => {
+      void loadEarnings();
+    }, 15000);
+
+    return () => clearInterval(intervalId);
+  }, [activeTab, hasActiveTrip, isPaired, loadEarnings]);
+
+  useEffect(() => {
     if (showScannerModal) return undefined;
     const timer = setTimeout(() => {
       stopScanner();
@@ -412,17 +463,36 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     return () => clearTimeout(timer);
   }, [showScannerModal, stopScanner]);
 
-  useEffect(() => {
-    if (!trip?.trip_id) {
-      setStartedShiftTripId(null);
-      return;
+  const handleStartShift = async () => {
+    try {
+      const res = await StaffService.startConductorShift();
+      const shift = res?.data?.shift ?? null;
+      setShiftState((prev) => ({
+        ...prev,
+        openShift: shift,
+        latestShift: shift,
+      }));
+      setActionMsg(res?.message || 'Conductor shift started');
+      setActiveTab('occupancy');
+    } catch (err) {
+      setActionMsg(err?.message || 'Unable to start shift right now.');
     }
+  };
 
-    const normalized = String(trip?.status || '').toLowerCase();
-    if (['boarding', 'departed', 'in-progress', 'completed'].includes(normalized)) {
-      setStartedShiftTripId(Number(trip.trip_id));
+  const handleEndShift = async () => {
+    try {
+      const res = await StaffService.endConductorShift();
+      const shift = res?.data?.shift ?? null;
+      setShiftState((prev) => ({
+        ...prev,
+        openShift: null,
+        latestShift: shift,
+      }));
+      setActionMsg(res?.message || 'Conductor shift ended');
+    } catch (err) {
+      setActionMsg(err?.message || 'Unable to end shift right now.');
     }
-  }, [trip?.trip_id, trip?.status]);
+  };
 
   useEffect(() => () => stopScanner(), [stopScanner]);
 
@@ -438,6 +508,16 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     if (!isPaired) {
       setScanResult({ success: false, msg: pairingReason });
       setScannerStatus('Pairing is required before scanning.');
+      if (manageBusy) {
+        scannerBusyRef.current = false;
+        setScannerBusy(false);
+      }
+      return;
+    }
+
+    if (!hasOpenShift) {
+      setScanResult({ success: false, msg: 'Start your shift first.' });
+      setScannerStatus('Start your shift first.');
       if (manageBusy) {
         scannerBusyRef.current = false;
         setScannerBusy(false);
@@ -478,6 +558,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
       setScannerStatus('Ticket validated. Ready for next scan.');
       void loadOccupancy();
       void loadPassengers();
+      void loadEarnings();
       void loadData();
     } catch (err) {
       setScanResult({ success: false, msg: err.message });
@@ -489,7 +570,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
         setScannerBusy(false);
       }
     }
-  }, [isPaired, loadOccupancy, pairingReason, scanUuid, trip?.trip_id]);
+  }, [hasOpenShift, isPaired, loadEarnings, loadOccupancy, loadPassengers, loadData, pairingReason, scanUuid, trip?.trip_id]);
 
   const handleGroupScan = useCallback(async (transactionRef, options = {}) => {
     const { manageBusy = true } = options;
@@ -501,6 +582,16 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     if (!isPaired) {
       setGroupScanResult({ success: false, msg: pairingReason });
       setScannerStatus('Pairing is required before group scanning.');
+      if (manageBusy) {
+        scannerBusyRef.current = false;
+        setScannerBusy(false);
+      }
+      return;
+    }
+
+    if (!hasOpenShift) {
+      setGroupScanResult({ success: false, msg: 'Start your shift first.' });
+      setScannerStatus('Start your shift first.');
       if (manageBusy) {
         scannerBusyRef.current = false;
         setScannerBusy(false);
@@ -524,12 +615,18 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     setGroupScanResult(null);
     try {
       const res = await StaffService.scanGroupTickets(transactionRef);
-      setGroupScanResult({ success: true, data: res?.data, msg: res?.message });
-      setActionMsg(`${res?.data?.boarded_count ?? 0} ticket(s) boarded.`);
+      const outcome = String(res?.data?.scan_outcome || 'success');
+      setGroupScanResult({ success: true, info: outcome === 'info_future', data: res?.data, msg: res?.message });
+      if (outcome === 'info_future') {
+        setActionMsg(res?.message || 'This ticket is scheduled for a future date and cannot be boarded yet.');
+      } else {
+        setActionMsg(`${res?.data?.boarded_count ?? 0} ticket(s) boarded.`);
+      }
       setScannerPhase('success');
       setScannerStatus('Group ticket validated. Ready for next scan.');
       void loadOccupancy();
       void loadPassengers();
+      void loadEarnings();
       void loadData();
     } catch (err) {
       setGroupScanResult({ success: false, msg: err.message });
@@ -541,7 +638,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
         setScannerBusy(false);
       }
     }
-  }, [isPaired, loadOccupancy, pairingReason, trip?.trip_id]);
+  }, [hasOpenShift, isPaired, loadEarnings, loadOccupancy, loadPassengers, loadData, pairingReason, trip?.trip_id]);
 
   const startScanner = useCallback(async () => {
     setScannerError('');
@@ -556,6 +653,11 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
 
     if (!isPaired) {
       setScannerError(pairingReason);
+      return;
+    }
+
+    if (!hasOpenShift) {
+      setScannerError('Start your shift first.');
       return;
     }
 
@@ -692,7 +794,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
       stopScanner();
       setScannerError(err?.message || 'Unable to access camera for QR scanning.');
     }
-  }, [extractTicketUuid, handleGroupScan, handleScan, isPaired, pairingReason, stopScanner, trip?.trip_id]);
+  }, [extractTicketUuid, handleGroupScan, handleScan, hasOpenShift, isPaired, pairingReason, stopScanner, trip?.trip_id]);
 
   const handleAlight = async (ticketId) => {
     if (!isPaired) {
@@ -738,6 +840,11 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
       return;
     }
 
+    if (!hasOpenShift) {
+      setActionMsg('Start your shift first.');
+      return;
+    }
+
     if (!onsiteForm.origin_stop_id || !onsiteForm.destination_stop_id) {
       setActionMsg('Please select origin and destination stops for onsite checkout.');
       return;
@@ -776,6 +883,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
       });
       void loadPassengers();
       void loadOccupancy();
+      void loadEarnings();
     } catch (err) {
       setOnsiteReceipt(null);
       setActionMsg(err.message || 'Failed to record onsite checkout.');
@@ -923,6 +1031,15 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
           <div className="flex items-center gap-2">
             <span
               className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${
+                hasOpenShift
+                  ? 'border-teal-200 bg-teal-50 text-teal-700'
+                  : 'border-slate-200 bg-slate-100 text-slate-500'
+              }`}
+            >
+              {shiftState.loading ? 'Checking shift...' : hasOpenShift ? 'Shift Active' : 'Shift Not Started'}
+            </span>
+            <span
+              className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${
                 pairing.loading
                   ? 'border-slate-200 bg-slate-100 text-slate-500'
                   : isPaired
@@ -942,7 +1059,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
             {actionMsg && <span className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">{actionMsg}</span>}
           </div>
         </header>
-
+                      disabled={scannerBusy || !hasOpenShift}
         {loading && <div className="rounded-xl border border-slate-200 bg-slate-50 p-6 text-sm text-slate-500">Loading dashboard data...</div>}
         {error && (
           <div className="mb-4 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700">
@@ -1037,12 +1154,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
             <div className="mt-6 text-center">
               <button
                 className="inline-flex items-center gap-2 rounded-lg bg-teal-500 px-8 py-3 text-sm font-bold text-white transition hover:bg-teal-600 disabled:cursor-not-allowed disabled:opacity-60"
-                onClick={() => {
-                  if (trip?.trip_id) {
-                    setStartedShiftTripId(Number(trip.trip_id));
-                  }
-                  setActiveTab('occupancy');
-                }}
+                onClick={handleStartShift}
                 disabled={shiftStarted}
               >
                 {shiftStarted ? 'SHIFT STARTED' : 'CONFIRM & START SHIFT'}
@@ -1055,13 +1167,26 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
 
         {!loading && activeTab === 'assigned' && (
           <section className="grid gap-4 md:grid-cols-2">
-            {assignedTrips.length === 0 ? (
+            <div className="md:col-span-2 flex items-center justify-end gap-2">
+              <label htmlFor="conductor-assigned-filter" className="text-xs font-semibold uppercase tracking-wide text-slate-500">Filter</label>
+              <select
+                id="conductor-assigned-filter"
+                value={assignedTripFilter}
+                onChange={(event) => setAssignedTripFilter(event.target.value)}
+                className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-700"
+              >
+                <option value="all">All</option>
+                <option value="scheduled">Scheduled</option>
+                <option value="completed">Completed</option>
+              </select>
+            </div>
+            {filteredAssignedTrips.length === 0 ? (
               <article className="rounded-2xl border border-dashed border-slate-800 bg-slate-900 p-6">
                 <h3 className="text-lg font-semibold text-slate-100">No Assigned Trips</h3>
-                <p className="mt-2 text-sm text-slate-500">You do not have any upcoming assigned trips.</p>
+                <p className="mt-2 text-sm text-slate-500">No trips match this filter.</p>
               </article>
             ) : (
-              assignedTrips.map((item) => (
+              filteredAssignedTrips.map((item) => (
                 <article key={item.trip_id} className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
                   <div className="mb-4 flex items-center justify-between">
                     <h3 className="text-lg font-semibold text-slate-100">Trip #{item.trip_id}</h3>
@@ -1231,14 +1356,15 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                         type="button"
                         className="rounded-lg bg-cyan-700 px-3 py-2 text-sm font-semibold text-white transition hover:bg-cyan-800 disabled:cursor-not-allowed disabled:opacity-60"
                         onClick={handleOnsiteCheckout}
-                        disabled={checkoutInFlight || !hasActiveTrip || !isPaired}
+                        disabled={checkoutInFlight || !hasActiveTrip || !isPaired || !hasOpenShift}
                       >
                         {checkoutInFlight ? 'Processing...' : 'Generate Ticket'}
                       </button>
                       <button
                         type="button"
-                        className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                        className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
                         onClick={() => setShowScannerModal(true)}
+                        disabled={!hasOpenShift}
                       >
                         Scan Ticket
                       </button>
@@ -1305,8 +1431,9 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                       {!scannerRunning ? (
                         <button
                           type="button"
-                          className="flex items-center gap-2 rounded-lg bg-teal-500 px-3 py-2 text-xs font-semibold text-white transition hover:bg-teal-600"
+                          className="flex items-center gap-2 rounded-lg bg-teal-500 px-3 py-2 text-xs font-semibold text-white transition hover:bg-teal-600 disabled:cursor-not-allowed disabled:opacity-60"
                           onClick={() => void startScanner()}
+                          disabled={!hasOpenShift}
                         >
                           <Camera className="h-4 w-4" />
                           Start Camera Scanner
@@ -1369,7 +1496,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                     <button
                       className="inline-flex items-center gap-2 rounded-xl bg-sky-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-50"
                       onClick={handleScan}
-                      disabled={scannerBusy}
+                      disabled={scannerBusy || !hasOpenShift}
                     >
                       {scannerBusy
                         ? <><div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-950/30 border-t-slate-950" />Validating...</>
@@ -1392,7 +1519,9 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                   {groupScanResult && (
                     <div
                       className={`mt-4 rounded-xl border px-4 py-3 text-sm ${
-                        groupScanResult.success
+                        groupScanResult.success && groupScanResult.info
+                          ? 'border-sky-200 bg-sky-50 text-sky-700'
+                          : groupScanResult.success
                           ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
                           : 'border-red-200 bg-red-50 text-red-700'
                       }`}
@@ -1506,11 +1635,16 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                   <Download className="h-3.5 w-3.5" />
                   Download Summary Report
                 </button>
-                <button className="rounded-lg bg-teal-500 px-3 py-2 text-xs font-semibold text-white transition hover:bg-teal-600">
+                <button
+                  type="button"
+                  className="rounded-lg bg-teal-500 px-3 py-2 text-xs font-semibold text-white transition hover:bg-teal-600"
+                  onClick={handleEndShift}
+                >
                   Verify &amp; End Shift
                 </button>
               </div>
             </div>
+            {actionMsg && <p className="mb-3 rounded-lg border border-teal-200 bg-teal-50 px-3 py-2 text-xs text-teal-700">{actionMsg}</p>}
 
             {/* Stats row */}
             <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -1632,6 +1766,8 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                 <div className="flex items-center justify-between"><span className="text-slate-500">Email</span><strong className="text-slate-100">{profile?.user?.email || profile?.email || '-'}</strong></div>
                 <div className="flex items-center justify-between"><span className="text-slate-500">Conductor ID</span><strong className="font-data text-slate-100">{profile?.company_user_id || '-'}</strong></div>
                 <div className="flex items-center justify-between"><span className="text-slate-500">Status</span><strong className="text-emerald-300">Active</strong></div>
+                <div className="flex items-center justify-between"><span className="text-slate-500">Shift Started</span><strong className="font-data text-slate-100">{formatDateTime(shiftState?.latestShift?.started_at)}</strong></div>
+                <div className="flex items-center justify-between"><span className="text-slate-500">Shift Ended</span><strong className="font-data text-slate-100">{formatDateTime(shiftState?.latestShift?.ended_at)}</strong></div>
               </div>
             </article>
 

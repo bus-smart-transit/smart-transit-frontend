@@ -24,6 +24,17 @@ const toTripDateValue = (value) => {
   return toDateInputValue(date);
 };
 
+const parseTripScheduleMs = (tripLike) => {
+  const dateStr = toTripDateValue(tripLike?.trip_date);
+  if (!dateStr) return Number.NaN;
+
+  const rawTime = String(tripLike?.departure_time || tripLike?.fleet_route?.start_time || '00:00:00').trim();
+  const hhmmMatch = rawTime.match(/^(\d{2}:\d{2})(?::\d{2})?$/);
+  const hhmmss = hhmmMatch ? `${hhmmMatch[1]}:00` : '00:00:00';
+
+  return new Date(`${dateStr}T${hhmmss}`).getTime();
+};
+
 const toRad = (deg) => (deg * Math.PI) / 180;
 const distanceKm = (aLat, aLng, bLat, bLng) => {
   const earthRadiusKm = 6371;
@@ -195,6 +206,7 @@ export default function useBuyTicket({ onTicketPurchased }) {
   const selectedFleetType = String(selectedTrip?.fleet_route?.fleet?.fleet_type || 'public').toLowerCase();
   const selectedTripDateValue = selectedTrip?.trip_date ? toTripDateValue(selectedTrip?.trip_date) : '';
   const todayDate = toDateInputValue();
+  const selectedTripIsToday = selectedTripDateValue === todayDate;
   const isAdvanceTrip = !!selectedTripDateValue && selectedTripDateValue > todayDate;
   const allowStanding = selectedFleetType !== 'private' && !isAdvanceTrip;
   const seatTypeOptions = allowStanding ? ['seated', 'standing'] : ['seated'];
@@ -214,7 +226,8 @@ export default function useBuyTicket({ onTicketPurchased }) {
   const stopLabel = useCallback((stop) => stop?.stop?.stop_name || stop?.stop_name || `Stop ${stop?.stop_id}`, []);
 
   const quantity = Math.max(1, parseInt(form.ticket_quantity, 10) || 1);
-  const unitFare = Number(fare ?? 0);
+  const unitFare = Number(fare);
+  const hasFareQuote = fare != null && Number.isFinite(unitFare);
   const grossTotal = Number.isFinite(unitFare) ? Number((unitFare * quantity).toFixed(2)) : 0;
   const requestedRewardPoints = Math.max(0, parseInt(form.reward_points_to_use, 10) || 0);
   const maxRedeemableByTotal = Math.max(0, Math.floor(grossTotal - 1));
@@ -263,7 +276,11 @@ export default function useBuyTicket({ onTicketPurchased }) {
   const visibleTrips = filteredTrips.length > 0 ? filteredTrips : suggestedTrips;
   const showingSuggestedTrips = filteredTrips.length === 0 && suggestedTrips.length > 0;
   const todayDateValue = toDateInputValue();
-  const hasBookNowOption = visibleTrips.some((trip) => toTripDateValue(trip?.trip_date) === todayDateValue);
+  const hasBookNowOption = visibleTrips.some((trip) => {
+    if (toTripDateValue(trip?.trip_date) !== todayDateValue) return false;
+    const scheduleMs = parseTripScheduleMs(trip);
+    return Number.isFinite(scheduleMs) && scheduleMs >= Date.now();
+  });
   const minBookingDate = (() => {
     const today = todayDateValue;
     const selectedTripDate = toTripDateValue(selectedTrip?.trip_date);
@@ -284,7 +301,7 @@ export default function useBuyTicket({ onTicketPurchased }) {
     form.seat_type,
   ].join('|');
 
-  const canProceedToOnlinePayment = fare != null && fareQuoteKey === currentFareQuoteKey;
+  const canProceedToOnlinePayment = hasFareQuote && fareQuoteKey === currentFareQuoteKey;
 
   const handleChange = useCallback((field, value) => {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -701,6 +718,21 @@ export default function useBuyTicket({ onTicketPurchased }) {
   }, [form.seat_type, seatTypeOptions, selectedTrip]);
 
   useEffect(() => {
+    if (!selectedTripIsToday) return undefined;
+    if (form.booking_option === 'now' && form.booking_date === toDateInputValue()) return undefined;
+
+    const timer = setTimeout(() => {
+      setForm((prev) => ({
+        ...prev,
+        booking_option: 'now',
+        booking_date: toDateInputValue(),
+      }));
+    }, 0);
+
+    return () => clearTimeout(timer);
+  }, [form.booking_date, form.booking_option, selectedTripIsToday]);
+
+  useEffect(() => {
     if (form.booking_option === 'now' && form.booking_date !== toDateInputValue()) {
       const timer = setTimeout(() => {
         setForm((prev) => ({ ...prev, booking_date: toDateInputValue() }));
@@ -841,9 +873,10 @@ export default function useBuyTicket({ onTicketPurchased }) {
 
           const fleets = res?.data?.fleets ?? [];
           const matchedFleet = fleets.find((fleet) => Number(fleet?.fleet_id) === selectedFleetId);
-          const amount = matchedFleet?.amount ?? null;
-          setFare(amount);
-          setFareQuoteKey(amount != null ? currentFareQuoteKey : '');
+          const amount = Number(matchedFleet?.amount);
+          const normalizedAmount = Number.isFinite(amount) ? amount : null;
+          setFare(normalizedAmount);
+          setFareQuoteKey(normalizedAmount != null ? currentFareQuoteKey : '');
           return;
         }
 
@@ -869,9 +902,10 @@ export default function useBuyTicket({ onTicketPurchased }) {
           destination_stop_id: parseInt(form.destination_stop_id, 10),
           seat_type: form.seat_type,
         });
-        const amount = res?.data?.amount ?? null;
-        setFare(amount);
-        setFareQuoteKey(amount != null ? currentFareQuoteKey : '');
+        const amount = Number(res?.data?.amount);
+        const normalizedAmount = Number.isFinite(amount) ? amount : null;
+        setFare(normalizedAmount);
+        setFareQuoteKey(normalizedAmount != null ? currentFareQuoteKey : '');
       } catch (err) {
         setFare(null);
         setFareQuoteKey('');
@@ -950,9 +984,7 @@ export default function useBuyTicket({ onTicketPurchased }) {
       if (tripDate) {
         handleChange('booking_date', tripDate);
         handleChange('search_date', tripDate);
-        if (tripDate > toDateInputValue()) {
-          handleChange('booking_option', 'later');
-        }
+        handleChange('booking_option', tripDate > toDateInputValue() ? 'later' : 'now');
       }
       handleChange('search_from', route?.origin || '');
       handleChange('search_to', route?.destination || '');
@@ -1042,7 +1074,7 @@ export default function useBuyTicket({ onTicketPurchased }) {
       if (form.booking_date && selectedTripDate && selectedTripDate !== form.booking_date) {
         nextErrors.trip_id = `Selected trip is for ${selectedTripDate}. Please pick a trip that matches your booking date.`;
       }
-      if (form.payment_method === 'online' && !canProceedToOnlinePayment) {
+      if (!canProceedToOnlinePayment) {
         nextErrors.payment = 'Please get a valid fare quote before proceeding to online payment.';
       }
       if (form.use_rewards && isRewardRequestInsufficient) {
@@ -1056,6 +1088,7 @@ export default function useBuyTicket({ onTicketPurchased }) {
 
       const payload = {
         items: [],
+        booking_date: form.booking_date,
         return_base_url: window.location.origin,
       };
 
@@ -1086,47 +1119,43 @@ export default function useBuyTicket({ onTicketPurchased }) {
         payload.items.push({ ...itemPayload });
       }
 
-      if (form.payment_method === 'online') {
-        payload.payment_channel = form.payment_channel;
-        if (isGuestCheckout && form.guest_email) payload.guest_email = form.guest_email;
-        if (!isGuestCheckout && form.use_rewards && rewardPointsToApply > 0) {
-          payload.reward_points_to_use = rewardPointsToApply;
-        }
-
-        const res = await PassengerService.checkoutOnline(payload);
-        const checkoutUrl = res?.data?.checkout_url || res?.checkout_url || null;
-
-        const paymentPayload = res?.data?.payment || res?.payment || {};
-        const checkoutMeta = {
-          paymentId: paymentPayload?.payment_id ?? null,
-          transactionReference: paymentPayload?.transaction_reference ?? null,
-          guestEmail: isGuestCheckout ? (form.guest_email || null) : null,
-          returnPath: `${window.location.pathname}${window.location.search}`,
-          startedAt: checkoutStartCounterRef.current++,
-        };
-
-        if (!checkoutUrl) {
-          throw new Error('Checkout URL was not returned by the payment gateway. Please try again.');
-        }
-
-        setPendingCheckout(checkoutMeta);
-        setCheckoutStatus('pending');
-        setQrTickets([]);
-        localStorage.setItem(CHECKOUT_PENDING_KEY, JSON.stringify(checkoutMeta));
-
-        const checkoutTab = window.open(checkoutUrl, '_blank');
-        if (!checkoutTab) {
-          localStorage.removeItem(CHECKOUT_PENDING_KEY);
-          setPendingCheckout(null);
-          setCheckoutStatus('idle');
-          throw new Error('Popup was blocked. Please enable popups and try again.');
-        }
-
-        setSuccess('Secure checkout opened in a new tab. Complete payment there.');
-        return;
+      payload.payment_channel = form.payment_channel;
+      if (isGuestCheckout && form.guest_email) payload.guest_email = form.guest_email;
+      if (!isGuestCheckout && form.use_rewards && rewardPointsToApply > 0) {
+        payload.reward_points_to_use = rewardPointsToApply;
       }
 
-      setError('Onsite checkout is only available at the terminal with a conductor');
+      const res = await PassengerService.checkoutOnline(payload);
+      const checkoutUrl = res?.data?.checkout_url || res?.checkout_url || null;
+
+      const paymentPayload = res?.data?.payment || res?.payment || {};
+      const checkoutMeta = {
+        paymentId: paymentPayload?.payment_id ?? null,
+        transactionReference: paymentPayload?.transaction_reference ?? null,
+        guestEmail: isGuestCheckout ? (form.guest_email || null) : null,
+        returnPath: `${window.location.pathname}${window.location.search}`,
+        startedAt: checkoutStartCounterRef.current++,
+      };
+
+      if (!checkoutUrl) {
+        throw new Error('Checkout URL was not returned by the payment gateway. Please try again.');
+      }
+
+      setPendingCheckout(checkoutMeta);
+      setCheckoutStatus('pending');
+      setQrTickets([]);
+      localStorage.setItem(CHECKOUT_PENDING_KEY, JSON.stringify(checkoutMeta));
+
+      const checkoutTab = window.open(checkoutUrl, '_blank');
+      if (!checkoutTab) {
+        localStorage.removeItem(CHECKOUT_PENDING_KEY);
+        setPendingCheckout(null);
+        setCheckoutStatus('idle');
+        throw new Error('Popup was blocked. Please enable popups and try again.');
+      }
+
+      setSuccess('Secure checkout opened in a new tab. Complete payment there.');
+      return;
     } catch (err) {
       setError(err.message);
     } finally {
@@ -1146,7 +1175,6 @@ export default function useBuyTicket({ onTicketPurchased }) {
     form.guest_email,
     form.origin_stop_id,
     form.payment_channel,
-    form.payment_method,
     form.ticket_quantity,
     form.use_rewards,
     form.reward_points_to_use,
@@ -1171,6 +1199,7 @@ export default function useBuyTicket({ onTicketPurchased }) {
     dropoffMode,
     error,
     fare,
+    hasFareQuote,
     form,
     formErrors,
     formatDateTime,
@@ -1202,6 +1231,7 @@ export default function useBuyTicket({ onTicketPurchased }) {
     selectedFleetType,
     selectedStops,
     selectedTrip,
+    selectedTripIsToday,
     seatTypeOptions,
     seatTypePolicyNote,
     setDestinationQuery,

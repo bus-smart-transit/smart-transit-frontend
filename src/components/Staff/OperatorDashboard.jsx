@@ -5,7 +5,7 @@ import { buildOperatorForecast } from './routeForecast'
 import { loadMapLib } from '../Map/mapDependencies'
 import {
   LayoutDashboard, Bus, MapPin, Clock, PieChart, Users, Settings,
-  LogOut, AlertCircle, Plus, Eye, RefreshCw, Shield, UserCheck,
+  LogOut, Plus, Eye, RefreshCw, Shield, Download,
   X, ChevronDown, ChevronUp, Loader2,
 } from 'lucide-react'
 
@@ -53,6 +53,7 @@ const NAV = [
 ]
 const DISPATCH_STORAGE_KEY = 'smarttransit.operator.dispatch.decisions'
 
+const getStaffFullName = (row) => row?.name || row?.user?.name || row?.user?.username || row?.username || '-'
 const getStaffUsername = (row) => row?.user?.username || row?.username || row?.name || '-'
 const getStaffEmail = (row) => row?.user?.email || row?.email || '-'
 const getStaffRole = (row) => row?.user?.role || row?.role || '-'
@@ -774,82 +775,6 @@ function StaffDirectoryTab({ drivers, conductors, onRefresh, onCreateAccount }) 
   )
 }
 
-function StaffListTab({ role, items, onRefresh, onCreateAccount }) {
-  const [showModal, setShowModal] = useState(false)
-  const [form, setForm] = useState({ username: '', email: '', password: '' })
-  const [saving, setSaving] = useState(false)
-  const [msg, setMsg] = useState('')
-
-  const handleCreate = async (e) => {
-    e.preventDefault(); setSaving(true); setMsg('')
-    try {
-      await onCreateAccount({ ...form, role })
-      setMsg(`${role.charAt(0).toUpperCase() + role.slice(1)} account created.`)
-      setForm({ username: '', email: '', password: '' }); setShowModal(false); onRefresh()
-    } catch (err) { setMsg(err?.message || 'Failed to create account.') }
-    finally { setSaving(false) }
-  }
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold text-slate-900 capitalize">{role}s</h2>
-        <div className="flex gap-2">
-          <button type="button" onClick={onRefresh} className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50">
-            <RefreshCw className="h-4 w-4" /> Refresh
-          </button>
-          <button type="button" onClick={() => { setShowModal(true); setMsg('') }} className="flex items-center gap-1.5 rounded-lg bg-teal-600 px-3 py-2 text-sm font-semibold text-white hover:bg-teal-700">
-            <Plus className="h-4 w-4" /> Add {role.charAt(0).toUpperCase() + role.slice(1)}
-          </button>
-        </div>
-      </div>
-      {msg && <p className="rounded-lg bg-teal-50 border border-teal-200 px-4 py-2 text-sm text-teal-800">{msg}</p>}
-      <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-slate-50">
-            <tr className="border-b border-slate-200">
-              {['Username','Email','Role','Joined'].map(h => (
-                <th key={h} className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {items.length === 0
-              ? <tr><td colSpan={4} className="px-5 py-8 text-center text-sm text-slate-400">No {role}s found.</td></tr>
-              : items.map(d => (
-                <tr key={getStaffCompanyUserId(d)} className="border-b border-slate-100 hover:bg-slate-50">
-                  <td className="px-5 py-3 font-medium text-slate-900">{getStaffUsername(d)}</td>
-                  <td className="px-5 py-3 text-slate-600">{getStaffEmail(d)}</td>
-                  <td className="px-5 py-3">
-                    <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-700 capitalize">{getStaffRole(d)}</span>
-                  </td>
-                  <td className="px-5 py-3 text-slate-500">{fmtDate(getStaffJoinedAt(d))}</td>
-                </tr>
-              ))
-            }
-          </tbody>
-        </table>
-      </div>
-      {showModal && (
-        <Modal title={`Create ${role.charAt(0).toUpperCase() + role.slice(1)} Account`} onClose={() => setShowModal(false)}>
-          <form className="space-y-4" onSubmit={handleCreate}>
-            <Field label="Username" value={form.username} onChange={e => setForm(p => ({...p, username: e.target.value}))} required placeholder="juan_dela_cruz" />
-            <Field label="Email" type="email" value={form.email} onChange={e => setForm(p => ({...p, email: e.target.value}))} required placeholder="juan@example.com" />
-            <Field label="Password" type="password" value={form.password} onChange={e => setForm(p => ({...p, password: e.target.value}))} required placeholder="Minimum 8 characters" />
-            {msg && <p className="text-sm text-red-600">{msg}</p>}
-            <div className="flex justify-end gap-2 pt-2">
-              <button type="button" onClick={() => setShowModal(false)} className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50">Cancel</button>
-              <button type="submit" disabled={saving} className="flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-60">
-                {saving && <Loader2 className="h-4 w-4 animate-spin" />}Create Account
-              </button>
-            </div>
-          </form>
-        </Modal>
-      )}
-    </div>
-  )
-}
-
 function FleetTrackingMap({ trip, location }) {
   const mapContainerRef = useRef(null)
   const mapRef = useRef(null)
@@ -992,23 +917,39 @@ function FleetsTab({ fleets, routes, trips, onRefresh }) {
   const [fareSaving, setFareSaving] = useState(false)
   const [fareMsg, setFareMsg] = useState('')
 
-  useEffect(() => {
-    let mounted = true
-
-    StaffService.getFleetLocations()
-      .then((res) => {
-        if (!mounted) return
-        setFleetLocations(Array.isArray(res?.data) ? res.data : [])
-      })
-      .catch(() => {
-        if (!mounted) return
-        setFleetLocations([])
-      })
-
-    return () => {
-      mounted = false
+  const refreshFleetLocations = useCallback(async () => {
+    try {
+      const res = await StaffService.getFleetLocations()
+      setFleetLocations(Array.isArray(res?.data) ? res.data : [])
+    } catch {
+      setFleetLocations([])
     }
   }, [])
+
+  useEffect(() => {
+    const initialTimer = setTimeout(() => {
+      void refreshFleetLocations()
+    }, 0)
+    const timer = setInterval(() => {
+      if (!document.hidden && navigator.onLine) {
+        void refreshFleetLocations()
+      }
+    }, 15000)
+
+    return () => {
+      clearTimeout(initialTimer)
+      clearInterval(timer)
+    }
+  }, [refreshFleetLocations])
+
+  useEffect(() => {
+    if (!focusedTripId) return
+    const timer = setTimeout(() => {
+      void refreshFleetLocations()
+    }, 0)
+
+    return () => clearTimeout(timer)
+  }, [focusedTripId, refreshFleetLocations])
 
   const statusToProgress = (status) => {
     const normalized = String(status || '').toLowerCase()
@@ -1137,7 +1078,14 @@ function FleetsTab({ fleets, routes, trips, onRefresh }) {
         <h2 className="text-2xl font-bold text-white">Active Monitoring</h2>
         <div className="flex items-center gap-2">
           <span className="text-sm text-slate-400">{todayLabel}</span>
-          <button type="button" onClick={onRefresh} className="flex items-center gap-1.5 rounded-lg border border-slate-600 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-800">
+          <button
+            type="button"
+            onClick={() => {
+              onRefresh()
+              void refreshFleetLocations()
+            }}
+            className="flex items-center gap-1.5 rounded-lg border border-slate-600 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-800"
+          >
             <RefreshCw className="h-3.5 w-3.5" /> Refresh
           </button>
         </div>
@@ -1435,9 +1383,11 @@ function RoutesTab({ routes, stops, trips, onRefresh }) {
   useEffect(() => {
     const routeId = Number(routeStopForm.route_id)
     if (!Number.isFinite(routeId) || routeId <= 0) {
-      setAssignedStopIds([])
-      setSuggestedStopOrder('')
-      return
+      const resetTimer = setTimeout(() => {
+        setAssignedStopIds([])
+        setSuggestedStopOrder('')
+      }, 0)
+      return () => clearTimeout(resetTimer)
     }
 
     let cancelled = false
@@ -1730,7 +1680,7 @@ function TripsTab({ trips, drivers, conductors, onRefresh }) {
   const [gpsMessage, setGpsMessage] = useState('')
   const [assignModal, setAssignModal]   = useState(null)
   const [confirmComplete, setConfirmComplete] = useState(null) // trip object pending confirmation
-  const [form, setForm]             = useState({ fleet_route_id: '', trip_date: '', departure_time: '', driver_id: '', conductor_id: '', notes: '' })
+  const [form, setForm]             = useState({ fleet_route_id: '', trip_date: '', departure_time: '', trip_type: 'one_way', return_departure_time: '', driver_id: '', conductor_id: '', notes: '' })
   const [assignId, setAssignId]     = useState('')
   const [saving, setSaving]         = useState(false)
   const [actionInFlight, setActionInFlight] = useState(null) // tripId currently being actioned
@@ -1750,12 +1700,14 @@ function TripsTab({ trips, drivers, conductors, onRefresh }) {
       await StaffService.scheduleTrip({
         fleet_route_id: Number(form.fleet_route_id),
         trip_date: form.trip_date,
-        departure_time: form.departure_time || null,
+        departure_time: form.departure_time,
+        trip_type: form.trip_type,
+        return_departure_time: form.trip_type === 'round_trip' ? form.return_departure_time : null,
         driver_id: Number(form.driver_id),
         conductor_id: Number(form.conductor_id),
         notes: form.notes,
       })
-      setMsg('Trip scheduled.'); setForm({ fleet_route_id: '', trip_date: '', departure_time: '', driver_id: '', conductor_id: '', notes: '' }); setShowModal(false); onRefresh()
+      setMsg('Trip scheduled.'); setForm({ fleet_route_id: '', trip_date: '', departure_time: '', trip_type: 'one_way', return_departure_time: '', driver_id: '', conductor_id: '', notes: '' }); setShowModal(false); onRefresh()
     } catch (err) { setMsg(err?.message || 'Failed.') }
     finally { setSaving(false) }
   }
@@ -1845,8 +1797,8 @@ function TripsTab({ trips, drivers, conductors, onRefresh }) {
                 : sorted.map(t => {
                   const driverRow = t.driver || driverMap.get(Number(t.driver_id))
                   const conductorRow = t.conductor || conductorMap.get(Number(t.conductor_id))
-                  const driverName = driverRow ? (driverRow?.name || driverRow?.user?.username || driverRow?.username || driverRow?.user?.email || driverRow?.email) : null
-                  const conductorName = conductorRow ? (conductorRow?.name || conductorRow?.user?.username || conductorRow?.username || conductorRow?.user?.email || conductorRow?.email) : null
+                  const driverName = driverRow ? getStaffFullName(driverRow) || (driverRow?.user?.email || driverRow?.email) : null
+                  const conductorName = conductorRow ? getStaffFullName(conductorRow) || (conductorRow?.user?.email || conductorRow?.email) : null
                   return (
                     <tr key={t.trip_id} className="border-b border-slate-100 hover:bg-slate-50">
                       <td className="px-4 py-3 font-mono text-xs text-slate-600">#{t.trip_id}</td>
@@ -1894,13 +1846,22 @@ function TripsTab({ trips, drivers, conductors, onRefresh }) {
               </select>
             </Field>
             <Field label="Trip Date" type="date" value={form.trip_date} onChange={e => setForm(p => ({...p, trip_date: e.target.value}))} required />
-            <Field label="Departure Time" type="time" value={form.departure_time} onChange={e => setForm(p => ({...p, departure_time: e.target.value}))} />
+            <Field label="Trip Type" required>
+              <select value={form.trip_type} onChange={e => setForm(p => ({ ...p, trip_type: e.target.value }))} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500">
+                <option value="one_way">One-way</option>
+                <option value="round_trip">Round Trip</option>
+              </select>
+            </Field>
+            <Field label="Departure Time" type="time" value={form.departure_time} onChange={e => setForm(p => ({...p, departure_time: e.target.value}))} required />
+            {form.trip_type === 'round_trip' && (
+              <Field label="Return Departure Time" type="time" value={form.return_departure_time} onChange={e => setForm(p => ({ ...p, return_departure_time: e.target.value }))} required />
+            )}
             <Field label="Driver" required>
               <select value={form.driver_id} onChange={e => setForm(p => ({ ...p, driver_id: e.target.value }))} required className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500">
                 <option value="">Select a driver…</option>
                 {drivers.map(d => (
                   <option key={getStaffCompanyUserId(d)} value={getStaffCompanyUserId(d)}>
-                    {getStaffUsername(d)} ({getStaffEmail(d)})
+                    {getStaffFullName(d) || getStaffUsername(d)} ({getStaffEmail(d)})
                   </option>
                 ))}
               </select>
@@ -1910,7 +1871,7 @@ function TripsTab({ trips, drivers, conductors, onRefresh }) {
                 <option value="">Select a conductor…</option>
                 {conductors.map(c => (
                   <option key={getStaffCompanyUserId(c)} value={getStaffCompanyUserId(c)}>
-                    {getStaffUsername(c)} ({getStaffEmail(c)})
+                    {getStaffFullName(c) || getStaffUsername(c)} ({getStaffEmail(c)})
                   </option>
                 ))}
               </select>
@@ -1934,7 +1895,7 @@ function TripsTab({ trips, drivers, conductors, onRefresh }) {
               <select value={assignId} onChange={e => setAssignId(e.target.value)} required className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500">
                 <option value="">Choose…</option>
                 {(assignModal.type === 'driver' ? drivers : conductors).map(p => (
-                  <option key={getStaffCompanyUserId(p)} value={getStaffCompanyUserId(p)}>{getStaffUsername(p)} ({getStaffEmail(p)})</option>
+                  <option key={getStaffCompanyUserId(p)} value={getStaffCompanyUserId(p)}>{getStaffFullName(p) || getStaffUsername(p)} ({getStaffEmail(p)})</option>
                 ))}
               </select>
             </Field>
@@ -1971,7 +1932,7 @@ function TripsTab({ trips, drivers, conductors, onRefresh }) {
         <Modal title={`Trip #${selectedTrip.trip_id} Details`} onClose={() => setSelectedTrip(null)}>
           <div className="space-y-4">
             <dl className="grid grid-cols-2 gap-3 text-sm">
-              {[['Date', fmtDate(selectedTrip.trip_date)],['Status', selectedTrip.status],['Route', selectedTrip.fleet_route?.route?.route_name],['Fleet', selectedTrip.fleet_route?.fleet?.plate_number],['Driver', selectedTrip.driver?.name || selectedTrip.driver?.user?.username || selectedTrip.driver?.username || 'Unassigned'],['Conductor', selectedTrip.conductor?.name || selectedTrip.conductor?.user?.username || selectedTrip.conductor?.username || 'Unassigned'],['Revenue', fmt(selectedTrip.total_revenue)]].map(([label, value]) => (
+              {[['Date', fmtDate(selectedTrip.trip_date)],['Status', selectedTrip.status],['Route', selectedTrip.fleet_route?.route?.route_name],['Fleet', selectedTrip.fleet_route?.fleet?.plate_number],['Driver', getStaffFullName(selectedTrip.driver) || selectedTrip.driver?.user?.email || 'Unassigned'],['Conductor', getStaffFullName(selectedTrip.conductor) || selectedTrip.conductor?.user?.email || 'Unassigned'],['Revenue', fmt(selectedTrip.total_revenue)]].map(([label, value]) => (
                 <div key={label}>
                   <dt className="text-xs font-medium uppercase tracking-wide text-slate-400">{label}</dt>
                   <dd className="mt-0.5 font-semibold text-slate-900">{value || '-'}</dd>
@@ -2133,6 +2094,78 @@ function ReportsTab({ fleets }) {
     ? [...new Set(reportRows.flatMap(row => Object.keys(row || {})))].slice(0, 14)
     : []
 
+  const handlePrintReport = () => {
+    if (!report || reportRows.length === 0 || reportColumns.length === 0) {
+      setMsg('Run a report first before printing.');
+      return;
+    }
+
+    const fleetLabel = fleets.find((fleet) => String(fleet.fleet_id) === String(selectedFleet))?.plate_number || `Fleet ${selectedFleet}`;
+    const reportLabel = reportType === 'financial'
+      ? 'Financial Audit'
+      : reportType === 'revenue'
+        ? 'Revenue by Route'
+        : reportType === 'adherence'
+          ? 'Route Adherence'
+          : reportType === 'occupancy'
+            ? 'Occupancy Trends'
+            : reportType === 'daily'
+              ? 'Daily Summary'
+              : 'Payment Channels';
+
+    const popup = window.open('', '_blank', 'width=1200,height=780');
+    if (!popup) {
+      setMsg('Unable to open print preview. Please allow pop-ups for this site.');
+      return;
+    }
+
+    const tableHead = reportColumns
+      .map((column) => `<th>${column.replace(/_/g, ' ')}</th>`)
+      .join('');
+
+    const tableRows = reportRows
+      .map((row) => `<tr>${reportColumns.map((column) => `<td>${String(renderValue(row?.[column]) || '-')}</td>`).join('')}</tr>`)
+      .join('');
+
+    popup.document.write(`
+      <html>
+        <head>
+          <title>${reportLabel} - ${fleetLabel}</title>
+          <style>
+            @page { size: A4 landscape; margin: 12mm; }
+            body { font-family: Arial, sans-serif; color: #0f172a; margin: 0; }
+            .page { padding: 8px; }
+            h1 { margin: 0; font-size: 20px; }
+            .meta { margin-top: 8px; color: #334155; font-size: 12px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 11px; }
+            th, td { border: 1px solid #cbd5e1; padding: 6px; text-align: left; vertical-align: top; }
+            th { background: #e2e8f0; text-transform: uppercase; font-size: 10px; letter-spacing: 0.04em; }
+            tr:nth-child(even) td { background: #f8fafc; }
+            .footer { margin-top: 10px; font-size: 10px; color: #64748b; }
+          </style>
+        </head>
+        <body>
+          <div class="page">
+            <h1>Smart Transit Fleet Report</h1>
+            <div class="meta">
+              <div><strong>Fleet:</strong> ${fleetLabel}</div>
+              <div><strong>Report:</strong> ${reportLabel}</div>
+              <div><strong>Generated:</strong> ${new Date().toLocaleString()}</div>
+            </div>
+            <table>
+              <thead><tr>${tableHead}</tr></thead>
+              <tbody>${tableRows}</tbody>
+            </table>
+            <p class="footer">Generated from Operator Dashboard Reports. This print view is PDF-ready via browser print dialog.</p>
+          </div>
+          <script>window.onload = function () { window.print(); };</script>
+        </body>
+      </html>
+    `);
+
+    popup.document.close();
+  }
+
   return (
     <div className="space-y-5">
       <h2 className="text-xl font-bold text-slate-900">Fleet Reports</h2>
@@ -2159,6 +2192,17 @@ function ReportsTab({ fleets }) {
           <button type="button" onClick={fetchReport} disabled={loading} className="flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-60">
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eye className="h-4 w-4" />}
             Run Report
+          </button>
+        </div>
+        <div className="flex items-end">
+          <button
+            type="button"
+            onClick={handlePrintReport}
+            disabled={!report || reportRows.length === 0 || reportColumns.length === 0}
+            className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+          >
+            <Download className="h-4 w-4" />
+            Print / Save PDF
           </button>
         </div>
       </div>
@@ -2198,16 +2242,17 @@ function ReportsTab({ fleets }) {
 function AccountTab({ profile }) {
   const user  = profile?.user ?? {}
   const staff = profile ?? {}
+  const displayName = staff?.name || user?.name || user?.username || user?.email || 'Operator'
   return (
     <div className="max-w-xl space-y-5">
       <h2 className="text-xl font-bold text-slate-900">Account</h2>
       <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm space-y-4">
         <div className="flex items-center gap-4">
           <div className="flex h-14 w-14 items-center justify-center rounded-full bg-teal-600 text-xl font-bold text-white">
-            {(user.username || user.email || 'O')[0].toUpperCase()}
+            {String(displayName)[0].toUpperCase()}
           </div>
           <div>
-            <p className="font-semibold text-slate-900">{user.username || 'Operator'}</p>
+            <p className="font-semibold text-slate-900">{displayName}</p>
             <p className="text-sm text-slate-500">{user.email}</p>
           </div>
         </div>
@@ -2305,7 +2350,7 @@ export default function OperatorDashboard() {
   }, [activeTab, hasLiveOpsTrips, loadTripsOnly])
 
   const handleLogout = async () => {
-    try { await StaffService.logoutOperator() } catch {}
+    try { await StaffService.logoutOperator() } catch (error) { void error }
     navigate('/employee/login')
   }
 

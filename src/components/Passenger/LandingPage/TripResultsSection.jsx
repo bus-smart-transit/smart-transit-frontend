@@ -1,5 +1,6 @@
 import { MapPin, Clock, Bus, Users, Loader, AlertCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useMemo, useState } from 'react';
 
 const toCompactTime = (value) => {
   if (!value) return '--:--';
@@ -17,6 +18,18 @@ const formatTripDate = (dateStr) => {
   } catch { return dateStr; }
 };
 
+const resolveTripBaseFare = (trip) => {
+  const directFare = Number(trip?.fare ?? trip?.base_fare ?? trip?.fleet_route?.base_fare);
+  if (Number.isFinite(directFare) && directFare > 0) return directFare;
+
+  const fareRules = trip?.fleet_route?.fleet?.fare_rules || trip?.fleet_route?.fleet?.fareRules || [];
+  const fares = fareRules
+    .map((rule) => Number(rule?.base_fare))
+    .filter((value) => Number.isFinite(value) && value > 0);
+
+  return fares.length > 0 ? Math.min(...fares) : null;
+};
+
 function TripCard({ trip, index, onBookSeat }) {
   const route = trip.fleet_route?.route ?? trip.fleet_route ?? {};
   const fleet = trip.fleet_route?.fleet ?? {};
@@ -28,7 +41,7 @@ function TripCard({ trip, index, onBookSeat }) {
   const seatedLeft = trip.available_seated_capacity ?? trip.remaining_seated_capacity ?? 10;
   const standingLeft = trip.available_standing_capacity ?? trip.remaining_standing_capacity ?? 0;
   const totalLeft = seatedLeft + standingLeft;
-  const listedFare = Number(trip.fare ?? trip.base_fare ?? trip.fleet_route?.base_fare ?? NaN);
+  const listedFare = resolveTripBaseFare(trip);
   const hasListedFare = Number.isFinite(listedFare) && listedFare > 0;
 
   return (
@@ -63,9 +76,9 @@ function TripCard({ trip, index, onBookSeat }) {
       <div className="flex shrink-0 flex-col items-end gap-2">
         <div className="text-right">
           <p className="text-lg font-bold text-slate-900">
-            {hasListedFare ? `₱${listedFare.toFixed(0)}` : 'Dynamic Fare'}
+            {hasListedFare ? `₱${listedFare.toFixed(0)}` : 'Fare depends on drop-off'}
           </p>
-          <p className="text-xs text-slate-400">{hasListedFare ? 'per passenger' : 'quoted at checkout'}</p>
+          <p className="text-xs text-slate-400">{hasListedFare ? 'base fare per passenger' : 'select drop-off to see exact price'}</p>
         </div>
         <div className="flex gap-2">
           <button
@@ -90,13 +103,30 @@ function TripCard({ trip, index, onBookSeat }) {
 
 export default function TripResultsSection({ trips, loading, error, searchState, onBookSeat }) {
   const navigate = useNavigate();
+  const [statusFilter, setStatusFilter] = useState('all');
   const origin = searchState?.from?.toUpperCase() || 'ALL TERMINALS';
   const dest = searchState?.to?.toUpperCase() || 'ALL DESTINATIONS';
   const dateLabel = searchState?.date
     ? formatTripDate(searchState.date)
     : new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'long', day: 'numeric', year: 'numeric' });
 
-  const displayTrips = (trips ?? []).slice(0, 10);
+  const filteredTrips = useMemo(() => {
+    const list = Array.isArray(trips) ? trips : [];
+    if (statusFilter === 'all') return list;
+    return list.filter((trip) => {
+      const status = String(trip?.status || '').toLowerCase();
+      if (statusFilter === 'scheduled') {
+        return ['scheduled', 'delayed', 'boarding', 'departed', 'in-progress'].includes(status);
+      }
+      if (statusFilter === 'completed') {
+        return ['completed', 'alighted'].includes(status);
+      }
+      return true;
+    });
+  }, [statusFilter, trips]);
+
+  const displayTrips = filteredTrips.slice(0, 10);
+  const hasActiveSearch = Boolean(searchState?.from || searchState?.to || searchState?.date);
 
   return (
     <section className="bg-slate-50 px-4 py-10 sm:px-6 lg:px-10">
@@ -119,15 +149,30 @@ export default function TripResultsSection({ trips, loading, error, searchState,
               )}
             </p>
           </div>
-          {!loading && displayTrips.length > 0 && (
-            <button
-              type="button"
-              onClick={() => navigate('/passenger/book')}
-              className="rounded-lg bg-[#0D1B2A] px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700"
+          <div className="flex items-center gap-2">
+            <label htmlFor="landing-trip-status-filter" className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Trip Filter
+            </label>
+            <select
+              id="landing-trip-status-filter"
+              value={statusFilter}
+              onChange={(event) => setStatusFilter(event.target.value)}
+              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
             >
-              View All Trips
-            </button>
-          )}
+              <option value="all">All</option>
+              <option value="scheduled">Scheduled</option>
+              <option value="completed">Completed</option>
+            </select>
+            {!loading && displayTrips.length > 0 && (
+              <button
+                type="button"
+                onClick={() => navigate('/passenger/book')}
+                className="rounded-lg bg-[#0D1B2A] px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700"
+              >
+                View All Trips
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Loading state */}
@@ -151,7 +196,11 @@ export default function TripResultsSection({ trips, loading, error, searchState,
           <div className="rounded-xl border border-slate-200 bg-white p-12 text-center">
             <Bus className="h-10 w-10 text-slate-300 mx-auto mb-3" />
             <p className="font-semibold text-slate-600">No trips found</p>
-            <p className="mt-1 text-sm text-slate-400">Try different search terms or select another date.</p>
+            <p className="mt-1 text-sm text-slate-400">
+              {hasActiveSearch
+                ? 'No trips match the selected route and date. Try broadening the search.'
+                : 'There are no scheduled trips available at the moment.'}
+            </p>
           </div>
         )}
 

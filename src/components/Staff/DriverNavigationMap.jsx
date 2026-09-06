@@ -8,6 +8,21 @@ const DRIVER_ROUTE_STOPS_SOURCE_ID = 'driver-route-stops';
 const DRIVER_ROUTE_STOPS_LAYER_ID = 'driver-route-stops-layer';
 const DRIVER_ROUTE_STOPS_LABEL_LAYER_ID = 'driver-route-stops-label-layer';
 
+const fetchRoadPathFromOsrm = async (coordinates = []) => {
+  if (!Array.isArray(coordinates) || coordinates.length < 2) return null;
+
+  const encoded = coordinates.map(([lng, lat]) => `${lng},${lat}`).join(';');
+  const url = `https://router.project-osrm.org/route/v1/driving/${encoded}?overview=full&geometries=geojson&steps=false`;
+  const response = await fetch(url);
+  if (!response.ok) return null;
+
+  const data = await response.json();
+  const roadCoords = data?.routes?.[0]?.geometry?.coordinates;
+  if (!Array.isArray(roadCoords) || roadCoords.length < 2) return null;
+
+  return roadCoords;
+};
+
 /**
  * Embedded MapLibre GL map for the driver's Navigation tab.
  * Shows:
@@ -83,12 +98,22 @@ export default function DriverNavigationMap({ trip, stops, lastGpsRef, routeGeom
         );
         if (valid.length < 2) { routeDrawnRef.current = false; return; }
 
-        const coords = valid.map((s) => [Number(s.longitude), Number(s.latitude)]);
+        const stopCoords = valid.map((s) => [Number(s.longitude), Number(s.latitude)]);
+        let routeCoords = stopCoords;
+
+        try {
+          const roadCoords = await fetchRoadPathFromOsrm(stopCoords);
+          if (Array.isArray(roadCoords) && roadCoords.length >= 2) {
+            routeCoords = roadCoords;
+          }
+        } catch {
+          // Keep fallback geometry from stop coordinates when OSRM is unavailable.
+        }
 
         // Route polyline
         map.addSource(DRIVER_ROUTE_SOURCE_ID, {
           type: 'geojson',
-          data: { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: coords } },
+          data: { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: routeCoords } },
         });
         map.addLayer({
           id: DRIVER_ROUTE_LINE_LAYER_ID,
@@ -174,9 +199,9 @@ export default function DriverNavigationMap({ trip, stops, lastGpsRef, routeGeom
         });
 
         // Fit to full route extent
-        const bounds = coords.reduce(
+        const bounds = routeCoords.reduce(
           (acc, c) => acc.extend(c),
-          new maplibregl.LngLatBounds(coords[0], coords[0])
+          new maplibregl.LngLatBounds(routeCoords[0], routeCoords[0])
         );
         map.fitBounds(bounds, { padding: 60, maxZoom: 14 });
         setRouteLoaded(true);

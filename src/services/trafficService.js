@@ -121,6 +121,64 @@ const extractRouteGeometryFromStops = (route = {}) => {
   };
 };
 
+const normalizeRoadName = (value, fallback) => {
+  const label = String(value || '').trim();
+  if (!label || label === '-' || label.toLowerCase() === 'unnamed') {
+    return fallback;
+  }
+  return label;
+};
+
+const buildMapboxAlerts = (routeData = {}, routeName = '') => {
+  const steps = routeData?.legs?.[0]?.steps || [];
+  const alerts = [];
+
+  for (const step of steps) {
+    const road = normalizeRoadName(step?.name, routeName || 'Route segment');
+    const durationMinutes = Math.max(1, Math.round(Number(step?.duration || 0) / 60));
+    const congestionLevel = Number(step?.congestion_numeric ?? step?.annotation?.congestion_numeric ?? 0);
+
+    if (durationMinutes < 2 && congestionLevel < 40) {
+      continue;
+    }
+
+    let severity = 'info';
+    if (congestionLevel >= 65 || durationMinutes >= 8) severity = 'danger';
+    else if (congestionLevel >= 40 || durationMinutes >= 4) severity = 'warn';
+
+    alerts.push({
+      road,
+      severity,
+      etaMinutes: durationMinutes,
+      detail: `Congestion on ${road} adds around ${durationMinutes} min.`,
+    });
+  }
+
+  return alerts.slice(0, 4);
+};
+
+const buildOrsAlerts = (routeData = {}, routeName = '') => {
+  const steps = routeData?.segments?.[0]?.steps || [];
+  const alerts = [];
+
+  for (const step of steps) {
+    const durationMinutes = Math.max(1, Math.round(Number(step?.duration || 0) / 60));
+    if (durationMinutes < 2) continue;
+
+    const road = normalizeRoadName(step?.name || step?.instruction, routeName || 'Route segment');
+    const severity = durationMinutes >= 8 ? 'danger' : durationMinutes >= 4 ? 'warn' : 'info';
+
+    alerts.push({
+      road,
+      severity,
+      etaMinutes: durationMinutes,
+      detail: `${road} segment is currently taking about ${durationMinutes} min.`,
+    });
+  }
+
+  return alerts.slice(0, 4);
+};
+
 export function buildFallbackTrafficStatus({
   currentLat,
   currentLng,
@@ -152,6 +210,13 @@ export function buildFallbackTrafficStatus({
       rerouteRoute: alternateRoute,
       assignedRoute: !!routeName,
       routeGeometry,
+      alerts: [{
+        road: routeName || 'Assigned route',
+        severity: 'info',
+        etaMinutes: 8,
+        detail: 'Live traffic feed is unavailable; showing route fallback estimate.',
+      }],
+      dataSource: 'fallback',
     };
   }
 
@@ -176,6 +241,13 @@ export function buildFallbackTrafficStatus({
       rerouteRoute: alternateRoute,
       assignedRoute: !!routeName,
       routeGeometry,
+      alerts: [{
+        road: routeName || 'Assigned route',
+        severity: 'danger',
+        etaMinutes: estimated,
+        detail: `Estimated heavy traffic with about ${estimated} min to next stop (fallback estimate).`,
+      }],
+      dataSource: 'fallback',
     };
   }
 
@@ -192,6 +264,13 @@ export function buildFallbackTrafficStatus({
       rerouteRoute: alternateRoute,
       assignedRoute: !!routeName,
       routeGeometry,
+      alerts: [{
+        road: routeName || 'Assigned route',
+        severity: 'warn',
+        etaMinutes: estimated,
+        detail: `Estimated moderate traffic with about ${estimated} min to next stop (fallback estimate).`,
+      }],
+      dataSource: 'fallback',
     };
   }
 
@@ -207,6 +286,13 @@ export function buildFallbackTrafficStatus({
     rerouteRoute: alternateRoute,
     assignedRoute: !!routeName,
     routeGeometry,
+    alerts: [{
+      road: routeName || 'Assigned route',
+      severity: 'info',
+      etaMinutes: estimated,
+      detail: 'Route conditions appear stable in fallback mode.',
+    }],
+    dataSource: 'fallback',
   };
 }
 
@@ -236,11 +322,11 @@ export async function fetchTrafficStatus({
     };
 
     if (provider === 'mapbox') {
-      url.pathname = '/directions/v5/mapbox/driving';
+      url.pathname = '/directions/v5/mapbox/driving-traffic';
       url.searchParams.set('access_token', apiKey);
       url.searchParams.set('geometries', 'geojson');
-      url.searchParams.set('annotations', 'duration,distance');
-      url.searchParams.set('steps', 'false');
+      url.searchParams.set('annotations', 'duration,distance,congestion_numeric,speed');
+      url.searchParams.set('steps', 'true');
       url.searchParams.set('alternatives', 'true');
       url.searchParams.set('coordinates', `${payload.start.join(',')};${payload.end.join(',')}`);
     } else if (provider === 'ors') {
@@ -251,6 +337,7 @@ export async function fetchTrafficStatus({
       url.searchParams.set('alternatives', 'true');
       url.searchParams.set('geometry', 'true');
       url.searchParams.set('geometries', 'geojson');
+      url.searchParams.set('instructions', 'true');
     } else {
       return buildFallbackTrafficStatus({ currentLat, currentLng, nextStop });
     }
@@ -274,6 +361,8 @@ export async function fetchTrafficStatus({
     let alternateRouteGeometry = null;
     const routeData = data?.routes?.[0];
     const alternativeData = (data?.routes || [])[1] || routeData;
+    const routeName = route?.route_name || route?.name || route?.routeName || '';
+    let alerts = [];
 
     if (provider === 'mapbox') {
       const duration = Number(routeData?.duration || 0);
@@ -281,20 +370,30 @@ export async function fetchTrafficStatus({
       routeGeometry = normalizeRouteGeometry(routeData?.geometry, provider);
       alternateEtaMinutes = Number(alternativeData?.duration || 0) > 0 ? Math.max(2, Math.round(Number(alternativeData.duration) / 60)) : etaMinutes;
       alternateRouteGeometry = normalizeRouteGeometry(alternativeData?.geometry, provider) || routeGeometry;
+      alerts = buildMapboxAlerts(routeData, routeName);
     } else if (provider === 'ors') {
       const duration = Number(routeData?.summary?.duration || 0);
       etaMinutes = duration > 0 ? Math.max(2, Math.round(duration / 60)) : 8;
       routeGeometry = normalizeRouteGeometry(routeData?.geometry, provider);
       alternateEtaMinutes = Number(alternativeData?.summary?.duration || 0) > 0 ? Math.max(2, Math.round(Number(alternativeData.summary.duration) / 60)) : etaMinutes;
       alternateRouteGeometry = normalizeRouteGeometry(alternativeData?.geometry, provider) || routeGeometry;
+      alerts = buildOrsAlerts(routeData, routeName);
     }
 
     const level = etaMinutes >= 12 ? 'heavy' : etaMinutes >= 7 ? 'moderate' : 'normal';
     const label = level === 'heavy' ? 'Heavy traffic' : level === 'moderate' ? 'Moderate traffic' : 'Normal flow';
-    const routeName = route?.route_name || route?.name || route?.routeName || '';
     const routeStopGeometry = extractRouteGeometryFromStops(route);
     const alternateRoute = routeName ? buildAssignedRouteAlternative(route) : 'parallel bypass corridor';
     const timeSavedMinutes = alternateEtaMinutes ? Math.max(0, etaMinutes - alternateEtaMinutes) : 0;
+
+    if (alerts.length === 0) {
+      alerts = [{
+        road: routeName || 'Assigned route',
+        severity: level === 'heavy' ? 'danger' : level === 'moderate' ? 'warn' : 'info',
+        etaMinutes,
+        detail: `No detailed incident segments were returned by ${provider.toUpperCase()}, using travel-time signal.`,
+      }];
+    }
 
     return {
       level,
@@ -330,6 +429,8 @@ export async function fetchTrafficStatus({
         }
         : null),
       timeSavedMinutes,
+      alerts,
+      dataSource: provider,
     };
   } catch {
     return buildFallbackTrafficStatus({ currentLat, currentLng, nextStop, route });

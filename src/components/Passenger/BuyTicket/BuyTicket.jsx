@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { MapPin, Clock, Smartphone, CreditCard, AlertCircle, CheckCircle, Loader, LocateFixed, Users } from 'lucide-react';
+import { MapPin, Clock, CreditCard, AlertCircle, CheckCircle, Loader, LocateFixed, Users } from 'lucide-react';
 import useBuyTicket from '../../../api/hooks/Passenger/useBuyTicket';
 import TicketCard from '../Ticket/TicketCard';
 import './BuyTicketPortal.css';
@@ -67,8 +67,22 @@ const toSeatAvailability = (trip, fleet) => {
   };
 };
 
+const resolveTripBaseFare = (trip) => {
+  const directFare = Number(trip?.fare ?? trip?.base_fare ?? trip?.fleet_route?.base_fare);
+  if (Number.isFinite(directFare) && directFare > 0) return directFare;
+
+  const fareRules = trip?.fleet_route?.fleet?.fare_rules || trip?.fleet_route?.fleet?.fareRules || [];
+  const fares = fareRules
+    .map((rule) => Number(rule?.base_fare))
+    .filter((value) => Number.isFinite(value) && value > 0);
+
+  if (fares.length === 0) return null;
+  return Math.min(...fares);
+};
+
 export default function BuyTicket({ onTicketPurchased }) {
   const [tripDetailsModal, setTripDetailsModal] = useState(null);
+  const [ticketPreview, setTicketPreview] = useState(null);
   const {
     availableRewardPoints,
     canProceedToOnlinePayment,
@@ -78,6 +92,7 @@ export default function BuyTicket({ onTicketPurchased }) {
     dropoffMode,
     error,
     fare,
+    hasFareQuote,
     form,
     formErrors,
     formatDateTime,
@@ -111,6 +126,7 @@ export default function BuyTicket({ onTicketPurchased }) {
     selectedFleetType,
     selectedStops,
     selectedTrip,
+    selectedTripIsToday,
     seatTypeOptions,
     seatTypePolicyNote,
     setDestinationQuery,
@@ -188,19 +204,42 @@ export default function BuyTicket({ onTicketPurchased }) {
               )}
 
               {qrTickets.map((ticket, idx) => (
-                <div key={ticket.ticket_uuid || idx}>
-                  <TicketCard
-                    fromLabel={selectedRoute?.origin || 'Ecoland Terminal'}
-                    toLabel={selectedRoute?.destination || ticket.destination || 'Tagum Terminal'}
-                    departureLabel={formatDateTime(ticket.valid_from)}
-                    seatLabel={ticket.seat_type || '-'}
-                    routeLabel={`${selectedRoute?.origin || '-'} to ${selectedRoute?.destination || ticket.destination || '-'}`}
-                    qrUrl={ticket.qr_url}
-                    statusLabel="Valid"
-                    amountLabel={`PHP ${Number(ticket.amount || 0).toFixed(2)}`}
-                    validLabel={formatDateTime(ticket.valid_from)}
-                    expiresLabel={formatDateTime(ticket.expires_at)}
-                  />
+                <div
+                  key={ticket.ticket_uuid || idx}
+                  style={{
+                    border: '1px solid rgba(148,163,184,0.2)',
+                    borderRadius: '12px',
+                    padding: '12px',
+                    background: 'rgba(15,23,42,0.45)',
+                    marginBottom: '10px',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+                    <div>
+                      <p style={{ margin: 0, fontSize: '0.9rem', fontWeight: 700, color: '#e2e8f0' }}>
+                        {selectedRoute?.origin || 'Ecoland Terminal'} to {selectedRoute?.destination || ticket.destination || 'Tagum Terminal'}
+                      </p>
+                      <p style={{ margin: '4px 0 0', fontSize: '0.78rem', color: '#94a3b8' }}>
+                        {ticket.seat_type || 'seated'} · {formatDateTime(ticket.valid_from)}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setTicketPreview({ ticket, idx })}
+                      style={{
+                        border: '1px solid rgba(45,212,191,0.45)',
+                        borderRadius: '10px',
+                        padding: '7px 12px',
+                        fontSize: '0.78rem',
+                        fontWeight: 700,
+                        color: '#99f6e4',
+                        background: 'rgba(20,184,166,0.12)',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      View Ticket
+                    </button>
+                  </div>
                   <button
                     type="button"
                     onClick={() => printQrTicket(ticket, idx)}
@@ -296,6 +335,7 @@ export default function BuyTicket({ onTicketPurchased }) {
                 const checked = form.trip_id === String(trip.trip_id);
                 const route = trip.fleet_route?.route || {};
                 const fleet = trip.fleet_route?.fleet || {};
+                const baseFare = resolveTripBaseFare(trip);
                 const {
                   seatedLeft,
                   standingLeft,
@@ -339,10 +379,14 @@ export default function BuyTicket({ onTicketPurchased }) {
                     {/* Capacity + fare column */}
                     <div className="buy-trip-side" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px', minWidth: '100px' }}>
                       {/* Fare */}
-                      <strong style={{ fontSize: '1rem', color: checked && fare ? '#34d399' : '#e2e8f0' }}>
-                        {checked && fare ? `PHP ${fare.toFixed(2)}` : 'See fare ↓'}
+                      <strong style={{ fontSize: '1rem', color: checked && hasFareQuote ? '#34d399' : '#e2e8f0', textAlign: 'right' }}>
+                        {checked && hasFareQuote
+                          ? `PHP ${Number(fare).toFixed(2)}`
+                          : (baseFare != null ? `From PHP ${Number(baseFare).toFixed(2)}` : 'Fare depends on drop-off')}
                       </strong>
-                      <span style={{ fontSize: '0.7rem', color: '#64748b' }}>per passenger</span>
+                      <span style={{ fontSize: '0.7rem', color: '#64748b', textAlign: 'right' }}>
+                        {baseFare != null ? 'base fare per passenger' : 'select drop-off to quote exact price'}
+                      </span>
 
                       {/* Seated capacity */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px', fontSize: '0.72rem', color: seatedLeft > 0 ? '#38bdf8' : '#ef4444' }}>
@@ -436,16 +480,22 @@ export default function BuyTicket({ onTicketPurchased }) {
                       value="later"
                       checked={form.booking_option === 'later'}
                       onChange={(e) => handleChange('booking_option', e.target.value)}
+                      disabled={selectedTripIsToday}
                     />
                     <span>Book Later</span>
                   </label>
                 </div>
+                {selectedTripIsToday && (
+                  <p style={{ color: '#f59e0b', marginTop: '6px', fontSize: '0.78rem' }}>
+                    This trip is scheduled for today, so only Book Now is available.
+                  </p>
+                )}
                 {!hasBookNowOption && (
                   <p style={{ color: '#f59e0b', marginTop: '6px', fontSize: '0.78rem' }}>
                     Book Now is unavailable because current trips are all future schedules.
                   </p>
                 )}
-                {form.booking_option === 'later' && (
+                {form.booking_option === 'later' && !selectedTripIsToday && (
                   <input
                     type="date"
                     value={form.booking_date}
@@ -457,91 +507,72 @@ export default function BuyTicket({ onTicketPurchased }) {
               </div>
 
               <div className="buy-inline-group">
-                <label><Smartphone size={14} /> Payment Method</label>
+                <label><CreditCard size={14} /> Payment Channel (Online)</label>
+                <div style={{ color: '#94a3b8', fontSize: '0.8rem', marginBottom: '8px' }}>
+                  Online booking is paid online by default.
+                </div>
                 <div className="buy-toggle-row">
-                  <label>
-                    <input
-                      type="radio"
-                      name="payment_method"
-                      value="online"
-                      checked={form.payment_method === 'online'}
-                      onChange={(e) => handleChange('payment_method', e.target.value)}
-                    />
-                    <span>Online</span>
-                  </label>
-                  <label className="disabled">
-                    <input type="radio" name="payment_method" value="onsite" disabled />
-                    <span>Onsite</span>
-                  </label>
+                  {['gcash', 'maya', 'card'].map((channel) => (
+                    <label key={channel}>
+                      <input
+                        type="radio"
+                        name="payment_channel"
+                        value={channel}
+                        checked={form.payment_channel === channel}
+                        onChange={(e) => handleChange('payment_channel', e.target.value)}
+                      />
+                      <span>{channel}</span>
+                    </label>
+                  ))}
                 </div>
+                {isGuestCheckout && (
+                  <input
+                    type="email"
+                    value={form.guest_email}
+                    onChange={(e) => handleChange('guest_email', e.target.value)}
+                    placeholder="Email for receipt (optional)"
+                  />
+                )}
+                {!isGuestCheckout && (
+                  <>
+                    <div style={{ color: '#94a3b8', fontSize: '0.82rem', marginTop: '6px' }}>
+                      {loadingRewards
+                        ? 'Loading reward balance...'
+                        : `Available Rewards: ${Number(availableRewardPoints || 0).toFixed(0)} RP`}
+                    </div>
+
+                    <label style={{ marginTop: '8px' }}>
+                      <input
+                        type="checkbox"
+                        checked={Boolean(form.use_rewards)}
+                        onChange={(e) => handleChange('use_rewards', e.target.checked)}
+                        disabled={!hasRewardPoints}
+                      />
+                      <span> Use reward points</span>
+                    </label>
+
+                    {form.use_rewards && (
+                      <>
+                        <input
+                          type="number"
+                          min="0"
+                          step="1"
+                          value={form.reward_points_to_use}
+                          onChange={(e) => handleChange('reward_points_to_use', e.target.value)}
+                          placeholder="Reward points to use"
+                        />
+                        <div style={{ color: isRewardRequestInsufficient ? '#fca5a5' : '#93c5fd', fontSize: '0.78rem' }}>
+                          Max usable now: {Number(maxRedeemableRewardPoints || 0).toFixed(0)} RP
+                          {isRewardRequestInsufficient ? ' (insufficient for requested amount)' : ''}
+                        </div>
+                        {formErrors.reward_points_to_use && (
+                          <div style={{ color: '#fca5a5', fontSize: '0.78rem' }}>{formErrors.reward_points_to_use}</div>
+                        )}
+                      </>
+                    )}
+                  </>
+                )}
               </div>
-
-              {form.payment_method === 'online' && (
-                <div className="buy-inline-group">
-                  <label>Payment Channel</label>
-                  <div className="buy-toggle-row">
-                    {['gcash', 'maya', 'card'].map((channel) => (
-                      <label key={channel}>
-                        <input
-                          type="radio"
-                          name="payment_channel"
-                          value={channel}
-                          checked={form.payment_channel === channel}
-                          onChange={(e) => handleChange('payment_channel', e.target.value)}
-                        />
-                        <span>{channel}</span>
-                      </label>
-                    ))}
-                  </div>
-                  {isGuestCheckout && (
-                    <input
-                      type="email"
-                      value={form.guest_email}
-                      onChange={(e) => handleChange('guest_email', e.target.value)}
-                      placeholder="Email for receipt (optional)"
-                    />
-                  )}
-                  {!isGuestCheckout && (
-                    <>
-                      <div style={{ color: '#94a3b8', fontSize: '0.82rem', marginTop: '6px' }}>
-                        {loadingRewards
-                          ? 'Loading reward balance...'
-                          : `Available Rewards: ${Number(availableRewardPoints || 0).toFixed(0)} RP`}
-                      </div>
-
-                      <label style={{ marginTop: '8px' }}>
-                        <input
-                          type="checkbox"
-                          checked={Boolean(form.use_rewards)}
-                          onChange={(e) => handleChange('use_rewards', e.target.checked)}
-                          disabled={!hasRewardPoints}
-                        />
-                        <span> Use reward points</span>
-                      </label>
-
-                      {form.use_rewards && (
-                        <>
-                          <input
-                            type="number"
-                            min="0"
-                            step="1"
-                            value={form.reward_points_to_use}
-                            onChange={(e) => handleChange('reward_points_to_use', e.target.value)}
-                            placeholder="Reward points to use"
-                          />
-                          <div style={{ color: isRewardRequestInsufficient ? '#fca5a5' : '#93c5fd', fontSize: '0.78rem' }}>
-                            Max usable now: {Number(maxRedeemableRewardPoints || 0).toFixed(0)} RP
-                            {isRewardRequestInsufficient ? ' (insufficient for requested amount)' : ''}
-                          </div>
-                          {formErrors.reward_points_to_use && (
-                            <div style={{ color: '#fca5a5', fontSize: '0.78rem' }}>{formErrors.reward_points_to_use}</div>
-                          )}
-                        </>
-                      )}
-                    </>
-                  )}
-                </div>
-              )}
 
               <div className="buy-stop-selectors">
                 <label>
@@ -631,7 +662,7 @@ export default function BuyTicket({ onTicketPurchased }) {
                 <div><span>Seat Type</span><strong>{form.seat_type}</strong></div>
                 <div><span>Fleet Type</span><strong style={{ textTransform: 'capitalize' }}>{selectedFleetType || 'public'}</strong></div>
                 <div><span>Payment</span><strong>{form.payment_channel}</strong></div>
-                <div><span>Unit Fare</span><strong>PHP {fare ? Number(unitFare).toFixed(2) : '0.00'}</strong></div>
+                <div><span>Unit Fare</span><strong>PHP {hasFareQuote ? Number(unitFare).toFixed(2) : '0.00'}</strong></div>
                 <div><span>Quantity</span><strong>{totalTickets}</strong></div>
                 <div><span>Booking</span><strong>{form.booking_option === 'later' ? `Later (${form.booking_date || '-'})` : 'Now (Today)'}</strong></div>
                 <div><span>Gross Total</span><strong>PHP {Number(grossTotal || 0).toFixed(2)}</strong></div>
@@ -662,6 +693,72 @@ export default function BuyTicket({ onTicketPurchased }) {
           </section>
         )}
       </form>
+
+      {ticketPreview?.ticket && (
+        <div
+          style={{ position: 'fixed', inset: 0, zIndex: 1100, background: 'rgba(2,6,23,0.76)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}
+          role="presentation"
+          onClick={() => setTicketPreview(null)}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-label="Ticket details"
+            onClick={(e) => e.stopPropagation()}
+            style={{ width: '100%', maxWidth: '540px', maxHeight: '92vh', overflowY: 'auto', borderRadius: '14px', border: '1px solid rgba(148,163,184,0.28)', background: '#0f172a', padding: '14px' }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', marginBottom: '12px' }}>
+              <h3 style={{ margin: 0, fontSize: '1rem', color: '#e2e8f0' }}>Ticket Details</h3>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  type="button"
+                  onClick={() => printQrTicket(ticketPreview.ticket, ticketPreview.idx)}
+                  disabled={!ticketPreview.ticket.qr_url}
+                  style={{
+                    border: '1px solid rgba(148,163,184,0.45)',
+                    borderRadius: '8px',
+                    padding: '6px 10px',
+                    fontSize: '0.75rem',
+                    color: ticketPreview.ticket.qr_url ? '#e2e8f0' : '#64748b',
+                    background: ticketPreview.ticket.qr_url ? 'rgba(15,23,42,0.5)' : 'rgba(30,41,59,0.3)',
+                    cursor: ticketPreview.ticket.qr_url ? 'pointer' : 'not-allowed',
+                  }}
+                >
+                  Print PDF
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTicketPreview(null)}
+                  style={{
+                    border: '1px solid rgba(148,163,184,0.45)',
+                    borderRadius: '8px',
+                    padding: '6px 10px',
+                    fontSize: '0.75rem',
+                    color: '#e2e8f0',
+                    background: 'rgba(15,23,42,0.5)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+
+            <TicketCard
+              fromLabel={selectedRoute?.origin || 'Ecoland Terminal'}
+              toLabel={selectedRoute?.destination || ticketPreview.ticket.destination || 'Tagum Terminal'}
+              departureLabel={formatDateTime(ticketPreview.ticket.valid_from)}
+              seatLabel={ticketPreview.ticket.seat_type || '-'}
+              routeLabel={`${selectedRoute?.origin || '-'} to ${selectedRoute?.destination || ticketPreview.ticket.destination || '-'}`}
+              qrUrl={ticketPreview.ticket.qr_url}
+              statusLabel="Valid"
+              amountLabel={`PHP ${Number(ticketPreview.ticket.amount || 0).toFixed(2)}`}
+              validLabel={formatDateTime(ticketPreview.ticket.valid_from)}
+              expiresLabel={formatDateTime(ticketPreview.ticket.expires_at)}
+            />
+          </section>
+        </div>
+      )}
 
       {/* ── Trip Details Modal (Suggestion) ─────────────────────────────── */}
       {tripDetailsModal && (() => {
