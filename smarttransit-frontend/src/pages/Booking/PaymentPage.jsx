@@ -11,9 +11,9 @@ import { calculateCheckout, MIN_REDEMPTION_POINTS } from "../../utils/rewards.js
 
 export default function PaymentPage() {
   const navigate = useNavigate();
-  const { booking, setUseSmartPoints } = useBooking();
+  const { booking, setUseSmartPoints, setReceipt } = useBooking();
   const { selectedTrip, selectedSeat, useSmartPoints } = booking;
-  const { points } = useRewards();
+  const { points, earnPoints, redeemPoints } = useRewards();
 
   useEffect(() => {
     if (!selectedTrip || !selectedSeat) navigate("/booking", { replace: true });
@@ -26,6 +26,39 @@ export default function PaymentPage() {
     points,
     useSmartPoints
   );
+  const fullyCoveredByPoints = amountToPay <= 0;
+
+  // When SmartPoints cover the whole fare there's nothing left to charge to
+  // GCash, so skip that screen and confirm the booking immediately — the
+  // same redeem/earn side effects GCashPlaceholderPage runs on a real pay.
+  const handleContinue = () => {
+    if (!fullyCoveredByPoints) {
+      navigate("/booking/gcash");
+      return;
+    }
+
+    const route = `${selectedTrip.origin} → ${selectedTrip.destination}`;
+    const date = new Date().toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+
+    if (pointsUsed > 0) {
+      redeemPoints({ pointsUsed, route, date });
+    }
+    const pointsEarned = earnPoints({ amountPaid: amountToPay, route, date });
+
+    setReceipt({
+      fare: selectedTrip.fare,
+      pointsUsed,
+      discount,
+      amountPaid: amountToPay,
+      pointsEarned,
+    });
+
+    navigate("/booking/confirmation");
+  };
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -107,21 +140,20 @@ export default function PaymentPage() {
             <dd className="font-display text-lg font-bold text-navy-950">₱{amountToPay.toFixed(2)}</dd>
           </dl>
 
-          <p className="mt-6 text-xs font-semibold uppercase tracking-wide text-slate-400">
-            Payment Method
-          </p>
-          <div className="mt-2 flex items-center justify-between rounded-xl border-2 border-navy-800 bg-navy-50 px-4 py-3">
-            <span className="text-sm font-semibold text-navy-900">GCash</span>
-            <span className="h-2.5 w-2.5 rounded-full bg-navy-800" />
-          </div>
+          {!fullyCoveredByPoints && (
+            <>
+              <p className="mt-6 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                Payment Method
+              </p>
+              <div className="mt-2 flex items-center justify-between rounded-xl border-2 border-navy-800 bg-navy-50 px-4 py-3">
+                <span className="text-sm font-semibold text-navy-900">GCash</span>
+                <span className="h-2.5 w-2.5 rounded-full bg-navy-800" />
+              </div>
+            </>
+          )}
 
-          <Button
-            variant="primary"
-            size="lg"
-            className="mt-6 w-full"
-            onClick={() => navigate("/booking/gcash")}
-          >
-            Continue and go to payment
+          <Button variant="primary" size="lg" className="mt-6 w-full" onClick={handleContinue}>
+            {fullyCoveredByPoints ? "Confirm Booking" : "Continue and go to payment"}
           </Button>
         </Card>
       </div>

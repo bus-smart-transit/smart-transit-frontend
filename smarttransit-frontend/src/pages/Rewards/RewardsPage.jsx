@@ -2,22 +2,12 @@ import DashboardLayout from "../../components/DashboardLayout.jsx";
 import Card from "../../components/ui/Card.jsx";
 import { CoinIcon, CheckCircleIcon, PlusIcon, MinusIcon, InfoIcon } from "../../components/Icons.jsx";
 import { useRewards } from "../../context/RewardsContext.jsx";
-import {
-  MIN_REDEMPTION_POINTS,
-  REWARD_TIERS,
-  getCurrentTier,
-  getNextTier,
-} from "../../utils/rewards.js";
+import { MIN_REDEMPTION_POINTS } from "../../utils/rewards.js";
 
 export default function RewardsPage() {
   const { points, activity } = useRewards();
 
   const eligible = points >= MIN_REDEMPTION_POINTS;
-  const currentTier = getCurrentTier(points);
-  const nextTier = getNextTier(points);
-  const tierProgressPercent = nextTier
-    ? Math.min(100, Math.round((points / nextTier.threshold) * 100))
-    : 100;
 
   return (
     <DashboardLayout>
@@ -54,49 +44,6 @@ export default function RewardsPage() {
                 </p>
               </div>
             )}
-          </div>
-        </Card>
-
-        {/* Milestone / tier progress */}
-        <Card className="p-6">
-          <div className="flex items-center justify-between">
-            <h2 className="font-display text-lg font-semibold text-navy-950">Rider Milestones</h2>
-            <span className="text-sm font-semibold text-navy-950">
-              {points.toLocaleString()} / {(nextTier ?? currentTier).threshold.toLocaleString()} pts
-            </span>
-          </div>
-
-          <div className="mt-3 h-2.5 w-full overflow-hidden rounded-full bg-slate-100">
-            <div
-              className="h-full rounded-full bg-gradient-to-r from-teal-400 to-teal-500"
-              style={{ width: `${tierProgressPercent}%` }}
-            />
-          </div>
-          <p className="mt-2 text-xs text-slate-500">
-            {nextTier
-              ? `${(nextTier.threshold - points).toLocaleString()} more points until your next milestone`
-              : "You've reached the top rider milestone!"}
-          </p>
-
-          <div className="mt-5 flex gap-4">
-            {REWARD_TIERS.map((tier) => {
-              const reached = points >= tier.threshold;
-              return (
-                <div
-                  key={tier.label}
-                  className={`flex-1 rounded-xl border p-4 text-center ${
-                    reached ? "border-teal-200 bg-teal-50" : "border-slate-200 bg-slate-50"
-                  }`}
-                >
-                  <p className={`text-sm font-semibold ${reached ? "text-teal-800" : "text-slate-400"}`}>
-                    {tier.label}
-                  </p>
-                  <p className={`mt-0.5 text-xs ${reached ? "text-teal-600" : "text-slate-400"}`}>
-                    {tier.threshold.toLocaleString()} SmartPoints
-                  </p>
-                </div>
-              );
-            })}
           </div>
         </Card>
 

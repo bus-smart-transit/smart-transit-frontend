@@ -42,12 +42,13 @@ export const SAMPLE_TRIPS = [
   },
 ];
 
-// 36-seat layout, laid out as 9 rows x 4 seats (A/B aisle C/D)
+// 49-seat layout: 11 rows x 4 seats (A/B aisle C/D) plus a 5-seat back bench.
 export const BUS_SEAT_COLUMNS = ["A", "B", "C", "D"];
-export const BUS_SEAT_ROWS = 9;
+export const BUS_SEAT_ROWS = 11;
+export const BACK_BENCH_SEAT_COUNT = 5;
 
 // A handful of seats are already booked, just for realism.
-export const TAKEN_SEATS = ["3", "7", "14", "21", "28", "33"];
+export const TAKEN_SEATS = ["3", "7", "14", "21", "28", "33", "46", "48"];
 
 export const UPCOMING_TRIPS = [
   {

@@ -13,6 +13,16 @@ export default function BookingWidget({ onSearch }) {
     setDestination(origin);
   };
 
+  const handleOriginChange = (value) => {
+    setOrigin(value);
+    if (value && value === destination) setDestination("");
+  };
+
+  const handleDestinationChange = (value) => {
+    setDestination(value);
+    if (value && value === origin) setOrigin("");
+  };
+
   const handleSubmit = (event) => {
     event.preventDefault();
     if (onSearch) onSearch({ origin, destination, date });
@@ -37,12 +47,12 @@ export default function BookingWidget({ onSearch }) {
             <LocationIcon size={18} className="shrink-0 text-slate-400" />
             <select
               value={origin}
-              onChange={(e) => setOrigin(e.target.value)}
+              onChange={(e) => handleOriginChange(e.target.value)}
               className="w-full bg-transparent text-sm text-ink focus:outline-none"
             >
               <option value="">Choose origin</option>
               {TERMINALS.map((t) => (
-                <option key={t} value={t}>
+                <option key={t} value={t} disabled={t === destination}>
                   {t}
                 </option>
               ))}
@@ -67,12 +77,12 @@ export default function BookingWidget({ onSearch }) {
             <LocationIcon size={18} className="shrink-0 text-slate-400" />
             <select
               value={destination}
-              onChange={(e) => setDestination(e.target.value)}
+              onChange={(e) => handleDestinationChange(e.target.value)}
               className="w-full bg-transparent text-sm text-ink focus:outline-none"
             >
               <option value="">Choose destination</option>
               {TERMINALS.map((t) => (
-                <option key={t} value={t}>
+                <option key={t} value={t} disabled={t === origin}>
                   {t}
                 </option>
               ))}
