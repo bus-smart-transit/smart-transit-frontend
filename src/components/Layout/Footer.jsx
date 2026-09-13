@@ -3,7 +3,7 @@ import { Bus } from 'lucide-react';
 
 export default function Footer() {
   return (
-    <footer className="bg-[#0D1B2A] px-4 py-6 sm:px-6 lg:px-10">
+    <footer className="bg-navy-950 px-4 py-6 sm:px-6 lg:px-10">
       <div className="mx-auto max-w-7xl flex flex-col items-center justify-between gap-4 sm:flex-row">
         {/* Brand */}
         <Link to="/" className="inline-flex items-center gap-2.5" aria-label="SmartTransit home">

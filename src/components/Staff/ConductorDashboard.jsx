@@ -25,9 +25,11 @@ import StaffService from '../../api/StaffService/StaffService';
 import usePassengersByTrip from '../../api/hooks/Staff/usePassengersByTrip';
 import useOnsiteReceiptPrinter from '../../api/hooks/Staff/useOnsiteReceiptPrinter';
 import PairingScreen from './PairingScreen';
+import { isSameBusinessDay, getBusinessToday, getBusinessNowMs, toBusinessScheduleMs } from '../../utils/dates';
 
 const NAV_ITEMS = [
   { key: 'trip', label: 'Start', icon: Play },
+  { key: 'assigned', label: 'Assigned Routes', icon: Calendar },
   { key: 'occupancy', label: 'Ticketing', icon: Ticket },
   { key: 'earnings', label: 'End Shift', icon: BarChart3 },
   { key: 'passengers', label: 'Passengers', icon: Users },
@@ -78,17 +80,7 @@ const formatTripSchedule = (tripLike) => {
   return dateLabel;
 };
 
-const isSameDay = (value) => {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return false;
-
-  const today = new Date();
-  return (
-    date.getFullYear() === today.getFullYear()
-    && date.getMonth() === today.getMonth()
-    && date.getDate() === today.getDate()
-  );
-};
+const isSameDay = (value) => isSameBusinessDay(value);
 
 const isCurrentOrSameDayTrip = (tripLike) => {
   if (!tripLike?.trip_id) return false;
@@ -101,18 +93,13 @@ const isCurrentOrSameDayTrip = (tripLike) => {
 const toTripScheduleMs = (tripLike) => {
   const dateValue = String(tripLike?.trip_date || '').trim();
   if (!dateValue) return Number.NaN;
-  const match = dateValue.match(/^(\d{4}-\d{2}-\d{2})/);
-  const dateOnly = match ? match[1] : '';
-  if (!dateOnly) return Number.NaN;
 
   const timeRaw = String(tripLike?.departure_time || tripLike?.fleet_route?.start_time || '00:00:00').trim();
-  const timeMatch = timeRaw.match(/^(\d{2}:\d{2})(?::\d{2})?$/);
-  const timeValue = timeMatch ? `${timeMatch[1]}:00` : '00:00:00';
-  return new Date(`${dateOnly}T${timeValue}`).getTime();
+  return toBusinessScheduleMs(dateValue, timeRaw);
 };
 
 const getUpcomingTrip = (trips) => {
-  const nowMs = Date.now();
+  const nowMs = getBusinessNowMs();
 
   return (trips || [])
     .filter((item) => {
@@ -124,6 +111,18 @@ const getUpcomingTrip = (trips) => {
       return scheduleMs >= nowMs;
     })
     .sort((a, b) => toTripScheduleMs(a) - toTripScheduleMs(b))[0] || null;
+};
+
+const filterTripsByStatus = (trips, statusFilter) => {
+  if (statusFilter === 'completed') {
+    return (trips || []).filter((item) => String(item?.status || '').toLowerCase() === 'completed');
+  }
+
+  if (statusFilter === 'scheduled') {
+    return (trips || []).filter((item) => ['scheduled', 'delayed', 'boarding', 'departed', 'in-progress'].includes(String(item?.status || '').toLowerCase()));
+  }
+
+  return trips || [];
 };
 
 export default function ConductorDashboard() {
@@ -185,12 +184,42 @@ export default function ConductorDashboard() {
   );
 }
 
+function TripCardGroup({ title, trips, emptyMessage = 'No trips in this section.' }) {
+  return (
+    <div className="md:col-span-2 rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+      <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">{title}</h3>
+      {trips.length === 0 ? (
+        <article className="rounded-2xl border border-dashed border-slate-800 bg-slate-900 p-6">
+          <p className="text-sm text-slate-500">{emptyMessage}</p>
+        </article>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2">
+          {trips.map((item) => (
+            <article key={item.trip_id} className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
+              <div className="mb-4 flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-slate-100">Trip #{item.trip_id}</h3>
+                <span className="rounded-full border border-sky-500/40 bg-sky-500/10 px-3 py-1 text-xs text-sky-300">{item.status}</span>
+              </div>
+              <div className="space-y-3 text-sm">
+                <div className="flex items-center justify-between"><span className="text-slate-500">Schedule</span><strong className="font-data text-slate-100">{formatTripSchedule(item)}</strong></div>
+                <div className="flex items-center justify-between"><span className="text-slate-500">Fleet</span><strong className="text-slate-100">{item.fleet_route?.fleet?.plate_number || `Fleet ${item.fleet_route?.fleet_id || '-'}`}</strong></div>
+                <div className="flex items-center justify-between"><span className="text-slate-500">Route</span><strong className="text-slate-100">{item.fleet_route?.route?.route_name || `Route ${item.fleet_route?.route_id || '-'}`}</strong></div>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   const [activeTab, setActiveTab] = useState('trip');
   const [assignedTripFilter, setAssignedTripFilter] = useState('all');
   const [profile, setProfile] = useState(null);
   const [trip, setTrip] = useState(null);
   const [assignedTrips, setAssignedTrips] = useState([]);
+  const [assignedTripsForView, setAssignedTripsForView] = useState([]);
   const [occupancy, setOccupancy] = useState(null);
   const [passengers, setPassengers] = useState([]);
   const [earnings, setEarnings] = useState(null);
@@ -234,18 +263,30 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   const routeStops = trip?.fleet_route?.route?.route_stops || trip?.fleet_route?.route?.routeStops || [];
   const shiftStarted = hasOpenShift;
   const groupedPassengers = usePassengersByTrip(passengers, trip);
-  const filteredAssignedTrips = assignedTrips.filter((item) => {
-    if (assignedTripFilter === 'all') return true;
-    const status = String(item?.status || '').toLowerCase();
-    if (assignedTripFilter === 'scheduled') {
-      return ['scheduled', 'delayed', 'boarding', 'departed', 'in-progress'].includes(status);
-    }
-    if (assignedTripFilter === 'completed') {
-      return status === 'completed';
-    }
-    return true;
+  const filteredAssignedTrips = assignedTripFilter === 'all' ? assignedTrips : assignedTripsForView;
+  const todayStart = getBusinessToday();
+  const todayAssignedTrips = filteredAssignedTrips.filter((item) => isSameBusinessDay(item?.trip_date, todayStart));
+  const upcomingAssignedTrips = filteredAssignedTrips.filter((item) => {
+    const tripDateStr = String(item?.trip_date || '').match(/^(\d{4}-\d{2}-\d{2})/)?.[1];
+    return !!tripDateStr && tripDateStr > todayStart;
   });
   const { printOnsiteReceipt } = useOnsiteReceiptPrinter();
+
+  const handleAssignedTripFilterChange = useCallback(async (value) => {
+    setAssignedTripFilter(value);
+
+    if (value === 'all') {
+      setAssignedTripsForView([]);
+      return;
+    }
+
+    try {
+      const res = await StaffService.getConductorTrips(value);
+      setAssignedTripsForView(Array.isArray(res?.data) ? res.data : []);
+    } catch {
+      setAssignedTripsForView([]);
+    }
+  }, []);
 
   const handleTwoFactorToggle = async (event) => {
     const enabled = event.target.checked;
@@ -334,7 +375,13 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
         }
       }
       if (tripRes.status === 'fulfilled') setTrip(tripRes.value?.data);
-      if (tripsRes.status === 'fulfilled') setAssignedTrips(tripsRes.value?.data ?? []);
+      if (tripsRes.status === 'fulfilled') {
+        const tripsData = tripsRes.value?.data ?? [];
+        setAssignedTrips(tripsData);
+        if (assignedTripFilter !== 'all') {
+          setAssignedTripsForView(filterTripsByStatus(tripsData, assignedTripFilter));
+        }
+      }
       if (shiftRes.status === 'fulfilled') {
         const payload = shiftRes.value?.data ?? {};
         setShiftState({
@@ -350,7 +397,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [assignedTripFilter]);
 
   const loadOccupancy = useCallback(async () => {
     if (!trip?.trip_id) {
@@ -1172,7 +1219,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
               <select
                 id="conductor-assigned-filter"
                 value={assignedTripFilter}
-                onChange={(event) => setAssignedTripFilter(event.target.value)}
+                onChange={(event) => { void handleAssignedTripFilterChange(event.target.value); }}
                 className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-700"
               >
                 <option value="all">All</option>
@@ -1186,19 +1233,10 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                 <p className="mt-2 text-sm text-slate-500">No trips match this filter.</p>
               </article>
             ) : (
-              filteredAssignedTrips.map((item) => (
-                <article key={item.trip_id} className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
-                  <div className="mb-4 flex items-center justify-between">
-                    <h3 className="text-lg font-semibold text-slate-100">Trip #{item.trip_id}</h3>
-                    <span className="rounded-full border border-sky-500/40 bg-sky-500/10 px-3 py-1 text-xs text-sky-300">{item.status}</span>
-                  </div>
-                  <div className="space-y-3 text-sm">
-                    <div className="flex items-center justify-between"><span className="text-slate-500">Schedule</span><strong className="font-data text-slate-100">{formatTripSchedule(item)}</strong></div>
-                    <div className="flex items-center justify-between"><span className="text-slate-500">Fleet</span><strong className="text-slate-100">{item.fleet_route?.fleet?.plate_number || `Fleet ${item.fleet_route?.fleet_id || '-'}`}</strong></div>
-                    <div className="flex items-center justify-between"><span className="text-slate-500">Route</span><strong className="text-slate-100">{item.fleet_route?.route?.route_name || `Route ${item.fleet_route?.route_id || '-'}`}</strong></div>
-                  </div>
-                </article>
-              ))
+              <>
+                <TripCardGroup title="Today's Assigned Trip" trips={todayAssignedTrips} />
+                <TripCardGroup title="Upcoming Trips" trips={upcomingAssignedTrips} emptyMessage="No upcoming trips match this filter." />
+              </>
             )}
           </section>
         )}

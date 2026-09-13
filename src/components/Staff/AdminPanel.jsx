@@ -33,7 +33,7 @@ export default function AdminPanel() {
   // Accounts
   const [allDrivers, setAllDrivers] = useState([]);
   const [allConductors, setAllConductors] = useState([]);
-  const [accountForm, setAccountForm] = useState({ name: '', email: '', password: '', phone_num: '', role: 'driver' });
+  const [accountForm, setAccountForm] = useState({ name: '', email: '', password: '', phone_num: '', address: '', birth_date: '', role: 'driver' });
 
   const showMessage = useCallback((msg, isSuccess) => {
     if (isSuccess) setSuccess(msg);
@@ -212,7 +212,7 @@ export default function AdminPanel() {
     try {
       await StaffService.createAdminAccount(accountForm);
       showMessage('Account created successfully!', true);
-      setAccountForm({ name: '', email: '', password: '', phone_num: '', role: 'driver' });
+      setAccountForm({ name: '', email: '', password: '', phone_num: '', address: '', birth_date: '', role: 'driver' });
       loadAccounts();
     } catch (err) {
       showMessage(err.message || 'Failed to create account', false);
@@ -581,6 +581,24 @@ export default function AdminPanel() {
                   className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2.5 text-sm text-white outline-none transition focus:border-sky-500"
                   required
                 />
+                <input
+                  type="text"
+                  placeholder="Address"
+                  value={accountForm.address}
+                  onChange={e => setAccountForm({ ...accountForm, address: e.target.value })}
+                  className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2.5 text-sm text-white outline-none transition focus:border-sky-500"
+                  required
+                />
+                <label className="block text-xs font-medium text-slate-400">
+                  Birth Date (optional)
+                  <input
+                    type="date"
+                    placeholder="Birth Date"
+                    value={accountForm.birth_date}
+                    onChange={e => setAccountForm({ ...accountForm, birth_date: e.target.value })}
+                    className="mt-1 w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2.5 text-sm text-white outline-none transition focus:border-sky-500"
+                  />
+                </label>
                 <select
                   value={accountForm.role}
                   onChange={e => setAccountForm({ ...accountForm, role: e.target.value })}

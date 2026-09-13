@@ -19,6 +19,7 @@ import StaffService from '../../api/StaffService/StaffService';
 import PairingScreen from './PairingScreen';
 import DriverNavigationMap from './DriverNavigationMap';
 import { haversineM } from '../../utils/geo';
+import { isSameBusinessDay, getBusinessToday, getBusinessNowMs, toBusinessScheduleMs } from '../../utils/dates';
 import { fetchTrafficStatus } from '../../services/trafficService';
 
 const STATUS_COLOR = {
@@ -87,17 +88,7 @@ const formatTripSchedule = (tripLike) => {
   return dateLabel;
 };
 
-const isSameDay = (value) => {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return false;
-
-  const today = new Date();
-  return (
-    date.getFullYear() === today.getFullYear()
-    && date.getMonth() === today.getMonth()
-    && date.getDate() === today.getDate()
-  );
-};
+const isSameDay = (value) => isSameBusinessDay(value);
 
 const isCurrentOrSameDayTrip = (tripLike) => {
   if (!tripLike?.trip_id) return false;
@@ -110,18 +101,13 @@ const isCurrentOrSameDayTrip = (tripLike) => {
 const toTripScheduleMs = (tripLike) => {
   const dateValue = String(tripLike?.trip_date || '').trim();
   if (!dateValue) return Number.NaN;
-  const match = dateValue.match(/^(\d{4}-\d{2}-\d{2})/);
-  const dateOnly = match ? match[1] : '';
-  if (!dateOnly) return Number.NaN;
 
   const timeRaw = String(tripLike?.departure_time || tripLike?.fleet_route?.start_time || '00:00:00').trim();
-  const timeMatch = timeRaw.match(/^(\d{2}:\d{2})(?::\d{2})?$/);
-  const timeValue = timeMatch ? `${timeMatch[1]}:00` : '00:00:00';
-  return new Date(`${dateOnly}T${timeValue}`).getTime();
+  return toBusinessScheduleMs(dateValue, timeRaw);
 };
 
 const getUpcomingTrip = (trips) => {
-  const nowMs = Date.now();
+  const nowMs = getBusinessNowMs();
 
   return (trips || [])
     .filter((item) => {
@@ -170,6 +156,18 @@ const deriveJourneyProgressFromStops = (stops = [], tripStatus) => {
     progressPercent,
     nextStopName: nextStop?.stop_name ?? nextStop?.name ?? null,
   };
+};
+
+const filterTripsByStatus = (trips, statusFilter) => {
+  if (statusFilter === 'completed') {
+    return (trips || []).filter((item) => String(item?.status || '').toLowerCase() === 'completed');
+  }
+
+  if (statusFilter === 'scheduled') {
+    return (trips || []).filter((item) => ['scheduled', 'delayed', 'boarding', 'departed', 'in-progress'].includes(String(item?.status || '').toLowerCase()));
+  }
+
+  return trips || [];
 };
 
 export default function DriverDashboard() {
@@ -255,6 +253,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   const [profile, setProfile] = useState(null);
   const [trip, setTrip] = useState(null);
   const [assignedTrips, setAssignedTrips] = useState([]);
+  const [assignedTripsForView, setAssignedTripsForView] = useState([]);
   const [stops, setStops] = useState([]);
   const [pin, setPin] = useState(null);
   const [showTripPin, setShowTripPin] = useState(false);
@@ -297,17 +296,29 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   const currentRoute = trip?.fleet_route?.route;
   const currentFleet = trip?.fleet_route?.fleet;
   const nextStop = stops.find((stop) => !stop.is_acknowledged) ?? null;
-  const filteredAssignedTrips = assignedTrips.filter((item) => {
-    if (assignedTripFilter === 'all') return true;
-    const status = String(item?.status || '').toLowerCase();
-    if (assignedTripFilter === 'scheduled') {
-      return ['scheduled', 'delayed', 'boarding', 'departed', 'in-progress'].includes(status);
-    }
-    if (assignedTripFilter === 'completed') {
-      return status === 'completed';
-    }
-    return true;
+  const filteredAssignedTrips = assignedTripFilter === 'all' ? assignedTrips : assignedTripsForView;
+  const todayStart = getBusinessToday();
+  const todayAssignedTrips = filteredAssignedTrips.filter((item) => isSameBusinessDay(item?.trip_date, todayStart));
+  const upcomingAssignedTrips = filteredAssignedTrips.filter((item) => {
+    const tripDateStr = String(item?.trip_date || '').match(/^(\d{4}-\d{2}-\d{2})/)?.[1];
+    return !!tripDateStr && tripDateStr > todayStart;
   });
+
+  const handleAssignedTripFilterChange = useCallback(async (value) => {
+    setAssignedTripFilter(value);
+
+    if (value === 'all') {
+      setAssignedTripsForView([]);
+      return;
+    }
+
+    try {
+      const res = await StaffService.getDriverTrips(value);
+      setAssignedTripsForView(Array.isArray(res?.data) ? res.data : []);
+    } catch {
+      setAssignedTripsForView([]);
+    }
+  }, []);
 
   const stopProgress = deriveJourneyProgressFromStops(stops, trip?.status);
   const tripProgress = stopProgress.progressPercent;
@@ -330,7 +341,13 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
         }
       }
       if (tripRes.status === 'fulfilled') setTrip(tripRes.value?.data);
-      if (tripsRes.status === 'fulfilled') setAssignedTrips(tripsRes.value?.data ?? []);
+      if (tripsRes.status === 'fulfilled') {
+        const tripsData = tripsRes.value?.data ?? [];
+        setAssignedTrips(tripsData);
+        if (assignedTripFilter !== 'all') {
+          setAssignedTripsForView(filterTripsByStatus(tripsData, assignedTripFilter));
+        }
+      }
       if (shiftRes.status === 'fulfilled') {
         const payload = shiftRes.value?.data ?? {};
         setShiftState({
@@ -347,7 +364,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [assignedTripFilter]);
 
   const loadStops = useCallback(async () => {
     if (!isPaired || !hasActiveTrip) {
@@ -641,7 +658,8 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   };
 
   const handleTripAction = async (action) => {
-    if (!trip) return;
+    const targetTripId = Number(trip?.trip_id ?? shiftState?.openShift?.trip_id ?? 0);
+    if (!targetTripId) return;
     if (!isPaired && action === 'depart') {
       setActionMsg(pairingReason);
       return;
@@ -656,10 +674,10 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     }
     setActionInFlight(true);
     try {
-      if (action === 'boarding') await StaffService.startBoardingTrip(trip.trip_id);
-      if (action === 'depart') await StaffService.departTrip(trip.trip_id);
+      if (action === 'boarding') await StaffService.startBoardingTrip(targetTripId);
+      if (action === 'depart') await StaffService.departTrip(targetTripId);
       setActionMsg(`Trip ${action} action completed.`);
-      void loadData();
+      await loadData();
     } catch (err) {
       setActionMsg(err.message);
     } finally {
@@ -678,6 +696,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
         latestShift: shift,
       }));
       setActionMsg(res?.message || 'Driver shift started');
+      await loadData();
     } catch (err) {
       setActionMsg(err?.message || 'Unable to start shift right now.');
     } finally {
@@ -696,6 +715,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
         latestShift: shift,
       }));
       setActionMsg(res?.message || 'Driver shift ended');
+      await loadData();
     } catch (err) {
       setActionMsg(err?.message || 'Unable to end shift right now.');
     } finally {
@@ -1129,13 +1149,13 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
         {!loading && activeTab === 'assigned' && (
           <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm">
             <div className="mb-4 flex items-center justify-between">
-              <h4 className="text-base font-bold text-slate-900">Today's Assigned Routes</h4>
+              <h4 className="text-base font-bold text-slate-900">Assigned Routes</h4>
               <div className="flex items-center gap-2">
                 <label htmlFor="driver-assigned-filter" className="text-xs font-semibold uppercase tracking-wide text-slate-500">Filter</label>
                 <select
                   id="driver-assigned-filter"
                   value={assignedTripFilter}
-                  onChange={(event) => setAssignedTripFilter(event.target.value)}
+                  onChange={(event) => { void handleAssignedTripFilterChange(event.target.value); }}
                   className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-700"
                 >
                   <option value="all">All</option>
@@ -1148,38 +1168,9 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
             {filteredAssignedTrips.length === 0 ? (
               <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-5 text-sm text-slate-500">No trips match this filter.</div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-175 text-left text-sm">
-                  <thead>
-                    <tr className="border-b border-slate-100 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                      <th className="py-3 pr-4">Route ID</th>
-                      <th className="py-3 pr-4">Route</th>
-                      <th className="py-3 pr-4">Departure Time</th>
-                      <th className="py-3 pr-4">Destination</th>
-                      <th className="py-3">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {filteredAssignedTrips.map((item) => (
-                      <tr
-                        key={item.trip_id}
-                        className="cursor-pointer hover:bg-slate-50 transition-colors"
-                        onClick={() => setTripDetailsModal(item)}
-                        title="Click for trip details"
-                      >
-                        <td className="py-3 pr-4 font-data text-slate-500">RTE-{item.trip_id}</td>
-                        <td className="py-3 pr-4 font-semibold text-slate-900">{item.fleet_route?.route?.origin || '-'} → {item.fleet_route?.route?.destination || '-'}</td>
-                        <td className="py-3 pr-4 font-data text-slate-600">{formatTripSchedule(item)}</td>
-                        <td className="py-3 pr-4 text-slate-600">{item.fleet_route?.route?.destination || '-'}</td>
-                        <td className="py-3">
-                          <span className="rounded-full px-2.5 py-1 text-xs font-semibold" style={{ background: `${STATUS_COLOR[item.status] || '#64748b'}20`, color: STATUS_COLOR[item.status] || '#64748b' }}>
-                            {(item.status || 'pending').toUpperCase()}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="space-y-5">
+                <DriverTripTable title="Today's Assigned Trips" trips={todayAssignedTrips} onSelectTrip={setTripDetailsModal} />
+                <DriverTripTable title="Upcoming Trips" trips={upcomingAssignedTrips} onSelectTrip={setTripDetailsModal} emptyMessage="No upcoming trips match this filter." />
               </div>
             )}
           </section>
@@ -1614,6 +1605,46 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
           </div>
         );
       })()}
+    </div>
+  );
+}
+
+function DriverTripTable({ title, trips, onSelectTrip, emptyMessage = 'No trips in this section.' }) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+      <h5 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">{title}</h5>
+      {trips.length === 0 ? (
+        <div className="rounded-lg border border-dashed border-slate-200 bg-white p-4 text-sm text-slate-500">{emptyMessage}</div>
+      ) : (
+        <div className="overflow-x-auto rounded-lg bg-white">
+          <table className="w-full min-w-175 text-left text-sm">
+            <thead>
+              <tr className="border-b border-slate-100 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <th className="py-3 pr-4 pl-4">Route ID</th>
+                <th className="py-3 pr-4">Route</th>
+                <th className="py-3 pr-4">Departure Time</th>
+                <th className="py-3 pr-4">Destination</th>
+                <th className="py-3 pr-4">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {trips.map((item) => (
+                <tr key={item.trip_id} className="cursor-pointer hover:bg-slate-50 transition-colors" onClick={() => onSelectTrip(item)} title="Click for trip details">
+                  <td className="py-3 pr-4 pl-4 font-data text-slate-500">RTE-{item.trip_id}</td>
+                  <td className="py-3 pr-4 font-semibold text-slate-900">{item.fleet_route?.route?.origin || '-'} → {item.fleet_route?.route?.destination || '-'}</td>
+                  <td className="py-3 pr-4 font-data text-slate-600">{formatTripSchedule(item)}</td>
+                  <td className="py-3 pr-4 text-slate-600">{item.fleet_route?.route?.destination || '-'}</td>
+                  <td className="py-3 pr-4">
+                    <span className="rounded-full px-2.5 py-1 text-xs font-semibold" style={{ background: `${STATUS_COLOR[item.status] || '#64748b'}20`, color: STATUS_COLOR[item.status] || '#64748b' }}>
+                      {(item.status || 'pending').toUpperCase()}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

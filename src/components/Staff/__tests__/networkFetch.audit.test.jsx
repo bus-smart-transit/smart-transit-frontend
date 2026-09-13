@@ -6,8 +6,14 @@ import DriverDashboard from '../DriverDashboard';
 import ConductorDashboard from '../ConductorDashboard';
 import PairingScreen from '../PairingScreen';
 import StaffService from '../../../api/StaffService/StaffService';
+import { getBusinessToday } from '../../../utils/dates';
 
-const todayIso = new Date().toISOString();
+// Backend trip_date is a date-only value ('date' cast) representing the
+// business timezone's (Asia/Manila) calendar day — not a UTC instant. Using
+// the real UTC 'now' here made this test flaky/timezone-dependent because
+// Manila's calendar day can already be ahead of the UTC day for part of
+// each day.
+const todayIso = getBusinessToday();
 
 function renderWithRouter(ui) {
   return render(<MemoryRouter>{ui}</MemoryRouter>);
@@ -72,7 +78,11 @@ describe('Network Fetch Audit - Staff dashboards', () => {
     expect(StaffService.getDriverTrips).toHaveBeenCalledTimes(1);
   });
 
-  test('driver pairing polling runs every 12s while unpaired and stops after unmount', async () => {
+  test('driver pairing polling runs every 90s while unpaired and stops after unmount', async () => {
+    // DriverDashboard.jsx polls every 90000ms while unpaired (see the
+    // "Poll every 90 seconds while unpaired." comment on its setInterval) —
+    // not 12s, which was this test's stale assumption from an earlier
+    // implementation.
     vi.useFakeTimers();
     Object.defineProperty(document, 'hidden', {
       configurable: true,
@@ -88,7 +98,7 @@ describe('Network Fetch Audit - Staff dashboards', () => {
     expect(StaffService.getPairingStatus).toHaveBeenCalledTimes(1);
 
     await act(async () => {
-      vi.advanceTimersByTime(11999);
+      vi.advanceTimersByTime(89999);
       await Promise.resolve();
     });
     expect(StaffService.getPairingStatus).toHaveBeenCalledTimes(1);
@@ -100,7 +110,7 @@ describe('Network Fetch Audit - Staff dashboards', () => {
     expect(StaffService.getPairingStatus).toHaveBeenCalledTimes(2);
 
     await act(async () => {
-      vi.advanceTimersByTime(12000);
+      vi.advanceTimersByTime(90000);
       await Promise.resolve();
     });
     expect(StaffService.getPairingStatus).toHaveBeenCalledTimes(3);
@@ -108,7 +118,7 @@ describe('Network Fetch Audit - Staff dashboards', () => {
     unmount();
 
     await act(async () => {
-      vi.advanceTimersByTime(24000);
+      vi.advanceTimersByTime(180000);
       await Promise.resolve();
     });
     expect(StaffService.getPairingStatus).toHaveBeenCalledTimes(3);
@@ -141,7 +151,7 @@ describe('Network Fetch Audit - Staff dashboards', () => {
     expect(StaffService.getPairingStatus).toHaveBeenCalledTimes(1);
   });
 
-  test('conductor occupancy fetch triggers exactly once when Occupancy tab is opened', async () => {
+  test('conductor occupancy fetch triggers exactly once when Ticketing tab is opened', async () => {
     mockCommonConductorEndpoints({ paired: true, withActiveTrip: true });
 
     renderWithRouter(<ConductorDashboard />);
@@ -150,7 +160,7 @@ describe('Network Fetch Audit - Staff dashboards', () => {
       expect(StaffService.getConductorTrip).toHaveBeenCalledTimes(1);
     });
 
-    const occupancyTab = await screen.findByRole('button', { name: /Occupancy/i });
+    const occupancyTab = await screen.findByRole('button', { name: /Ticketing/i });
     fireEvent.click(occupancyTab);
 
     await waitFor(() => {

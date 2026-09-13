@@ -1,5 +1,6 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Poppins:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap');
 @import "tailwindcss";
+@config "../tailwind.config.js";
 
 /* ─── Base overrides ──────────────────────────────── */
 @layer base {
@@ -16,9 +17,9 @@
 
 /* ─── Typography utilities ──────────────────────────────── */
 @layer utilities {
-  /* Display headings use Plus Jakarta Sans with better weight */
+  /* Display headings use Poppins, matching the design team's typography */
   .font-display {
-    font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+    font-family: 'Poppins', system-ui, sans-serif;
     font-weight: 700;
   }
   
@@ -62,7 +63,7 @@
 
 /*
   Legacy CSS variables — updated to new color scheme.
-  Still referenced by PassengerPortal.css, BuyTicketPortal.css, and TicketCard.css
+  Still referenced by BuyTicketPortal.css and TicketCard.css.
   Remove this block once those files are migrated to full Tailwind.
 */
 :root {
@@ -81,7 +82,7 @@
   --text-heading:   #020617;
   --grad-primary:   linear-gradient(135deg, #0f766e 0%, #0d9488 100%);
   --font-sans:      'Inter', system-ui, sans-serif;
-  --font-heading:   'Plus Jakarta Sans', system-ui, sans-serif;
+  --font-heading:   'Poppins', system-ui, sans-serif;
   --font-mono:      'JetBrains Mono', monospace;
   --transition:     0.25s cubic-bezier(0.4, 0, 0.2, 1);
   --accent-gold:    #2dd4bf;

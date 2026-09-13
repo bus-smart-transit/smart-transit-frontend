@@ -1,6 +1,7 @@
 import { MapPin, Clock, Bus, Users, Loader, AlertCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useMemo, useState } from 'react';
+import { parseAppDate, formatAppDate } from '../../../utils/dates';
 
 const toCompactTime = (value) => {
   if (!value) return '--:--';
@@ -11,11 +12,14 @@ const toCompactTime = (value) => {
 
 const formatTripDate = (dateStr) => {
   if (!dateStr) return '-';
-  try {
-    const d = new Date(dateStr);
-    if (isNaN(d.getTime())) return dateStr;
-    return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
-  } catch { return dateStr; }
+  const parsed = parseAppDate(dateStr);
+  if (!parsed) return dateStr;
+  return parsed.toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
 };
 
 const resolveTripBaseFare = (trip) => {
@@ -91,7 +95,7 @@ function TripCard({ trip, index, onBookSeat }) {
           <button
             type="button"
             onClick={() => onBookSeat(trip)}
-            className="rounded-lg bg-[#0D1B2A] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-slate-700"
+            className="rounded-lg bg-navy-950 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-navy-900"
           >
             Book Seat
           </button>
@@ -103,29 +107,13 @@ function TripCard({ trip, index, onBookSeat }) {
 
 export default function TripResultsSection({ trips, loading, error, searchState, onBookSeat }) {
   const navigate = useNavigate();
-  const [statusFilter, setStatusFilter] = useState('all');
   const origin = searchState?.from?.toUpperCase() || 'ALL TERMINALS';
   const dest = searchState?.to?.toUpperCase() || 'ALL DESTINATIONS';
   const dateLabel = searchState?.date
     ? formatTripDate(searchState.date)
     : new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'long', day: 'numeric', year: 'numeric' });
 
-  const filteredTrips = useMemo(() => {
-    const list = Array.isArray(trips) ? trips : [];
-    if (statusFilter === 'all') return list;
-    return list.filter((trip) => {
-      const status = String(trip?.status || '').toLowerCase();
-      if (statusFilter === 'scheduled') {
-        return ['scheduled', 'delayed', 'boarding', 'departed', 'in-progress'].includes(status);
-      }
-      if (statusFilter === 'completed') {
-        return ['completed', 'alighted'].includes(status);
-      }
-      return true;
-    });
-  }, [statusFilter, trips]);
-
-  const displayTrips = filteredTrips.slice(0, 10);
+  const displayTrips = useMemo(() => (Array.isArray(trips) ? trips.slice(0, 10) : []), [trips]);
   const hasActiveSearch = Boolean(searchState?.from || searchState?.to || searchState?.date);
 
   return (
@@ -150,24 +138,11 @@ export default function TripResultsSection({ trips, loading, error, searchState,
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <label htmlFor="landing-trip-status-filter" className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Trip Filter
-            </label>
-            <select
-              id="landing-trip-status-filter"
-              value={statusFilter}
-              onChange={(event) => setStatusFilter(event.target.value)}
-              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
-            >
-              <option value="all">All</option>
-              <option value="scheduled">Scheduled</option>
-              <option value="completed">Completed</option>
-            </select>
             {!loading && displayTrips.length > 0 && (
               <button
                 type="button"
                 onClick={() => navigate('/passenger/book')}
-                className="rounded-lg bg-[#0D1B2A] px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700"
+                className="rounded-lg bg-navy-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-navy-900"
               >
                 View All Trips
               </button>

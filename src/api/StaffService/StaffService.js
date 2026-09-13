@@ -103,8 +103,8 @@ class StaffService extends BaseService {
   }
 
   // ── Driver ──
-  async getDriverTrips() {
-    return await this.request('/driver/trips', 'GET');
+  async getDriverTrips(statusFilter = 'all') {
+    return await this.request('/driver/trips', 'GET', { status_filter: statusFilter });
   }
 
   async getCurrentTrip() {
@@ -194,8 +194,8 @@ class StaffService extends BaseService {
     }
   }
 
-  async getConductorTrips() {
-    return await this.request('/conductor/trips', 'GET');
+  async getConductorTrips(statusFilter = 'all') {
+    return await this.request('/conductor/trips', 'GET', { status_filter: statusFilter });
   }
 
   async getConductorShiftStatus() {
@@ -295,8 +295,8 @@ class StaffService extends BaseService {
     return await this.request('/operator/fleet-routes', 'GET');
   }
 
-  async getOperatorTrips() {
-    return await this.request('/operator/trips', 'GET');
+  async getOperatorTrips(statusFilter = 'all') {
+    return await this.request('/operator/trips', 'GET', { status_filter: statusFilter });
   }
 
   async getOperatorDrivers() {

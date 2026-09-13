@@ -129,6 +129,39 @@ const normalizeRoadName = (value, fallback) => {
   return label;
 };
 
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+let trafficFailureCount = 0;
+let trafficBackoffUntil = 0;
+
+const shouldRetryStatus = (status) => [406, 408, 429, 500, 502, 503, 504].includes(Number(status));
+
+async function fetchWithRetry(url, options, { attempts = 3, baseDelayMs = 1000 } = {}) {
+  let lastResponse = null;
+
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      const response = await fetch(url, options);
+      if (response.ok) {
+        return response;
+      }
+
+      lastResponse = response;
+      if (attempt >= attempts || !shouldRetryStatus(response.status)) {
+        return response;
+      }
+    } catch (error) {
+      if (attempt >= attempts) {
+        throw error;
+      }
+    }
+
+    await sleep(baseDelayMs * (2 ** (attempt - 1)));
+  }
+
+  return lastResponse;
+}
+
 const buildMapboxAlerts = (routeData = {}, routeName = '') => {
   const steps = routeData?.legs?.[0]?.steps || [];
   const alerts = [];
@@ -314,6 +347,10 @@ export async function fetchTrafficStatus({
     return buildFallbackTrafficStatus({ currentLat, currentLng, nextStop, route });
   }
 
+  if (Date.now() < trafficBackoffUntil) {
+    return buildFallbackTrafficStatus({ currentLat, currentLng, nextStop, route });
+  }
+
   try {
     const url = new URL(endpointBase);
     const payload = {
@@ -342,16 +379,23 @@ export async function fetchTrafficStatus({
       return buildFallbackTrafficStatus({ currentLat, currentLng, nextStop });
     }
 
-    const response = await fetch(url.toString(), {
+    const response = await fetchWithRetry(url.toString(), {
       method: 'GET',
       headers: {
-        Accept: 'application/json',
+        Accept: provider === 'ors' ? 'application/geo+json, application/json;q=0.9' : 'application/json',
       },
     });
 
     if (!response.ok) {
+      trafficFailureCount += 1;
+      if (trafficFailureCount >= 2) {
+        trafficBackoffUntil = Date.now() + Math.min(60000, 15000 * trafficFailureCount);
+      }
       return buildFallbackTrafficStatus({ currentLat, currentLng, nextStop, route });
     }
+
+    trafficFailureCount = 0;
+    trafficBackoffUntil = 0;
 
     const data = await response.json();
 

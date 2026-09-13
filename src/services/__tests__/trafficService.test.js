@@ -52,6 +52,7 @@ describe('trafficService', () => {
     expect(requestUrl.searchParams.get('end')).toContain('125.62,7.091');
     expect(requestUrl.searchParams.get('alternatives')).toBe('true');
     expect(requestUrl.searchParams.get('instructions')).toBe('true');
+    expect(fetchMock.mock.calls[0][1]?.headers?.Accept).toContain('application/geo+json');
 
     expect(result.level).toBe('moderate');
     expect(result.etaMinutes).toBe(11);
@@ -68,5 +69,37 @@ describe('trafficService', () => {
     expect(Array.isArray(result.alerts)).toBe(true);
     expect(result.alerts[0].road).toContain('Quirino');
     expect(result.dataSource).toBe('ors');
+  });
+
+  test('retries ORS requests with bounded backoff after a 406 response', async () => {
+    vi.stubEnv('VITE_TRAFFIC_PROVIDER', 'ors');
+    vi.stubEnv('VITE_TRAFFIC_API_BASE', 'https://api.openrouteservice.org');
+    vi.stubEnv('VITE_TRAFFIC_API_KEY', 'demo-key');
+
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({ ok: false, status: 406, json: async () => ({}) })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          routes: [{
+            summary: { duration: 420 },
+            geometry: { type: 'LineString', coordinates: [[125.615, 7.087], [125.62, 7.091]] },
+            segments: [{ steps: [{ name: 'Demo Road', duration: 420 }] }],
+          }],
+        }),
+      });
+
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchTrafficStatus({
+      currentLat: 7.087,
+      currentLng: 125.615,
+      nextStop: { latitude: 7.091, longitude: 125.62 },
+      route: { route_name: 'Retry Route' },
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(result.dataSource).toBe('ors');
+    expect(result.routeGeometry?.type).toBe('LineString');
   });
 });

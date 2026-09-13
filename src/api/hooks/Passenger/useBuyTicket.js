@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useLocation, useSearchParams } from 'react-router-dom';
 import PassengerService from '../../PassengerService/PassengerService';
 import useDropoffPicker from './useDropoffPicker';
+import { parseAppDate, toDateInputValue, getBusinessToday, getBusinessNowMs, toBusinessScheduleMs } from '../../../utils/dates';
 
 const CHECKOUT_EVENT_KEY = 'smart_transit_checkout_event';
 const CHECKOUT_PENDING_KEY = 'smart_transit_checkout_pending';
@@ -10,17 +11,10 @@ const TICKET_QR_CACHE_KEY = 'smart_transit_ticket_qr_cache_v1';
 const LOOKUP_CACHE_TTL_MS = 60 * 1000;
 const QR_CACHE_TTL_MS = 5 * 60 * 1000;
 
-const toDateInputValue = (value = new Date()) => {
-  const yyyy = value.getFullYear();
-  const mm = String(value.getMonth() + 1).padStart(2, '0');
-  const dd = String(value.getDate()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd}`;
-};
-
 const toTripDateValue = (value) => {
   if (!value) return '';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '';
+  const date = parseAppDate(value);
+  if (!date) return '';
   return toDateInputValue(date);
 };
 
@@ -32,7 +26,7 @@ const parseTripScheduleMs = (tripLike) => {
   const hhmmMatch = rawTime.match(/^(\d{2}:\d{2})(?::\d{2})?$/);
   const hhmmss = hhmmMatch ? `${hhmmMatch[1]}:00` : '00:00:00';
 
-  return new Date(`${dateStr}T${hhmmss}`).getTime();
+  return toBusinessScheduleMs(dateStr, hhmmss);
 };
 
 const toRad = (deg) => (deg * Math.PI) / 180;
@@ -187,10 +181,10 @@ export default function useBuyTicket({ onTicketPurchased }) {
     payment_method: 'online',
     payment_channel: 'gcash',
     booking_option: 'now',
-    booking_date: toDateInputValue(),
+    booking_date: getBusinessToday(),
     search_from: '',
     search_to: '',
-    search_date: toDateInputValue(),
+    search_date: getBusinessToday(),
     ticket_quantity: '1',
     use_rewards: false,
     reward_points_to_use: '',
@@ -205,7 +199,7 @@ export default function useBuyTicket({ onTicketPurchased }) {
   const selectedRoute = selectedTrip?.fleet_route?.route || null;
   const selectedFleetType = String(selectedTrip?.fleet_route?.fleet?.fleet_type || 'public').toLowerCase();
   const selectedTripDateValue = selectedTrip?.trip_date ? toTripDateValue(selectedTrip?.trip_date) : '';
-  const todayDate = toDateInputValue();
+  const todayDate = getBusinessToday();
   const selectedTripIsToday = selectedTripDateValue === todayDate;
   const isAdvanceTrip = !!selectedTripDateValue && selectedTripDateValue > todayDate;
   const allowStanding = selectedFleetType !== 'private' && !isAdvanceTrip;
@@ -275,11 +269,11 @@ export default function useBuyTicket({ onTicketPurchased }) {
 
   const visibleTrips = filteredTrips.length > 0 ? filteredTrips : suggestedTrips;
   const showingSuggestedTrips = filteredTrips.length === 0 && suggestedTrips.length > 0;
-  const todayDateValue = toDateInputValue();
+  const todayDateValue = getBusinessToday();
   const hasBookNowOption = visibleTrips.some((trip) => {
     if (toTripDateValue(trip?.trip_date) !== todayDateValue) return false;
     const scheduleMs = parseTripScheduleMs(trip);
-    return Number.isFinite(scheduleMs) && scheduleMs >= Date.now();
+    return Number.isFinite(scheduleMs) && scheduleMs >= getBusinessNowMs();
   });
   const minBookingDate = (() => {
     const today = todayDateValue;
@@ -719,13 +713,13 @@ export default function useBuyTicket({ onTicketPurchased }) {
 
   useEffect(() => {
     if (!selectedTripIsToday) return undefined;
-    if (form.booking_option === 'now' && form.booking_date === toDateInputValue()) return undefined;
+    if (form.booking_option === 'now' && form.booking_date === getBusinessToday()) return undefined;
 
     const timer = setTimeout(() => {
       setForm((prev) => ({
         ...prev,
         booking_option: 'now',
-        booking_date: toDateInputValue(),
+        booking_date: getBusinessToday(),
       }));
     }, 0);
 
@@ -733,9 +727,9 @@ export default function useBuyTicket({ onTicketPurchased }) {
   }, [form.booking_date, form.booking_option, selectedTripIsToday]);
 
   useEffect(() => {
-    if (form.booking_option === 'now' && form.booking_date !== toDateInputValue()) {
+    if (form.booking_option === 'now' && form.booking_date !== getBusinessToday()) {
       const timer = setTimeout(() => {
-        setForm((prev) => ({ ...prev, booking_date: toDateInputValue() }));
+        setForm((prev) => ({ ...prev, booking_date: getBusinessToday() }));
       }, 0);
       return () => clearTimeout(timer);
     }
@@ -979,12 +973,12 @@ export default function useBuyTicket({ onTicketPurchased }) {
 
     if (tripIdValue) {
       const picked = trips.find((trip) => String(trip.trip_id) === String(tripIdValue));
-      const tripDate = picked?.trip_date ? toDateInputValue(new Date(picked.trip_date)) : '';
+      const tripDate = picked?.trip_date ? toTripDateValue(picked.trip_date) : '';
       const route = picked?.fleet_route?.route || {};
       if (tripDate) {
         handleChange('booking_date', tripDate);
         handleChange('search_date', tripDate);
-        handleChange('booking_option', tripDate > toDateInputValue() ? 'later' : 'now');
+        handleChange('booking_option', tripDate > getBusinessToday() ? 'later' : 'now');
       }
       handleChange('search_from', route?.origin || '');
       handleChange('search_to', route?.destination || '');
@@ -1040,8 +1034,8 @@ export default function useBuyTicket({ onTicketPurchased }) {
 
     try {
       const nextErrors = {};
-      const todayDate = toDateInputValue();
-      const selectedTripDate = selectedTrip?.trip_date ? toDateInputValue(new Date(selectedTrip.trip_date)) : null;
+      const todayDate = getBusinessToday();
+      const selectedTripDate = selectedTrip?.trip_date ? toTripDateValue(selectedTrip.trip_date) : null;
 
       if (!form.trip_id) {
         nextErrors.trip_id = 'Please select a trip.';
@@ -1099,6 +1093,9 @@ export default function useBuyTicket({ onTicketPurchased }) {
             throw new Error('Selected origin stop has no coordinates for custom drop-off mode');
           }
 
+          const explicitOriginLabel = String(originPinnedLabel || stopLabel(selectedOriginStop) || '').trim();
+          const explicitDestinationLabel = String(destinationPinnedLabel || '').trim();
+
           return {
             trip_id: parseInt(form.trip_id, 10),
             seat_type: form.seat_type,
@@ -1106,6 +1103,8 @@ export default function useBuyTicket({ onTicketPurchased }) {
             origin_lng: originCoords.lng,
             destination_lat: Number(form.destination_lat),
             destination_lng: Number(form.destination_lng),
+            origin_label: explicitOriginLabel || undefined,
+            destination_label: explicitDestinationLabel || undefined,
           };
         })()
         : {

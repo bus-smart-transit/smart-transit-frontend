@@ -278,7 +278,7 @@ export default function StaffLoginPage() {
               </div>
 
               {error && (
-                <div className="mb-4 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5">
+                <div role="alert" className="mb-4 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5">
                   <TriangleAlert className="h-4 w-4 text-red-500 shrink-0" />
                   <p className="text-sm text-red-700">{error}</p>
                 </div>

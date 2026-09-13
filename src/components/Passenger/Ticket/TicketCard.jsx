@@ -1,4 +1,5 @@
 import './TicketCard.css';
+import { parseAppDate } from '../../../utils/dates';
 
 const STATUS_FOOTER = {
   valid:     { text: 'Valid Ticket — Present QR code to board', mod: '' },

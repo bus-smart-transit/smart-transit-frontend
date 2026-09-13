@@ -1,8 +1,19 @@
 import { useState } from 'react';
-import { MapPin, Clock, CreditCard, AlertCircle, CheckCircle, Loader, LocateFixed, Users } from 'lucide-react';
+import { MapPin, Clock, CreditCard, AlertCircle, CheckCircle, Loader, LocateFixed, Users, Wallet, Smartphone } from 'lucide-react';
 import useBuyTicket from '../../../api/hooks/Passenger/useBuyTicket';
 import TicketCard from '../Ticket/TicketCard';
+import Toggle from '../../ui/Toggle';
+import { parseAppDate } from '../../../utils/dates';
 import './BuyTicketPortal.css';
+
+// Matches the backend's accepted payment_channel values (see
+// OnlineCheckoutRequest::rules() — 'in:gcash,maya,card').
+const PAYMENT_CHANNELS = [
+  { value: 'gcash', label: 'GCash', icon: Smartphone },
+  { value: 'maya', label: 'Maya', icon: Wallet },
+  { value: 'card', label: 'Card', icon: CreditCard },
+];
+
 
 const toCompactTime = (value) => {
   if (!value) return '';
@@ -14,14 +25,8 @@ const toCompactTime = (value) => {
 
 const toDateLabel = (value) => {
   if (!value) return '-';
-  const str = String(value);
-  const dateOnlyMatch = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (dateOnlyMatch) {
-    return `${dateOnlyMatch[1]}/${dateOnlyMatch[2]}/${dateOnlyMatch[3]}`;
-  }
-
-  const date = new Date(str);
-  if (Number.isNaN(date.getTime())) return '-';
+  const date = parseAppDate(value);
+  if (!date) return '-';
   const yyyy = date.getFullYear();
   const mm = String(date.getMonth() + 1).padStart(2, '0');
   const dd = String(date.getDate()).padStart(2, '0');
@@ -83,6 +88,7 @@ const resolveTripBaseFare = (trip) => {
 export default function BuyTicket({ onTicketPurchased }) {
   const [tripDetailsModal, setTripDetailsModal] = useState(null);
   const [ticketPreview, setTicketPreview] = useState(null);
+  const [showDropoffModal, setShowDropoffModal] = useState(false);
   const {
     availableRewardPoints,
     canProceedToOnlinePayment,
@@ -507,23 +513,9 @@ export default function BuyTicket({ onTicketPurchased }) {
               </div>
 
               <div className="buy-inline-group">
-                <label><CreditCard size={14} /> Payment Channel (Online)</label>
+                <label><CreditCard size={14} /> Payment</label>
                 <div style={{ color: '#94a3b8', fontSize: '0.8rem', marginBottom: '8px' }}>
                   Online booking is paid online by default.
-                </div>
-                <div className="buy-toggle-row">
-                  {['gcash', 'maya', 'card'].map((channel) => (
-                    <label key={channel}>
-                      <input
-                        type="radio"
-                        name="payment_channel"
-                        value={channel}
-                        checked={form.payment_channel === channel}
-                        onChange={(e) => handleChange('payment_channel', e.target.value)}
-                      />
-                      <span>{channel}</span>
-                    </label>
-                  ))}
                 </div>
                 {isGuestCheckout && (
                   <input
@@ -533,6 +525,30 @@ export default function BuyTicket({ onTicketPurchased }) {
                     placeholder="Email for receipt (optional)"
                   />
                 )}
+
+                <div role="radiogroup" aria-label="Payment method" className="mt-2 grid grid-cols-3 gap-2">
+                  {PAYMENT_CHANNELS.map((channel) => {
+                    const isSelected = form.payment_channel === channel.value;
+                    return (
+                      <button
+                        key={channel.value}
+                        type="button"
+                        role="radio"
+                        aria-checked={isSelected}
+                        onClick={() => handleChange('payment_channel', channel.value)}
+                        className={`flex flex-col items-center gap-1 rounded-lg border-2 px-3 py-2.5 text-xs font-semibold transition ${
+                          isSelected
+                            ? 'border-teal-500 bg-teal-50 text-teal-700'
+                            : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'
+                        }`}
+                      >
+                        <channel.icon className="h-4 w-4" />
+                        {channel.label}
+                      </button>
+                    );
+                  })}
+                </div>
+
                 {!isGuestCheckout && (
                   <>
                     <div style={{ color: '#94a3b8', fontSize: '0.82rem', marginTop: '6px' }}>
@@ -541,15 +557,17 @@ export default function BuyTicket({ onTicketPurchased }) {
                         : `Available Rewards: ${Number(availableRewardPoints || 0).toFixed(0)} RP`}
                     </div>
 
-                    <label style={{ marginTop: '8px' }}>
-                      <input
-                        type="checkbox"
-                        checked={Boolean(form.use_rewards)}
-                        onChange={(e) => handleChange('use_rewards', e.target.checked)}
-                        disabled={!hasRewardPoints}
-                      />
-                      <span> Use reward points</span>
-                    </label>
+                    <Toggle
+                      checked={Boolean(form.use_rewards)}
+                      onChange={(checked) => handleChange('use_rewards', checked)}
+                      disabled={!hasRewardPoints}
+                      label="Use reward points"
+                      description={
+                        !hasRewardPoints && !loadingRewards
+                          ? "Disabled — you don't have any reward points to redeem yet. Earn points by completing paid trips."
+                          : undefined
+                      }
+                    />
 
                     {form.use_rewards && (
                       <>
@@ -625,26 +643,15 @@ export default function BuyTicket({ onTicketPurchased }) {
                       <strong>{destinationPinnedLabel || 'No location pinned yet'}</strong>
                     </div>
 
-                    <div className="buy-custom-dropoff-tools">
-                      <button
-                        type="button"
-                        className="buy-inline-location-btn"
-                        onClick={pinCurrentLocationAsOrigin}
-                        disabled={locatingDropoff}
-                      >
-                        <LocateFixed size={14} />
-                        {locatingDropoff ? 'Locating Origin...' : 'Pin My Current Location as Origin'}
-                      </button>
-
-                      <div className="buy-dropoff-map-wrap">
-                        <div className="buy-dropoff-map-head">
-                          <strong>Pin Drop-off on Map</strong>
-                          <span>Click map to fill coordinates</span>
-                        </div>
-                        <div ref={mapContainerRef} className="buy-dropoff-map" />
-                        {formErrors.destination_lat && <p style={{ color: '#fca5a5', marginTop: '6px', fontSize: '0.78rem' }}>{formErrors.destination_lat}</p>}
-                      </div>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowDropoffModal(true)}
+                      className="mt-2 flex items-center gap-2 rounded-lg border border-navy-800 px-3 py-2 text-xs font-semibold text-navy-800 transition hover:bg-navy-50"
+                    >
+                      <MapPin size={14} />
+                      Pin drop-off on map
+                    </button>
+                    {formErrors.destination_lat && <p style={{ color: '#fca5a5', marginTop: '6px', fontSize: '0.78rem' }}>{formErrors.destination_lat}</p>}
                   </>
                 )}
                 {formErrors.origin_stop_id && <p style={{ color: '#fca5a5', marginTop: '8px', fontSize: '0.78rem' }}>{formErrors.origin_stop_id}</p>}
@@ -660,8 +667,8 @@ export default function BuyTicket({ onTicketPurchased }) {
               <div className="buy-summary-grid">
                 <div><span>Route</span><strong>{selectedRoute?.origin || '-'} to {selectedRoute?.destination || '-'}</strong></div>
                 <div><span>Seat Type</span><strong>{form.seat_type}</strong></div>
-                <div><span>Fleet Type</span><strong style={{ textTransform: 'capitalize' }}>{selectedFleetType || 'public'}</strong></div>
-                <div><span>Payment</span><strong>{form.payment_channel}</strong></div>
+                <div><span>Destination</span><strong>{selectedRoute?.destination || 'Destination'}</strong></div>
+                <div><span>Payment</span><strong>Online payment</strong></div>
                 <div><span>Unit Fare</span><strong>PHP {hasFareQuote ? Number(unitFare).toFixed(2) : '0.00'}</strong></div>
                 <div><span>Quantity</span><strong>{totalTickets}</strong></div>
                 <div><span>Booking</span><strong>{form.booking_option === 'later' ? `Later (${form.booking_date || '-'})` : 'Now (Today)'}</strong></div>
@@ -693,6 +700,67 @@ export default function BuyTicket({ onTicketPurchased }) {
           </section>
         )}
       </form>
+
+      {/* Custom drop-off map modal. Mounted whenever dropoffMode === 'custom'
+          (matching the same condition useDropoffPicker's map-init effect
+          checks) so the MapLibre instance's lifecycle is never disturbed by
+          opening/closing this modal — only *visibility* is toggled here via
+          Tailwind's visible/invisible utilities (which preserve layout size,
+          unlike display:none/conditional mounting) so the map keeps a real
+          width/height to size its canvas against. */}
+      {dropoffMode === 'custom' && (
+        <div
+          role="presentation"
+          onClick={() => setShowDropoffModal(false)}
+          className={`fixed inset-0 z-1200 flex items-center justify-center bg-black/60 p-4 transition-opacity ${
+            showDropoffModal ? 'visible opacity-100' : 'invisible opacity-0 pointer-events-none'
+          }`}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-label="Pin drop-off on map"
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-5 shadow-card"
+          >
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <h3 className="font-display text-base font-semibold text-navy-950">Pin Drop-off on Map</h3>
+              <button
+                type="button"
+                onClick={() => setShowDropoffModal(false)}
+                className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-500 hover:bg-slate-50"
+              >
+                Done
+              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={pinCurrentLocationAsOrigin}
+              disabled={locatingDropoff}
+              className="mb-3 flex items-center gap-2 rounded-lg border border-navy-800 px-3 py-2 text-xs font-semibold text-navy-800 transition hover:bg-navy-50 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <LocateFixed size={14} />
+              {locatingDropoff ? 'Locating Origin...' : 'Pin My Current Location as Origin'}
+            </button>
+
+            <p className="mb-2 text-xs text-slate-500">Click the map to set the drop-off coordinates.</p>
+            <div ref={mapContainerRef} className="buy-dropoff-map" style={{ height: '320px', width: '100%', borderRadius: '12px', overflow: 'hidden' }} />
+            {formErrors.destination_lat && <p style={{ color: '#dc2626', marginTop: '8px', fontSize: '0.78rem' }}>{formErrors.destination_lat}</p>}
+
+            <dl className="mt-3 space-y-1 text-xs">
+              <div className="flex justify-between gap-4">
+                <dt className="text-slate-400">Pinned Origin</dt>
+                <dd className="text-right font-medium text-navy-950">{originPinnedLabel || 'Not pinned yet'}</dd>
+              </div>
+              <div className="flex justify-between gap-4">
+                <dt className="text-slate-400">Pinned Destination</dt>
+                <dd className="text-right font-medium text-navy-950">{destinationPinnedLabel || 'Not pinned yet'}</dd>
+              </div>
+            </dl>
+          </section>
+        </div>
+      )}
 
       {ticketPreview?.ticket && (
         <div
@@ -745,11 +813,11 @@ export default function BuyTicket({ onTicketPurchased }) {
             </div>
 
             <TicketCard
-              fromLabel={selectedRoute?.origin || 'Ecoland Terminal'}
-              toLabel={selectedRoute?.destination || ticketPreview.ticket.destination || 'Tagum Terminal'}
+              fromLabel={ticketPreview.ticket.origin || selectedRoute?.origin || 'Ecoland Terminal'}
+              toLabel={ticketPreview.ticket.destination || selectedRoute?.destination || 'Tagum Terminal'}
               departureLabel={formatDateTime(ticketPreview.ticket.valid_from)}
               seatLabel={ticketPreview.ticket.seat_type || '-'}
-              routeLabel={`${selectedRoute?.origin || '-'} to ${selectedRoute?.destination || ticketPreview.ticket.destination || '-'}`}
+              routeLabel={`${ticketPreview.ticket.origin || selectedRoute?.origin || '-'} to ${ticketPreview.ticket.destination || selectedRoute?.destination || '-'}`}
               qrUrl={ticketPreview.ticket.qr_url}
               statusLabel="Valid"
               amountLabel={`PHP ${Number(ticketPreview.ticket.amount || 0).toFixed(2)}`}

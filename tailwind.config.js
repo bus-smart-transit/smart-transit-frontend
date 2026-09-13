@@ -7,37 +7,59 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Navy primary (dark blue for text and headings)
+        // Navy primary — aligned with the design team's exact palette
+        // (previously an approximated slate-based scale; now matches
+        // the reference implementation's hex values 1:1).
         navy: {
-          50: '#f8fafc',
-          100: '#f1f5f9',
-          200: '#e2e8f0',
-          300: '#cbd5e1',
-          400: '#94a3b8',
-          500: '#64748b',
-          600: '#475569',
-          700: '#334155',
-          800: '#1e293b',
-          900: '#0f172a',
-          950: '#020617',
+          DEFAULT: '#153a6b',
+          50: '#eef3fb',
+          100: '#d6e2f4',
+          200: '#adc5e9',
+          300: '#7fa3da',
+          400: '#4e7cc4',
+          500: '#2c5aa3',
+          600: '#1e4fa1',
+          700: '#183f80',
+          800: '#153a6b',
+          900: '#0e2749',
+          950: '#091934',
         },
-        // Teal accent (for highlights and calls-to-action)
+        // Teal accent — aligned with the design team's exact palette.
         teal: {
-          50: '#f0fdfa',
-          100: '#ccfbf1',
-          200: '#99f6e4',
-          300: '#5eead4',
-          400: '#2dd4bf',
-          500: '#14b8a6',
-          600: '#0d9488',
-          700: '#0f766e',
-          800: '#115e59',
-          900: '#134e4a',
+          DEFAULT: '#6ac1b8',
+          50: '#eefaf8',
+          100: '#d3f1ec',
+          200: '#a9e2d9',
+          300: '#7dd0c3',
+          400: '#6ac1b8',
+          500: '#48a89d',
+          600: '#398a82',
+          700: '#2f6f6a',
+          800: '#295856',
+          900: '#254948',
+        },
+        cyan: {
+          DEFAULT: '#41fdfe',
+          50: '#eafffe',
+          100: '#c8fffe',
+          200: '#a0fdfe',
+          300: '#41fdfe',
+          400: '#1fe3e5',
+          500: '#0dbcbf',
+          600: '#0c9598',
+          700: '#12777a',
+          800: '#175f62',
+          900: '#175053',
+        },
+        ink: {
+          DEFAULT: '#101418',
+          muted: 'rgba(16,20,24,0.7)',
         },
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', 'sans-serif'],
-        display: ['Plus Jakarta Sans', 'system-ui', 'sans-serif'],
+        body: ['Inter', 'system-ui', 'sans-serif'],
+        display: ['Poppins', 'system-ui', 'sans-serif'],
         mono: ['JetBrains Mono', 'monospace'],
       },
       fontSize: {
@@ -51,9 +73,14 @@ export default {
         '3xl': ['1.875rem', { lineHeight: '2.25rem' }],
         '4xl': ['2.25rem', { lineHeight: '2.5rem' }],
       },
+      maxWidth: {
+        container: '1280px',
+      },
       boxShadow: {
-        // Card shadow for elevated components
-        card: '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1)',
+        // Card shadow for elevated components — aligned with the design
+        // team's exact card/card-hover shadow values.
+        card: '0 1px 2px rgba(16,20,24,0.04), 0 8px 24px -8px rgba(16,20,24,0.12)',
+        'card-hover': '0 4px 8px rgba(16,20,24,0.06), 0 16px 32px -12px rgba(16,20,24,0.18)',
         'card-lg': '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1)',
       },
       spacing: {
@@ -62,6 +89,16 @@ export default {
       borderRadius: {
         xl: '0.75rem',
         '2xl': '1rem',
+        xl2: '1.25rem',
+      },
+      keyframes: {
+        'fade-in': {
+          '0%': { opacity: '0', transform: 'translateY(6px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+      },
+      animation: {
+        'fade-in': 'fade-in 0.2s ease-out',
       },
     },
   },

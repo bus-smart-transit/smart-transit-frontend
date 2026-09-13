@@ -521,7 +521,7 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
           <div>
             <p className="text-xs font-semibold uppercase tracking-widest text-teal-600">Public Live Tracking</p>
             <h2 className="mt-2 font-display text-3xl font-bold text-slate-900 sm:text-4xl">Track buses without an account</h2>
-            <p className="mt-2 max-w-3xl text-sm text-slate-500">See current location, estimated arrival, and fleet type in real time before you sign in.</p>
+            <p className="mt-2 max-w-3xl text-sm text-slate-500">See current location, estimated arrival, and active destination/next stop in real time before you sign in.</p>
           </div>
         )}
 
@@ -559,7 +559,7 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
                 <p className="text-[11px] text-slate-500 capitalize">{selectedFleet?.trip_status || 'idle'}</p>
               </div>
               <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
-                <p className="text-[11px] uppercase tracking-widest text-slate-500">Next Stop</p>
+                <p className="text-[11px] uppercase tracking-widest text-slate-500">Next Stop / Destination</p>
                 <p className="mt-1 inline-flex items-center gap-1 text-sm font-semibold text-slate-900"><Navigation className="h-3.5 w-3.5 text-teal-600" />{nextStopOrDestinationLabel}</p>
                 <p className="text-[11px] text-slate-500">{selectedFleet?.route_name || selectedFleet?.destination || 'Route sync pending'}</p>
               </div>

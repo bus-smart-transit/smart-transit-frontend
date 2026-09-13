@@ -96,23 +96,29 @@ export default function usePassengerDashboard({ preloadMapView }) {
     const stopName = pickStopName(ticket?.origin_stop) || pickStopName(ticket?.originStop);
     if (stopName) return stopName;
     if (ticket?.origin) return ticket.origin;
+    if (selectedTicket?.ticket_uuid && ticket?.ticket_uuid === selectedTicket.ticket_uuid && selectedTicketQr?.origin) {
+      return selectedTicketQr.origin;
+    }
     // Custom GPS pinpoint fallback when no reverse-geocoded label exists.
     if (ticket?.origin_lat != null && ticket?.origin_lng != null) {
       return 'Custom pickup point';
     }
     return getRouteOriginFallback(ticket) || 'Route unavailable';
-  }, []);
+  }, [selectedTicket, selectedTicketQr]);
 
   const getDestinationLabel = useCallback((ticket) => {
     const stopName = pickStopName(ticket?.destination_stop) || pickStopName(ticket?.destinationStop);
     if (stopName) return stopName;
     if (ticket?.destination) return ticket.destination;
+    if (selectedTicket?.ticket_uuid && ticket?.ticket_uuid === selectedTicket.ticket_uuid && selectedTicketQr?.destination) {
+      return selectedTicketQr.destination;
+    }
     // Custom GPS drop-off fallback when no reverse-geocoded label exists.
     if (ticket?.destination_lat != null && ticket?.destination_lng != null) {
       return 'Custom drop-off point';
     }
     return getRouteDestinationFallback(ticket) || 'Route unavailable';
-  }, []);
+  }, [selectedTicket, selectedTicketQr]);
 
   const clearPrivateData = useCallback(() => {
     setIsLoadingPrivate(false);

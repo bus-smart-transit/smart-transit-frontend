@@ -1,10 +1,12 @@
 import React from 'react';
 
 /**
- * Flexible Card component for content containers.
- * Supports elevation, borders, and padding variations.
+ * Card component matching the design team's reference implementation
+ * (rounded-2xl, slate border, shadow-card). Keeps padding/elevation props
+ * for backward compatibility with existing callers.
  */
 const Card = React.forwardRef(({
+  as: As = 'div',
   children,
   className = '',
   elevation = 'md',
@@ -16,7 +18,7 @@ const Card = React.forwardRef(({
     none: '',
     sm: 'shadow-card',
     md: 'shadow-card',
-    lg: 'shadow-card-lg',
+    lg: 'shadow-card-hover',
   };
 
   const paddingStyles = {
@@ -26,15 +28,14 @@ const Card = React.forwardRef(({
     lg: 'p-6 sm:p-8',
   };
 
-  const baseStyles = 'bg-white rounded-xl transition-all';
   const borderStyles = border ? 'border border-slate-200' : '';
 
-  const cardClass = `${baseStyles} ${elevationStyles[elevation]} ${paddingStyles[padding]} ${borderStyles} ${className}`;
+  const cardClass = `rounded-2xl bg-white transition-all ${elevationStyles[elevation]} ${paddingStyles[padding]} ${borderStyles} ${className}`;
 
   return (
-    <div ref={ref} className={cardClass} {...props}>
+    <As ref={ref} className={cardClass} {...props}>
       {children}
-    </div>
+    </As>
   );
 });
 

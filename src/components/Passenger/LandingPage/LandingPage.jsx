@@ -1,12 +1,19 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import Navbar from './Navbar';
-import Footer from './Footer';
+import Navbar from '../../Layout/Navbar';
+import Footer from '../../Layout/Footer';
 import LandingHero from './LandingHero';
 import TripResultsSection from './TripResultsSection';
 import WhyRideSection from './WhyRideSection';
 import PublicTrackingSection from './PublicTrackingSection';
+import HowItWorksSection from './HowItWorksSection';
+import WhatYouCanDoSection from './WhatYouCanDoSection';
+import DigitalTicketSection from './DigitalTicketSection';
+import BeforeYouTravelSection from './BeforeYouTravelSection';
+import HomeFaqSection from './HomeFaqSection';
+import NeedHelpSection from './NeedHelpSection';
 import PassengerService from '../../../api/PassengerService/PassengerService';
+import { getBusinessToday } from '../../../utils/dates';
 
 export default function LandingPage() {
   const navigate = useNavigate();
@@ -14,13 +21,11 @@ export default function LandingPage() {
   const [trips, setTrips] = useState(null);
   const [loading, setLoading] = useState(false);
   const [searchError, setSearchError] = useState(null);
-  const [hasSearched, setHasSearched] = useState(false);
 
   const handleSearch = useCallback(async ({ from, to, date }) => {
     setSearchState({ from, to, date });
     setLoading(true);
     setSearchError(null);
-    setHasSearched(true);
     try {
       const params = {};
       if (date) params.trip_date = date;
@@ -29,11 +34,9 @@ export default function LandingPage() {
       const normalizedFrom = (from || '').trim().toLowerCase();
       const normalizedTo = (to || '').trim().toLowerCase();
       const sameDayOrFutureTrips = allTrips.filter((trip) => {
-        const tripDate = trip?.trip_date ? new Date(trip.trip_date) : null;
-        if (!tripDate || Number.isNaN(tripDate.getTime())) return true;
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        return tripDate >= today;
+        const tripDateStr = String(trip?.trip_date || '').match(/^(\d{4}-\d{2}-\d{2})/)?.[1];
+        if (!tripDateStr) return true;
+        return tripDateStr >= getBusinessToday();
       });
       const filtered = sameDayOrFutureTrips.filter((t) => {
         const route = t?.fleet_route?.route ?? {};
@@ -54,6 +57,14 @@ export default function LandingPage() {
     }
   }, []);
 
+  // Show "All Available Trips" by default (not gated behind an explicit
+  // search action), matching the current design — reuses the same fetch
+  // logic that an explicit search would use, just with empty filters.
+  useEffect(() => {
+    void handleSearch({ from: '', to: '', date: '' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleBookSeat = useCallback((trip) => {
     const tripId = trip?.trip_id ?? trip?.id;
     const query = tripId ? `?trip_id=${encodeURIComponent(String(tripId))}` : '';
@@ -67,19 +78,29 @@ export default function LandingPage() {
       <main className="flex-1">
         <LandingHero onSearch={handleSearch} searchState={searchState} />
 
-        {hasSearched && (
-          <TripResultsSection
-            trips={trips}
-            loading={loading}
-            error={searchError}
-            searchState={searchState}
-            onBookSeat={handleBookSeat}
-          />
-        )}
+        <TripResultsSection
+          trips={trips ?? []}
+          loading={loading}
+          error={searchError}
+          searchState={searchState}
+          onBookSeat={handleBookSeat}
+        />
+
+        <HowItWorksSection />
+
+        <WhatYouCanDoSection />
+
+        <DigitalTicketSection />
 
         <PublicTrackingSection />
 
-        {!hasSearched && <WhyRideSection />}
+        <BeforeYouTravelSection />
+
+        <WhyRideSection />
+
+        <HomeFaqSection />
+
+        <NeedHelpSection />
       </main>
 
       <Footer />

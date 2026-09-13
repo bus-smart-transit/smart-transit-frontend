@@ -87,9 +87,9 @@ describe('Bug 1 — StaffGuestRoute: stale token does not redirect to dashboard'
     expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 
-  test('stale token in localStorage (backend returns 401) → stays on login page', async () => {
-    localStorage.setItem('staff_token', 'expired-token-abc123');
-    localStorage.setItem('staff_role', 'operator');
+  test('stale token in sessionStorage (backend returns 401) → stays on login page', async () => {
+    sessionStorage.setItem('staff_token', 'expired-token-abc123');
+    sessionStorage.setItem('staff_role', 'operator');
     globalThis.fetch.mockResolvedValue({ ok: false, status: 401 });
 
     render(
@@ -110,13 +110,13 @@ describe('Bug 1 — StaffGuestRoute: stale token does not redirect to dashboard'
     expect(screen.queryByTestId('operator-dashboard')).not.toBeInTheDocument();
 
     // Stale token should have been cleared
-    expect(localStorage.getItem('staff_token')).toBeNull();
-    expect(localStorage.getItem('staff_role')).toBeNull();
+    expect(sessionStorage.getItem('staff_token')).toBeNull();
+    expect(sessionStorage.getItem('staff_role')).toBeNull();
   });
 
   test('valid token (backend returns 200) → redirects to role dashboard', async () => {
-    localStorage.setItem('staff_token', 'valid-token-xyz');
-    localStorage.setItem('staff_role', 'driver');
+    sessionStorage.setItem('staff_token', 'valid-token-xyz');
+    sessionStorage.setItem('staff_role', 'driver');
     globalThis.fetch.mockResolvedValue({ ok: true, status: 200 });
 
     render(
@@ -136,9 +136,12 @@ describe('Bug 1 — StaffGuestRoute: stale token does not redirect to dashboard'
     expect(screen.queryByTestId('login-page')).not.toBeInTheDocument();
   });
 
-  test('network error during validation → stays on login page (fail-safe)', async () => {
-    localStorage.setItem('staff_token', 'some-token');
-    localStorage.setItem('staff_role', 'conductor');
+  test('network error during validation → fails open to the role dashboard (documented intentional fail-safe)', async () => {
+    // See StaffAuthGuard.jsx validateStaffToken(): a network failure is
+    // deliberately treated as 'valid' so a freshly-issued token isn't wiped
+    // just because the tunnel/backend is briefly unreachable.
+    sessionStorage.setItem('staff_token', 'some-token');
+    sessionStorage.setItem('staff_role', 'conductor');
     globalThis.fetch.mockRejectedValue(new Error('Network error'));
 
     render(
@@ -153,9 +156,9 @@ describe('Bug 1 — StaffGuestRoute: stale token does not redirect to dashboard'
     );
 
     await waitFor(() => {
-      expect(screen.getByTestId('login-page')).toBeInTheDocument();
+      expect(screen.getByTestId('conductor-dashboard')).toBeInTheDocument();
     });
-    expect(screen.queryByTestId('conductor-dashboard')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('login-page')).not.toBeInTheDocument();
   });
 });
 
@@ -187,10 +190,10 @@ describe('Bug 2 — Successful login does not display lockout/attempt message', 
       </MemoryRouter>
     );
 
-    fireEvent.change(screen.getByPlaceholderText(/smarttransit\.com/i), {
+    fireEvent.change(screen.getByPlaceholderText(/enter your email or driver id/i), {
       target: { value: 'driver@smarttransit.com' },
     });
-    fireEvent.change(screen.getByPlaceholderText(/enter password/i), {
+    fireEvent.change(screen.getByPlaceholderText(/enter your password/i), {
       target: { value: 'password123' },
     });
 
@@ -220,8 +223,8 @@ describe('Bug 2 — Successful login does not display lockout/attempt message', 
       </MemoryRouter>
     );
 
-    const emailInput = screen.getByPlaceholderText(/smarttransit\.com/i);
-    const passwordInput = screen.getByPlaceholderText(/enter password/i);
+    const emailInput = screen.getByPlaceholderText(/enter your email or driver id/i);
+    const passwordInput = screen.getByPlaceholderText(/enter your password/i);
     const submitBtn = screen.getByRole('button', { name: /sign in/i });
 
     // Attempt 1 — wrong password

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import StaffService from '../../api/StaffService/StaffService'
 import { buildOperatorForecast } from './routeForecast'
 import { loadMapLib } from '../Map/mapDependencies'
+import { parseAppDate, getBusinessToday } from '../../utils/dates'
 import {
   LayoutDashboard, Bus, MapPin, Clock, PieChart, Users, Settings,
   LogOut, Plus, Eye, RefreshCw, Shield, Download,
@@ -656,7 +657,7 @@ function StaffDirectoryTab({ drivers, conductors, onRefresh, onCreateAccount }) 
   const [showModal, setShowModal] = useState(false)
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState('')
-  const [form, setForm] = useState({ username: '', email: '', password: '', role: 'driver' })
+  const [form, setForm] = useState({ name: '', username: '', email: '', password: '', phone_num: '', address: '', birth_date: '', role: 'driver' })
 
   const allStaff = [
     ...drivers.map((row) => ({ ...row, _resolvedRole: 'driver' })),
@@ -679,7 +680,7 @@ function StaffDirectoryTab({ drivers, conductors, onRefresh, onCreateAccount }) 
       await onCreateAccount(form)
       setMsg('Staff account created successfully.')
       setShowModal(false)
-      setForm({ username: '', email: '', password: '', role: roleFilter === 'all' ? 'driver' : roleFilter })
+      setForm({ name: '', username: '', email: '', password: '', phone_num: '', address: '', birth_date: '', role: roleFilter === 'all' ? 'driver' : roleFilter })
       onRefresh()
     } catch (err) {
       setMsg(err?.message || 'Failed to create staff account.')
@@ -758,8 +759,12 @@ function StaffDirectoryTab({ drivers, conductors, onRefresh, onCreateAccount }) 
                 <option value="conductor">Conductor</option>
               </select>
             </Field>
+            <Field label="Full Name" value={form.name} onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))} required placeholder="Juan Dela Cruz" />
             <Field label="Username" value={form.username} onChange={(event) => setForm((prev) => ({ ...prev, username: event.target.value }))} required placeholder="juan_dela_cruz" />
             <Field label="Email" type="email" value={form.email} onChange={(event) => setForm((prev) => ({ ...prev, email: event.target.value }))} required placeholder="juan@example.com" />
+            <Field label="Phone Number" type="tel" value={form.phone_num} onChange={(event) => setForm((prev) => ({ ...prev, phone_num: event.target.value }))} required placeholder="09123456789" />
+            <Field label="Address" value={form.address} onChange={(event) => setForm((prev) => ({ ...prev, address: event.target.value }))} required placeholder="Street, Barangay, City" />
+            <Field label="Birth Date (optional)" type="date" value={form.birth_date} onChange={(event) => setForm((prev) => ({ ...prev, birth_date: event.target.value }))} />
             <Field label="Password" type="password" value={form.password} onChange={(event) => setForm((prev) => ({ ...prev, password: event.target.value }))} required placeholder="Minimum 8 characters" />
             {msg && <p className="text-sm text-red-600">{msg}</p>}
             <div className="flex justify-end gap-2 pt-2">
@@ -780,6 +785,7 @@ function FleetTrackingMap({ trip, location }) {
   const mapRef = useRef(null)
   const mapLibRef = useRef(null)
   const markerRef = useRef(null)
+  const routeGeometryCacheRef = useRef(new Map())
 
   useEffect(() => {
     if (mapRef.current || !mapContainerRef.current) return
@@ -816,26 +822,41 @@ function FleetTrackingMap({ trip, location }) {
     const map = mapRef.current
     const maplibregl = mapLibRef.current
     if (!map || !maplibregl) return
-
-    const routeStops = trip?.fleet_route?.route?.route_stops || trip?.fleet_route?.route?.routeStops || []
-    const coords = routeStops
-      .slice()
-      .sort((a, b) => Number(a?.stop_order ?? 0) - Number(b?.stop_order ?? 0))
-      .map((stop) => {
-        const lat = Number(stop?.stop?.latitude ?? stop?.latitude)
-        const lng = Number(stop?.stop?.longitude ?? stop?.longitude)
-        return Number.isFinite(lat) && Number.isFinite(lng) ? [lng, lat] : null
-      })
-      .filter(Boolean)
-
     const lat = Number(location?.latitude)
     const lng = Number(location?.longitude)
     const hasLiveMarker = Number.isFinite(lat) && Number.isFinite(lng)
     const liveCoord = hasLiveMarker ? [lng, lat] : null
+    const routeId = Number(location?.route_id ?? trip?.fleet_route?.route?.route_id)
 
-    const draw = () => {
+    const removeRoute = () => {
       if (map.getLayer('operator-route-line')) map.removeLayer('operator-route-line')
+      if (map.getLayer('operator-route-glow')) map.removeLayer('operator-route-glow')
       if (map.getSource('operator-route')) map.removeSource('operator-route')
+    }
+
+    const createBusMarker = () => {
+      const outerEl = document.createElement('div')
+      outerEl.className = 'operator-fleet-marker'
+      outerEl.style.width = '38px'
+      outerEl.style.height = '38px'
+      outerEl.style.borderRadius = '9999px'
+      outerEl.style.display = 'grid'
+      outerEl.style.placeItems = 'center'
+      outerEl.style.background = 'linear-gradient(135deg, #0f766e, #22c55e)'
+      outerEl.style.boxShadow = '0 12px 28px rgba(15, 118, 110, 0.35)'
+      outerEl.style.border = '2px solid rgba(255,255,255,0.92)'
+
+      const innerEl = document.createElement('div')
+      innerEl.textContent = '🚌'
+      innerEl.style.fontSize = '18px'
+      innerEl.style.lineHeight = '1'
+
+      outerEl.appendChild(innerEl)
+      return outerEl
+    }
+
+    const draw = (coords = []) => {
+      removeRoute()
 
       if (coords.length >= 2) {
         map.addSource('operator-route', {
@@ -847,6 +868,18 @@ function FleetTrackingMap({ trip, location }) {
               type: 'LineString',
               coordinates: coords,
             },
+          },
+        })
+
+        map.addLayer({
+          id: 'operator-route-glow',
+          type: 'line',
+          source: 'operator-route',
+          layout: { 'line-join': 'round', 'line-cap': 'round' },
+          paint: {
+            'line-color': '#facc15',
+            'line-width': 10,
+            'line-opacity': 0.18,
           },
         })
 
@@ -874,7 +907,7 @@ function FleetTrackingMap({ trip, location }) {
         `
         const popup = new maplibregl.Popup({ closeButton: false, closeOnClick: false }).setHTML(popupHtml)
 
-        markerRef.current = new maplibregl.Marker({ color: '#16a34a' })
+        markerRef.current = new maplibregl.Marker({ element: createBusMarker() })
           .setLngLat(liveCoord)
           .setPopup(popup)
           .addTo(map)
@@ -899,8 +932,61 @@ function FleetTrackingMap({ trip, location }) {
       }
     }
 
-    if (map.isStyleLoaded()) draw()
-    else map.once('load', draw)
+    let cancelled = false
+
+    const drawWhenReady = (coords = []) => {
+      if (map.isStyleLoaded()) draw(coords)
+      else map.once('load', () => draw(coords))
+    }
+
+    const loadRouteAndDraw = async () => {
+      let routeCoords
+
+      const embeddedStops = trip?.fleet_route?.route?.route_stops || trip?.fleet_route?.route?.routeStops || []
+      routeCoords = embeddedStops
+        .slice()
+        .sort((a, b) => Number(a?.stop_order ?? 0) - Number(b?.stop_order ?? 0))
+        .map((stop) => {
+          const stopLat = Number(stop?.stop?.latitude ?? stop?.latitude)
+          const stopLng = Number(stop?.stop?.longitude ?? stop?.longitude)
+          return Number.isFinite(stopLat) && Number.isFinite(stopLng) ? [stopLng, stopLat] : null
+        })
+        .filter(Boolean)
+
+      if (routeCoords.length < 2 && Number.isFinite(routeId) && routeId > 0) {
+        const cached = routeGeometryCacheRef.current.get(routeId)
+        if (cached) {
+          routeCoords = cached
+        } else {
+          try {
+            const stopsRes = await StaffService.getRouteStops(routeId)
+            const routeStops = Array.isArray(stopsRes?.data) ? stopsRes.data : []
+            routeCoords = routeStops
+              .map((stop) => {
+                const stopLat = Number(stop?.latitude)
+                const stopLng = Number(stop?.longitude)
+                return Number.isFinite(stopLat) && Number.isFinite(stopLng) ? [stopLng, stopLat] : null
+              })
+              .filter(Boolean)
+            if (routeCoords.length >= 2) {
+              routeGeometryCacheRef.current.set(routeId, routeCoords)
+            }
+          } catch {
+            routeCoords = []
+          }
+        }
+      }
+
+      if (!cancelled) {
+        drawWhenReady(routeCoords)
+      }
+    }
+
+    void loadRouteAndDraw()
+
+    return () => {
+      cancelled = true
+    }
   }, [trip, location])
 
   return <div ref={mapContainerRef} className="h-107.5 w-full" />
@@ -968,6 +1054,21 @@ function FleetsTab({ fleets, routes, trips, onRefresh }) {
     if (normalized === 'scheduled') return 'Upcoming'
     if (normalized === 'completed') return 'Completed'
     return 'Pending'
+  }
+
+  const getLocationForTrip = (tripItem) => {
+    if (!tripItem) return null
+
+    const tripId = Number(tripItem?.trip_id)
+    const fleetId = Number(tripItem?.fleet_route?.fleet?.fleet_id)
+
+    return fleetLocations.find((entry) => {
+      const entryTripId = Number(entry?.trip_id)
+      const entryFleetId = Number(entry?.fleet_id)
+      if (Number.isFinite(tripId) && tripId > 0 && entryTripId === tripId) return true
+      if (Number.isFinite(fleetId) && fleetId > 0 && entryFleetId === fleetId) return true
+      return false
+    }) || null
   }
 
   const getLocationByFleet = (fleetId) => fleetLocations.find((entry) => Number(entry?.fleet_id) === Number(fleetId)) || null
@@ -1039,33 +1140,22 @@ function FleetsTab({ fleets, routes, trips, onRefresh }) {
     window.open(`https://www.google.com/maps?q=${lat},${lng}`, '_blank', 'noopener,noreferrer')
   }
 
+  const todayStart = getBusinessToday()
   const displayTrips = [...trips]
     .filter((trip) => {
       const status = String(trip?.status || '').toLowerCase()
-      return status !== 'cancelled' && status !== 'completed'
+      const tripDateStr = String(trip?.trip_date || '').match(/^(\d{4}-\d{2}-\d{2})/)?.[1]
+      return status !== 'cancelled' && status !== 'completed' && !!tripDateStr && tripDateStr === todayStart
     })
-    .sort((a, b) => new Date(a?.trip_date || 0) - new Date(b?.trip_date || 0))
+    .sort((a, b) => (parseAppDate(a?.trip_date)?.getTime() ?? 0) - (parseAppDate(b?.trip_date)?.getTime() ?? 0))
 
-  const fallbackTrips = [...fleets]
-    .slice(0, 6)
-    .map((fleet, index) => ({
-      trip_id: `fleet-fallback-${fleet.fleet_id || index}`,
-      status: fleet?.status || 'scheduled',
-      fleet_route: {
-        fleet,
-        route: {
-          route_name: 'Route pending assignment',
-          origin: 'TBD',
-          destination: 'TBD',
-        },
-        start_time: '',
-      },
-    }))
+  const assignedFleetIds = new Set(displayTrips.map((trip) => Number(trip?.fleet_route?.fleet?.fleet_id)).filter(Number.isFinite))
+  const unassignedFleets = fleets.filter((fleet) => !assignedFleetIds.has(Number(fleet?.fleet_id)))
 
-  const cards = displayTrips.length > 0 ? displayTrips.slice(0, 9) : fallbackTrips
+  const cards = displayTrips.slice(0, 9)
   const focusedTrip = cards.find((trip) => String(trip.trip_id) === String(focusedTripId)) || null
   const focusedFleetId = focusedTrip?.fleet_route?.fleet?.fleet_id
-  const focusedLocation = focusedTrip ? getLocationByFleet(focusedFleetId) : null
+  const focusedLocation = getLocationForTrip(focusedTrip)
   const focusedLat = Number(focusedLocation?.latitude)
   const focusedLng = Number(focusedLocation?.longitude)
   const hasFocusedLocation = Number.isFinite(focusedLat) && Number.isFinite(focusedLng)
@@ -1156,7 +1246,7 @@ function FleetsTab({ fleets, routes, trips, onRefresh }) {
         <div className="rounded-2xl border border-slate-800 bg-[#0D162B] p-3 sm:p-4">
           <h3 className="mb-4 text-4xl font-bold leading-tight text-white">Fleets Trips</h3>
           {cards.length === 0 ? (
-            <p className="rounded-xl border border-slate-700 bg-[#15203a] px-4 py-5 text-sm text-slate-300">No fleet trips available yet.</p>
+            <p className="rounded-xl border border-slate-700 bg-[#15203a] px-4 py-5 text-sm text-slate-300">No active or scheduled trips for today.</p>
           ) : (
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               {cards.map((trip) => {
@@ -1221,6 +1311,22 @@ function FleetsTab({ fleets, routes, trips, onRefresh }) {
             </div>
 
             <aside className="rounded-xl border border-slate-700 bg-[#121D33] p-3">
+        {unassignedFleets.length > 0 && (
+          <div className="mt-5 rounded-2xl border border-slate-800 bg-[#0D162B] p-3 sm:p-4">
+            <h3 className="mb-4 text-2xl font-bold leading-tight text-white">Available Fleets</h3>
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {unassignedFleets.map((fleet) => (
+                <article key={`fleet-unassigned-${fleet.fleet_id}`} className="rounded-2xl border border-slate-700 bg-[#18243A] p-4 shadow-[0_6px_20px_rgba(0,0,0,0.25)]">
+                  <div className="rounded-xl bg-[#222F45] p-3">
+                    <p className="text-xl font-bold text-white">{fleet?.plate_number || `Fleet ${fleet?.fleet_id || '-'}`}</p>
+                    <p className="text-sm text-slate-300">{fleet?.fleet_type || 'public'} fleet</p>
+                    <p className="text-sm text-slate-300">Pending trip assignment</p>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </div>
+        )}
               <div className="mb-3 flex items-center gap-2">
                 <h4 className="text-4xl font-bold text-white">Live Tracking</h4>
                 <span className="rounded-full bg-[#1F2B47] px-3 py-1 text-sm font-semibold text-slate-200">Status</span>
@@ -1675,6 +1781,7 @@ function RoutesTab({ routes, stops, trips, onRefresh }) {
 function TripsTab({ trips, drivers, conductors, onRefresh }) {
   const [showModal, setShowModal]   = useState(false)
   const [selectedTrip, setSelectedTrip] = useState(null)
+  const [tripFilter, setTripFilter] = useState('all')
   const [gpsHistory, setGpsHistory] = useState([])
   const [gpsLoading, setGpsLoading] = useState(false)
   const [gpsMessage, setGpsMessage] = useState('')
@@ -1686,6 +1793,7 @@ function TripsTab({ trips, drivers, conductors, onRefresh }) {
   const [actionInFlight, setActionInFlight] = useState(null) // tripId currently being actioned
   const [msg, setMsg]               = useState('')
   const [fleetRoutes, setFleetRoutes] = useState([])
+  const [visibleTrips, setVisibleTrips] = useState(trips)
 
   const driverMap = new Map(drivers.map(d => [Number(getStaffCompanyUserId(d)), d]))
   const conductorMap = new Map(conductors.map(c => [Number(getStaffCompanyUserId(c)), c]))
@@ -1693,6 +1801,34 @@ function TripsTab({ trips, drivers, conductors, onRefresh }) {
   useEffect(() => {
     StaffService.getOperatorFleetRoutes().then(r => setFleetRoutes(r?.data ?? [])).catch(() => {})
   }, [])
+
+  useEffect(() => {
+    let cancelled = false
+
+    const loadFilteredTrips = async () => {
+      if (tripFilter === 'all') {
+        setVisibleTrips(trips)
+        return
+      }
+
+      try {
+        const res = await StaffService.getOperatorTrips(tripFilter)
+        if (!cancelled) {
+          setVisibleTrips(Array.isArray(res?.data) ? res.data : [])
+        }
+      } catch {
+        if (!cancelled) {
+          setVisibleTrips([])
+        }
+      }
+    }
+
+    void loadFilteredTrips()
+
+    return () => {
+      cancelled = true
+    }
+  }, [tripFilter, trips])
 
   const handleSchedule = async (e) => {
     e.preventDefault(); setSaving(true); setMsg('')
@@ -1748,7 +1884,8 @@ function TripsTab({ trips, drivers, conductors, onRefresh }) {
     finally { setActionInFlight(null) }
   }
 
-  const sorted = [...trips].sort((a,b) => new Date(b.trip_date) - new Date(a.trip_date))
+  const sorted = [...visibleTrips]
+    .sort((a,b) => (parseAppDate(b.trip_date)?.getTime() ?? 0) - (parseAppDate(a.trip_date)?.getTime() ?? 0))
 
   const loadTripGpsHistory = async (tripId) => {
     if (!tripId) return
@@ -1771,7 +1908,18 @@ function TripsTab({ trips, drivers, conductors, onRefresh }) {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-bold text-slate-900">Trips</h2>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <label htmlFor="operator-trip-filter" className="text-xs font-semibold uppercase tracking-wide text-slate-500">Filter</label>
+          <select
+            id="operator-trip-filter"
+            value={tripFilter}
+            onChange={(event) => setTripFilter(event.target.value)}
+            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
+          >
+            <option value="all">All</option>
+            <option value="scheduled">Scheduled / Active</option>
+            <option value="completed">Completed</option>
+          </select>
           <button type="button" onClick={onRefresh} className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50">
             <RefreshCw className="h-4 w-4" /> Refresh
           </button>
