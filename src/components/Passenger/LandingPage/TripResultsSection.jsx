@@ -39,11 +39,27 @@ function TripCard({ trip, index, onBookSeat }) {
   const fleet = trip.fleet_route?.fleet ?? {};
   const origin = route?.origin_stop?.stop_name ?? trip.fleet_route?.origin_stop_name ?? 'Origin';
   const destination = route?.destination_stop?.stop_name ?? trip.fleet_route?.destination_stop_name ?? 'Destination';
-  const startTime = toCompactTime(trip.fleet_route?.start_time ?? trip.start_time);
-  const endTime = toCompactTime(trip.fleet_route?.end_time ?? trip.end_time);
+  // This trip's actual scheduled departure time — NOT fleet_route.start_time/
+  // end_time, which is the fleet route's general daily operating-hours
+  // window (e.g. 05:00-21:00) and was being shown here instead of the
+  // specific trip's departure time (e.g. 7:30).
+  const departureTime = toCompactTime(trip?.departure_time || trip?.fleet_route?.start_time);
   const busName = fleet?.plate_number ?? fleet?.name ?? `Bus ${index + 1}`;
-  const seatedLeft = trip.available_seated_capacity ?? trip.remaining_seated_capacity ?? 10;
-  const standingLeft = trip.available_standing_capacity ?? trip.remaining_standing_capacity ?? 0;
+  // Backend stores current_* as OCCUPIED counts (not remaining), so
+  // available capacity must be derived as total - current, mirroring
+  // BuyTicket.jsx's toSeatAvailability(). The previous available_seated_capacity/
+  // remaining_seated_capacity fields don't exist on the API response, so
+  // this always silently fell back to a hardcoded "10 seats available".
+  const seatedTotal = Number(fleet?.seated_capacity ?? 0);
+  const standingTotal = Number(fleet?.standing_capacity ?? 0);
+  const explicitSeatedAvailable = trip.available_seated_capacity ?? trip.available_seated ?? trip.remaining_seated_capacity;
+  const explicitStandingAvailable = trip.available_standing_capacity ?? trip.available_standing ?? trip.remaining_standing_capacity;
+  const seatedLeft = explicitSeatedAvailable != null
+    ? Number(explicitSeatedAvailable)
+    : Math.max(0, seatedTotal - Number(trip?.current_seated_capacity ?? 0));
+  const standingLeft = explicitStandingAvailable != null
+    ? Number(explicitStandingAvailable)
+    : Math.max(0, standingTotal - Number(trip?.current_standing_capacity ?? 0));
   const totalLeft = seatedLeft + standingLeft;
   const listedFare = resolveTripBaseFare(trip);
   const hasListedFare = Number.isFinite(listedFare) && listedFare > 0;
@@ -63,7 +79,7 @@ function TripCard({ trip, index, onBookSeat }) {
         <div className="mt-1.5 flex flex-wrap items-center gap-3 text-xs text-slate-500">
           <span className="flex items-center gap-1">
             <Clock className="h-3.5 w-3.5 shrink-0" />
-            {startTime} – {endTime}
+            {departureTime}
           </span>
           <span className="flex items-center gap-1">
             <Bus className="h-3.5 w-3.5 shrink-0" />
@@ -183,7 +199,7 @@ export default function TripResultsSection({ trips, loading, error, searchState,
         {!loading && !error && displayTrips.length > 0 && (
           <div className="space-y-3">
             {displayTrips.map((trip, i) => (
-              <TripCard key={trip.id ?? i} trip={trip} index={i} onBookSeat={onBookSeat} />
+              <TripCard key={trip.trip_id ?? i} trip={trip} index={i} onBookSeat={onBookSeat} />
             ))}
           </div>
         )}

@@ -1,6 +1,7 @@
 import { QrCode } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import Button from '../../ui/Button';
+import { useAuth } from '../../../api/hooks/useAuth';
 
 const BEFORE_BOARDING_STEPS = [
   { step: 1, title: 'Open My Tickets', description: 'Find your active booking.' },
@@ -11,6 +12,16 @@ const BEFORE_BOARDING_STEPS = [
 
 export default function DigitalTicketSection() {
   const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
+
+  const goToTickets = () => {
+    const to = '/passenger/dashboard?tab=tickets';
+    if (!isAuthenticated) {
+      navigate('/passenger/login', { state: { redirectTo: to } });
+      return;
+    }
+    navigate(to);
+  };
 
   return (
     <section className="bg-white px-4 py-12 sm:px-6 lg:px-10">
@@ -79,7 +90,7 @@ export default function DigitalTicketSection() {
                 </li>
               ))}
             </ol>
-            <Button type="button" variant="primary" size="md" className="mt-6" onClick={() => navigate('/passenger/dashboard?tab=tickets')}>
+            <Button type="button" variant="primary" size="md" className="mt-6" onClick={goToTickets}>
               View My Tickets
             </Button>
           </div>

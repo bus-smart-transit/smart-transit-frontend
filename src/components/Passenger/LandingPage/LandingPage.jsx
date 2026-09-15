@@ -13,7 +13,7 @@ import BeforeYouTravelSection from './BeforeYouTravelSection';
 import HomeFaqSection from './HomeFaqSection';
 import NeedHelpSection from './NeedHelpSection';
 import PassengerService from '../../../api/PassengerService/PassengerService';
-import { getBusinessToday } from '../../../utils/dates';
+import { getBusinessToday, debugLogBusinessTime } from '../../../utils/dates';
 
 export default function LandingPage() {
   const navigate = useNavigate();
@@ -33,6 +33,7 @@ export default function LandingPage() {
       const allTrips = Array.isArray(res) ? res : (res?.data ?? []);
       const normalizedFrom = (from || '').trim().toLowerCase();
       const normalizedTo = (to || '').trim().toLowerCase();
+      debugLogBusinessTime('LandingPage: available trips date filter');
       const sameDayOrFutureTrips = allTrips.filter((trip) => {
         const tripDateStr = String(trip?.trip_date || '').match(/^(\d{4}-\d{2}-\d{2})/)?.[1];
         if (!tripDateStr) return true;

@@ -2,9 +2,12 @@ import { useState } from 'react';
 import { MapPin, Clock, CreditCard, AlertCircle, CheckCircle, Loader, LocateFixed, Users, Wallet, Smartphone } from 'lucide-react';
 import useBuyTicket from '../../../api/hooks/Passenger/useBuyTicket';
 import TicketCard from '../Ticket/TicketCard';
+import Card from '../../ui/Card';
+import Button from '../../ui/Button';
 import Toggle from '../../ui/Toggle';
+import Modal from '../../ui/Modal';
 import { parseAppDate } from '../../../utils/dates';
-import './BuyTicketPortal.css';
+import heroBg from '../../../assets/hero.png';
 
 // Matches the backend's accepted payment_channel values (see
 // OnlineCheckoutRequest::rules() — 'in:gcash,maya,card').
@@ -35,11 +38,13 @@ const toDateLabel = (value) => {
 
 const getTripScheduleLabel = (trip) => {
   const dateLabel = toDateLabel(trip?.trip_date);
-  const startTime = toCompactTime(trip?.fleet_route?.start_time);
-  const endTime = toCompactTime(trip?.fleet_route?.end_time);
+  // Use the trip's actual scheduled departure_time, not fleet_route's
+  // general operating-hours window (start_time-end_time) — that range is
+  // the whole fleet route's daily service window, not this specific trip's
+  // departure time.
+  const departureTime = toCompactTime(trip?.departure_time || trip?.fleet_route?.start_time);
 
-  if (startTime && endTime) return `${dateLabel} ${startTime}-${endTime}`;
-  if (startTime) return `${dateLabel} ${startTime}`;
+  if (departureTime) return `${dateLabel} ${departureTime}`;
   return dateLabel;
 };
 
@@ -89,6 +94,7 @@ export default function BuyTicket({ onTicketPurchased }) {
   const [tripDetailsModal, setTripDetailsModal] = useState(null);
   const [ticketPreview, setTicketPreview] = useState(null);
   const [showDropoffModal, setShowDropoffModal] = useState(false);
+  const [qrModalDismissedFor, setQrModalDismissedFor] = useState(null);
   const {
     availableRewardPoints,
     canProceedToOnlinePayment,
@@ -145,141 +151,150 @@ export default function BuyTicket({ onTicketPurchased }) {
     useCurrentLocationAsOrigin,
   } = useBuyTicket({ onTicketPurchased });
 
+  // S1: "Your Ticket QR" opens in its own modal rather than sitting inline
+  // in the page. Derived (not effect-driven) so dismissing the modal for
+  // one purchase doesn't suppress it for a later one in the same session —
+  // the "identity" of the current successful checkout is tracked via the
+  // first ticket's uuid (falling back to a fixed key while QR is still
+  // loading), and the modal reopens whenever that identity changes.
+  const qrModalIdentity = checkoutStatus === 'success'
+    ? (qrTickets[0]?.ticket_uuid || 'pending-qr')
+    : null;
+  const qrModalOpen = qrModalIdentity !== null && qrModalIdentity !== qrModalDismissedFor;
+
   return (
-    <div className="buy-portal">
-      <section className="buy-hero">
+    <div className="mx-auto max-w-5xl space-y-4 p-4 sm:p-6">
+      <section
+        className="relative flex min-h-[190px] items-center overflow-hidden rounded-2xl bg-cover bg-center p-6 text-white"
+        style={{ backgroundImage: `linear-gradient(rgba(9,25,52,0.55), rgba(9,25,52,0.65)), url(${heroBg})` }}
+      >
         <div>
-          <span className="buy-tag">Real-time trips active</span>
-          <h1>Ride smarter, arrive on time.</h1>
-          <p>Book your next trip with live seat availability and smart route visibility.</p>
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-teal-400/25 px-2.5 py-1 text-[0.65rem] font-semibold uppercase tracking-wide ring-1 ring-inset ring-teal-200/40">
+            Real-time trips active
+          </span>
+          <h1 className="mt-3 font-display text-3xl font-bold leading-tight sm:text-4xl">Ride smarter, arrive on time.</h1>
+          <p className="mt-2 max-w-md text-sm text-slate-200">Book your next trip with live seat availability and smart route visibility.</p>
         </div>
       </section>
 
       {error && (
-        <div className="buy-alert error">
-          <AlertCircle size={16} />
+        <div className="flex items-center gap-2 rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-medium text-red-700 ring-1 ring-inset ring-red-200">
+          <AlertCircle size={16} className="shrink-0" />
           <span>{error}</span>
         </div>
       )}
 
       {success && (
-        <div className="buy-alert success">
-          <CheckCircle size={16} />
+        <div className="flex items-center gap-2 rounded-xl bg-emerald-50 px-3.5 py-2.5 text-sm font-medium text-emerald-700 ring-1 ring-inset ring-emerald-200">
+          <CheckCircle size={16} className="shrink-0" />
           <span>{success}</span>
         </div>
       )}
 
       {checkoutStatus === 'pending' && (
-        <section className="buy-panel" style={{ marginBottom: '16px' }}>
-          <div className="buy-panel-head">
-            <h2>Checkout in Progress</h2>
-          </div>
-          <p style={{ color: '#94a3b8', fontSize: '0.9rem' }}>
+        <Card className="p-4">
+          <h2 className="font-display text-lg font-semibold text-navy-950">Checkout in Progress</h2>
+          <p className="mt-2 text-sm text-slate-500">
             Complete the payment in the newly opened tab. This page will update with success or failure automatically.
           </p>
-        </section>
+        </Card>
       )}
 
-      {checkoutStatus === 'success' && (
-        <section className="buy-panel" style={{ marginBottom: '16px' }}>
-          <div className="buy-panel-head">
-            <h2>Your Ticket QR</h2>
-          </div>
+      {/* S1: "Your Ticket QR" as its own modal — shows the Group QR for a
+          multi-ticket purchase, or the single ticket's own QR otherwise. */}
+      <Modal
+        open={qrModalOpen}
+        onClose={() => setQrModalDismissedFor(qrModalIdentity)}
+        title="Your Ticket QR"
+      >
+        {loadingQr ? (
+          <div className="flex items-center gap-2 text-sm text-slate-500"><Loader size={16} className="animate-spin" /> Loading ticket QR...</div>
+        ) : qrTickets.length === 0 ? (
+          <p className="text-sm text-slate-500">Payment succeeded. Ticket QR will appear on your scheduled trip date.</p>
+        ) : qrTickets.length > 1 ? (
+          // Group purchase — the Group QR is the primary artifact; a
+          // conductor scans it once to board every ticket in this order.
+          <div className="space-y-3">
+            {qrTickets[0]?.group_qr_url ? (
+              <div className="rounded-xl bg-teal-50 p-3 ring-1 ring-inset ring-teal-200">
+                <p className="text-sm font-semibold text-teal-800">
+                  Group Boarding QR — scan once to board all {qrTickets.length} tickets
+                </p>
+                <img
+                  src={qrTickets[0].group_qr_url}
+                  alt="Group boarding QR"
+                  className="mt-2 h-40 w-40 rounded-lg"
+                />
+                <p className="mt-2 text-xs text-teal-700">
+                  The conductor scans this QR to board all passengers in your order at once.
+                </p>
+              </div>
+            ) : (
+              <p className="text-sm text-slate-500">Group QR will appear on your scheduled trip date.</p>
+            )}
 
-          {loadingQr ? (
-            <div className="buy-loading"><Loader size={16} /> Loading ticket QR...</div>
-          ) : qrTickets.length === 0 ? (
-            <p className="buy-empty">Payment succeeded. Ticket QR will appear on your scheduled trip date.</p>
-          ) : (
-            <div className="buy-trip-list">
-              {/* Group QR — shown once when the order has more than one ticket */}
-              {qrTickets.length > 1 && qrTickets[0]?.group_qr_url && (
-                <div style={{ marginBottom: '16px', padding: '12px', border: '1px solid rgba(99,179,237,0.3)', borderRadius: '12px', background: 'rgba(14,165,233,0.06)' }}>
-                  <p style={{ margin: '0 0 8px', fontSize: '0.8rem', fontWeight: 600, color: '#7dd3fc' }}>
-                    Group Boarding QR — scan once to board all {qrTickets.length} tickets
-                  </p>
-                  <img
-                    src={qrTickets[0].group_qr_url}
-                    alt="Group boarding QR"
-                    style={{ width: '160px', height: '160px', borderRadius: '8px', display: 'block' }}
-                  />
-                  <p style={{ margin: '8px 0 0', fontSize: '0.7rem', color: '#94a3b8' }}>
-                    The conductor scans this QR to board all passengers in your order at once.
-                  </p>
-                </div>
-              )}
-
+            <div className="space-y-2">
               {qrTickets.map((ticket, idx) => (
-                <div
-                  key={ticket.ticket_uuid || idx}
-                  style={{
-                    border: '1px solid rgba(148,163,184,0.2)',
-                    borderRadius: '12px',
-                    padding: '12px',
-                    background: 'rgba(15,23,42,0.45)',
-                    marginBottom: '10px',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
-                    <div>
-                      <p style={{ margin: 0, fontSize: '0.9rem', fontWeight: 700, color: '#e2e8f0' }}>
-                        {selectedRoute?.origin || 'Ecoland Terminal'} to {selectedRoute?.destination || ticket.destination || 'Tagum Terminal'}
-                      </p>
-                      <p style={{ margin: '4px 0 0', fontSize: '0.78rem', color: '#94a3b8' }}>
-                        {ticket.seat_type || 'seated'} · {formatDateTime(ticket.valid_from)}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setTicketPreview({ ticket, idx })}
-                      style={{
-                        border: '1px solid rgba(45,212,191,0.45)',
-                        borderRadius: '10px',
-                        padding: '7px 12px',
-                        fontSize: '0.78rem',
-                        fontWeight: 700,
-                        color: '#99f6e4',
-                        background: 'rgba(20,184,166,0.12)',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      View Ticket
-                    </button>
+                <div key={ticket.ticket_uuid || idx} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 p-3">
+                  <div>
+                    <p className="text-sm font-semibold text-navy-950">
+                      {selectedRoute?.origin || 'Ecoland Terminal'} to {selectedRoute?.destination || ticket.destination || 'Tagum Terminal'}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {ticket.seat_type || 'seated'} · {formatDateTime(ticket.valid_from)}
+                    </p>
                   </div>
                   <button
                     type="button"
-                    onClick={() => printQrTicket(ticket, idx)}
-                    disabled={!ticket.qr_url}
-                    style={{
-                      marginTop: '8px',
-                      border: '1px solid rgba(148,163,184,0.4)',
-                      borderRadius: '8px',
-                      padding: '6px 10px',
-                      fontSize: '0.75rem',
-                      color: ticket.qr_url ? '#e2e8f0' : '#64748b',
-                      background: ticket.qr_url ? 'rgba(15,23,42,0.5)' : 'rgba(30,41,59,0.3)',
-                      cursor: ticket.qr_url ? 'pointer' : 'not-allowed',
-                    }}
+                    onClick={() => setTicketPreview({ ticket, idx })}
+                    className="rounded-lg bg-teal-50 px-3 py-1.5 text-xs font-semibold text-teal-700 ring-1 ring-inset ring-teal-200 hover:bg-teal-100"
                   >
-                    Print QR (PDF)
+                    View Ticket
                   </button>
                 </div>
               ))}
             </div>
-          )}
-        </section>
-      )}
+          </div>
+        ) : (
+          // Single-ticket purchase — show that ticket's own QR directly,
+          // not a "group" QR for a transaction of one.
+          <TicketCard
+            fromLabel={qrTickets[0]?.origin || selectedRoute?.origin || 'Ecoland Terminal'}
+            toLabel={qrTickets[0]?.destination || selectedRoute?.destination || 'Tagum Terminal'}
+            departureLabel={formatDateTime(qrTickets[0]?.valid_from)}
+            seatLabel={qrTickets[0]?.seat_type || '-'}
+            routeLabel={`${qrTickets[0]?.origin || selectedRoute?.origin || '-'} to ${qrTickets[0]?.destination || selectedRoute?.destination || '-'}`}
+            qrUrl={qrTickets[0]?.qr_url}
+            statusLabel="Valid"
+            validLabel={formatDateTime(qrTickets[0]?.valid_from)}
+            expiresLabel={formatDateTime(qrTickets[0]?.expires_at)}
+          />
+        )}
 
-      <form onSubmit={handleSubmit} className="buy-form">
-        <section className="buy-search-card">
-          <h3>Book a Seat</h3>
-          <p>Sign in is required only for history and rewards.</p>
-          <div className="buy-fields-row">
+        {qrTickets.length > 0 && (
+          <div className="mt-4 flex justify-end gap-2">
+            {qrTickets.length === 1 && (
+              <Button type="button" variant="outline" size="sm" onClick={() => printQrTicket(qrTickets[0], 0)} disabled={!qrTickets[0]?.qr_url}>
+                Print QR (PDF)
+              </Button>
+            )}
+            <Button type="button" variant="primary" size="sm" onClick={() => setQrModalDismissedFor(qrModalIdentity)}>Close</Button>
+          </div>
+        )}
+      </Modal>
+
+
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <Card className="p-4">
+          <h3 className="font-display text-base font-semibold text-navy-950">Book a Seat</h3>
+          <p className="mt-1 text-xs text-slate-500">Sign in is required only for history and rewards.</p>
+          <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1fr_1fr_auto]">
             <input
               type="text"
               value={form.search_from || ''}
               onChange={(e) => handleChange('search_from', e.target.value)}
               placeholder="From (origin terminal)"
+              className="min-h-9 rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-sm text-ink focus:border-navy-700 focus:outline-none focus:ring-2 focus:ring-navy-700/30"
             />
 
             <input
@@ -298,12 +313,14 @@ export default function BuyTicket({ onTicketPurchased }) {
               }}
               readOnly={dropoffMode === 'custom'}
               placeholder={dropoffMode === 'stop' ? 'To (destination terminal)' : 'Pin destination on map below'}
+              className="min-h-9 rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-sm text-ink focus:border-navy-700 focus:outline-none focus:ring-2 focus:ring-navy-700/30"
             />
 
             <input
               type="date"
               value={form.search_date || ''}
               onChange={(e) => handleChange('search_date', e.target.value)}
+              className="min-h-9 rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-sm text-ink focus:border-navy-700 focus:outline-none focus:ring-2 focus:ring-navy-700/30"
             />
 
             <datalist id="destination-stop-list">
@@ -312,31 +329,36 @@ export default function BuyTicket({ onTicketPurchased }) {
               ))}
             </datalist>
 
-            <button type="button" onClick={useCurrentLocationAsOrigin} disabled={locatingOrigin || !selectedStops.length}>
+            <button
+              type="button"
+              onClick={useCurrentLocationAsOrigin}
+              disabled={locatingOrigin || !selectedStops.length}
+              className="min-h-9 whitespace-nowrap rounded-lg bg-navy-50 px-3 py-2 text-sm font-semibold text-navy-800 hover:bg-navy-100 disabled:cursor-not-allowed disabled:opacity-60"
+            >
               {locatingOrigin ? 'Locating...' : 'Use Current'}
             </button>
           </div>
-          {formErrors.trip_id && <p style={{ color: '#fca5a5', marginTop: '8px', fontSize: '0.8rem' }}>{formErrors.trip_id}</p>}
-        </section>
+          {formErrors.trip_id && <p className="mt-2 text-xs text-red-600">{formErrors.trip_id}</p>}
+        </Card>
 
-        <section className="buy-panel">
-          <div className="buy-panel-head">
-            <h2>Available Trips</h2>
-            <span>{loading ? 'Loading...' : `${trips.length} trip(s) found`}</span>
+        <Card className="p-4">
+          <div className="flex items-center justify-between">
+            <h2 className="font-display text-lg font-semibold text-navy-950">Available Trips</h2>
+            <span className="text-xs text-slate-500">{loading ? 'Loading...' : `${trips.length} trip(s) found`}</span>
           </div>
 
           {loading ? (
-            <div className="buy-loading"><Loader size={16} /> Loading available trips...</div>
+            <div className="mt-3 flex items-center gap-2 text-sm text-slate-500"><Loader size={16} className="animate-spin" /> Loading available trips...</div>
           ) : trips.length === 0 ? (
-            <p className="buy-empty">No active trips available right now.</p>
+            <p className="mt-3 text-sm text-slate-500">No active trips available right now.</p>
           ) : (
             <>
               {showingSuggestedTrips && (
-                <p className="buy-empty" style={{ marginBottom: '8px' }}>
+                <p className="mt-3 text-sm text-slate-500">
                   No exact trips found for the selected date. Showing the next available matching trips.
                 </p>
               )}
-              <div className="buy-trip-list">
+              <div className="mt-3 space-y-2">
                 {trips.map((trip) => {
                 const checked = form.trip_id === String(trip.trip_id);
                 const route = trip.fleet_route?.route || {};
@@ -354,64 +376,65 @@ export default function BuyTicket({ onTicketPurchased }) {
                     key={trip.trip_id}
                     role="button"
                     tabIndex={0}
-                    className={`buy-trip-card ${checked ? 'active' : ''} ${isFull ? 'full' : ''}`}
+                    className={`grid grid-cols-[1fr_auto] items-center gap-2 rounded-xl border p-3 transition ${
+                      checked ? 'border-navy-700 bg-navy-50' : 'border-slate-200'
+                    } ${isFull ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
                     onClick={() => !isFull && handleTripSelect(checked ? '' : String(trip.trip_id))}
                     onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && !isFull) handleTripSelect(checked ? '' : String(trip.trip_id)); }}
                     aria-pressed={checked}
                     aria-disabled={isFull}
-                    style={{ cursor: isFull ? 'not-allowed' : 'pointer', opacity: isFull ? 0.6 : 1 }}
                   >
                     {/* Route header */}
-                    <div className="buy-trip-main">
-                      <h4 style={{ marginBottom: '2px', fontSize: '1rem', fontWeight: 700 }}>
+                    <div>
+                      <h4 className="text-sm font-bold text-navy-950">
                         {route.origin || 'Origin'} &rarr; {route.destination || 'Destination'}
                       </h4>
-                      <p style={{ margin: 0, fontSize: '0.78rem', color: '#94a3b8' }}>
+                      <p className="mt-0.5 text-xs text-slate-500">
                         {route.route_name || ''}
                       </p>
                       {/* Fleet sub-info */}
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '6px', fontSize: '0.75rem', color: '#64748b' }}>
+                      <div className="mt-1.5 flex flex-wrap gap-2 text-xs text-slate-500">
                         {fleet.plate_number && <span>🚌 {fleet.plate_number}</span>}
-                        {fleet.fleet_type  && <span style={{ textTransform: 'capitalize' }}>{fleet.fleet_type}</span>}
-                        <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+                        {fleet.fleet_type && <span className="capitalize">{fleet.fleet_type}</span>}
+                        <span className="flex items-center gap-1">
                           <Clock size={11} /> {getTripScheduleLabel(trip)}
                         </span>
-                        <span style={{ textTransform: 'capitalize', color: trip.status === 'boarding' ? '#22c55e' : '#64748b' }}>
+                        <span className={`capitalize ${trip.status === 'boarding' ? 'text-emerald-600' : 'text-slate-500'}`}>
                           {trip.status}
                         </span>
                       </div>
                     </div>
 
                     {/* Capacity + fare column */}
-                    <div className="buy-trip-side" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px', minWidth: '100px' }}>
+                    <div className="flex min-w-[100px] flex-col items-end gap-1">
                       {/* Fare */}
-                      <strong style={{ fontSize: '1rem', color: checked && hasFareQuote ? '#34d399' : '#e2e8f0', textAlign: 'right' }}>
+                      <strong className={`text-right text-sm ${checked && hasFareQuote ? 'text-emerald-600' : 'text-navy-950'}`}>
                         {checked && hasFareQuote
                           ? `PHP ${Number(fare).toFixed(2)}`
                           : (baseFare != null ? `From PHP ${Number(baseFare).toFixed(2)}` : 'Fare depends on drop-off')}
                       </strong>
-                      <span style={{ fontSize: '0.7rem', color: '#64748b', textAlign: 'right' }}>
+                      <span className="text-right text-[0.7rem] text-slate-400">
                         {baseFare != null ? 'base fare per passenger' : 'select drop-off to quote exact price'}
                       </span>
 
                       {/* Seated capacity */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px', fontSize: '0.72rem', color: seatedLeft > 0 ? '#38bdf8' : '#ef4444' }}>
+                      <div className={`mt-1 flex items-center gap-1 text-xs ${seatedLeft > 0 ? 'text-sky-600' : 'text-red-500'}`}>
                         <Users size={11} />
                         <span>Seated: {seatedLeft}/{seatedTotal}</span>
                       </div>
                       {/* Standing capacity */}
-                      <div style={{ fontSize: '0.72rem', color: standingLeft > 0 ? '#94a3b8' : '#ef4444' }}>
+                      <div className={`text-xs ${standingLeft > 0 ? 'text-slate-500' : 'text-red-500'}`}>
                         Standing: {standingLeft}/{standingTotal}
                       </div>
 
                       {isFull && (
-                        <span style={{ fontSize: '0.68rem', color: '#ef4444', fontWeight: 600 }}>FULL</span>
+                        <span className="text-[0.68rem] font-semibold text-red-500">FULL</span>
                       )}
 
                       {/* Trip info link */}
                       <button
                         type="button"
-                        style={{ marginTop: '4px', fontSize: '0.68rem', color: '#38bdf8', background: 'none', border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'underline' }}
+                        className="mt-1 text-[0.68rem] font-medium text-sky-600 underline"
                         onClick={(ev) => { ev.stopPropagation(); setTripDetailsModal(trip); }}
                       >
                         Trip info
@@ -423,20 +446,18 @@ export default function BuyTicket({ onTicketPurchased }) {
               </div>
             </>
           )}
-        </section>
+        </Card>
 
         {selectedTrip && (
-          <section className="buy-grid-two">
-            <article className="buy-panel">
-              <div className="buy-panel-head">
-                <h2>Seat and Payment</h2>
-              </div>
+          <section className="grid grid-cols-1 gap-4 lg:grid-cols-[1.6fr_1fr]">
+            <Card className="p-4">
+              <h2 className="font-display text-lg font-semibold text-navy-950">Seat and Payment</h2>
 
-              <div className="buy-inline-group">
-                <label>Seat Type</label>
-                <div className="buy-toggle-row">
+              <div className="mt-4">
+                <label className="mb-1.5 block text-xs font-semibold text-slate-600">Seat Type</label>
+                <div className="flex flex-wrap gap-2">
                   {seatTypeOptions.map((type) => (
-                    <label key={type}>
+                    <label key={type} className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm text-navy-900">
                       <input
                         type="radio"
                         name="seat_type"
@@ -448,11 +469,11 @@ export default function BuyTicket({ onTicketPurchased }) {
                     </label>
                   ))}
                 </div>
-                {seatTypePolicyNote && <p style={{ color: '#94a3b8', marginTop: '6px', fontSize: '0.78rem' }}>{seatTypePolicyNote}</p>}
+                {seatTypePolicyNote && <p className="mt-1.5 text-xs text-slate-500">{seatTypePolicyNote}</p>}
               </div>
 
-              <div className="buy-inline-group">
-                <label>Ticket Quantity</label>
+              <div className="mt-4">
+                <label className="mb-1.5 block text-xs font-semibold text-slate-600">Ticket Quantity</label>
                 <input
                   type="number"
                   min="1"
@@ -461,14 +482,15 @@ export default function BuyTicket({ onTicketPurchased }) {
                   value={form.ticket_quantity}
                   onChange={(e) => handleChange('ticket_quantity', e.target.value)}
                   placeholder="Number of tickets"
+                  className="min-h-9 w-full rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-sm text-ink focus:border-navy-700 focus:outline-none focus:ring-2 focus:ring-navy-700/30"
                 />
-                {formErrors.ticket_quantity && <p style={{ color: '#fca5a5', marginTop: '6px', fontSize: '0.78rem' }}>{formErrors.ticket_quantity}</p>}
+                {formErrors.ticket_quantity && <p className="mt-1.5 text-xs text-red-600">{formErrors.ticket_quantity}</p>}
               </div>
 
-              <div className="buy-inline-group">
-                <label>Booking Option</label>
-                <div className="buy-toggle-row">
-                  <label>
+              <div className="mt-4">
+                <label className="mb-1.5 block text-xs font-semibold text-slate-600">Booking Option</label>
+                <div className="flex flex-wrap gap-2">
+                  <label className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm text-navy-900">
                     <input
                       type="radio"
                       name="booking_option"
@@ -479,7 +501,7 @@ export default function BuyTicket({ onTicketPurchased }) {
                     />
                     <span>Book Now</span>
                   </label>
-                  <label>
+                  <label className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm text-navy-900">
                     <input
                       type="radio"
                       name="booking_option"
@@ -492,12 +514,12 @@ export default function BuyTicket({ onTicketPurchased }) {
                   </label>
                 </div>
                 {selectedTripIsToday && (
-                  <p style={{ color: '#f59e0b', marginTop: '6px', fontSize: '0.78rem' }}>
+                  <p className="mt-1.5 text-xs text-amber-600">
                     This trip is scheduled for today, so only Book Now is available.
                   </p>
                 )}
                 {!hasBookNowOption && (
-                  <p style={{ color: '#f59e0b', marginTop: '6px', fontSize: '0.78rem' }}>
+                  <p className="mt-1.5 text-xs text-amber-600">
                     Book Now is unavailable because current trips are all future schedules.
                   </p>
                 )}
@@ -507,14 +529,15 @@ export default function BuyTicket({ onTicketPurchased }) {
                     value={form.booking_date}
                     onChange={(e) => handleChange('booking_date', e.target.value)}
                     min={minBookingDate}
+                    className="mt-2 min-h-9 rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-sm text-ink focus:border-navy-700 focus:outline-none focus:ring-2 focus:ring-navy-700/30"
                   />
                 )}
-                {formErrors.booking_date && <p style={{ color: '#fca5a5', marginTop: '6px', fontSize: '0.78rem' }}>{formErrors.booking_date}</p>}
+                {formErrors.booking_date && <p className="mt-1.5 text-xs text-red-600">{formErrors.booking_date}</p>}
               </div>
 
-              <div className="buy-inline-group">
-                <label><CreditCard size={14} /> Payment</label>
-                <div style={{ color: '#94a3b8', fontSize: '0.8rem', marginBottom: '8px' }}>
+              <div className="mt-4">
+                <label className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-slate-600"><CreditCard size={14} /> Payment</label>
+                <div className="mb-2 text-sm text-slate-500">
                   Online booking is paid online by default.
                 </div>
                 {isGuestCheckout && (
@@ -523,6 +546,7 @@ export default function BuyTicket({ onTicketPurchased }) {
                     value={form.guest_email}
                     onChange={(e) => handleChange('guest_email', e.target.value)}
                     placeholder="Email for receipt (optional)"
+                    className="mb-2 min-h-9 w-full rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-sm text-ink focus:border-navy-700 focus:outline-none focus:ring-2 focus:ring-navy-700/30"
                   />
                 )}
 
@@ -551,7 +575,7 @@ export default function BuyTicket({ onTicketPurchased }) {
 
                 {!isGuestCheckout && (
                   <>
-                    <div style={{ color: '#94a3b8', fontSize: '0.82rem', marginTop: '6px' }}>
+                    <div className="mt-2 text-sm text-slate-500">
                       {loadingRewards
                         ? 'Loading reward balance...'
                         : `Available Rewards: ${Number(availableRewardPoints || 0).toFixed(0)} RP`}
@@ -578,13 +602,14 @@ export default function BuyTicket({ onTicketPurchased }) {
                           value={form.reward_points_to_use}
                           onChange={(e) => handleChange('reward_points_to_use', e.target.value)}
                           placeholder="Reward points to use"
+                          className="mt-2 min-h-9 w-full rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-sm text-ink focus:border-navy-700 focus:outline-none focus:ring-2 focus:ring-navy-700/30"
                         />
-                        <div style={{ color: isRewardRequestInsufficient ? '#fca5a5' : '#93c5fd', fontSize: '0.78rem' }}>
+                        <div className={`mt-1.5 text-xs ${isRewardRequestInsufficient ? 'text-red-600' : 'text-slate-500'}`}>
                           Max usable now: {Number(maxRedeemableRewardPoints || 0).toFixed(0)} RP
                           {isRewardRequestInsufficient ? ' (insufficient for requested amount)' : ''}
                         </div>
                         {formErrors.reward_points_to_use && (
-                          <div style={{ color: '#fca5a5', fontSize: '0.78rem' }}>{formErrors.reward_points_to_use}</div>
+                          <div className="mt-1 text-xs text-red-600">{formErrors.reward_points_to_use}</div>
                         )}
                       </>
                     )}
@@ -592,23 +617,25 @@ export default function BuyTicket({ onTicketPurchased }) {
                 )}
               </div>
 
-              <div className="buy-stop-selectors">
-                <label>
+              <div className="mt-4 space-y-3">
+                <label className="block text-xs font-semibold text-slate-600">
                   Drop-off Mode
                   <select
                     value={dropoffMode}
                     onChange={(e) => handleDropoffModeChange(e.target.value)}
+                    className="mt-1.5 min-h-9 w-full rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-sm text-ink focus:border-navy-700 focus:outline-none focus:ring-2 focus:ring-navy-700/30"
                   >
                     <option value="stop">Route Stop</option>
                     <option value="custom">Custom Drop-off (Coordinates)</option>
                   </select>
                 </label>
 
-                <label>
-                  <MapPin size={14} /> Origin Stop
+                <label className="block text-xs font-semibold text-slate-600">
+                  <span className="inline-flex items-center gap-1"><MapPin size={14} /> Origin Stop</span>
                   <select
                     value={form.origin_stop_id}
                     onChange={(e) => handleChange('origin_stop_id', e.target.value)}
+                    className="mt-1.5 min-h-9 w-full rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-sm text-ink focus:border-navy-700 focus:outline-none focus:ring-2 focus:ring-navy-700/30"
                   >
                     <option value="">Select origin stop...</option>
                     {selectedStops.map((stop) => (
@@ -618,29 +645,30 @@ export default function BuyTicket({ onTicketPurchased }) {
                 </label>
 
                 {dropoffMode === 'stop' ? (
-                  <label>
-                    <MapPin size={14} /> Destination Stop
+                  <label className="block text-xs font-semibold text-slate-600">
+                    <span className="inline-flex items-center gap-1"><MapPin size={14} /> Destination Stop</span>
                     <select
                       value={form.destination_stop_id}
                       onChange={(e) => handleDestinationStopChange(e.target.value)}
+                      className="mt-1.5 min-h-9 w-full rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-sm text-ink focus:border-navy-700 focus:outline-none focus:ring-2 focus:ring-navy-700/30"
                     >
                       <option value="">Select destination stop...</option>
                       {selectedStops.map((stop) => (
                         <option key={`dest-select-${stop.stop_id}`} value={stop.stop_id}>{stopLabel(stop)}</option>
                       ))}
                     </select>
-                    {formErrors.destination_stop_id && <p style={{ color: '#fca5a5', marginTop: '6px', fontSize: '0.78rem' }}>{formErrors.destination_stop_id}</p>}
+                    {formErrors.destination_stop_id && <p className="mt-1.5 text-xs text-red-600">{formErrors.destination_stop_id}</p>}
                   </label>
                 ) : (
                   <>
-                    <div className="buy-pinned-location-display">
-                      <span>Pinned Origin</span>
-                      <strong>{originPinnedLabel || 'Origin pin will appear once stop is selected or located'}</strong>
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-2.5">
+                      <span className="block text-xs font-semibold text-slate-500">Pinned Origin</span>
+                      <strong className="mt-0.5 block text-sm text-navy-950">{originPinnedLabel || 'Origin pin will appear once stop is selected or located'}</strong>
                     </div>
 
-                    <div className="buy-pinned-location-display">
-                      <span>Pinned Destination</span>
-                      <strong>{destinationPinnedLabel || 'No location pinned yet'}</strong>
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-2.5">
+                      <span className="block text-xs font-semibold text-slate-500">Pinned Destination</span>
+                      <strong className="mt-0.5 block text-sm text-navy-950">{destinationPinnedLabel || 'No location pinned yet'}</strong>
                     </div>
 
                     <button
@@ -651,30 +679,28 @@ export default function BuyTicket({ onTicketPurchased }) {
                       <MapPin size={14} />
                       Pin drop-off on map
                     </button>
-                    {formErrors.destination_lat && <p style={{ color: '#fca5a5', marginTop: '6px', fontSize: '0.78rem' }}>{formErrors.destination_lat}</p>}
+                    {formErrors.destination_lat && <p className="mt-1.5 text-xs text-red-600">{formErrors.destination_lat}</p>}
                   </>
                 )}
-                {formErrors.origin_stop_id && <p style={{ color: '#fca5a5', marginTop: '8px', fontSize: '0.78rem' }}>{formErrors.origin_stop_id}</p>}
-                {routeWarning && <p style={{ color: '#f59e0b', marginTop: '8px', fontSize: '0.78rem' }}>{routeWarning}</p>}
-                {formErrors.payment && <p style={{ color: '#fca5a5', marginTop: '8px', fontSize: '0.78rem' }}>{formErrors.payment}</p>}
+                {formErrors.origin_stop_id && <p className="text-xs text-red-600">{formErrors.origin_stop_id}</p>}
+                {routeWarning && <p className="text-xs text-amber-600">{routeWarning}</p>}
+                {formErrors.payment && <p className="text-xs text-red-600">{formErrors.payment}</p>}
               </div>
-            </article>
+            </Card>
 
-            <article className="buy-panel buy-summary">
-              <div className="buy-panel-head">
-                <h2>Booking Summary</h2>
-              </div>
-              <div className="buy-summary-grid">
-                <div><span>Route</span><strong>{selectedRoute?.origin || '-'} to {selectedRoute?.destination || '-'}</strong></div>
-                <div><span>Seat Type</span><strong>{form.seat_type}</strong></div>
-                <div><span>Destination</span><strong>{selectedRoute?.destination || 'Destination'}</strong></div>
-                <div><span>Payment</span><strong>Online payment</strong></div>
-                <div><span>Unit Fare</span><strong>PHP {hasFareQuote ? Number(unitFare).toFixed(2) : '0.00'}</strong></div>
-                <div><span>Quantity</span><strong>{totalTickets}</strong></div>
-                <div><span>Booking</span><strong>{form.booking_option === 'later' ? `Later (${form.booking_date || '-'})` : 'Now (Today)'}</strong></div>
-                <div><span>Gross Total</span><strong>PHP {Number(grossTotal || 0).toFixed(2)}</strong></div>
-                <div><span>Rewards Applied</span><strong>{Number(rewardPointsToApply || 0).toFixed(0)} RP</strong></div>
-                <div><span>Net Total</span><strong>PHP {Number(netTotal || 0).toFixed(2)}</strong></div>
+            <Card className="p-4">
+              <h2 className="font-display text-lg font-semibold text-navy-950">Booking Summary</h2>
+              <div className="mt-3 space-y-2">
+                <div className="flex justify-between gap-2 border-b border-slate-100 pb-1.5"><span className="text-xs text-slate-500">Route</span><strong className="text-sm text-navy-950">{selectedRoute?.origin || '-'} to {selectedRoute?.destination || '-'}</strong></div>
+                <div className="flex justify-between gap-2 border-b border-slate-100 pb-1.5"><span className="text-xs text-slate-500">Seat Type</span><strong className="text-sm text-navy-950">{form.seat_type}</strong></div>
+                <div className="flex justify-between gap-2 border-b border-slate-100 pb-1.5"><span className="text-xs text-slate-500">Destination</span><strong className="text-sm text-navy-950">{selectedRoute?.destination || 'Destination'}</strong></div>
+                <div className="flex justify-between gap-2 border-b border-slate-100 pb-1.5"><span className="text-xs text-slate-500">Payment</span><strong className="text-sm text-navy-950">Online payment</strong></div>
+                <div className="flex justify-between gap-2 border-b border-slate-100 pb-1.5"><span className="text-xs text-slate-500">Unit Fare</span><strong className="text-sm text-navy-950">PHP {hasFareQuote ? Number(unitFare).toFixed(2) : '0.00'}</strong></div>
+                <div className="flex justify-between gap-2 border-b border-slate-100 pb-1.5"><span className="text-xs text-slate-500">Quantity</span><strong className="text-sm text-navy-950">{totalTickets}</strong></div>
+                <div className="flex justify-between gap-2 border-b border-slate-100 pb-1.5"><span className="text-xs text-slate-500">Booking</span><strong className="text-sm text-navy-950">{form.booking_option === 'later' ? `Later (${form.booking_date || '-'})` : 'Now (Today)'}</strong></div>
+                <div className="flex justify-between gap-2 border-b border-slate-100 pb-1.5"><span className="text-xs text-slate-500">Gross Total</span><strong className="text-sm text-navy-950">PHP {Number(grossTotal || 0).toFixed(2)}</strong></div>
+                <div className="flex justify-between gap-2 border-b border-slate-100 pb-1.5"><span className="text-xs text-slate-500">Rewards Applied</span><strong className="text-sm text-navy-950">{Number(rewardPointsToApply || 0).toFixed(0)} RP</strong></div>
+                <div className="flex justify-between gap-2"><span className="text-xs text-slate-500">Net Total</span><strong className="text-sm text-navy-950">PHP {Number(netTotal || 0).toFixed(2)}</strong></div>
               </div>
               <button
                 type="submit"
@@ -688,15 +714,15 @@ export default function BuyTicket({ onTicketPurchased }) {
                   (form.payment_method === 'online' && !canProceedToOnlinePayment) ||
                   isRewardRequestInsufficient
                 }
-                className="buy-submit"
+                className="mt-4 flex min-h-9 w-full items-center justify-center gap-2 rounded-lg bg-navy-800 text-sm font-semibold text-white hover:bg-navy-900 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isSubmitting ? (
-                  <><Loader size={14} /> Processing...</>
+                  <><Loader size={14} className="animate-spin" /> Processing...</>
                 ) : (
                   <><CreditCard size={14} /> Continue to Payment</>
                 )}
               </button>
-            </article>
+            </Card>
           </section>
         )}
       </form>
@@ -745,8 +771,8 @@ export default function BuyTicket({ onTicketPurchased }) {
             </button>
 
             <p className="mb-2 text-xs text-slate-500">Click the map to set the drop-off coordinates.</p>
-            <div ref={mapContainerRef} className="buy-dropoff-map" style={{ height: '320px', width: '100%', borderRadius: '12px', overflow: 'hidden' }} />
-            {formErrors.destination_lat && <p style={{ color: '#dc2626', marginTop: '8px', fontSize: '0.78rem' }}>{formErrors.destination_lat}</p>}
+            <div ref={mapContainerRef} className="h-80 w-full overflow-hidden rounded-xl" />
+            {formErrors.destination_lat && <p className="mt-2 text-xs text-red-600">{formErrors.destination_lat}</p>}
 
             <dl className="mt-3 space-y-1 text-xs">
               <div className="flex justify-between gap-4">
@@ -762,54 +788,18 @@ export default function BuyTicket({ onTicketPurchased }) {
         </div>
       )}
 
-      {ticketPreview?.ticket && (
-        <div
-          style={{ position: 'fixed', inset: 0, zIndex: 1100, background: 'rgba(2,6,23,0.76)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}
-          role="presentation"
-          onClick={() => setTicketPreview(null)}
-        >
-          <section
-            role="dialog"
-            aria-modal="true"
-            aria-label="Ticket details"
-            onClick={(e) => e.stopPropagation()}
-            style={{ width: '100%', maxWidth: '540px', maxHeight: '92vh', overflowY: 'auto', borderRadius: '14px', border: '1px solid rgba(148,163,184,0.28)', background: '#0f172a', padding: '14px' }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', marginBottom: '12px' }}>
-              <h3 style={{ margin: 0, fontSize: '1rem', color: '#e2e8f0' }}>Ticket Details</h3>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button
-                  type="button"
-                  onClick={() => printQrTicket(ticketPreview.ticket, ticketPreview.idx)}
-                  disabled={!ticketPreview.ticket.qr_url}
-                  style={{
-                    border: '1px solid rgba(148,163,184,0.45)',
-                    borderRadius: '8px',
-                    padding: '6px 10px',
-                    fontSize: '0.75rem',
-                    color: ticketPreview.ticket.qr_url ? '#e2e8f0' : '#64748b',
-                    background: ticketPreview.ticket.qr_url ? 'rgba(15,23,42,0.5)' : 'rgba(30,41,59,0.3)',
-                    cursor: ticketPreview.ticket.qr_url ? 'pointer' : 'not-allowed',
-                  }}
-                >
-                  Print PDF
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setTicketPreview(null)}
-                  style={{
-                    border: '1px solid rgba(148,163,184,0.45)',
-                    borderRadius: '8px',
-                    padding: '6px 10px',
-                    fontSize: '0.75rem',
-                    color: '#e2e8f0',
-                    background: 'rgba(15,23,42,0.5)',
-                    cursor: 'pointer',
-                  }}
-                >
-                  Close
-                </button>
-              </div>
+      <Modal open={Boolean(ticketPreview?.ticket)} onClose={() => setTicketPreview(null)} title="Ticket Details">
+        {ticketPreview?.ticket && (
+          <>
+            <div className="mb-3 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => printQrTicket(ticketPreview.ticket, ticketPreview.idx)}
+                disabled={!ticketPreview.ticket.qr_url}
+                className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300 disabled:hover:bg-transparent"
+              >
+                Print PDF
+              </button>
             </div>
 
             <TicketCard
@@ -824,63 +814,49 @@ export default function BuyTicket({ onTicketPurchased }) {
               validLabel={formatDateTime(ticketPreview.ticket.valid_from)}
               expiresLabel={formatDateTime(ticketPreview.ticket.expires_at)}
             />
-          </section>
-        </div>
-      )}
+          </>
+        )}
+      </Modal>
 
       {/* ── Trip Details Modal (Suggestion) ─────────────────────────────── */}
-      {tripDetailsModal && (() => {
-        const td = tripDetailsModal;
-        const route = td.fleet_route?.route || {};
-        const fleet = td.fleet_route?.fleet || {};
-        const {
-          seatedLeft,
-          standingLeft,
-          seatedTotal,
-          standingTotal,
-        } = toSeatAvailability(td, fleet);
-        return (
-          <div
-            style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.65)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}
-            role="presentation"
-            onClick={() => setTripDetailsModal(null)}
-          >
-            <section
-              role="dialog"
-              aria-modal="true"
-              aria-label="Trip details"
-              onClick={(e) => e.stopPropagation()}
-              style={{ background: '#0f172a', border: '1px solid rgba(148,163,184,0.2)', borderRadius: '16px', padding: '24px', width: '100%', maxWidth: '420px', color: '#e2e8f0' }}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
-                <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>
-                  {route.origin || '—'} → {route.destination || '—'}
-                </h3>
-                <button type="button" onClick={() => setTripDetailsModal(null)} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: '1.1rem' }}>✕</button>
-              </div>
-
-              <dl style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 0', fontSize: '0.82rem' }}>
-                {[
-                  ['Route', route.route_name || '—'],
-                  ['Schedule', getTripScheduleLabel(td)],
-                  ['Status', td.status],
-                  ['Fleet', fleet.plate_number || '—'],
-                  ['Fleet type', fleet.fleet_type || '—'],
-                  ['Seated capacity', seatedTotal],
-                  ['Standing capacity', standingTotal],
-                  ['Seated available', seatedLeft],
-                  ['Standing available', standingLeft],
-                ].map(([k, v]) => (
-                  <div key={k}>
-                    <dt style={{ color: '#64748b', marginBottom: '2px' }}>{k}</dt>
-                    <dd style={{ margin: 0, fontWeight: 600, textTransform: 'capitalize' }}>{String(v)}</dd>
-                  </div>
-                ))}
-              </dl>
-            </section>
-          </div>
-        );
-      })()}
+      <Modal
+        open={Boolean(tripDetailsModal)}
+        onClose={() => setTripDetailsModal(null)}
+        title={tripDetailsModal ? `${tripDetailsModal.fleet_route?.route?.origin || '—'} → ${tripDetailsModal.fleet_route?.route?.destination || '—'}` : undefined}
+      >
+        {tripDetailsModal && (() => {
+          const td = tripDetailsModal;
+          const route = td.fleet_route?.route || {};
+          const fleet = td.fleet_route?.fleet || {};
+          const {
+            seatedLeft,
+            standingLeft,
+            seatedTotal,
+            standingTotal,
+          } = toSeatAvailability(td, fleet);
+          return (
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-2.5 text-sm">
+              {[
+                ['Route', route.route_name || '—'],
+                ['Schedule', getTripScheduleLabel(td)],
+                ['Status', td.status],
+                ['Fleet', fleet.plate_number || '—'],
+                ['Fleet type', fleet.fleet_type || '—'],
+                ['Seated capacity', seatedTotal],
+                ['Standing capacity', standingTotal],
+                ['Seated available', seatedLeft],
+                ['Standing available', standingLeft],
+              ].map(([k, v]) => (
+                <div key={k}>
+                  <dt className="mb-0.5 text-xs text-slate-400">{k}</dt>
+                  <dd className="font-semibold capitalize text-navy-950">{String(v)}</dd>
+                </div>
+              ))}
+            </dl>
+          );
+        })()}
+      </Modal>
     </div>
   );
 }
+

@@ -376,6 +376,12 @@ class StaffService extends BaseService {
     return await this.request(`/operator/trips/${tripId}/complete`, 'PATCH');
   }
 
+  // Manual status override — operators may only mark an already-departed
+  // trip as 'completed' (server-enforced); admins can override any status.
+  async overrideTripStatus(tripId, status) {
+    return await this.request(`/operator/trips/${tripId}/status`, 'PATCH', { status });
+  }
+
   // ── Fleet Route Assignment ──
   async assignRouteToFleet(fleetId, routeData) {
     return await this.request(`/operator/fleets/${fleetId}/routes`, 'POST', routeData);

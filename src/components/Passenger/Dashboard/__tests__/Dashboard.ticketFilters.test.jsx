@@ -51,20 +51,26 @@ vi.mock('../../../../api/hooks/Passenger/usePassengerDashboard', () => ({
 }));
 
 describe('Passenger dashboard ticket filters', () => {
-  test('shows scheduled and completed filters and narrows results by status', () => {
+  test('shows a status filter dropdown defaulting to Scheduled and narrows results by status', () => {
     render(
       <MemoryRouter>
         <Dashboard />
       </MemoryRouter>,
     );
 
-    expect(screen.getByRole('button', { name: /scheduled/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /completed/i })).toBeInTheDocument();
+    const filterSelect = screen.getByRole('combobox', { name: /filter/i });
+    expect(filterSelect).toHaveValue('scheduled');
 
+    expect(screen.getByRole('option', { name: /^scheduled$/i })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /^completed$/i })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /^expired$/i })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /^group$/i })).toBeInTheDocument();
+
+    // Default filter is "Scheduled" — only the valid ticket (Destination A) shows.
     expect(screen.getByText(/Destination A/i)).toBeInTheDocument();
-    expect(screen.getByText(/Destination B/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Destination B/i)).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /^completed$/i }));
+    fireEvent.change(filterSelect, { target: { value: 'completed' } });
 
     expect(screen.queryByText(/Destination A/i)).not.toBeInTheDocument();
     expect(screen.getByText(/Destination B/i)).toBeInTheDocument();

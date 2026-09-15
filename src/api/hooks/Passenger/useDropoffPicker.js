@@ -147,6 +147,7 @@ export default function useDropoffPicker({
   const mapLibRef = useRef(null);
   const originMarkerRef = useRef(null);
   const destinationMarkerRef = useRef(null);
+  const stopMarkersRef = useRef([]);
   const routeCoordinatesRef = useRef([]);
 
   const clearDestinationPinnedLabel = useCallback(() => {
@@ -178,6 +179,45 @@ export default function useDropoffPicker({
       .setLngLat([lng, lat])
       .addTo(mapRef.current);
   }, []);
+
+  const clearStopMarkers = useCallback(() => {
+    stopMarkersRef.current.forEach((marker) => marker.remove());
+    stopMarkersRef.current = [];
+  }, []);
+
+  // Hollow ring markers for each intermediate stop along the route (Google
+  // Maps multi-stop style) — the first/last stops are skipped since
+  // origin/destination already get their own distinct filled teardrop pins
+  // via updateOriginMarker()/updateDestinationMarker() above.
+  const renderStopMarkers = useCallback((stops) => {
+    const maplibregl = mapLibRef.current;
+    if (!mapRef.current || !maplibregl) return;
+
+    clearStopMarkers();
+
+    const intermediateStops = (Array.isArray(stops) ? stops : []).slice(1, -1);
+    intermediateStops.forEach((stopLike) => {
+      const coords = extractStopCoordinates(stopLike);
+      if (!coords) return;
+
+      const el = document.createElement('div');
+      el.style.width = '14px';
+      el.style.height = '14px';
+      el.style.borderRadius = '50%';
+      el.style.background = '#ffffff';
+      el.style.border = '3px solid #1f6ecf';
+      el.style.boxShadow = '0 1px 3px rgba(15,23,42,0.35)';
+      el.setAttribute('role', 'img');
+      el.setAttribute('aria-label', `Stop: ${stopLabel(stopLike)}`);
+      el.title = stopLabel(stopLike);
+
+      const marker = new maplibregl.Marker({ element: el, anchor: 'center' })
+        .setLngLat([coords.lng, coords.lat])
+        .addTo(mapRef.current);
+
+      stopMarkersRef.current.push(marker);
+    });
+  }, [clearStopMarkers, stopLabel]);
 
   const setPinnedDestination = useCallback((lat, lng) => {
     const routeCoords = routeCoordinatesRef.current;
@@ -366,6 +406,7 @@ export default function useDropoffPicker({
 
           routeCoordinatesRef.current = routeCoords;
           drawRouteLine(routeCoords);
+          renderStopMarkers(selectedStops);
         })();
       });
 
@@ -384,7 +425,7 @@ export default function useDropoffPicker({
     return () => {
       disposed = true;
     };
-  }, [dropoffMode, drawRouteLine, selectedOriginStop, selectedStops, setPinnedDestination, updateDestinationMarker, updateOriginMarker]);
+  }, [dropoffMode, drawRouteLine, renderStopMarkers, selectedOriginStop, selectedStops, setPinnedDestination, updateDestinationMarker, updateOriginMarker]);
 
   useEffect(() => {
     if (dropoffMode !== 'custom' || !mapRef.current || !mapRef.current.isStyleLoaded()) return;
@@ -411,12 +452,13 @@ export default function useDropoffPicker({
       if (cancelled) return;
       routeCoordinatesRef.current = routeCoords;
       drawRouteLine(routeCoords);
+      renderStopMarkers(selectedStops);
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [drawRouteLine, dropoffMode, selectedStops]);
+  }, [drawRouteLine, dropoffMode, renderStopMarkers, selectedStops]);
 
   useEffect(() => {
     if (dropoffMode !== 'custom' || !mapRef.current) return;
@@ -448,6 +490,7 @@ export default function useDropoffPicker({
       destinationMarkerRef.current.remove();
       destinationMarkerRef.current = null;
     }
+    clearStopMarkers();
     if (mapRef.current) {
       if (mapRef.current.getLayer(ROUTE_LAYER_ID)) {
         mapRef.current.removeLayer(ROUTE_LAYER_ID);
@@ -487,6 +530,7 @@ export default function useDropoffPicker({
       destinationMarkerRef.current.remove();
       destinationMarkerRef.current = null;
     }
+    clearStopMarkers();
     if (mapRef.current) {
       if (mapRef.current.getLayer(ROUTE_LAYER_ID)) {
         mapRef.current.removeLayer(ROUTE_LAYER_ID);

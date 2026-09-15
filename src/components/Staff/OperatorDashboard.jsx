@@ -3,11 +3,11 @@ import { useNavigate } from 'react-router-dom'
 import StaffService from '../../api/StaffService/StaffService'
 import { buildOperatorForecast } from './routeForecast'
 import { loadMapLib } from '../Map/mapDependencies'
-import { parseAppDate, getBusinessToday } from '../../utils/dates'
+import { parseAppDate, getBusinessToday, debugLogBusinessTime } from '../../utils/dates'
 import {
   LayoutDashboard, Bus, MapPin, Clock, PieChart, Users, Settings,
   LogOut, Plus, Eye, RefreshCw, Shield, Download,
-  X, ChevronDown, ChevronUp, Loader2,
+  X, ChevronDown, ChevronUp, Loader2, AlertTriangle,
 } from 'lucide-react'
 
 const fmt = (v) => {
@@ -1262,7 +1262,7 @@ function FleetsTab({ fleets, routes, trips, onRefresh }) {
                     <div className="rounded-xl bg-[#222F45] p-3">
                       <p className="text-xl font-bold text-white">{routeName}</p>
                       <p className="text-sm text-slate-300">{plate}</p>
-                      <p className="text-sm text-slate-300">{trip?.fleet_route?.start_time || '--:--'}</p>
+                      <p className="text-sm text-slate-300">{trip?.departure_time || trip?.fleet_route?.start_time || '--:--'}</p>
                     </div>
                     <div className="mt-3 flex items-center justify-between text-xs font-semibold">
                       <span className="text-blue-300">Status</span>
@@ -1540,7 +1540,11 @@ function RoutesTab({ routes, stops, trips, onRefresh }) {
     const avgDailyPassengers = Math.round(passengersTotal / days)
 
     const hourBuckets = routeTrips.reduce((acc, trip) => {
-      const startRaw = String(trip?.fleet_route?.start_time || '').trim()
+      // Same underlying bug as Issue #2 (Batch 10/11): each trip's own
+      // departure_time, not the fleet route's shared operating-hours
+      // start_time, must drive per-trip bucketing — otherwise every trip on
+      // a route collapses into one identical hour bucket.
+      const startRaw = String(trip?.departure_time || trip?.fleet_route?.start_time || '').trim()
       const hourLabel = /^\d{2}:\d{2}/.test(startRaw) ? `${startRaw.slice(0, 2)}:00` : 'Unscheduled'
       acc[hourLabel] = (acc[hourLabel] || 0) + 1
       return acc
@@ -1787,6 +1791,8 @@ function TripsTab({ trips, drivers, conductors, onRefresh }) {
   const [gpsMessage, setGpsMessage] = useState('')
   const [assignModal, setAssignModal]   = useState(null)
   const [confirmComplete, setConfirmComplete] = useState(null) // trip object pending confirmation
+  const [statusOverrideSaving, setStatusOverrideSaving] = useState(false)
+  const [statusOverrideMsg, setStatusOverrideMsg] = useState('')
   const [form, setForm]             = useState({ fleet_route_id: '', trip_date: '', departure_time: '', trip_type: 'one_way', return_departure_time: '', driver_id: '', conductor_id: '', notes: '' })
   const [assignId, setAssignId]     = useState('')
   const [saving, setSaving]         = useState(false)
@@ -1884,8 +1890,39 @@ function TripsTab({ trips, drivers, conductors, onRefresh }) {
     finally { setActionInFlight(null) }
   }
 
+  // Manual status override — for a trip the driver forgot to mark completed
+  // (server enforces: operators may only force an already-departed trip to
+  // 'completed'; admins have full override elsewhere).
+  const handleStatusOverride = async (tripId, status) => {
+    setStatusOverrideSaving(true)
+    setStatusOverrideMsg('')
+    try {
+      const res = await StaffService.overrideTripStatus(tripId, status)
+      setStatusOverrideMsg('Status updated.')
+      setSelectedTrip(res?.data ?? null)
+      onRefresh()
+    } catch (err) {
+      setStatusOverrideMsg(err?.message || 'Failed to update status.')
+    } finally {
+      setStatusOverrideSaving(false)
+    }
+  }
+
   const sorted = [...visibleTrips]
     .sort((a,b) => (parseAppDate(b.trip_date)?.getTime() ?? 0) - (parseAppDate(a.trip_date)?.getTime() ?? 0))
+
+  // S3: purely computed, non-persisted indicator — a trip whose scheduled
+  // date has passed without ever being closed out (completed or cancelled).
+  // Not a new status; just a visual flag layered on top of whatever status
+  // the trip is currently stuck in, so Operator/Admin can spot it without a
+  // manual search.
+  const todayStart = getBusinessToday()
+  debugLogBusinessTime('OperatorDashboard: overdue-trip flag check')
+  const isOverdueUnclosed = (trip) => {
+    const tripDateStr = String(trip?.trip_date || '').match(/^(\d{4}-\d{2}-\d{2})/)?.[1]
+    if (!tripDateStr) return false
+    return tripDateStr < todayStart && !['completed', 'cancelled'].includes(trip?.status)
+  }
 
   const loadTripGpsHistory = async (tripId) => {
     if (!tripId) return
@@ -1964,12 +2001,21 @@ function TripsTab({ trips, drivers, conductors, onRefresh }) {
                       </td>
                       <td className="px-4 py-3">
                         <span className={`rounded-full px-2 py-0.5 text-xs font-semibold whitespace-nowrap ${STATUS_CHIP[t.status] ?? 'bg-slate-100 text-slate-600'}`}>{t.status}</span>
+                        {isOverdueUnclosed(t) && (
+                          <span
+                            className="ml-1.5 inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700 whitespace-nowrap"
+                            title="Scheduled date has passed and this trip was never marked completed or cancelled."
+                          >
+                            <AlertTriangle className="h-3 w-3" /> Overdue
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex gap-1">
                           {['scheduled', 'delayed'].includes(t.status)    && <button type="button" onClick={() => handleAction(t.trip_id,'boarding')} disabled={actionInFlight === t.trip_id} className="rounded px-2 py-1 text-xs bg-blue-100 text-blue-700 hover:bg-blue-200 disabled:opacity-50">{actionInFlight === t.trip_id ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Board'}</button>}
                           {t.status === 'boarding'     && <button type="button" onClick={() => handleAction(t.trip_id,'depart')} disabled={actionInFlight === t.trip_id} className="rounded px-2 py-1 text-xs bg-amber-100 text-amber-700 hover:bg-amber-200 disabled:opacity-50">{actionInFlight === t.trip_id ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Depart'}</button>}
                           {['departed','in-progress'].includes(t.status) && <button type="button" onClick={() => handleAction(t.trip_id,'complete')} disabled={actionInFlight === t.trip_id} className="rounded px-2 py-1 text-xs bg-emerald-100 text-emerald-700 hover:bg-emerald-200 disabled:opacity-50">Complete</button>}
+                          {isOverdueUnclosed(t) && <button type="button" onClick={() => setSelectedTrip(t)} className="rounded px-2 py-1 text-xs bg-red-100 text-red-700 hover:bg-red-200">Update Status</button>}
                           <button type="button" onClick={() => setSelectedTrip(t)} className="rounded px-2 py-1 text-xs bg-slate-100 text-slate-600 hover:bg-slate-200"><Eye className="h-3.5 w-3.5" /></button>
                         </div>
                       </td>
@@ -2087,6 +2133,33 @@ function TripsTab({ trips, drivers, conductors, onRefresh }) {
                 </div>
               ))}
             </dl>
+
+            {isOverdueUnclosed(selectedTrip) && (
+              <div className="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-700">
+                <AlertTriangle className="h-4 w-4 shrink-0" />
+                Overdue — this trip's scheduled date has passed and it was never marked completed or cancelled.
+              </div>
+            )}
+
+            {(['departed', 'in-progress'].includes(selectedTrip.status) || isOverdueUnclosed(selectedTrip)) && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+                <p className="text-sm font-semibold text-amber-900">Update Status</p>
+                <p className="mt-1 text-xs text-amber-700">
+                  {['departed', 'in-progress'].includes(selectedTrip.status)
+                    ? 'Use this if the driver forgot to complete the trip on their end.'
+                    : "This trip's scheduled date has passed without departing. Operators can only close out a trip that already departed \u2014 if it never departed, ask an Admin to resolve it."}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => handleStatusOverride(selectedTrip.trip_id, 'completed')}
+                  disabled={statusOverrideSaving}
+                  className="mt-2 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700 disabled:opacity-60"
+                >
+                  {statusOverrideSaving ? 'Updating...' : 'Force Complete'}
+                </button>
+                {statusOverrideMsg && <p className="mt-2 text-xs font-medium text-amber-800">{statusOverrideMsg}</p>}
+              </div>
+            )}
 
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
               <div className="mb-2 flex items-center justify-between gap-2">

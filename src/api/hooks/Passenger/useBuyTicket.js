@@ -10,6 +10,9 @@ const CHECKOUT_LOOKUP_CACHE_KEY = 'smart_transit_checkout_lookup_cache_v1';
 const TICKET_QR_CACHE_KEY = 'smart_transit_ticket_qr_cache_v1';
 const LOOKUP_CACHE_TTL_MS = 60 * 1000;
 const QR_CACHE_TTL_MS = 5 * 60 * 1000;
+// PayMongo checkout sessions are short-lived; treat a pending-checkout flag
+// older than this as abandoned/stale rather than trusting it forever.
+const CHECKOUT_PENDING_TTL_MS = 30 * 60 * 1000;
 
 const toTripDateValue = (value) => {
   if (!value) return '';
@@ -160,7 +163,6 @@ export default function useBuyTicket({ onTicketPurchased }) {
   const [loadingQr, setLoadingQr] = useState(false);
   const [availableRewardPoints, setAvailableRewardPoints] = useState(0);
   const [loadingRewards, setLoadingRewards] = useState(false);
-  const checkoutStartCounterRef = useRef(1);
   const lookupCacheRef = useRef(readSessionCache(CHECKOUT_LOOKUP_CACHE_KEY));
   const qrCacheRef = useRef(readSessionCache(TICKET_QR_CACHE_KEY));
   const inFlightLookupRef = useRef(new Set());
@@ -448,10 +450,23 @@ export default function useBuyTicket({ onTicketPurchased }) {
       ticket?.trip?.fleetRoute?.route?.destination ||
       null;
 
+    // Issue #3 fix: this fallback (used when a ticket's real QR isn't
+    // active yet — e.g. a "Book Later" future-dated trip — and
+    // getTicketQR() can't return the backend's generateQRData() payload)
+    // previously omitted group_qr_url entirely, so the Group QR section
+    // never rendered for multi-ticket future-dated bookings even though
+    // the feature otherwise works. Mirror toGuestQrTicket()'s derivation.
+    const transactionRef = ticket?.payment?.transaction_reference ?? null;
+    const groupQrContent = transactionRef ? `grp:${transactionRef}` : null;
+
     return {
       ticket_uuid: ticket.ticket_uuid,
       qr_content: ticket.ticket_uuid,
       qr_url: null,
+      group_qr_url: groupQrContent
+        ? `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(groupQrContent)}`
+        : null,
+      transaction_reference: transactionRef,
       destination: destinationName || 'Not specified',
       seat_type: ticket?.seat_type,
       amount: ticket?.amount,
@@ -768,6 +783,21 @@ export default function useBuyTicket({ onTicketPurchased }) {
 
     try {
       const parsedPending = JSON.parse(storedPending);
+
+      // Issue #1 fix: startedAt is now a real Date.now() timestamp (it used
+      // to be a per-page-load monotonic counter, which meant a stale flag
+      // left behind by an abandoned/crashed checkout tab could never be
+      // detected as stale and would be trusted forever on every future page
+      // load). Only resume the "pending" UI if the stored session is still
+      // within a reasonable window of an actual PayMongo checkout session.
+      const startedAt = Number(parsedPending?.startedAt) || 0;
+      const age = Date.now() - startedAt;
+      if (!startedAt || age < 0 || age > CHECKOUT_PENDING_TTL_MS) {
+        localStorage.removeItem(CHECKOUT_PENDING_KEY);
+        localStorage.removeItem(CHECKOUT_EVENT_KEY);
+        return;
+      }
+
       setTimeout(() => {
         setPendingCheckout(parsedPending);
         setCheckoutStatus('pending');
@@ -1133,7 +1163,10 @@ export default function useBuyTicket({ onTicketPurchased }) {
         transactionReference: paymentPayload?.transaction_reference ?? null,
         guestEmail: isGuestCheckout ? (form.guest_email || null) : null,
         returnPath: `${window.location.pathname}${window.location.search}`,
-        startedAt: checkoutStartCounterRef.current++,
+        // Real epoch-ms timestamp (was a per-page-load monotonic counter,
+        // which made it impossible to detect a stale/abandoned pending flag
+        // on a later page load — see Issue #1 fix above).
+        startedAt: Date.now(),
       };
 
       if (!checkoutUrl) {

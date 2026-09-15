@@ -19,7 +19,7 @@ import StaffService from '../../api/StaffService/StaffService';
 import PairingScreen from './PairingScreen';
 import DriverNavigationMap from './DriverNavigationMap';
 import { haversineM } from '../../utils/geo';
-import { isSameBusinessDay, getBusinessToday, getBusinessNowMs, toBusinessScheduleMs } from '../../utils/dates';
+import { isSameBusinessDay, getBusinessToday, getBusinessNowMs, toBusinessScheduleMs, debugLogBusinessTime } from '../../utils/dates';
 import { fetchTrafficStatus } from '../../services/trafficService';
 
 const STATUS_COLOR = {
@@ -81,10 +81,12 @@ const formatDateOnly = (value) => {
 const formatTripSchedule = (tripLike) => {
   if (!tripLike) return '-';
   const dateLabel = formatDateOnly(tripLike?.trip_date);
-  const start = toCompactTime(tripLike?.fleet_route?.start_time);
-  const end = toCompactTime(tripLike?.fleet_route?.end_time);
-  if (start && end) return `${dateLabel} - ${start} to ${end}`;
-  if (start) return `${dateLabel} - ${start}`;
+  // Batch 10 fix (Issue #2) applied here too: bind to the trip's actual
+  // departure_time, not fleet_route.start_time/end_time — that's the
+  // fleet route's general daily operating-hours window (e.g. 05:00-21:00),
+  // not this specific trip's scheduled departure time.
+  const departureTime = toCompactTime(tripLike?.departure_time || tripLike?.fleet_route?.start_time);
+  if (departureTime) return `${dateLabel} - ${departureTime}`;
   return dateLabel;
 };
 
@@ -298,6 +300,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   const nextStop = stops.find((stop) => !stop.is_acknowledged) ?? null;
   const filteredAssignedTrips = assignedTripFilter === 'all' ? assignedTrips : assignedTripsForView;
   const todayStart = getBusinessToday();
+  debugLogBusinessTime('DriverDashboard: assigned trips today/upcoming filter');
   const todayAssignedTrips = filteredAssignedTrips.filter((item) => isSameBusinessDay(item?.trip_date, todayStart));
   const upcomingAssignedTrips = filteredAssignedTrips.filter((item) => {
     const tripDateStr = String(item?.trip_date || '').match(/^(\d{4}-\d{2}-\d{2})/)?.[1];
@@ -1022,50 +1025,63 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
 
         {!loading && activeTab === 'dashboard' && isPaired && !showNoCurrentTripState && (
           <section className="grid gap-4 xl:grid-cols-4 md:grid-cols-2">
-            <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Today's Trip</p>
-              <h3 className="mt-2 text-lg font-bold text-slate-900">{currentRoute?.route_name || `Route ${trip?.fleet_route_id ?? '-'}`}</h3>
-              <p className="mt-1 text-sm text-slate-500">{currentRoute?.origin || '-'} → {currentRoute?.destination || '-'}</p>
-              <button className="mt-3 text-sm font-semibold text-teal-600 hover:text-teal-700 flex items-center gap-1" onClick={() => setActiveTab('assigned')}>View Details →</button>
-            </article>
-
-            <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Next Stop</p>
-              <h3 className="mt-2 text-lg font-bold text-slate-900">{nextStop?.stop_name ?? nextStop?.name ?? 'No pending stop'}</h3>
-              <p className="mt-1 inline-flex items-center gap-1 text-sm text-slate-500"><Clock3 className="h-3.5 w-3.5" /> ETA {formatTripSchedule(trip)}</p>
-              <button className="mt-3 text-sm font-semibold text-teal-600 hover:text-teal-700" onClick={() => setActiveTab('journey')}>View Journey →</button>
-            </article>
-
-            <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Trip Progress</p>
-              <h3 className="font-data mt-2 text-3xl font-bold text-slate-900">{tripProgress}%</h3>
-              <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-slate-100">
-                <div className="h-full rounded-full bg-teal-500 transition-all" style={{ width: `${tripProgress}%` }} />
+            {/* S1: consolidated current-trip card — was 4 separate cards
+                (Today's Trip / Next Stop / Trip Progress / Journey Status)
+                describing facets of the same trip; merged into one primary
+                card. No data/logic changes — same bindings and nav actions. */}
+            <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm md:col-span-2 xl:col-span-4">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Today's Trip</p>
+                  <h3 className="mt-1 text-lg font-bold text-slate-900">{currentRoute?.route_name || `Route ${trip?.fleet_route_id ?? '-'}`}</h3>
+                  <p className="mt-1 text-sm text-slate-500">{currentRoute?.origin || '-'} → {currentRoute?.destination || '-'}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {trip?.status === 'completed' ? (
+                    <CheckCircle2 className="h-6 w-6 text-teal-500" />
+                  ) : (
+                    <div className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-amber-400">
+                      <div className="h-2 w-2 rounded-full bg-amber-400" />
+                    </div>
+                  )}
+                  <span className="text-sm font-bold capitalize text-slate-900">{trip?.status || 'Idle'}</span>
+                </div>
               </div>
-              <p className="mt-2 text-sm text-slate-500">
-                {stopProgress.totalStops > 0
-                  ? `${stopProgress.completedStops}/${stopProgress.totalStops} stops reached`
-                  : journeyStatusLabel}
-              </p>
-              {stopProgress.nextStopName && (
-                <p className="mt-1 text-xs text-slate-500">Next stop: {stopProgress.nextStopName}</p>
-              )}
-            </article>
 
-            <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Journey Status</p>
-              <div className="mt-2 flex items-center gap-2">
-                {trip?.status === 'completed' ? (
-                  <CheckCircle2 className="h-7 w-7 text-teal-500" />
-                ) : (
-                  <div className="h-7 w-7 rounded-full border-2 border-amber-400 flex items-center justify-center">
-                    <div className="h-2.5 w-2.5 rounded-full bg-amber-400" />
+              <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Next Stop</p>
+                  <p className="mt-1 text-sm font-bold text-slate-900">{nextStop?.stop_name ?? nextStop?.name ?? 'No pending stop'}</p>
+                  <p className="mt-1 inline-flex items-center gap-1 text-xs text-slate-500"><Clock3 className="h-3.5 w-3.5" /> ETA {formatTripSchedule(trip)}</p>
+                </div>
+
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Trip Progress</p>
+                  <p className="font-data mt-1 text-2xl font-bold text-slate-900">{tripProgress}%</p>
+                  <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-200">
+                    <div className="h-full rounded-full bg-teal-500 transition-all" style={{ width: `${tripProgress}%` }} />
                   </div>
-                )}
-                <h3 className="text-base font-bold capitalize text-slate-900">{trip?.status || 'Idle'}</h3>
+                  <p className="mt-1.5 text-xs text-slate-500">
+                    {stopProgress.totalStops > 0
+                      ? `${stopProgress.completedStops} of ${stopProgress.totalStops} Stops Completed — ${tripProgress}%`
+                      : journeyStatusLabel}
+                  </p>
+                  {stopProgress.nextStopName && (
+                    <p className="mt-1 text-xs text-slate-500">Next stop: {stopProgress.nextStopName}</p>
+                  )}
+                </div>
+
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Journey Status</p>
+                  <p className="mt-1 text-sm font-semibold text-slate-800">{trip?.status === 'completed' ? 'Journey Completed Successfully' : 'Manage trip via Quick Actions below'}</p>
+                </div>
               </div>
-              <p className="mt-1 text-sm text-slate-500">{trip?.status === 'completed' ? 'Journey Completed Successfully' : 'Manage trip via Quick Actions'}</p>
-              <button className="mt-3 text-sm font-semibold text-teal-600 hover:text-teal-700" onClick={() => setActiveTab('trip')}>View Summary →</button>
+
+              <div className="mt-4 flex flex-wrap gap-4 border-t border-slate-100 pt-3">
+                <button className="text-sm font-semibold text-teal-600 hover:text-teal-700" onClick={() => setActiveTab('assigned')}>View Details →</button>
+                <button className="text-sm font-semibold text-teal-600 hover:text-teal-700" onClick={() => setActiveTab('journey')}>View Journey →</button>
+                <button className="text-sm font-semibold text-teal-600 hover:text-teal-700" onClick={() => setActiveTab('trip')}>View Summary →</button>
+              </div>
             </article>
 
             <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm md:col-span-2 xl:col-span-2">
@@ -1261,7 +1277,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                   <div className="rounded-xl border border-slate-800 bg-slate-950 px-3 py-3">
                     <div className="mb-2 flex items-center justify-between gap-2">
                       <p className="text-[11px] uppercase tracking-widest text-slate-500">Route Progress</p>
-                      <p className="text-xs font-semibold text-slate-300">{stopProgress.completedStops}/{stopProgress.totalStops} stops acknowledged</p>
+                      <p className="text-xs font-semibold text-slate-300">{stopProgress.completedStops} of {stopProgress.totalStops} Stops Completed — {stopProgress.progressPercent}%</p>
                     </div>
                     <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-800">
                       <div

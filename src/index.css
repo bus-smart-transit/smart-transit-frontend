@@ -61,29 +61,4 @@
 ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
-/*
-  Legacy CSS variables — updated to new color scheme.
-  Still referenced by BuyTicketPortal.css and TicketCard.css.
-  Remove this block once those files are migrated to full Tailwind.
-*/
-:root {
-  --primary:        #0f766e;
-  --primary-light:  #14b8a6;
-  --primary-dark:   #115e59;
-  --secondary:      #0f172a;
-  --bg:             #f1f5f9;
-  --bg-card:        #ffffff;
-  --bg-card-hover:  #f8fafc;
-  --bg-input:       #ffffff;
-  --border:         #e2e8f0;
-  --border-focus:   #5eead4;
-  --text:           #0f172a;
-  --text-muted:     #64748b;
-  --text-heading:   #020617;
-  --grad-primary:   linear-gradient(135deg, #0f766e 0%, #0d9488 100%);
-  --font-sans:      'Inter', system-ui, sans-serif;
-  --font-heading:   'Poppins', system-ui, sans-serif;
-  --font-mono:      'JetBrains Mono', monospace;
-  --transition:     0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  --accent-gold:    #2dd4bf;
-}
+

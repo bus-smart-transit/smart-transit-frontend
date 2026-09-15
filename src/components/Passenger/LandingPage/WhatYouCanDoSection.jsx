@@ -1,5 +1,12 @@
 import { useNavigate } from 'react-router-dom';
 import { Ticket, History, MapPin, Gift, CalendarClock, ChevronRight } from 'lucide-react';
+import { useAuth } from '../../../api/hooks/useAuth';
+
+// Tabs gated behind auth on the passenger dashboard (mirrors Dashboard.jsx's
+// own PROTECTED_TABS) — an unauthenticated visitor clicking one of these
+// from the homepage must go through the login gate first, not land
+// silently on the dashboard's public "dashboard" tab.
+const PROTECTED_TABS = new Set(['tickets', 'transactions', 'rewards', 'profile']);
 
 const ITEMS = [
   { icon: Ticket, title: 'My Tickets', description: 'View your upcoming bookings, ticket information, and QR codes.', to: '/passenger/dashboard?tab=tickets' },
@@ -11,6 +18,16 @@ const ITEMS = [
 
 export default function WhatYouCanDoSection() {
   const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
+
+  const goTo = (to) => {
+    const tab = new URLSearchParams(to.split('?')[1] || '').get('tab');
+    if (tab && PROTECTED_TABS.has(tab) && !isAuthenticated) {
+      navigate('/passenger/login', { state: { redirectTo: to } });
+      return;
+    }
+    navigate(to);
+  };
 
   return (
     <section className="bg-slate-50 px-4 py-12 sm:px-6 lg:px-10">
@@ -28,7 +45,7 @@ export default function WhatYouCanDoSection() {
             <button
               key={title}
               type="button"
-              onClick={() => navigate(to)}
+              onClick={() => goTo(to)}
               className="flex w-full items-center gap-4 px-5 py-4 text-left transition hover:bg-slate-50"
             >
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-teal-50 text-teal-600">

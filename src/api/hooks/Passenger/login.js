@@ -24,6 +24,9 @@ export function useLogin() {
         ? `/passenger/book?trip_id=${encodeURIComponent(String(tripId))}`
         : '/passenger/book';
     }
+    if (state?.redirectTo) {
+      return state.redirectTo;
+    }
     return goToDashboardAfterLogin ? '/passenger/dashboard' : '/';
   };
 

@@ -50,6 +50,49 @@ export function getBusinessToday() {
   return `${p.year}-${mm}-${dd}`;
 }
 
+// ── Dev-only business-time debug logger ──────────────────────────────────
+// Given how many past bugs traced back to Manila business-time vs. the
+// viewer's local browser time disagreeing, this makes that comparison
+// visible in DevTools without tracing through code. Gated behind an env
+// flag the same way as the demo-credentials banner / DISABLE_STEP_UP — off
+// by default, never logs in production. Read-only diagnostic: it does not
+// let you override/simulate "now", it only surfaces what the app currently
+// computes "now" to be.
+const DEBUG_BUSINESS_TIME = typeof import.meta !== 'undefined'
+  && import.meta.env?.VITE_DEBUG_BUSINESS_TIME === 'true';
+
+// De-duped per (context, Manila-calendar-day) so this stays low-noise even
+// if the caller re-renders many times in the same day — it only logs again
+// once the underlying business day actually changes.
+const loggedBusinessTimeContexts = new Set();
+
+/**
+ * Logs the current Manila business-time alongside the viewer's local time,
+ * for a named call site (e.g. "LandingPage: trip filter",
+ * "OperatorDashboard: overdue-flag check"). No-op unless
+ * VITE_DEBUG_BUSINESS_TIME=true. Call this at meaningful business-day
+ * decision points (filtering, overdue checks) — not on every render.
+ */
+export function debugLogBusinessTime(context = '') {
+  if (!DEBUG_BUSINESS_TIME) return;
+
+  const manilaToday = getBusinessToday();
+  const dedupeKey = `${context}|${manilaToday}`;
+  if (loggedBusinessTimeContexts.has(dedupeKey)) return;
+  loggedBusinessTimeContexts.add(dedupeKey);
+
+  const p = getBusinessNowParts();
+  const manilaTime = `${manilaToday} ${String(p.hour).padStart(2, '0')}:${String(p.minute).padStart(2, '0')}:${String(p.second).padStart(2, '0')}`;
+
+  const local = new Date();
+  const localTime = `${local.getFullYear()}-${String(local.getMonth() + 1).padStart(2, '0')}-${String(local.getDate()).padStart(2, '0')} ${String(local.getHours()).padStart(2, '0')}:${String(local.getMinutes()).padStart(2, '0')}:${String(local.getSeconds()).padStart(2, '0')}`;
+  const localTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+  console.log(
+    `[business-time]${context ? ` ${context}:` : ''} Manila (Asia/Manila) = ${manilaTime} | Viewer local (${localTimezone}) = ${localTime}`,
+  );
+}
+
 /**
  * A comparable (but NOT real-epoch) millisecond value representing "now" as
  * wall-clock time in the business timezone. Only meaningful when compared

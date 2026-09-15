@@ -8,7 +8,6 @@ import ProfileDropdown from '../../Layout/ProfileDropdown';
 import Card from '../../ui/Card';
 import Button from '../../ui/Button';
 import StatusBadge from '../../ui/StatusBadge';
-import FilterTabs from '../../ui/FilterTabs';
 import SearchBar from '../../ui/SearchBar';
 import Toggle from '../../ui/Toggle';
 import Modal from '../../ui/Modal';
@@ -25,7 +24,7 @@ const BuyTicket = lazy(() => import('../BuyTicket/BuyTicket'));
 const NAV_ITEMS = [
   { key: 'dashboard', label: 'Dashboard', icon: LayoutGrid, protected: false },
   { key: 'tickets', label: 'My Tickets', icon: Ticket, protected: true },
-  { key: 'transactions', label: 'Trip History', icon: History, protected: true },
+  { key: 'transactions', label: 'Transaction History', icon: History, protected: true },
   { key: 'map', label: 'Track Bus', icon: Map, protected: false },
   { key: 'rewards', label: 'Rewards', icon: Gift, protected: true },
 ];
@@ -94,7 +93,7 @@ export default function Dashboard() {
   const [twoFactorOverride, setTwoFactorOverride] = useState(null);
   const [updating2fa, setUpdating2fa] = useState(false);
   const [twoFactorMsg, setTwoFactorMsg] = useState('');
-  const [ticketStatusFilter, setTicketStatusFilter] = useState('all');
+  const [ticketStatusFilter, setTicketStatusFilter] = useState('scheduled');
   const [showAllSchedule, setShowAllSchedule] = useState(false);
   const [historySearch, setHistorySearch] = useState('');
 
@@ -168,10 +167,20 @@ export default function Dashboard() {
   ];
   const numericPoints = Number(profile?.reward_points ?? user?.reward_points ?? 0);
 
+  // S2: ticket-history status filter — Scheduled/Completed/Expired/Group,
+  // defaulting to "Scheduled". "Group" counts transaction references shared
+  // by more than one ticket (a multi-ticket purchase).
+  const ticketRefCounts = {};
+  tickets.forEach((t) => {
+    const ref = t?.payment?.transaction_reference;
+    if (ref) ticketRefCounts[ref] = (ticketRefCounts[ref] ?? 0) + 1;
+  });
+
   const ticketStatusFilterOptions = [
-    { value: 'all', label: 'All' },
     { value: 'scheduled', label: 'Scheduled' },
     { value: 'completed', label: 'Completed' },
+    { value: 'expired', label: 'Expired' },
+    { value: 'group', label: 'Group' },
   ];
 
   const filteredTickets = tickets.filter((ticket) => {
@@ -181,6 +190,13 @@ export default function Dashboard() {
     }
     if (ticketStatusFilter === 'completed') {
       return normalizedStatus === 'alighted';
+    }
+    if (ticketStatusFilter === 'expired') {
+      return normalizedStatus === 'expired';
+    }
+    if (ticketStatusFilter === 'group') {
+      const ref = ticket?.payment?.transaction_reference;
+      return Boolean(ref && (ticketRefCounts[ref] ?? 1) > 1);
     }
     return true;
   });
@@ -378,18 +394,23 @@ export default function Dashboard() {
     }
 
     if (visibleTab === 'tickets') {
-      const refCounts = {};
-      tickets.forEach((t) => {
-        const ref = t?.payment?.transaction_reference;
-        if (ref) refCounts[ref] = (refCounts[ref] ?? 0) + 1;
-      });
-
       return (
         <div>
           <div className="flex flex-wrap items-end justify-between gap-4">
             <h1 className="font-display text-2xl font-bold text-navy-950 sm:text-3xl">My Tickets</h1>
             {tickets.length > 0 && (
-              <FilterTabs options={ticketStatusFilterOptions} value={ticketStatusFilter} onChange={setTicketStatusFilter} />
+              <label className="flex items-center gap-2 text-sm font-medium text-navy-950">
+                Filter:
+                <select
+                  value={ticketStatusFilter}
+                  onChange={(e) => setTicketStatusFilter(e.target.value)}
+                  className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-navy-950 focus:border-navy-800 focus:outline-none"
+                >
+                  {ticketStatusFilterOptions.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+              </label>
             )}
           </div>
 
@@ -398,13 +419,13 @@ export default function Dashboard() {
               <Card className="p-8 text-center text-sm text-slate-500">Loading tickets...</Card>
             ) : filteredTickets.length === 0 ? (
               <Card className="p-8 text-center text-sm text-slate-500">
-                No {ticketStatusFilter === 'scheduled' ? 'scheduled' : ticketStatusFilter === 'completed' ? 'completed' : ''} tickets found.
+                No {ticketStatusFilterOptions.find((o) => o.value === ticketStatusFilter)?.label.toLowerCase() || ''} tickets found.
               </Card>
             ) : (
               <Card className="divide-y divide-slate-100 overflow-hidden">
                 {filteredTickets.map((ticket, idx) => {
                   const ref = ticket?.payment?.transaction_reference;
-                  const isPartOfGroup = ref && (refCounts[ref] ?? 1) > 1;
+                  const isPartOfGroup = ref && (ticketRefCounts[ref] ?? 1) > 1;
                   return (
                     <button
                       key={ticket.ticket_id ?? ticket.ticket_uuid ?? idx}
@@ -455,7 +476,7 @@ export default function Dashboard() {
 
       return (
         <div>
-          <h1 className="font-display text-2xl font-bold text-navy-950 sm:text-3xl">Trip History</h1>
+          <h1 className="font-display text-2xl font-bold text-navy-950 sm:text-3xl">Transaction History</h1>
           <SearchBar
             value={historySearch}
             onChange={setHistorySearch}

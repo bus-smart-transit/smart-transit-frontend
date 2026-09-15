@@ -8,6 +8,27 @@ const DRIVER_ROUTE_STOPS_SOURCE_ID = 'driver-route-stops';
 const DRIVER_ROUTE_STOPS_LAYER_ID = 'driver-route-stops-layer';
 const DRIVER_ROUTE_STOPS_LABEL_LAYER_ID = 'driver-route-stops-label-layer';
 
+// S4: builds the stop-marker GeoJSON feature collection, tagging each stop
+// as completed (already acknowledged by the driver) or upcoming so the map
+// layer's circle-color expression can distinguish them.
+const buildStopFeatures = (validStops = [], acknowledgedStopIds = new Set()) => ({
+  type: 'FeatureCollection',
+  features: validStops.map((stop, idx) => ({
+    type: 'Feature',
+    properties: {
+      stopName: stop.stop_name || `Stop ${idx + 1}`,
+      stopOrder: idx + 1,
+      isFirst: idx === 0,
+      isLast: idx === validStops.length - 1,
+      isAcknowledged: acknowledgedStopIds.has(Number(stop.stop_id)),
+    },
+    geometry: {
+      type: 'Point',
+      coordinates: [Number(stop.longitude), Number(stop.latitude)],
+    },
+  })),
+});
+
 const fetchRoadPathFromOsrm = async (coordinates = []) => {
   if (!Array.isArray(coordinates) || coordinates.length < 2) return null;
 
@@ -40,6 +61,10 @@ export default function DriverNavigationMap({ trip, stops, lastGpsRef, routeGeom
   const driverSourceAddedRef = useRef(false);
   const routeDrawnRef     = useRef(false);
   const gpsIntervalRef    = useRef(null);
+  // Route-level stops fetched once (with lat/lng), kept so the S4
+  // completed/upcoming coloring effect can rebuild the same feature list
+  // whenever the trip's per-stop acknowledgment state changes.
+  const routeStopsRef     = useRef([]);
 
   const [mapReady, setMapReady]         = useState(false);
   const [routeLoaded, setRouteLoaded]   = useState(false);
@@ -97,6 +122,7 @@ export default function DriverNavigationMap({ trip, stops, lastGpsRef, routeGeom
           (s) => Number.isFinite(Number(s?.longitude)) && Number.isFinite(Number(s?.latitude))
         );
         if (valid.length < 2) { routeDrawnRef.current = false; return; }
+        routeStopsRef.current = valid;
 
         const stopCoords = valid.map((s) => [Number(s.longitude), Number(s.latitude)]);
         let routeCoords = stopCoords;
@@ -124,24 +150,14 @@ export default function DriverNavigationMap({ trip, stops, lastGpsRef, routeGeom
         });
 
         // Route stop pins as map layers, so they stay correctly anchored while zooming/panning.
+        const acknowledgedStopIds = new Set(
+          (Array.isArray(stops) ? stops : [])
+            .filter((s) => s?.is_acknowledged)
+            .map((s) => Number(s?.stop_id)),
+        );
         map.addSource(DRIVER_ROUTE_STOPS_SOURCE_ID, {
           type: 'geojson',
-          data: {
-            type: 'FeatureCollection',
-            features: valid.map((stop, idx) => ({
-              type: 'Feature',
-              properties: {
-                stopName: stop.stop_name || `Stop ${idx + 1}`,
-                stopOrder: idx + 1,
-                isFirst: idx === 0,
-                isLast: idx === valid.length - 1,
-              },
-              geometry: {
-                type: 'Point',
-                coordinates: [Number(stop.longitude), Number(stop.latitude)],
-              },
-            })),
-          },
+          data: buildStopFeatures(valid, acknowledgedStopIds),
         });
 
         map.addLayer({
@@ -155,10 +171,13 @@ export default function DriverNavigationMap({ trip, stops, lastGpsRef, routeGeom
               ['get', 'isLast'], 8,
               6,
             ],
+            // Completed (acknowledged) stops take priority so a passed origin
+            // or intermediate stop reads as "done" rather than by position.
             'circle-color': [
               'case',
-              ['get', 'isFirst'], '#22c55e',
+              ['get', 'isAcknowledged'], '#2dd4bf',
               ['get', 'isLast'], '#ef4444',
+              ['get', 'isFirst'], '#22c55e',
               '#38bdf8',
             ],
             'circle-stroke-color': '#ffffff',
@@ -209,7 +228,25 @@ export default function DriverNavigationMap({ trip, stops, lastGpsRef, routeGeom
         routeDrawnRef.current = false; // allow retry on next render
       }
     })();
-  }, [mapReady, routeId]);
+  }, [mapReady, routeId, stops]);
+
+  // ── 2b. Re-sync completed/upcoming stop coloring whenever the driver
+  //         acknowledges a new stop (stops prop changes) — updates the same
+  //         source in place rather than redrawing the whole route. ─────────
+  useEffect(() => {
+    if (!routeLoaded || !mapRef.current) return;
+    const validStops = routeStopsRef.current;
+    if (!validStops.length) return;
+
+    const acknowledgedStopIds = new Set(
+      (Array.isArray(stops) ? stops : [])
+        .filter((s) => s?.is_acknowledged)
+        .map((s) => Number(s?.stop_id)),
+    );
+
+    const source = mapRef.current.getSource(DRIVER_ROUTE_STOPS_SOURCE_ID);
+    if (source) source.setData(buildStopFeatures(validStops, acknowledgedStopIds));
+  }, [stops, routeLoaded]);
 
   // ── 3. Driver position (GeoJSON circle layer, updated every 1 s) ──────────
   // Reading lastGpsRef at 1-second granularity is smooth because
@@ -369,10 +406,13 @@ export default function DriverNavigationMap({ trip, stops, lastGpsRef, routeGeom
       <div ref={mapContainer} style={{ height: '420px', width: '100%' }} />
       <div className="flex flex-wrap gap-4 border-t border-slate-800 px-4 py-2 text-xs text-slate-400">
         <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded-full bg-emerald-400" />Your position</span>
-        <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded-full bg-sky-400" />Route</span>
+        <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded-full bg-teal-400" />Completed stop</span>
+        <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded-full bg-sky-400" />Upcoming stop</span>
         <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded-full bg-red-400" />Destination</span>
         {stops.length > 0 && (
-          <span className="ml-auto">{stops.filter((s) => s.is_acknowledged).length}/{stops.length} stops acknowledged</span>
+          <span className="ml-auto">
+            {stops.filter((s) => s.is_acknowledged).length} of {stops.length} Stops Completed — {Math.round((stops.filter((s) => s.is_acknowledged).length / stops.length) * 100)}%
+          </span>
         )}
       </div>
     </div>

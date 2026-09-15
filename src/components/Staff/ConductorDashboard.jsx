@@ -25,7 +25,7 @@ import StaffService from '../../api/StaffService/StaffService';
 import usePassengersByTrip from '../../api/hooks/Staff/usePassengersByTrip';
 import useOnsiteReceiptPrinter from '../../api/hooks/Staff/useOnsiteReceiptPrinter';
 import PairingScreen from './PairingScreen';
-import { isSameBusinessDay, getBusinessToday, getBusinessNowMs, toBusinessScheduleMs } from '../../utils/dates';
+import { isSameBusinessDay, getBusinessToday, getBusinessNowMs, toBusinessScheduleMs, debugLogBusinessTime } from '../../utils/dates';
 
 const NAV_ITEMS = [
   { key: 'trip', label: 'Start', icon: Play },
@@ -73,10 +73,12 @@ const formatDateOnly = (value) => {
 const formatTripSchedule = (tripLike) => {
   if (!tripLike) return '-';
   const dateLabel = formatDateOnly(tripLike?.trip_date);
-  const start = toCompactTime(tripLike?.fleet_route?.start_time);
-  const end = toCompactTime(tripLike?.fleet_route?.end_time);
-  if (start && end) return `${dateLabel} - ${start} to ${end}`;
-  if (start) return `${dateLabel} - ${start}`;
+  // Batch 10 fix (Issue #2) applied here too: bind to the trip's actual
+  // departure_time, not fleet_route.start_time/end_time — that's the
+  // fleet route's general daily operating-hours window (e.g. 05:00-21:00),
+  // not this specific trip's scheduled departure time.
+  const departureTime = toCompactTime(tripLike?.departure_time || tripLike?.fleet_route?.start_time);
+  if (departureTime) return `${dateLabel} - ${departureTime}`;
   return dateLabel;
 };
 
@@ -265,6 +267,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   const groupedPassengers = usePassengersByTrip(passengers, trip);
   const filteredAssignedTrips = assignedTripFilter === 'all' ? assignedTrips : assignedTripsForView;
   const todayStart = getBusinessToday();
+  debugLogBusinessTime('ConductorDashboard: assigned trips today/upcoming filter');
   const todayAssignedTrips = filteredAssignedTrips.filter((item) => isSameBusinessDay(item?.trip_date, todayStart));
   const upcomingAssignedTrips = filteredAssignedTrips.filter((item) => {
     const tripDateStr = String(item?.trip_date || '').match(/^(\d{4}-\d{2}-\d{2})/)?.[1];

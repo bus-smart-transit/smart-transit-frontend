@@ -2,18 +2,14 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeftRight, MapPin, Calendar, Search, ChevronDown } from 'lucide-react';
 import Button from '../../ui/Button';
+import { getBusinessToday } from '../../../utils/dates';
 import heroBg from '../../../assets/hero.png';
-
-const today = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-};
 
 export default function LandingHero({ onSearch, searchState }) {
   const navigate = useNavigate();
   const [from, setFrom] = useState(searchState?.from ?? '');
   const [to, setTo] = useState(searchState?.to ?? '');
-  const [date, setDate] = useState(searchState?.date ?? today());
+  const [date, setDate] = useState(searchState?.date ?? getBusinessToday());
 
   const swap = () => {
     setFrom(to);
