@@ -4,10 +4,11 @@ import StaffService from '../../api/StaffService/StaffService'
 import { buildOperatorForecast } from './routeForecast'
 import { loadMapLib } from '../Map/mapDependencies'
 import { parseAppDate, getBusinessToday, debugLogBusinessTime } from '../../utils/dates'
+import { nearestPointOnLine } from '../../utils/geo'
 import {
   LayoutDashboard, Bus, MapPin, Clock, PieChart, Users, Settings,
   LogOut, Plus, Eye, RefreshCw, Shield, Download,
-  X, ChevronDown, ChevronUp, Loader2, AlertTriangle,
+  X, ChevronDown, ChevronUp, Loader2, AlertTriangle, Bell,
 } from 'lucide-react'
 
 const fmt = (v) => {
@@ -99,6 +100,109 @@ function Modal({ title, onClose, children }) {
         {children}
       </div>
     </div>
+  )
+}
+
+// S2 (Batch 12): Operator-facing notification bell/badge — currently only
+// populated by trip declines (Driver/Chauffeur declining an assignment).
+function NotificationBell() {
+  const [open, setOpen] = useState(false)
+  const [notifications, setNotifications] = useState([])
+  const [unreadCount, setUnreadCount] = useState(0)
+  const [loadingNotifications, setLoadingNotifications] = useState(false)
+
+  const loadNotifications = useCallback(async () => {
+    setLoadingNotifications(true)
+    try {
+      const res = await StaffService.getNotifications()
+      setNotifications(Array.isArray(res?.data?.notifications) ? res.data.notifications : [])
+      setUnreadCount(Number(res?.data?.unread_count ?? 0))
+    } catch {
+      // Keep last-known state on transient poll errors.
+    } finally {
+      setLoadingNotifications(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      void loadNotifications()
+    }, 0)
+    const intervalId = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return
+      void loadNotifications()
+    }, 45000)
+    return () => {
+      clearTimeout(timer)
+      clearInterval(intervalId)
+    }
+  }, [loadNotifications])
+
+  const handleMarkRead = async (id) => {
+    try {
+      await StaffService.markNotificationRead(id)
+      void loadNotifications()
+    } catch { /* no-op — bell state simply won't update this cycle */ }
+  }
+
+  const handleMarkAllRead = async () => {
+    try {
+      await StaffService.markAllNotificationsRead()
+      void loadNotifications()
+    } catch { /* no-op */ }
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="relative flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:bg-slate-50"
+        aria-label="Notifications"
+      >
+        <Bell className="h-4.5 w-4.5" />
+        {unreadCount > 0 && (
+          <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[11px] font-bold text-white">
+            {unreadCount > 9 ? '9+' : unreadCount}
+          </span>
+        )}
+      </button>
+
+      {open && (
+        <Modal title="Notifications" onClose={() => setOpen(false)}>
+          <div className="mb-3 flex items-center justify-between">
+            <span className="text-xs text-slate-500">{unreadCount} unread</span>
+            <button type="button" onClick={handleMarkAllRead} className="text-xs font-semibold text-teal-600 hover:underline" disabled={unreadCount === 0}>
+              Mark all as read
+            </button>
+          </div>
+          <div className="max-h-96 space-y-2 overflow-y-auto">
+            {loadingNotifications && notifications.length === 0 ? (
+              <p className="py-6 text-center text-sm text-slate-400">Loading…</p>
+            ) : notifications.length === 0 ? (
+              <p className="py-6 text-center text-sm text-slate-400">No notifications yet.</p>
+            ) : (
+              notifications.map((n) => (
+                <div
+                  key={n.id}
+                  className={`rounded-lg border px-3 py-2.5 text-sm ${n.read_at ? 'border-slate-100 bg-slate-50 text-slate-500' : 'border-amber-200 bg-amber-50 text-slate-800'}`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="font-semibold">{n.title}</p>
+                    {!n.read_at && (
+                      <button type="button" onClick={() => handleMarkRead(n.id)} className="shrink-0 text-xs font-semibold text-teal-600 hover:underline">
+                        Mark read
+                      </button>
+                    )}
+                  </div>
+                  <p className="mt-1 text-xs">{n.message}</p>
+                </div>
+              ))
+            )}
+          </div>
+        </Modal>
+      )}
+    </>
   )
 }
 
@@ -896,6 +1000,13 @@ function FleetTrackingMap({ trip, location }) {
         })
       }
 
+      // Snap the live fleet position onto the drawn route path so the
+      // Operator's tracked marker moves smoothly along it instead of
+      // drifting off due to raw GPS jitter (mirrors the driver-side fix).
+      const snappedLiveCoord = hasLiveMarker && coords.length >= 2
+        ? nearestPointOnLine(liveCoord, coords)
+        : liveCoord
+
       if (hasLiveMarker) {
         if (markerRef.current) markerRef.current.remove()
         const popupHtml = `
@@ -908,7 +1019,7 @@ function FleetTrackingMap({ trip, location }) {
         const popup = new maplibregl.Popup({ closeButton: false, closeOnClick: false }).setHTML(popupHtml)
 
         markerRef.current = new maplibregl.Marker({ element: createBusMarker() })
-          .setLngLat(liveCoord)
+          .setLngLat(snappedLiveCoord)
           .setPopup(popup)
           .addTo(map)
 
@@ -918,7 +1029,7 @@ function FleetTrackingMap({ trip, location }) {
         markerEl.style.cursor = 'pointer'
       }
 
-      const boundsSeed = [...coords, ...(liveCoord ? [liveCoord] : [])]
+      const boundsSeed = [...coords, ...(snappedLiveCoord ? [snappedLiveCoord] : [])]
       if (boundsSeed.length > 0) {
         const bounds = boundsSeed.reduce(
           (acc, point) => acc.extend(point),
@@ -926,8 +1037,8 @@ function FleetTrackingMap({ trip, location }) {
         )
         map.fitBounds(bounds, { padding: 50, maxZoom: 14 })
 
-        if (liveCoord) {
-          map.flyTo({ center: liveCoord, zoom: Math.max(map.getZoom(), 13), duration: 700 })
+        if (snappedLiveCoord) {
+          map.flyTo({ center: snappedLiveCoord, zoom: Math.max(map.getZoom(), 13), duration: 700 })
         }
       }
     }
@@ -1785,7 +1896,10 @@ function RoutesTab({ routes, stops, trips, onRefresh }) {
 function TripsTab({ trips, drivers, conductors, onRefresh }) {
   const [showModal, setShowModal]   = useState(false)
   const [selectedTrip, setSelectedTrip] = useState(null)
-  const [tripFilter, setTripFilter] = useState('all')
+  // S1 (Batch 13): default to "Scheduled / Active" rather than "All",
+  // consistent with the passenger ticket filter's default-to-relevant-view
+  // pattern (Batch 12 S2).
+  const [tripFilter, setTripFilter] = useState('scheduled')
   const [gpsHistory, setGpsHistory] = useState([])
   const [gpsLoading, setGpsLoading] = useState(false)
   const [gpsMessage, setGpsMessage] = useState('')
@@ -1911,6 +2025,20 @@ function TripsTab({ trips, drivers, conductors, onRefresh }) {
   const sorted = [...visibleTrips]
     .sort((a,b) => (parseAppDate(b.trip_date)?.getTime() ?? 0) - (parseAppDate(a.trip_date)?.getTime() ?? 0))
 
+  // S3: split into "Today's Trips" (today + any past/overdue trips still
+  // needing attention — the existing "Overdue" badge below already flags
+  // those) and "Upcoming Trips" (strictly future-dated), using the same
+  // Manila-anchored business-day helper relied on elsewhere in the app.
+  const todaysTrips = sorted.filter((t) => {
+    const tripDateStr = String(t?.trip_date || '').match(/^(\d{4}-\d{2}-\d{2})/)?.[1]
+    if (!tripDateStr) return true
+    return tripDateStr <= getBusinessToday()
+  })
+  const upcomingTrips = sorted.filter((t) => {
+    const tripDateStr = String(t?.trip_date || '').match(/^(\d{4}-\d{2}-\d{2})/)?.[1]
+    return Boolean(tripDateStr) && tripDateStr > getBusinessToday()
+  })
+
   // S3: purely computed, non-persisted indicator — a trip whose scheduled
   // date has passed without ever being closed out (completed or cancelled).
   // Not a new status; just a visual flag layered on top of whatever status
@@ -1966,67 +2094,76 @@ function TripsTab({ trips, drivers, conductors, onRefresh }) {
         </div>
       </div>
       {msg && <p className="rounded-lg bg-teal-50 border border-teal-200 px-4 py-2 text-sm text-teal-800">{msg}</p>}
-      <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50">
-              <tr className="border-b border-slate-200">
-                {['ID','Date','Departure','Route','Fleet','Driver','Conductor','Status','Actions'].map(h => (
-                  <th key={h} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 whitespace-nowrap">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {sorted.length === 0
-                ? <tr><td colSpan={9} className="px-5 py-8 text-center text-sm text-slate-400">No trips found.</td></tr>
-                : sorted.map(t => {
-                  const driverRow = t.driver || driverMap.get(Number(t.driver_id))
-                  const conductorRow = t.conductor || conductorMap.get(Number(t.conductor_id))
-                  const driverName = driverRow ? getStaffFullName(driverRow) || (driverRow?.user?.email || driverRow?.email) : null
-                  const conductorName = conductorRow ? getStaffFullName(conductorRow) || (conductorRow?.user?.email || conductorRow?.email) : null
-                  return (
-                    <tr key={t.trip_id} className="border-b border-slate-100 hover:bg-slate-50">
-                      <td className="px-4 py-3 font-mono text-xs text-slate-600">#{t.trip_id}</td>
-                      <td className="px-4 py-3 text-slate-700 whitespace-nowrap">{fmtDate(t.trip_date)}</td>
-                      <td className="px-4 py-3 text-slate-700 whitespace-nowrap">{String(t.departure_time || t.fleet_route?.start_time || '--:--').slice(0, 5)}</td>
-                      <td className="px-4 py-3 text-slate-700 max-w-30 truncate">{t.fleet_route?.route?.route_name || '-'}</td>
-                      <td className="px-4 py-3 text-slate-700">{t.fleet_route?.fleet?.plate_number || '-'}</td>
-                      <td className="px-4 py-3">
-                        {driverName ? <span className="text-slate-700">{driverName}</span>
-                          : <button type="button" onClick={() => { setAssignModal({ trip: t, type: 'driver' }); setAssignId(''); setMsg('') }} className="text-xs text-teal-600 hover:underline">Assign</button>}
-                      </td>
-                      <td className="px-4 py-3">
-                        {conductorName ? <span className="text-slate-700">{conductorName}</span>
-                          : <button type="button" onClick={() => { setAssignModal({ trip: t, type: 'conductor' }); setAssignId(''); setMsg('') }} className="text-xs text-teal-600 hover:underline">Assign</button>}
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className={`rounded-full px-2 py-0.5 text-xs font-semibold whitespace-nowrap ${STATUS_CHIP[t.status] ?? 'bg-slate-100 text-slate-600'}`}>{t.status}</span>
-                        {isOverdueUnclosed(t) && (
-                          <span
-                            className="ml-1.5 inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700 whitespace-nowrap"
-                            title="Scheduled date has passed and this trip was never marked completed or cancelled."
-                          >
-                            <AlertTriangle className="h-3 w-3" /> Overdue
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex gap-1">
-                          {['scheduled', 'delayed'].includes(t.status)    && <button type="button" onClick={() => handleAction(t.trip_id,'boarding')} disabled={actionInFlight === t.trip_id} className="rounded px-2 py-1 text-xs bg-blue-100 text-blue-700 hover:bg-blue-200 disabled:opacity-50">{actionInFlight === t.trip_id ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Board'}</button>}
-                          {t.status === 'boarding'     && <button type="button" onClick={() => handleAction(t.trip_id,'depart')} disabled={actionInFlight === t.trip_id} className="rounded px-2 py-1 text-xs bg-amber-100 text-amber-700 hover:bg-amber-200 disabled:opacity-50">{actionInFlight === t.trip_id ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Depart'}</button>}
-                          {['departed','in-progress'].includes(t.status) && <button type="button" onClick={() => handleAction(t.trip_id,'complete')} disabled={actionInFlight === t.trip_id} className="rounded px-2 py-1 text-xs bg-emerald-100 text-emerald-700 hover:bg-emerald-200 disabled:opacity-50">Complete</button>}
-                          {isOverdueUnclosed(t) && <button type="button" onClick={() => setSelectedTrip(t)} className="rounded px-2 py-1 text-xs bg-red-100 text-red-700 hover:bg-red-200">Update Status</button>}
-                          <button type="button" onClick={() => setSelectedTrip(t)} className="rounded px-2 py-1 text-xs bg-slate-100 text-slate-600 hover:bg-slate-200"><Eye className="h-3.5 w-3.5" /></button>
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })
-              }
-            </tbody>
-          </table>
+      {[
+        { key: 'today', title: "Today's Trips", list: todaysTrips },
+        { key: 'upcoming', title: 'Upcoming Trips', list: upcomingTrips },
+      ].map(({ key, title, list }) => (
+        <div key={key} className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+            <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
+            <span className="text-xs font-medium text-slate-500">{list.length} trip{list.length === 1 ? '' : 's'}</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50">
+                <tr className="border-b border-slate-200">
+                  {['ID','Date','Departure','Route','Fleet','Driver','Conductor','Status','Actions'].map(h => (
+                    <th key={h} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 whitespace-nowrap">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {list.length === 0
+                  ? <tr><td colSpan={9} className="px-5 py-8 text-center text-sm text-slate-400">No trips found.</td></tr>
+                  : list.map(t => {
+                    const driverRow = t.driver || driverMap.get(Number(t.driver_id))
+                    const conductorRow = t.conductor || conductorMap.get(Number(t.conductor_id))
+                    const driverName = driverRow ? getStaffFullName(driverRow) || (driverRow?.user?.email || driverRow?.email) : null
+                    const conductorName = conductorRow ? getStaffFullName(conductorRow) || (conductorRow?.user?.email || conductorRow?.email) : null
+                    return (
+                      <tr key={t.trip_id} className="border-b border-slate-100 hover:bg-slate-50">
+                        <td className="px-4 py-3 font-mono text-xs text-slate-600">#{t.trip_id}</td>
+                        <td className="px-4 py-3 text-slate-700 whitespace-nowrap">{fmtDate(t.trip_date)}</td>
+                        <td className="px-4 py-3 text-slate-700 whitespace-nowrap">{String(t.departure_time || t.fleet_route?.start_time || '--:--').slice(0, 5)}</td>
+                        <td className="px-4 py-3 text-slate-700 max-w-30 truncate">{t.fleet_route?.route?.route_name || '-'}</td>
+                        <td className="px-4 py-3 text-slate-700">{t.fleet_route?.fleet?.plate_number || '-'}</td>
+                        <td className="px-4 py-3">
+                          {driverName ? <span className="text-slate-700">{driverName}</span>
+                            : <button type="button" onClick={() => { setAssignModal({ trip: t, type: 'driver' }); setAssignId(''); setMsg('') }} className="text-xs text-teal-600 hover:underline">Assign</button>}
+                        </td>
+                        <td className="px-4 py-3">
+                          {conductorName ? <span className="text-slate-700">{conductorName}</span>
+                            : <button type="button" onClick={() => { setAssignModal({ trip: t, type: 'conductor' }); setAssignId(''); setMsg('') }} className="text-xs text-teal-600 hover:underline">Assign</button>}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`rounded-full px-2 py-0.5 text-xs font-semibold whitespace-nowrap ${STATUS_CHIP[t.status] ?? 'bg-slate-100 text-slate-600'}`}>{t.status}</span>
+                          {isOverdueUnclosed(t) && (
+                            <span
+                              className="ml-1.5 inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700 whitespace-nowrap"
+                              title="Scheduled date has passed and this trip was never marked completed or cancelled."
+                            >
+                              <AlertTriangle className="h-3 w-3" /> Overdue
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex gap-1">
+                            {['scheduled', 'delayed'].includes(t.status)    && <button type="button" onClick={() => handleAction(t.trip_id,'boarding')} disabled={actionInFlight === t.trip_id} className="rounded px-2 py-1 text-xs bg-blue-100 text-blue-700 hover:bg-blue-200 disabled:opacity-50">{actionInFlight === t.trip_id ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Board'}</button>}
+                            {t.status === 'boarding'     && <button type="button" onClick={() => handleAction(t.trip_id,'depart')} disabled={actionInFlight === t.trip_id} className="rounded px-2 py-1 text-xs bg-amber-100 text-amber-700 hover:bg-amber-200 disabled:opacity-50">{actionInFlight === t.trip_id ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Depart'}</button>}
+                            {['departed','in-progress'].includes(t.status) && <button type="button" onClick={() => handleAction(t.trip_id,'complete')} disabled={actionInFlight === t.trip_id} className="rounded px-2 py-1 text-xs bg-emerald-100 text-emerald-700 hover:bg-emerald-200 disabled:opacity-50">Complete</button>}
+                            {isOverdueUnclosed(t) && <button type="button" onClick={() => setSelectedTrip(t)} className="rounded px-2 py-1 text-xs bg-red-100 text-red-700 hover:bg-red-200">Update Status</button>}
+                            <button type="button" onClick={() => setSelectedTrip(t)} className="rounded px-2 py-1 text-xs bg-slate-100 text-slate-600 hover:bg-slate-200"><Eye className="h-3.5 w-3.5" /></button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })
+                }
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
+      ))}
 
       {showModal && (
         <Modal title="Schedule Trip" onClose={() => setShowModal(false)}>
@@ -2587,6 +2724,9 @@ export default function OperatorDashboard() {
     <div className="flex h-screen overflow-hidden bg-slate-50">
       <Sidebar activeTab={activeTab} onTabChange={setActiveTab} onLogout={handleLogout} />
       <main className="flex-1 overflow-y-auto p-6">
+        <div className="mb-4 flex justify-end">
+          <NotificationBell />
+        </div>
         {activeTab === 'dashboard'  && <DashboardTab trips={trips} drivers={drivers} conductors={conductors} fleets={fleets} />}
         {activeTab === 'staffs'     && (
           <StaffDirectoryTab drivers={drivers} conductors={conductors} onRefresh={loadFull} onCreateAccount={d => StaffService.createEmployeeAccount(d)} />

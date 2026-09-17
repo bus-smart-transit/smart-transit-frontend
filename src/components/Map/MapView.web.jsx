@@ -376,13 +376,22 @@ export default function MapView({ role = "passenger", trackedFleetId = null }) {
       }
       innerEl.style.filter = 'drop-shadow(0 0 8px rgba(245,158,11,0.8))';
       setIsTracking(true);
+
+      // S2 (Batch 13): the route path previously only rendered once the
+      // user manually clicked the bus marker — the auto-tracked view never
+      // triggered that click, so the path stayed missing even though the
+      // route's lat/long data was already available. Draw it immediately,
+      // the same way the marker click handler does.
+      const currentRow = fleetDataRef.current[trackedFleetId];
+      const routeId = currentRow?.route_id ?? currentRow?.fleet_route?.route_id ?? null;
+      if (routeId) void drawFleetRoute(routeId);
     };
 
     // Attempt immediately, retry after next poll cycle if marker not yet rendered
     focusFleet();
     const retryId = setTimeout(focusFleet, 3000);
     return () => clearTimeout(retryId);
-  }, [trackedFleetId]);
+  }, [trackedFleetId, drawFleetRoute]);
 
   const handlePinCurrentLocation = () => {
     const maplibregl = mapLibRef.current;

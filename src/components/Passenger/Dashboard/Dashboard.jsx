@@ -201,6 +201,29 @@ export default function Dashboard() {
     return true;
   });
 
+  // S1 (Batch 12): when the Group filter is active, present one Group QR
+  // block per transaction with its tickets nested underneath, instead of
+  // each ticket as a separate top-level row. The group QR payload matches
+  // the backend's own scheme (`grp:<transaction_reference>`, see
+  // QRCodeService::generateQRData()) so it can be derived locally without
+  // an extra per-ticket QR fetch — the conductor scan flow already expects
+  // this exact `grp:` prefix.
+  const groupedTicketsByRef = (() => {
+    if (ticketStatusFilter !== 'group') return [];
+    const groups = new Map();
+    filteredTickets.forEach((ticket) => {
+      const ref = ticket?.payment?.transaction_reference;
+      if (!ref) return;
+      if (!groups.has(ref)) groups.set(ref, []);
+      groups.get(ref).push(ticket);
+    });
+    return Array.from(groups.entries()).map(([ref, groupTickets]) => ({
+      ref,
+      tickets: groupTickets,
+      groupQrUrl: `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(`grp:${ref}`)}`,
+    }));
+  })();
+
   const navLinkClasses = (active) => `flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-left text-sm font-medium transition-colors ${
     active ? 'bg-white text-navy-900 shadow-sm' : 'text-navy-200 hover:bg-teal-400/10 hover:text-teal-300'
   }`;
@@ -421,6 +444,36 @@ export default function Dashboard() {
               <Card className="p-8 text-center text-sm text-slate-500">
                 No {ticketStatusFilterOptions.find((o) => o.value === ticketStatusFilter)?.label.toLowerCase() || ''} tickets found.
               </Card>
+            ) : ticketStatusFilter === 'group' ? (
+              <div className="space-y-4">
+                {groupedTicketsByRef.map(({ ref, tickets: groupTickets, groupQrUrl }) => (
+                  <Card key={ref} className="overflow-hidden p-0">
+                    <div className="flex flex-wrap items-center gap-4 border-b border-slate-100 bg-teal-50/60 px-5 py-4">
+                      <img src={groupQrUrl} alt="Group boarding QR" className="h-16 w-16 rounded-lg border border-teal-200 bg-white" />
+                      <div>
+                        <p className="text-sm font-semibold text-teal-800">Group Boarding QR — {groupTickets.length} tickets</p>
+                        <p className="mt-0.5 text-xs text-teal-700">Transaction {ref}</p>
+                      </div>
+                    </div>
+                    <div className="divide-y divide-slate-100">
+                      {groupTickets.map((ticket, idx) => (
+                        <button
+                          key={ticket.ticket_id ?? ticket.ticket_uuid ?? idx}
+                          type="button"
+                          onClick={() => { void openTicketModal(ticket); }}
+                          className="flex w-full flex-wrap items-center justify-between gap-3 px-5 py-3.5 pl-8 text-left transition hover:bg-slate-50 sm:flex-nowrap"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-semibold text-navy-950">{getOriginLabel(ticket)} to {getDestinationLabel(ticket)}</p>
+                            <p className="mt-0.5 text-xs text-slate-500">Booked: {formatDateTime(ticket?.created_at)}</p>
+                          </div>
+                          <StatusBadge status={ticket.status || 'valid'} />
+                        </button>
+                      ))}
+                    </div>
+                  </Card>
+                ))}
+              </div>
             ) : (
               <Card className="divide-y divide-slate-100 overflow-hidden">
                 {filteredTickets.map((ticket, idx) => {

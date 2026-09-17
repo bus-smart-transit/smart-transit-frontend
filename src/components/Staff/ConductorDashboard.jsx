@@ -186,7 +186,7 @@ export default function ConductorDashboard() {
   );
 }
 
-function TripCardGroup({ title, trips, emptyMessage = 'No trips in this section.' }) {
+function TripCardGroup({ title, trips, onDeclineTrip, emptyMessage = 'No trips in this section.' }) {
   return (
     <div className="md:col-span-2 rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
       <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">{title}</h3>
@@ -196,19 +196,33 @@ function TripCardGroup({ title, trips, emptyMessage = 'No trips in this section.
         </article>
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
-          {trips.map((item) => (
-            <article key={item.trip_id} className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
-              <div className="mb-4 flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-slate-100">Trip #{item.trip_id}</h3>
-                <span className="rounded-full border border-sky-500/40 bg-sky-500/10 px-3 py-1 text-xs text-sky-300">{item.status}</span>
-              </div>
-              <div className="space-y-3 text-sm">
-                <div className="flex items-center justify-between"><span className="text-slate-500">Schedule</span><strong className="font-data text-slate-100">{formatTripSchedule(item)}</strong></div>
-                <div className="flex items-center justify-between"><span className="text-slate-500">Fleet</span><strong className="text-slate-100">{item.fleet_route?.fleet?.plate_number || `Fleet ${item.fleet_route?.fleet_id || '-'}`}</strong></div>
-                <div className="flex items-center justify-between"><span className="text-slate-500">Route</span><strong className="text-slate-100">{item.fleet_route?.route?.route_name || `Route ${item.fleet_route?.route_id || '-'}`}</strong></div>
-              </div>
-            </article>
-          ))}
+          {trips.map((item) => {
+            // Batch 14: decline must be reachable from this list — today OR
+            // upcoming — regardless of pairing status.
+            const canDecline = ['scheduled', 'delayed', 'boarding'].includes(String(item?.status || '').toLowerCase());
+            return (
+              <article key={item.trip_id} className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
+                <div className="mb-4 flex items-center justify-between">
+                  <h3 className="text-lg font-semibold text-slate-100">Trip #{item.trip_id}</h3>
+                  <span className="rounded-full border border-sky-500/40 bg-sky-500/10 px-3 py-1 text-xs text-sky-300">{item.status}</span>
+                </div>
+                <div className="space-y-3 text-sm">
+                  <div className="flex items-center justify-between"><span className="text-slate-500">Schedule</span><strong className="font-data text-slate-100">{formatTripSchedule(item)}</strong></div>
+                  <div className="flex items-center justify-between"><span className="text-slate-500">Fleet</span><strong className="text-slate-100">{item.fleet_route?.fleet?.plate_number || `Fleet ${item.fleet_route?.fleet_id || '-'}`}</strong></div>
+                  <div className="flex items-center justify-between"><span className="text-slate-500">Route</span><strong className="text-slate-100">{item.fleet_route?.route?.route_name || `Route ${item.fleet_route?.route_id || '-'}`}</strong></div>
+                </div>
+                {canDecline && (
+                  <button
+                    type="button"
+                    className="mt-4 w-full rounded-lg border border-red-900/60 bg-red-950/20 px-3 py-2 text-xs font-semibold text-red-300 transition hover:bg-red-950/40"
+                    onClick={() => onDeclineTrip?.(item)}
+                  >
+                    Decline Trip
+                  </button>
+                )}
+              </article>
+            );
+          })}
         </div>
       )}
     </div>
@@ -249,10 +263,36 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   const [saving2fa, setSaving2fa] = useState(false);
   const [checkoutInFlight, setCheckoutInFlight] = useState(false);
   const [confirmCheckout, setConfirmCheckout] = useState(false);
+  // S2 (Batch 12): decline assigned trip — mirrors DriverDashboard.jsx.
+  // Holds the trip object being declined (not just a boolean) so decline
+  // can be triggered per-card from the Assigned Trips list — today OR
+  // upcoming — and regardless of pairing status (Batch 14).
+  const [confirmDecline, setConfirmDecline] = useState(null);
+  const [declineReasonCode, setDeclineReasonCode] = useState('');
+  const [declineSubmitting, setDeclineSubmitting] = useState(false);
   const [shiftState, setShiftState] = useState({ openShift: null, latestShift: null, loading: false });
   const isPaired = pairing?.paired === true;
   const pairingReason = pairing?.reason || 'Waiting for pairing with your Driver before live trip features unlock.';
   const hasActiveTrip = isCurrentOrSameDayTrip(trip);
+  // Batch 13, Issue #1: mirrors the DriverDashboard.jsx fix — `hasActiveTrip`
+  // (from /conductor/trips/current, which only resolves once a shift is
+  // OPEN) can never be true before the shift starts. Using it alone to hide
+  // the "trip" tab (which contains Start Shift) created a deadlock: the
+  // conductor could never see the button that starts the shift that makes
+  // hasActiveTrip true. Day-based check against ASSIGNED trips instead.
+  const hasTodayAssignedTrip = (assignedTrips || []).some((t) => {
+    const status = String(t?.status || '').toLowerCase();
+    if (['completed', 'cancelled'].includes(status)) return false;
+    return isSameDay(t?.trip_date);
+  });
+  // Trip to preview in the pre-shift "Current Trip Info" card — the live
+  // `trip` state is still null at this point (no open shift yet), so fall
+  // back to the matching today-assigned trip from the trips list.
+  const todayAssignedTrip = trip || (assignedTrips || []).find((t) => {
+    const status = String(t?.status || '').toLowerCase();
+    if (['completed', 'cancelled'].includes(status)) return false;
+    return isSameDay(t?.trip_date);
+  }) || null;
   const hasOpenShift = Boolean(shiftState?.openShift && !shiftState?.openShift?.ended_at);
   const didBootstrap = useRef(false);
   const videoRef = useRef(null);
@@ -261,7 +301,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   const scannerBusyRef = useRef(false);
   const lastDetectedRef = useRef({ value: '', at: 0 });
   const upcomingTrip = getUpcomingTrip(assignedTrips);
-  const showNoCurrentTripState = !loading && isPaired && !hasActiveTrip && ['trip', 'occupancy', 'passengers', 'pin'].includes(activeTab);
+  const showNoCurrentTripState = !loading && isPaired && !hasActiveTrip && !hasTodayAssignedTrip && ['trip', 'occupancy', 'passengers', 'pin'].includes(activeTab);
   const routeStops = trip?.fleet_route?.route?.route_stops || trip?.fleet_route?.route?.routeStops || [];
   const shiftStarted = hasOpenShift;
   const groupedPassengers = usePassengersByTrip(passengers, trip);
@@ -526,6 +566,27 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
       setActiveTab('occupancy');
     } catch (err) {
       setActionMsg(err?.message || 'Unable to start shift right now.');
+    }
+  };
+
+  // S2 (Batch 12): decline the assigned trip — returns it to the
+  // unassigned pool for the Operator to reassign. Reason is optional.
+  // Works for any status-eligible trip in the conductor's assigned list —
+  // today or upcoming — and regardless of pairing status (Batch 14).
+  const handleConfirmedDecline = async () => {
+    const tripId = confirmDecline?.trip_id;
+    if (!tripId) return;
+    setDeclineSubmitting(true);
+    try {
+      await StaffService.declineConductorTrip(tripId, declineReasonCode ? { reason_code: declineReasonCode } : {});
+      setActionMsg('Trip declined. The Operator has been notified.');
+      setConfirmDecline(null);
+      setDeclineReasonCode('');
+      void loadData();
+    } catch (err) {
+      setActionMsg(err.message);
+    } finally {
+      setDeclineSubmitting(false);
     }
   };
 
@@ -1109,7 +1170,6 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
             {actionMsg && <span className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">{actionMsg}</span>}
           </div>
         </header>
-                      disabled={scannerBusy || !hasOpenShift}
         {loading && <div className="rounded-xl border border-slate-200 bg-slate-50 p-6 text-sm text-slate-500">Loading dashboard data...</div>}
         {error && (
           <div className="mb-4 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700">
@@ -1174,8 +1234,8 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                     <Bus className="h-5 w-5 text-teal-600" />
                   </div>
                   <div>
-                    <p className="font-bold text-slate-900">{trip?.fleet_route?.fleet?.plate_number ?? 'Bus #1'}</p>
-                    <p className="text-xs text-slate-500">{trip?.fleet_route?.fleet?.make ?? 'Assigned Fleet'}</p>
+                    <p className="font-bold text-slate-900">{todayAssignedTrip?.fleet_route?.fleet?.plate_number ?? 'Bus #1'}</p>
+                    <p className="text-xs text-slate-500">{todayAssignedTrip?.fleet_route?.fleet?.make ?? 'Assigned Fleet'}</p>
                   </div>
                 </div>
               </div>
@@ -1186,15 +1246,15 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span className="text-slate-500">Route</span>
-                    <span className="font-semibold text-slate-900">{trip?.fleet_route?.route?.route_name ?? '-'}</span>
+                    <span className="font-semibold text-slate-900">{todayAssignedTrip?.fleet_route?.route?.route_name ?? '-'}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-500">Status</span>
-                    <span className="font-semibold capitalize text-teal-600">{trip?.status ?? '-'}</span>
+                    <span className="font-semibold capitalize text-teal-600">{todayAssignedTrip?.status ?? '-'}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-500">Schedule</span>
-                    <span className="font-data text-slate-700">{formatTripSchedule(trip)}</span>
+                    <span className="font-data text-slate-700">{formatTripSchedule(todayAssignedTrip)}</span>
                   </div>
                 </div>
               </div>
@@ -1211,6 +1271,15 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                 <Play className="h-4 w-4" />
               </button>
               <p className="mt-3 text-xs text-slate-400">This will take you to the Ticketing screen</p>
+              {['scheduled', 'delayed', 'boarding'].includes(String(todayAssignedTrip?.status || '').toLowerCase()) && (
+                <button
+                  type="button"
+                  className="mt-4 inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-white px-4 py-2 text-xs font-semibold text-red-600 transition hover:bg-red-50"
+                  onClick={() => setConfirmDecline(todayAssignedTrip)}
+                >
+                  ✕ Decline This Trip
+                </button>
+              )}
             </div>
           </section>
         )}
@@ -1237,8 +1306,8 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
               </article>
             ) : (
               <>
-                <TripCardGroup title="Today's Assigned Trip" trips={todayAssignedTrips} />
-                <TripCardGroup title="Upcoming Trips" trips={upcomingAssignedTrips} emptyMessage="No upcoming trips match this filter." />
+                <TripCardGroup title="Today's Assigned Trip" trips={todayAssignedTrips} onDeclineTrip={setConfirmDecline} />
+                <TripCardGroup title="Upcoming Trips" trips={upcomingAssignedTrips} onDeclineTrip={setConfirmDecline} emptyMessage="No upcoming trips match this filter." />
               </>
             )}
           </section>
@@ -1852,6 +1921,39 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
             <div className="flex gap-2">
               <button type="button" onClick={() => setConfirmCheckout(false)} className="flex-1 rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800">Cancel</button>
               <button type="button" onClick={handleConfirmedOnsiteCheckout} className="flex-1 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700">Confirm Payment</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── S2 (Batch 12): Decline Trip Confirmation Modal ─────────────── */}
+      {confirmDecline && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-sm rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl">
+            <h3 className="mb-2 text-base font-bold text-slate-100">Decline This Trip?</h3>
+            <p className="mb-3 text-sm text-slate-300">
+              {confirmDecline?.fleet_route?.route?.origin || '-'} → {confirmDecline?.fleet_route?.route?.destination || '-'} · {formatTripSchedule(confirmDecline)}
+            </p>
+            <p className="mb-4 text-sm text-slate-400">
+              The trip will return to the unassigned pool and the Operator will be notified to find a replacement.
+            </p>
+            <label className="mb-4 block text-sm text-slate-300">
+              Reason (optional)
+              <select
+                value={declineReasonCode}
+                onChange={(e) => setDeclineReasonCode(e.target.value)}
+                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 outline-none focus:border-teal-500"
+              >
+                <option value="">No reason given</option>
+                <option value="sick">Sick</option>
+                <option value="vehicle_issue">Vehicle issue</option>
+                <option value="schedule_conflict">Schedule conflict</option>
+                <option value="other">Other</option>
+              </select>
+            </label>
+            <div className="flex gap-2">
+              <button type="button" onClick={() => { setConfirmDecline(null); setDeclineReasonCode(''); }} className="flex-1 rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800" disabled={declineSubmitting}>Cancel</button>
+              <button type="button" onClick={handleConfirmedDecline} className="flex-1 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60" disabled={declineSubmitting}>{declineSubmitting ? 'Declining...' : 'Yes, Decline'}</button>
             </div>
           </div>
         </div>

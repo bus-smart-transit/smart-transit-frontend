@@ -269,6 +269,14 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   const [actionMsg, setActionMsg] = useState('');
   const [actionInFlight, setActionInFlight] = useState(false);
   const [confirmComplete, setConfirmComplete] = useState(false);
+  // S2 (Batch 12): decline assigned trip — plain decline, reason code optional.
+  // Holds the trip object being declined (not just a boolean) so decline can
+  // be triggered per-row from the Assigned Trips list — today OR upcoming —
+  // per Batch 14 request: decline must work regardless of pairing status
+  // and regardless of whether the trip is scheduled today or in the future.
+  const [confirmDecline, setConfirmDecline] = useState(null);
+  const [declineReasonCode, setDeclineReasonCode] = useState('');
+  const [declineSubmitting, setDeclineSubmitting] = useState(false);
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
   const [saving2fa, setSaving2fa] = useState(false);
   const [msg2fa, setMsg2fa] = useState('');
@@ -284,6 +292,26 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   const isPaired = pairing?.paired === true;
   const pairingReason = pairing?.reason || 'Waiting for pairing with your Conductor before enabling session-synced features.';
   const hasActiveTrip = isCurrentOrSameDayTrip(trip);
+  // Batch 13, Issue #1: `hasActiveTrip` (derived from /driver/trips/current,
+  // which only resolves once a shift is OPEN) can never be true before the
+  // driver starts their shift — using it to gate the Start Shift button (or
+  // the tabs that contain it) created a deadlock: no shift can start
+  // because the button/section that starts it was hidden until a shift
+  // already existed. This is a day-based (not time-based) check against the
+  // driver's ASSIGNED trips, independent of whether a shift is open yet.
+  const hasTodayAssignedTrip = (assignedTrips || []).some((t) => {
+    const status = String(t?.status || '').toLowerCase();
+    if (['completed', 'cancelled'].includes(status)) return false;
+    return isSameDay(t?.trip_date);
+  });
+  // S2 (Batch 12) decline needs a trip reference even before a shift is
+  // open (trip/`getCurrentTrip()` is null until then) — fall back to the
+  // matching today-assigned trip from the trips list, same as Conductor.
+  const todayAssignedTrip = trip || (assignedTrips || []).find((t) => {
+    const status = String(t?.status || '').toLowerCase();
+    if (['completed', 'cancelled'].includes(status)) return false;
+    return isSameDay(t?.trip_date);
+  }) || null;
   const hasOpenShift = Boolean(shiftState?.openShift && !shiftState?.openShift?.ended_at);
   const didBootstrap = useRef(false);
   const stopsLoadedRef = useRef(false);
@@ -293,7 +321,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   const lastGpsRef = useRef(null);
   const lastSentGpsRef = useRef(null); // tracks last successfully sent position for deduplication
   const [proximityAlert, setProximityAlert] = useState(null); // { stop_name, count } | null
-  const showNoCurrentTripState = !loading && isPaired && !hasActiveTrip && ['dashboard', 'journey', 'navigation', 'trip'].includes(activeTab);
+  const showNoCurrentTripState = !loading && isPaired && !hasActiveTrip && !hasTodayAssignedTrip && ['dashboard', 'journey', 'navigation', 'trip'].includes(activeTab);
 
   const currentRoute = trip?.fleet_route?.route;
   const currentFleet = trip?.fleet_route?.fleet;
@@ -740,6 +768,27 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     }
   };
 
+  // S2 (Batch 12): decline the assigned trip — returns it to the
+  // unassigned pool for the Operator to reassign. Reason is optional.
+  // Works for any status-eligible trip in the driver's assigned list —
+  // today or upcoming — and regardless of pairing status (Batch 14).
+  const handleConfirmedDecline = async () => {
+    const tripId = confirmDecline?.trip_id;
+    if (!tripId) return;
+    setDeclineSubmitting(true);
+    try {
+      await StaffService.declineDriverTrip(tripId, declineReasonCode ? { reason_code: declineReasonCode } : {});
+      setActionMsg('Trip declined. The Operator has been notified.');
+      setConfirmDecline(null);
+      setDeclineReasonCode('');
+      void loadData();
+    } catch (err) {
+      setActionMsg(err.message);
+    } finally {
+      setDeclineSubmitting(false);
+    }
+  };
+
   const handleLogout = onLogout;
 
   useEffect(() => {
@@ -936,7 +985,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
             <button
               className="inline-flex items-center gap-2 rounded-xl border border-teal-200 bg-teal-50 px-3 py-2 text-xs font-semibold text-teal-700 transition hover:bg-teal-100 disabled:opacity-60"
               onClick={handleStartShift}
-              disabled={actionInFlight || !isPaired || !hasActiveTrip || hasOpenShift}
+              disabled={actionInFlight || !isPaired || hasOpenShift || !(hasActiveTrip || hasTodayAssignedTrip)}
               title={!isPaired ? 'Pairing is required before starting shift.' : undefined}
             >
               Start Shift
@@ -1099,6 +1148,16 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                 <button className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50" onClick={() => handleTripAction('complete')} disabled={actionInFlight || !isPaired || !['departed', 'in-progress'].includes(trip?.status)}>
                   ■ End Trip
                 </button>
+                {['scheduled', 'delayed', 'boarding'].includes(String(todayAssignedTrip?.status || '').toLowerCase()) && (
+                  <button
+                    type="button"
+                    className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-red-200 bg-white px-4 py-2.5 text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:opacity-50"
+                    onClick={() => setConfirmDecline(todayAssignedTrip)}
+                    disabled={actionInFlight}
+                  >
+                    ✕ Decline Trip
+                  </button>
+                )}
               </div>
             </article>
 
@@ -1185,8 +1244,8 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
               <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-5 text-sm text-slate-500">No trips match this filter.</div>
             ) : (
               <div className="space-y-5">
-                <DriverTripTable title="Today's Assigned Trips" trips={todayAssignedTrips} onSelectTrip={setTripDetailsModal} />
-                <DriverTripTable title="Upcoming Trips" trips={upcomingAssignedTrips} onSelectTrip={setTripDetailsModal} emptyMessage="No upcoming trips match this filter." />
+                <DriverTripTable title="Today's Assigned Trips" trips={todayAssignedTrips} onSelectTrip={setTripDetailsModal} onDeclineTrip={setConfirmDecline} />
+                <DriverTripTable title="Upcoming Trips" trips={upcomingAssignedTrips} onSelectTrip={setTripDetailsModal} onDeclineTrip={setConfirmDecline} emptyMessage="No upcoming trips match this filter." />
               </div>
             )}
           </section>
@@ -1573,6 +1632,39 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
         </div>
       )}
 
+      {/* ── S2 (Batch 12): Decline Trip Confirmation Modal ─────────────── */}
+      {confirmDecline && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-sm rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl">
+            <h3 className="mb-2 text-base font-bold text-slate-100">Decline This Trip?</h3>
+            <p className="mb-3 text-sm text-slate-300">
+              {confirmDecline?.fleet_route?.route?.origin || '-'} → {confirmDecline?.fleet_route?.route?.destination || '-'} · {formatTripSchedule(confirmDecline)}
+            </p>
+            <p className="mb-4 text-sm text-slate-400">
+              The trip will return to the unassigned pool and the Operator will be notified to find a replacement.
+            </p>
+            <label className="mb-4 block text-sm text-slate-300">
+              Reason (optional)
+              <select
+                value={declineReasonCode}
+                onChange={(e) => setDeclineReasonCode(e.target.value)}
+                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 outline-none focus:border-teal-500"
+              >
+                <option value="">No reason given</option>
+                <option value="sick">Sick</option>
+                <option value="vehicle_issue">Vehicle issue</option>
+                <option value="schedule_conflict">Schedule conflict</option>
+                <option value="other">Other</option>
+              </select>
+            </label>
+            <div className="flex gap-2">
+              <button type="button" onClick={() => { setConfirmDecline(null); setDeclineReasonCode(''); }} className="flex-1 rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800" disabled={declineSubmitting}>Cancel</button>
+              <button type="button" onClick={handleConfirmedDecline} className="flex-1 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60" disabled={declineSubmitting}>{declineSubmitting ? 'Declining...' : 'Yes, Decline'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Suggestion: Trip details modal ───────────────────────────────── */}
       {tripDetailsModal && (() => {
         const td = tripDetailsModal;
@@ -1625,7 +1717,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   );
 }
 
-function DriverTripTable({ title, trips, onSelectTrip, emptyMessage = 'No trips in this section.' }) {
+function DriverTripTable({ title, trips, onSelectTrip, onDeclineTrip, emptyMessage = 'No trips in this section.' }) {
   return (
     <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
       <h5 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">{title}</h5>
@@ -1641,22 +1733,39 @@ function DriverTripTable({ title, trips, onSelectTrip, emptyMessage = 'No trips 
                 <th className="py-3 pr-4">Departure Time</th>
                 <th className="py-3 pr-4">Destination</th>
                 <th className="py-3 pr-4">Status</th>
+                <th className="py-3 pr-4">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {trips.map((item) => (
-                <tr key={item.trip_id} className="cursor-pointer hover:bg-slate-50 transition-colors" onClick={() => onSelectTrip(item)} title="Click for trip details">
-                  <td className="py-3 pr-4 pl-4 font-data text-slate-500">RTE-{item.trip_id}</td>
-                  <td className="py-3 pr-4 font-semibold text-slate-900">{item.fleet_route?.route?.origin || '-'} → {item.fleet_route?.route?.destination || '-'}</td>
-                  <td className="py-3 pr-4 font-data text-slate-600">{formatTripSchedule(item)}</td>
-                  <td className="py-3 pr-4 text-slate-600">{item.fleet_route?.route?.destination || '-'}</td>
-                  <td className="py-3 pr-4">
-                    <span className="rounded-full px-2.5 py-1 text-xs font-semibold" style={{ background: `${STATUS_COLOR[item.status] || '#64748b'}20`, color: STATUS_COLOR[item.status] || '#64748b' }}>
-                      {(item.status || 'pending').toUpperCase()}
-                    </span>
-                  </td>
-                </tr>
-              ))}
+              {trips.map((item) => {
+                // Batch 14: decline must be reachable from this list \u2014
+                // today OR upcoming \u2014 regardless of pairing status.
+                const canDecline = ['scheduled', 'delayed', 'boarding'].includes(String(item?.status || '').toLowerCase());
+                return (
+                  <tr key={item.trip_id} className="cursor-pointer hover:bg-slate-50 transition-colors" onClick={() => onSelectTrip(item)} title="Click for trip details">
+                    <td className="py-3 pr-4 pl-4 font-data text-slate-500">RTE-{item.trip_id}</td>
+                    <td className="py-3 pr-4 font-semibold text-slate-900">{item.fleet_route?.route?.origin || '-'} → {item.fleet_route?.route?.destination || '-'}</td>
+                    <td className="py-3 pr-4 font-data text-slate-600">{formatTripSchedule(item)}</td>
+                    <td className="py-3 pr-4 text-slate-600">{item.fleet_route?.route?.destination || '-'}</td>
+                    <td className="py-3 pr-4">
+                      <span className="rounded-full px-2.5 py-1 text-xs font-semibold" style={{ background: `${STATUS_COLOR[item.status] || '#64748b'}20`, color: STATUS_COLOR[item.status] || '#64748b' }}>
+                        {(item.status || 'pending').toUpperCase()}
+                      </span>
+                    </td>
+                    <td className="py-3 pr-4">
+                      {canDecline && (
+                        <button
+                          type="button"
+                          className="rounded-lg border border-red-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-red-600 transition hover:bg-red-50"
+                          onClick={(event) => { event.stopPropagation(); onDeclineTrip?.(item); }}
+                        >
+                          Decline
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

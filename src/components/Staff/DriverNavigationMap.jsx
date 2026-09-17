@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { loadMapLib } from '../Map/mapDependencies';
 import StaffService from '../../api/StaffService/StaffService';
+import { nearestPointOnLine } from '../../utils/geo';
 
 const DRIVER_ROUTE_SOURCE_ID = 'driver-route';
 const DRIVER_ROUTE_LINE_LAYER_ID = 'driver-route-line';
@@ -11,22 +12,30 @@ const DRIVER_ROUTE_STOPS_LABEL_LAYER_ID = 'driver-route-stops-label-layer';
 // S4: builds the stop-marker GeoJSON feature collection, tagging each stop
 // as completed (already acknowledged by the driver) or upcoming so the map
 // layer's circle-color expression can distinguish them.
-const buildStopFeatures = (validStops = [], acknowledgedStopIds = new Set()) => ({
+// Batch 13, Issue #2: each stop's marker position is snapped onto the
+// drawn route line (routeCoords) rather than plotted at its raw lat/lng —
+// otherwise a stop whose recorded coordinate isn't exactly on the
+// OSRM-snapped road geometry renders visibly off the path.
+const buildStopFeatures = (validStops = [], acknowledgedStopIds = new Set(), routeCoords = []) => ({
   type: 'FeatureCollection',
-  features: validStops.map((stop, idx) => ({
-    type: 'Feature',
-    properties: {
-      stopName: stop.stop_name || `Stop ${idx + 1}`,
-      stopOrder: idx + 1,
-      isFirst: idx === 0,
-      isLast: idx === validStops.length - 1,
-      isAcknowledged: acknowledgedStopIds.has(Number(stop.stop_id)),
-    },
-    geometry: {
-      type: 'Point',
-      coordinates: [Number(stop.longitude), Number(stop.latitude)],
-    },
-  })),
+  features: validStops.map((stop, idx) => {
+    const rawCoord = [Number(stop.longitude), Number(stop.latitude)];
+    const displayCoord = routeCoords.length >= 2 ? nearestPointOnLine(rawCoord, routeCoords) : rawCoord;
+    return {
+      type: 'Feature',
+      properties: {
+        stopName: stop.stop_name || `Stop ${idx + 1}`,
+        stopOrder: idx + 1,
+        isFirst: idx === 0,
+        isLast: idx === validStops.length - 1,
+        isAcknowledged: acknowledgedStopIds.has(Number(stop.stop_id)),
+      },
+      geometry: {
+        type: 'Point',
+        coordinates: displayCoord,
+      },
+    };
+  }),
 });
 
 const fetchRoadPathFromOsrm = async (coordinates = []) => {
@@ -65,6 +74,11 @@ export default function DriverNavigationMap({ trip, stops, lastGpsRef, routeGeom
   // completed/upcoming coloring effect can rebuild the same feature list
   // whenever the trip's per-stop acknowledgment state changes.
   const routeStopsRef     = useRef([]);
+  // Batch 13, Issue #2: the drawn route line's coordinates (possibly
+  // OSRM road-snapped), kept so stop markers can be re-snapped onto it
+  // whenever acknowledgment state changes without re-fetching/re-drawing
+  // the whole route.
+  const routeLineCoordsRef = useRef([]);
 
   const [mapReady, setMapReady]         = useState(false);
   const [routeLoaded, setRouteLoaded]   = useState(false);
@@ -135,6 +149,7 @@ export default function DriverNavigationMap({ trip, stops, lastGpsRef, routeGeom
         } catch {
           // Keep fallback geometry from stop coordinates when OSRM is unavailable.
         }
+        routeLineCoordsRef.current = routeCoords;
 
         // Route polyline
         map.addSource(DRIVER_ROUTE_SOURCE_ID, {
@@ -157,7 +172,7 @@ export default function DriverNavigationMap({ trip, stops, lastGpsRef, routeGeom
         );
         map.addSource(DRIVER_ROUTE_STOPS_SOURCE_ID, {
           type: 'geojson',
-          data: buildStopFeatures(valid, acknowledgedStopIds),
+          data: buildStopFeatures(valid, acknowledgedStopIds, routeCoords),
         });
 
         map.addLayer({
@@ -245,7 +260,7 @@ export default function DriverNavigationMap({ trip, stops, lastGpsRef, routeGeom
     );
 
     const source = mapRef.current.getSource(DRIVER_ROUTE_STOPS_SOURCE_ID);
-    if (source) source.setData(buildStopFeatures(validStops, acknowledgedStopIds));
+    if (source) source.setData(buildStopFeatures(validStops, acknowledgedStopIds, routeLineCoordsRef.current));
   }, [stops, routeLoaded]);
 
   // ── 3. Driver position (GeoJSON circle layer, updated every 1 s) ──────────
@@ -308,7 +323,15 @@ export default function DriverNavigationMap({ trip, stops, lastGpsRef, routeGeom
       const pos = lastGpsRef?.current;
       if (!pos || !Number.isFinite(pos.latitude) || !Number.isFinite(pos.longitude)) return;
 
-      const coords  = [Number(pos.longitude), Number(pos.latitude)];
+      const rawCoords = [Number(pos.longitude), Number(pos.latitude)];
+      // Snap the live position onto the drawn route line — raw GPS fixes
+      // jitter side-to-side even on a straight road, so this keeps the
+      // driver/operator's tracked dot moving smoothly along the path
+      // instead of drifting off it (same fix as the Issue #2 stop markers).
+      const routeCoords = routeLineCoordsRef.current;
+      const coords = Array.isArray(routeCoords) && routeCoords.length >= 2
+        ? nearestPointOnLine(rawCoords, routeCoords)
+        : rawCoords;
       const geoData = {
         type: 'Feature',
         properties: {},

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useLocation, useSearchParams } from 'react-router-dom';
 import PassengerService from '../../PassengerService/PassengerService';
 import useDropoffPicker from './useDropoffPicker';
-import { parseAppDate, toDateInputValue, getBusinessToday, getBusinessNowMs, toBusinessScheduleMs } from '../../../utils/dates';
+import { parseAppDate, toDateInputValue, getBusinessToday } from '../../../utils/dates';
 
 const CHECKOUT_EVENT_KEY = 'smart_transit_checkout_event';
 const CHECKOUT_PENDING_KEY = 'smart_transit_checkout_pending';
@@ -19,17 +19,6 @@ const toTripDateValue = (value) => {
   const date = parseAppDate(value);
   if (!date) return '';
   return toDateInputValue(date);
-};
-
-const parseTripScheduleMs = (tripLike) => {
-  const dateStr = toTripDateValue(tripLike?.trip_date);
-  if (!dateStr) return Number.NaN;
-
-  const rawTime = String(tripLike?.departure_time || tripLike?.fleet_route?.start_time || '00:00:00').trim();
-  const hhmmMatch = rawTime.match(/^(\d{2}:\d{2})(?::\d{2})?$/);
-  const hhmmss = hhmmMatch ? `${hhmmMatch[1]}:00` : '00:00:00';
-
-  return toBusinessScheduleMs(dateStr, hhmmss);
 };
 
 const toRad = (deg) => (deg * Math.PI) / 180;
@@ -272,11 +261,18 @@ export default function useBuyTicket({ onTicketPurchased }) {
   const visibleTrips = filteredTrips.length > 0 ? filteredTrips : suggestedTrips;
   const showingSuggestedTrips = filteredTrips.length === 0 && suggestedTrips.length > 0;
   const todayDateValue = getBusinessToday();
-  const hasBookNowOption = visibleTrips.some((trip) => {
-    if (toTripDateValue(trip?.trip_date) !== todayDateValue) return false;
-    const scheduleMs = parseTripScheduleMs(trip);
-    return Number.isFinite(scheduleMs) && scheduleMs >= getBusinessNowMs();
-  });
+  // Batch 12, Issue #1 / S4: gate "Book Now" purely by business DAY, not by
+  // comparing the trip's departure time against the live clock. A trip
+  // scheduled for today is bookable "now" regardless of the specific
+  // departure time — the backend already excludes non-bookable statuses
+  // (only 'scheduled'/'delayed'/'boarding' are returned). The previous
+  // time-based check made this flip true/false once a trip's original
+  // slot passed and it got auto-flagged "delayed" (still today, but with a
+  // departure_time now in the past), which fought with the
+  // selectedTripIsToday effect below (that effect always forces
+  // booking_option back to 'now' for today's trips) — the two effects
+  // kept overriding each other, causing the Book Now/Book Later flicker.
+  const hasBookNowOption = visibleTrips.some((trip) => toTripDateValue(trip?.trip_date) === todayDateValue);
   const minBookingDate = (() => {
     const today = todayDateValue;
     const selectedTripDate = toTripDateValue(selectedTrip?.trip_date);

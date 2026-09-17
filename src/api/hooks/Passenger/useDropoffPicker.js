@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { loadMapLib } from '../../../components/Map/mapDependencies';
+import { nearestPointOnLine } from '../../../utils/geo';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
 const FALLBACK_CENTER = [125.6047, 7.0707];
@@ -189,16 +190,26 @@ export default function useDropoffPicker({
   // Maps multi-stop style) — the first/last stops are skipped since
   // origin/destination already get their own distinct filled teardrop pins
   // via updateOriginMarker()/updateDestinationMarker() above.
+  // Batch 13, Issue #2: snap each marker onto the drawn route line
+  // (routeCoordinatesRef, possibly OSRM road-snapped) rather than the
+  // stop's raw coordinate — otherwise a stop recorded slightly off the
+  // road renders visibly adrift from the path.
   const renderStopMarkers = useCallback((stops) => {
     const maplibregl = mapLibRef.current;
     if (!mapRef.current || !maplibregl) return;
 
     clearStopMarkers();
 
+    const routeCoords = routeCoordinatesRef.current;
     const intermediateStops = (Array.isArray(stops) ? stops : []).slice(1, -1);
     intermediateStops.forEach((stopLike) => {
       const coords = extractStopCoordinates(stopLike);
       if (!coords) return;
+
+      const rawPoint = [coords.lng, coords.lat];
+      const displayPoint = Array.isArray(routeCoords) && routeCoords.length >= 2
+        ? nearestPointOnLine(rawPoint, routeCoords)
+        : rawPoint;
 
       const el = document.createElement('div');
       el.style.width = '14px';
@@ -212,7 +223,7 @@ export default function useDropoffPicker({
       el.title = stopLabel(stopLike);
 
       const marker = new maplibregl.Marker({ element: el, anchor: 'center' })
-        .setLngLat([coords.lng, coords.lat])
+        .setLngLat(displayPoint)
         .addTo(mapRef.current);
 
       stopMarkersRef.current.push(marker);

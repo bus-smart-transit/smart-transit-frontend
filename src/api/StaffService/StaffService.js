@@ -140,6 +140,13 @@ class StaffService extends BaseService {
     return await this.request(`/driver/trips/${tripId}/complete`, 'PATCH');
   }
 
+  // S2 (Batch 12): decline an assigned trip — returns it to the
+  // unassigned pool for the Operator to reassign. reason_code/reason_text
+  // are both optional ("plain decline is enough").
+  async declineDriverTrip(tripId, payload = {}) {
+    return await this.request(`/driver/trips/${tripId}/decline`, 'PATCH', payload);
+  }
+
   async getDriverPin() {
     return await this.request('/driver/pin', 'GET');
   }
@@ -232,6 +239,11 @@ class StaffService extends BaseService {
 
   async recordAlighting(ticketId) {
     return await this.request(`/conductor/tickets/${ticketId}/alight`, 'POST');
+  }
+
+  // S2 (Batch 12): mirrors declineDriverTrip() for the conductor role.
+  async declineConductorTrip(tripId, payload = {}) {
+    return await this.request(`/conductor/trips/${tripId}/decline`, 'PATCH', payload);
   }
 
   async getConductorPin() {
@@ -380,6 +392,19 @@ class StaffService extends BaseService {
   // trip as 'completed' (server-enforced); admins can override any status.
   async overrideTripStatus(tripId, status) {
     return await this.request(`/operator/trips/${tripId}/status`, 'PATCH', { status });
+  }
+
+  // S2 (Batch 12): Operator notification feed (currently: trip declines)
+  async getNotifications() {
+    return await this.request('/operator/notifications', 'GET');
+  }
+
+  async markNotificationRead(id) {
+    return await this.request(`/operator/notifications/${id}/read`, 'PATCH');
+  }
+
+  async markAllNotificationsRead() {
+    return await this.request('/operator/notifications/read-all', 'PATCH');
   }
 
   // ── Fleet Route Assignment ──
