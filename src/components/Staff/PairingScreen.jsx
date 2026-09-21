@@ -9,7 +9,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import QrScanner from 'qr-scanner';
-import StaffService from '../../api/StaffService/StaffService';
+import StaffService from '../../api/StaffService/StaffBaseService';
 
 const isLikelyPin = (value) => /^\d{6}$/.test(String(value || '').trim());
 

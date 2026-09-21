@@ -1,5 +1,3 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
   AlertCircle,
   BarChart3,
@@ -20,12 +18,8 @@ import {
   Users,
   XCircle,
 } from 'lucide-react';
-import QrScanner from 'qr-scanner';
-import StaffService from '../../api/StaffService/StaffService';
-import usePassengersByTrip from '../../api/hooks/Staff/usePassengersByTrip';
-import useOnsiteReceiptPrinter from '../../api/hooks/Staff/useOnsiteReceiptPrinter';
 import PairingScreen from './PairingScreen';
-import { isSameBusinessDay, getBusinessToday, getBusinessNowMs, toBusinessScheduleMs, debugLogBusinessTime } from '../../utils/dates';
+import { useConductorPairing, useConductorDashboardData } from '../../api/hooks/Staff/useConductorDashboard';
 
 const NAV_ITEMS = [
   { key: 'trip', label: 'Start', icon: Play },
@@ -36,8 +30,6 @@ const NAV_ITEMS = [
   { key: 'pin', label: 'Daily PIN', icon: KeyRound },
   { key: 'account', label: 'Account', icon: UserCheck },
 ];
-
-const UUID_PATTERN = /[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i;
 
 const formatDateTime = (value) => {
   if (!value) return '-';
@@ -82,100 +74,8 @@ const formatTripSchedule = (tripLike) => {
   return dateLabel;
 };
 
-const isSameDay = (value) => isSameBusinessDay(value);
-
-const isCurrentOrSameDayTrip = (tripLike) => {
-  if (!tripLike?.trip_id) return false;
-  if (!isSameDay(tripLike?.trip_date)) return false;
-
-  const status = String(tripLike?.status || '').toLowerCase();
-  return status !== 'completed' && status !== 'cancelled';
-};
-
-const toTripScheduleMs = (tripLike) => {
-  const dateValue = String(tripLike?.trip_date || '').trim();
-  if (!dateValue) return Number.NaN;
-
-  const timeRaw = String(tripLike?.departure_time || tripLike?.fleet_route?.start_time || '00:00:00').trim();
-  return toBusinessScheduleMs(dateValue, timeRaw);
-};
-
-const getUpcomingTrip = (trips) => {
-  const nowMs = getBusinessNowMs();
-
-  return (trips || [])
-    .filter((item) => {
-      const status = String(item?.status || '').toLowerCase();
-      if (status === 'completed' || status === 'cancelled') return false;
-
-      const scheduleMs = toTripScheduleMs(item);
-      if (!Number.isFinite(scheduleMs)) return false;
-      return scheduleMs >= nowMs;
-    })
-    .sort((a, b) => toTripScheduleMs(a) - toTripScheduleMs(b))[0] || null;
-};
-
-const filterTripsByStatus = (trips, statusFilter) => {
-  if (statusFilter === 'completed') {
-    return (trips || []).filter((item) => String(item?.status || '').toLowerCase() === 'completed');
-  }
-
-  if (statusFilter === 'scheduled') {
-    return (trips || []).filter((item) => ['scheduled', 'delayed', 'boarding', 'departed', 'in-progress'].includes(String(item?.status || '').toLowerCase()));
-  }
-
-  return trips || [];
-};
-
 export default function ConductorDashboard() {
-  const navigate = useNavigate();
-
-  const [pairing, setPairing] = useState({ loading: false, paired: false, reason: '' });
-  const didInitialPairingCheck = useRef(false);
-  const pairingRequestRef = useRef(null);
-
-  const refreshPairingStatus = useCallback(async () => {
-    if (pairingRequestRef.current) {
-      return pairingRequestRef.current;
-    }
-
-    pairingRequestRef.current = (async () => {
-      try {
-        const res = await StaffService.getPairingStatus('conductor');
-        const data = res?.data ?? {};
-        const nextPaired = data?.paired === true;
-        const nextReason = data?.reason || '';
-        setPairing((prev) => {
-          if (!prev.loading && prev.paired === nextPaired && prev.reason === nextReason) {
-            return prev;
-          }
-
-          return {
-            loading: false,
-            paired: nextPaired,
-            reason: nextReason,
-          };
-        });
-      } catch {
-        setPairing((prev) => ({ ...prev, loading: false, paired: false }));
-      } finally {
-        pairingRequestRef.current = null;
-      }
-    })();
-
-    return pairingRequestRef.current;
-  }, []);
-
-  useEffect(() => {
-    if (didInitialPairingCheck.current) return;
-    didInitialPairingCheck.current = true;
-    void refreshPairingStatus();
-  }, [refreshPairingStatus]);
-
-  const handleLogout = async () => {
-    await StaffService.logoutConductor().catch(() => {});
-    navigate('/employee/login');
-  };
+  const { pairing, refreshPairingStatus, handleLogout } = useConductorPairing();
 
   return (
     <ConductorDashboardInner
@@ -186,7 +86,7 @@ export default function ConductorDashboard() {
   );
 }
 
-function TripCardGroup({ title, trips, onDeclineTrip, emptyMessage = 'No trips in this section.' }) {
+function TripCardGroup({ title, trips, onDeclineTrip, onAcceptTrip, emptyMessage = 'No trips in this section.' }) {
   return (
     <div className="md:col-span-2 rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
       <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">{title}</h3>
@@ -212,13 +112,24 @@ function TripCardGroup({ title, trips, onDeclineTrip, emptyMessage = 'No trips i
                   <div className="flex items-center justify-between"><span className="text-slate-500">Route</span><strong className="text-slate-100">{item.fleet_route?.route?.route_name || `Route ${item.fleet_route?.route_id || '-'}`}</strong></div>
                 </div>
                 {canDecline && (
-                  <button
-                    type="button"
-                    className="mt-4 w-full rounded-lg border border-red-900/60 bg-red-950/20 px-3 py-2 text-xs font-semibold text-red-300 transition hover:bg-red-950/40"
-                    onClick={() => onDeclineTrip?.(item)}
-                  >
-                    Decline Trip
-                  </button>
+                  <div className="mt-4 flex gap-2">
+                    {!item?.conductor_accepted_at && (
+                      <button
+                        type="button"
+                        className="flex-1 rounded-lg border border-emerald-900/60 bg-emerald-950/20 px-3 py-2 text-xs font-semibold text-emerald-300 transition hover:bg-emerald-950/40"
+                        onClick={() => onAcceptTrip?.(item)}
+                      >
+                        Accept
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="flex-1 rounded-lg border border-red-900/60 bg-red-950/20 px-3 py-2 text-xs font-semibold text-red-300 transition hover:bg-red-950/40"
+                      onClick={() => onDeclineTrip?.(item)}
+                    >
+                      Decline
+                    </button>
+                  </div>
                 )}
               </article>
             );
@@ -230,839 +141,85 @@ function TripCardGroup({ title, trips, onDeclineTrip, emptyMessage = 'No trips i
 }
 
 function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
-  const [activeTab, setActiveTab] = useState('trip');
-  const [assignedTripFilter, setAssignedTripFilter] = useState('all');
-  const [profile, setProfile] = useState(null);
-  const [trip, setTrip] = useState(null);
-  const [assignedTrips, setAssignedTrips] = useState([]);
-  const [assignedTripsForView, setAssignedTripsForView] = useState([]);
-  const [occupancy, setOccupancy] = useState(null);
-  const [passengers, setPassengers] = useState([]);
-  const [earnings, setEarnings] = useState(null);
-  const [pinInput, setPinInput] = useState('');
-  const [pinStatus, setPinStatus] = useState('');
-  const [scanUuid, setScanUuid] = useState('');
-  const [scanResult, setScanResult] = useState(null);
-  const [groupScanResult, setGroupScanResult] = useState(null);
-  const [scannerRunning, setScannerRunning] = useState(false);
-  const [scannerBusy, setScannerBusy] = useState(false);
-  const [scannerError, setScannerError] = useState('');
-  const [scannerStatus, setScannerStatus] = useState('');
-  const [scannerPhase, setScannerPhase] = useState('idle');
-  const [showScannerModal, setShowScannerModal] = useState(false);
-  const [onsiteReceipt, setOnsiteReceipt] = useState(null);
-  const [onsiteForm, setOnsiteForm] = useState({
-    origin_stop_id: '',
-    destination_stop_id: '',
-    seat_type: 'seated',
-  });
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [actionMsg, setActionMsg] = useState('');
-  const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
-  const [saving2fa, setSaving2fa] = useState(false);
-  const [checkoutInFlight, setCheckoutInFlight] = useState(false);
-  const [confirmCheckout, setConfirmCheckout] = useState(false);
-  // S2 (Batch 12): decline assigned trip — mirrors DriverDashboard.jsx.
-  // Holds the trip object being declined (not just a boolean) so decline
-  // can be triggered per-card from the Assigned Trips list — today OR
-  // upcoming — and regardless of pairing status (Batch 14).
-  const [confirmDecline, setConfirmDecline] = useState(null);
-  const [declineReasonCode, setDeclineReasonCode] = useState('');
-  const [declineSubmitting, setDeclineSubmitting] = useState(false);
-  const [shiftState, setShiftState] = useState({ openShift: null, latestShift: null, loading: false });
-  const isPaired = pairing?.paired === true;
-  const pairingReason = pairing?.reason || 'Waiting for pairing with your Driver before live trip features unlock.';
-  const hasActiveTrip = isCurrentOrSameDayTrip(trip);
-  // Batch 13, Issue #1: mirrors the DriverDashboard.jsx fix — `hasActiveTrip`
-  // (from /conductor/trips/current, which only resolves once a shift is
-  // OPEN) can never be true before the shift starts. Using it alone to hide
-  // the "trip" tab (which contains Start Shift) created a deadlock: the
-  // conductor could never see the button that starts the shift that makes
-  // hasActiveTrip true. Day-based check against ASSIGNED trips instead.
-  const hasTodayAssignedTrip = (assignedTrips || []).some((t) => {
-    const status = String(t?.status || '').toLowerCase();
-    if (['completed', 'cancelled'].includes(status)) return false;
-    return isSameDay(t?.trip_date);
-  });
-  // Trip to preview in the pre-shift "Current Trip Info" card — the live
-  // `trip` state is still null at this point (no open shift yet), so fall
-  // back to the matching today-assigned trip from the trips list.
-  const todayAssignedTrip = trip || (assignedTrips || []).find((t) => {
-    const status = String(t?.status || '').toLowerCase();
-    if (['completed', 'cancelled'].includes(status)) return false;
-    return isSameDay(t?.trip_date);
-  }) || null;
-  const hasOpenShift = Boolean(shiftState?.openShift && !shiftState?.openShift?.ended_at);
-  const didBootstrap = useRef(false);
-  const videoRef = useRef(null);
-  const scannerStreamRef = useRef(null);
-  const scannerTimerRef = useRef(null);
-  const scannerBusyRef = useRef(false);
-  const lastDetectedRef = useRef({ value: '', at: 0 });
-  const upcomingTrip = getUpcomingTrip(assignedTrips);
-  const showNoCurrentTripState = !loading && isPaired && !hasActiveTrip && !hasTodayAssignedTrip && ['trip', 'occupancy', 'passengers', 'pin'].includes(activeTab);
-  const routeStops = trip?.fleet_route?.route?.route_stops || trip?.fleet_route?.route?.routeStops || [];
-  const shiftStarted = hasOpenShift;
-  const groupedPassengers = usePassengersByTrip(passengers, trip);
-  const filteredAssignedTrips = assignedTripFilter === 'all' ? assignedTrips : assignedTripsForView;
-  const todayStart = getBusinessToday();
-  debugLogBusinessTime('ConductorDashboard: assigned trips today/upcoming filter');
-  const todayAssignedTrips = filteredAssignedTrips.filter((item) => isSameBusinessDay(item?.trip_date, todayStart));
-  const upcomingAssignedTrips = filteredAssignedTrips.filter((item) => {
-    const tripDateStr = String(item?.trip_date || '').match(/^(\d{4}-\d{2}-\d{2})/)?.[1];
-    return !!tripDateStr && tripDateStr > todayStart;
-  });
-  const { printOnsiteReceipt } = useOnsiteReceiptPrinter();
-
-  const handleAssignedTripFilterChange = useCallback(async (value) => {
-    setAssignedTripFilter(value);
-
-    if (value === 'all') {
-      setAssignedTripsForView([]);
-      return;
-    }
-
-    try {
-      const res = await StaffService.getConductorTrips(value);
-      setAssignedTripsForView(Array.isArray(res?.data) ? res.data : []);
-    } catch {
-      setAssignedTripsForView([]);
-    }
-  }, []);
-
-  const handleTwoFactorToggle = async (event) => {
-    const enabled = event.target.checked;
-    setTwoFactorEnabled(enabled);
-    setSaving2fa(true);
-    setActionMsg('');
-
-    try {
-      await StaffService.setTwoFactorPreference(enabled, 'conductor');
-      setActionMsg(enabled ? '2FA enabled for your account.' : '2FA disabled for your account.');
-    } catch (err) {
-      setTwoFactorEnabled(!enabled);
-      setActionMsg(err?.message || 'Failed to update 2FA preference.');
-    } finally {
-      setSaving2fa(false);
-    }
-  };
-
-  const stopScanner = useCallback(() => {
-    if (scannerTimerRef.current) {
-      clearInterval(scannerTimerRef.current);
-      scannerTimerRef.current = null;
-    }
-
-    if (scannerStreamRef.current) {
-      // destroy() stops scanning AND releases all camera resources
-      if (typeof scannerStreamRef.current.destroy === 'function') {
-        scannerStreamRef.current.destroy();
-      } else if (typeof scannerStreamRef.current.stop === 'function') {
-        scannerStreamRef.current.stop();
-      } else if (typeof scannerStreamRef.current.getTracks === 'function') {
-        scannerStreamRef.current.getTracks().forEach((track) => track.stop());
-      }
-      scannerStreamRef.current = null;
-    }
-
-    if (videoRef.current) {
-      videoRef.current.srcObject = null;
-    }
-
-    scannerBusyRef.current = false;
-    setScannerRunning(false);
-  }, []);
-
-  const extractTicketUuid = useCallback((rawValue) => {
-    if (!rawValue) return '';
-
-    const trimmed = String(rawValue).trim();
-    const directMatch = trimmed.match(UUID_PATTERN);
-    if (directMatch?.[0]) return directMatch[0];
-
-    try {
-      const url = new URL(trimmed);
-      const fromQuery =
-        url.searchParams.get('ticket_uuid') ||
-        url.searchParams.get('uuid') ||
-        url.searchParams.get('ticket');
-
-      if (fromQuery && UUID_PATTERN.test(fromQuery)) {
-        const queryMatch = fromQuery.match(UUID_PATTERN);
-        return queryMatch?.[0] || '';
-      }
-    } catch {
-      return '';
-    }
-
-    return '';
-  }, []);
-
-  const loadData = useCallback(async () => {
-    setLoading(true);
-    setError('');
-    setShiftState((prev) => ({ ...prev, loading: true }));
-    try {
-      const [profileRes, tripRes, tripsRes, shiftRes] = await Promise.allSettled([
-        StaffService.getProfile('conductor'),
-        StaffService.getConductorTrip(),
-        StaffService.getConductorTrips(),
-        StaffService.getConductorShiftStatus(),
-      ]);
-      if (profileRes.status === 'fulfilled') {
-        const nextProfile = profileRes.value?.data;
-        setProfile(nextProfile);
-        if (typeof nextProfile?.user?.two_factor_enabled === 'boolean') {
-          setTwoFactorEnabled(nextProfile.user.two_factor_enabled);
-        }
-      }
-      if (tripRes.status === 'fulfilled') setTrip(tripRes.value?.data);
-      if (tripsRes.status === 'fulfilled') {
-        const tripsData = tripsRes.value?.data ?? [];
-        setAssignedTrips(tripsData);
-        if (assignedTripFilter !== 'all') {
-          setAssignedTripsForView(filterTripsByStatus(tripsData, assignedTripFilter));
-        }
-      }
-      if (shiftRes.status === 'fulfilled') {
-        const payload = shiftRes.value?.data ?? {};
-        setShiftState({
-          openShift: payload?.open_shift ?? null,
-          latestShift: payload?.latest_shift ?? null,
-          loading: false,
-        });
-      } else {
-        setShiftState((prev) => ({ ...prev, loading: false }));
-      }
-    } catch {
-      setShiftState((prev) => ({ ...prev, loading: false }));
-    } finally {
-      setLoading(false);
-    }
-  }, [assignedTripFilter]);
-
-  const loadOccupancy = useCallback(async () => {
-    if (!trip?.trip_id) {
-      setOccupancy(null);
-      return;
-    }
-    try {
-      const res = await StaffService.getTripOccupancy();
-      setOccupancy(res?.data);
-    } catch (err) {
-      setError(err.message);
-    }
-  }, [trip?.trip_id]);
-
-  const loadPassengers = useCallback(async () => {
-    if (!trip?.trip_id) {
-      setPassengers([]);
-      return;
-    }
-    try {
-      const res = await StaffService.getCurrentPassengers();
-      const payload = res?.data;
-      if (Array.isArray(payload)) {
-        setPassengers(payload);
-      } else {
-        setPassengers(payload?.passengers ?? []);
-      }
-    } catch (err) {
-      setError(err.message);
-    }
-  }, [trip?.trip_id]);
-
-  const loadPin = useCallback(async () => {
-    if (!trip?.trip_id) {
-      return;
-    }
-    try {
-      await StaffService.getConductorPin();
-    } catch (err) {
-      setError(err.message);
-    }
-  }, [trip?.trip_id]);
-
-  const loadEarnings = useCallback(async () => {
-    if (!trip?.trip_id || !isPaired) {
-      setEarnings(null);
-      return;
-    }
-    try {
-      const res = await StaffService.getTripEarnings('conductor');
-      setEarnings(res?.data ?? null);
-    } catch {
-      setEarnings(null);
-    }
-  }, [isPaired, trip?.trip_id]);
-
-  useEffect(() => {
-    if (didBootstrap.current) return;
-    didBootstrap.current = true;
-    void loadData();
-  }, [loadData]);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (activeTab === 'occupancy' && hasActiveTrip && isPaired) void loadOccupancy();
-    }, 0);
-
-    return () => clearTimeout(timer);
-  }, [activeTab, hasActiveTrip, isPaired, loadOccupancy]);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (activeTab === 'passengers' && hasActiveTrip && isPaired) void loadPassengers();
-    }, 0);
-
-    return () => clearTimeout(timer);
-  }, [activeTab, hasActiveTrip, isPaired, loadPassengers]);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (activeTab === 'pin' && hasActiveTrip && isPaired) void loadPin();
-    }, 0);
-
-    return () => clearTimeout(timer);
-  }, [activeTab, hasActiveTrip, isPaired, loadPin]);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (activeTab === 'earnings' && hasActiveTrip && isPaired) void loadEarnings();
-    }, 0);
-
-    return () => clearTimeout(timer);
-  }, [activeTab, hasActiveTrip, isPaired, loadEarnings]);
-
-  useEffect(() => {
-    if (activeTab !== 'earnings' || !hasActiveTrip || !isPaired) return undefined;
-
-    const intervalId = setInterval(() => {
-      void loadEarnings();
-    }, 15000);
-
-    return () => clearInterval(intervalId);
-  }, [activeTab, hasActiveTrip, isPaired, loadEarnings]);
-
-  useEffect(() => {
-    if (showScannerModal) return undefined;
-    const timer = setTimeout(() => {
-      stopScanner();
-    }, 0);
-    return () => clearTimeout(timer);
-  }, [showScannerModal, stopScanner]);
-
-  const handleStartShift = async () => {
-    try {
-      const res = await StaffService.startConductorShift();
-      const shift = res?.data?.shift ?? null;
-      setShiftState((prev) => ({
-        ...prev,
-        openShift: shift,
-        latestShift: shift,
-      }));
-      setActionMsg(res?.message || 'Conductor shift started');
-      setActiveTab('occupancy');
-    } catch (err) {
-      setActionMsg(err?.message || 'Unable to start shift right now.');
-    }
-  };
-
-  // S2 (Batch 12): decline the assigned trip — returns it to the
-  // unassigned pool for the Operator to reassign. Reason is optional.
-  // Works for any status-eligible trip in the conductor's assigned list —
-  // today or upcoming — and regardless of pairing status (Batch 14).
-  const handleConfirmedDecline = async () => {
-    const tripId = confirmDecline?.trip_id;
-    if (!tripId) return;
-    setDeclineSubmitting(true);
-    try {
-      await StaffService.declineConductorTrip(tripId, declineReasonCode ? { reason_code: declineReasonCode } : {});
-      setActionMsg('Trip declined. The Operator has been notified.');
-      setConfirmDecline(null);
-      setDeclineReasonCode('');
-      void loadData();
-    } catch (err) {
-      setActionMsg(err.message);
-    } finally {
-      setDeclineSubmitting(false);
-    }
-  };
-
-  const handleEndShift = async () => {
-    try {
-      const res = await StaffService.endConductorShift();
-      const shift = res?.data?.shift ?? null;
-      setShiftState((prev) => ({
-        ...prev,
-        openShift: null,
-        latestShift: shift,
-      }));
-      setActionMsg(res?.message || 'Conductor shift ended');
-    } catch (err) {
-      setActionMsg(err?.message || 'Unable to end shift right now.');
-    }
-  };
-
-  useEffect(() => () => stopScanner(), [stopScanner]);
-
-  const handleScan = useCallback(async (scannedUuid = scanUuid, options = {}) => {
-    const { manageBusy = true } = options;
-    const ticketUuid = String(scannedUuid || '').trim();
-
-    if (manageBusy) {
-      scannerBusyRef.current = true;
-      setScannerBusy(true);
-    }
-
-    if (!isPaired) {
-      setScanResult({ success: false, msg: pairingReason });
-      setScannerStatus('Pairing is required before scanning.');
-      if (manageBusy) {
-        scannerBusyRef.current = false;
-        setScannerBusy(false);
-      }
-      return;
-    }
-
-    if (!hasOpenShift) {
-      setScanResult({ success: false, msg: 'Start your shift first.' });
-      setScannerStatus('Start your shift first.');
-      if (manageBusy) {
-        scannerBusyRef.current = false;
-        setScannerBusy(false);
-      }
-      return;
-    }
-
-    if (!trip?.trip_id) {
-      setScanResult({ success: false, msg: 'No active trip assigned. Ticket scanning is unavailable.' });
-      setScannerStatus('No active trip assigned for scanning.');
-      if (manageBusy) {
-        scannerBusyRef.current = false;
-        setScannerBusy(false);
-      }
-      return;
-    }
-
-    if (!ticketUuid) {
-      setScanResult({ success: false, msg: 'Please provide a ticket UUID before scanning.' });
-      setScannerStatus('Please provide a ticket UUID.');
-      if (manageBusy) {
-        scannerBusyRef.current = false;
-        setScannerBusy(false);
-      }
-      return;
-    }
-
-    setScannerStatus('Validating ticket...');
-    setScannerPhase('validating');
-    setGroupScanResult(null);
-    setScanResult(null);
-    try {
-      const res = await StaffService.scanTicket(ticketUuid);
-      setScanResult({ success: true, data: res?.data, msg: res?.message });
-      setActionMsg('Ticket scanned successfully.');
-      setScanUuid(ticketUuid);
-      setScannerPhase('success');
-      setScannerStatus('Ticket validated. Ready for next scan.');
-      void loadOccupancy();
-      void loadPassengers();
-      void loadEarnings();
-      void loadData();
-    } catch (err) {
-      setScanResult({ success: false, msg: err.message });
-      setScannerPhase('failed');
-      setScannerStatus('Ticket validation failed. Ready for next scan.');
-    } finally {
-      if (manageBusy) {
-        scannerBusyRef.current = false;
-        setScannerBusy(false);
-      }
-    }
-  }, [hasOpenShift, isPaired, loadEarnings, loadOccupancy, loadPassengers, loadData, pairingReason, scanUuid, trip?.trip_id]);
-
-  const handleGroupScan = useCallback(async (transactionRef, options = {}) => {
-    const { manageBusy = true } = options;
-    if (manageBusy) {
-      scannerBusyRef.current = true;
-      setScannerBusy(true);
-    }
-
-    if (!isPaired) {
-      setGroupScanResult({ success: false, msg: pairingReason });
-      setScannerStatus('Pairing is required before group scanning.');
-      if (manageBusy) {
-        scannerBusyRef.current = false;
-        setScannerBusy(false);
-      }
-      return;
-    }
-
-    if (!hasOpenShift) {
-      setGroupScanResult({ success: false, msg: 'Start your shift first.' });
-      setScannerStatus('Start your shift first.');
-      if (manageBusy) {
-        scannerBusyRef.current = false;
-        setScannerBusy(false);
-      }
-      return;
-    }
-
-    if (!trip?.trip_id) {
-      setGroupScanResult({ success: false, msg: 'No active trip assigned. Group scanning is unavailable.' });
-      setScannerStatus('No active trip assigned for group scanning.');
-      if (manageBusy) {
-        scannerBusyRef.current = false;
-        setScannerBusy(false);
-      }
-      return;
-    }
-
-    setScannerStatus('Validating group ticket...');
-    setScannerPhase('validating');
-    setScanResult(null);
-    setGroupScanResult(null);
-    try {
-      const res = await StaffService.scanGroupTickets(transactionRef);
-      const outcome = String(res?.data?.scan_outcome || 'success');
-      setGroupScanResult({ success: true, info: outcome === 'info_future', data: res?.data, msg: res?.message });
-      if (outcome === 'info_future') {
-        setActionMsg(res?.message || 'This ticket is scheduled for a future date and cannot be boarded yet.');
-      } else {
-        setActionMsg(`${res?.data?.boarded_count ?? 0} ticket(s) boarded.`);
-      }
-      setScannerPhase('success');
-      setScannerStatus('Group ticket validated. Ready for next scan.');
-      void loadOccupancy();
-      void loadPassengers();
-      void loadEarnings();
-      void loadData();
-    } catch (err) {
-      setGroupScanResult({ success: false, msg: err.message });
-      setScannerPhase('failed');
-      setScannerStatus('Group ticket validation failed. Ready for next scan.');
-    } finally {
-      if (manageBusy) {
-        scannerBusyRef.current = false;
-        setScannerBusy(false);
-      }
-    }
-  }, [hasOpenShift, isPaired, loadEarnings, loadOccupancy, loadPassengers, loadData, pairingReason, trip?.trip_id]);
-
-  const startScanner = useCallback(async () => {
-    setScannerError('');
-    setScannerStatus('');
-    setScannerPhase('idle');
-    setScanResult(null);
-
-    if (!trip?.trip_id) {
-      setScannerError('No active trip assigned. Camera scanning is unavailable.');
-      return;
-    }
-
-    if (!isPaired) {
-      setScannerError(pairingReason);
-      return;
-    }
-
-    if (!hasOpenShift) {
-      setScannerError('Start your shift first.');
-      return;
-    }
-
-    if (!navigator?.mediaDevices?.getUserMedia) {
-      setScannerError('Camera API is not available on this device/browser.');
-      return;
-    }
-
-    if (!window.isSecureContext) {
-      setScannerError('Camera access requires HTTPS or localhost. Please open this app in a secure context.');
-      return;
-    }
-
-    if (!videoRef.current) {
-      setScannerError('Scanner element is not ready. Please try again.');
-      return;
-    }
-
-    try {
-      const hasCamera = await QrScanner.hasCamera();
-      if (!hasCamera) {
-        setScannerError('No camera device was detected for scanning.');
-        return;
-      }
-
-      const cameraList = await QrScanner.listCameras(true).catch(() => []);
-      const preferredCamera = cameraList.find((camera) => /back|rear|environment/i.test(String(camera?.label || '')))?.id || 'environment';
-
-      const handleDecodedResult = async (result) => {
-        const rawValue = result?.data;
-        if (!rawValue) return;
-
-        if (scannerBusyRef.current) return;          // drop scan — one already in flight
-        scannerBusyRef.current = true;
-        setScannerBusy(true);
-
-        // Prevent duplicate detections within 3 seconds
-        const now = Date.now();
-        const isRecentDuplicate =
-          lastDetectedRef.current.value === rawValue && now - lastDetectedRef.current.at < 3000;
-        if (isRecentDuplicate) {
-          scannerBusyRef.current = false;
-          setScannerBusy(false);
-          return;
-        }
-
-        lastDetectedRef.current = { value: rawValue, at: now };
-        setScannerPhase('captured');
-        setScannerStatus('⏳ Processing scan…');
-
-        // Group QR path — encodes "grp:{transaction_reference}"
-        if (typeof rawValue === 'string' && rawValue.startsWith('grp:')) {
-          const transactionRef = rawValue.slice(4).trim();
-          setScannerStatus('Group QR detected. Boarding all tickets in this order...');
-          try {
-              await handleGroupScan(transactionRef, { manageBusy: false });
-          } finally {
-            scannerBusyRef.current = false;
-            setScannerBusy(false);
-          }
-          return;
-        }
-
-        // Single ticket path
-        const parsedUuid = extractTicketUuid(rawValue);
-        if (!parsedUuid) {
-          setScannerStatus('QR detected, but no valid ticket UUID was found.');
-          scannerBusyRef.current = false;
-          setScannerBusy(false);
-          return;
-        }
-
-        setScanUuid(parsedUuid);
-        setScannerStatus(`QR captured: ${parsedUuid}. Validating ticket...`);
-        try {
-            await handleScan(parsedUuid, { manageBusy: false });
-        } finally {
-          scannerBusyRef.current = false;
-          setScannerBusy(false);
-        }
-      };
-
-      // Initialize QR Scanner with cross-browser support
-      let qrScanner = new QrScanner(
-        videoRef.current,
-        handleDecodedResult,
-        {
-          onDecodeError: () => {
-            setScannerStatus('Scanning... keep QR centered and well-lit.');
-          },
-          maxScansPerSecond: 2,
-          preferredCamera,
-          workerPath: '/qr-scanner-worker.min.js',
-        }
-      );
-
-      try {
-        // Race: abort if camera takes > 10s to initialise (e.g. pending permission dialog)
-        await Promise.race([
-          qrScanner.start(),
-          new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('Camera initialisation timed out (10s). Check camera permissions.')), 10000)
-          ),
-        ]);
-      } catch {
-        if (typeof qrScanner.destroy === 'function') qrScanner.destroy();
-        qrScanner = new QrScanner(
-          videoRef.current,
-          handleDecodedResult,
-          {
-            onDecodeError: () => {
-              setScannerStatus('Scanning... keep QR centered and well-lit.');
-            },
-            maxScansPerSecond: 2,
-            preferredCamera,
-          },
-        );
-        await Promise.race([
-          qrScanner.start(),
-          new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('Camera initialisation timed out (10s). Check camera permissions.')), 10000)
-          ),
-        ]);
-      }
-
-      scannerStreamRef.current = qrScanner;
-
-      // Guard: scanner may have been stopped while start() was awaiting (e.g. tab change)
-      if (!scannerStreamRef.current) return;
-
-      setScannerRunning(true);
-      setScannerStatus('Camera is active. Point it at a ticket QR code.');
-    } catch (err) {
-      stopScanner();
-      setScannerError(err?.message || 'Unable to access camera for QR scanning.');
-    }
-  }, [extractTicketUuid, handleGroupScan, handleScan, hasOpenShift, isPaired, pairingReason, stopScanner, trip?.trip_id]);
-
-  const handleAlight = async (ticketId) => {
-    if (!isPaired) {
-      setActionMsg(pairingReason);
-      return;
-    }
-
-    try {
-      await StaffService.recordAlighting(ticketId);
-      setActionMsg('Alighting recorded.');
-      void loadPassengers();
-    } catch (err) {
-      setActionMsg(err.message);
-    }
-  };
-
-  const handleVerifyPin = async () => {
-    if (!isPaired) {
-      setPinStatus(pairingReason);
-      return;
-    }
-
-    if (!trip?.trip_id) {
-      setPinStatus('No active trip assigned. PIN verification is unavailable.');
-      return;
-    }
-    try {
-      await StaffService.verifyConductorPin(pinInput);
-      setPinStatus('PIN verified successfully.');
-    } catch (err) {
-      setPinStatus(err.message);
-    }
-  };
-
-  const handleOnsiteCheckout = async () => {
-    if (!isPaired) {
-      setActionMsg(pairingReason);
-      return;
-    }
-
-    if (!trip?.trip_id) {
-      setActionMsg('No active trip assigned. Onsite checkout is unavailable.');
-      return;
-    }
-
-    if (!hasOpenShift) {
-      setActionMsg('Start your shift first.');
-      return;
-    }
-
-    if (!onsiteForm.origin_stop_id || !onsiteForm.destination_stop_id) {
-      setActionMsg('Please select origin and destination stops for onsite checkout.');
-      return;
-    }
-
-    setConfirmCheckout(true);
-  };
-
-  const handleConfirmedOnsiteCheckout = async () => {
-    setConfirmCheckout(false);
-    setCheckoutInFlight(true);
-    try {
-      const res = await StaffService.checkoutOnsite({
-        items: [
-          {
-            trip_id: Number(trip.trip_id),
-            seat_type: onsiteForm.seat_type,
-            origin_stop_id: Number(onsiteForm.origin_stop_id),
-            destination_stop_id: Number(onsiteForm.destination_stop_id),
-          },
-        ],
-      });
-
-      const checkoutData = res?.data ?? res ?? {};
-      setOnsiteReceipt({
-        payment: checkoutData?.payment || null,
-        tickets: checkoutData?.tickets || [],
-        createdAtLabel: formatDateTime(new Date().toISOString()),
-      });
-
-      setActionMsg('Onsite checkout recorded successfully.');
-      setOnsiteForm({
-        origin_stop_id: '',
-        destination_stop_id: '',
-        seat_type: 'seated',
-      });
-      void loadPassengers();
-      void loadOccupancy();
-      void loadEarnings();
-    } catch (err) {
-      setOnsiteReceipt(null);
-      setActionMsg(err.message || 'Failed to record onsite checkout.');
-    } finally {
-      setCheckoutInFlight(false);
-    }
-  };
-
-  const handleLogout = onLogout;
-
-  const capPct = occupancy
-    ? Math.min(
-        100,
-        Math.round(
-          ((Number(occupancy?.boarded?.seated ?? occupancy?.current_seated ?? 0) +
-            Number(occupancy?.boarded?.standing ?? occupancy?.current_standing ?? 0)) /
-            (Number(occupancy?.capacity?.total ?? occupancy?.total_capacity ?? 1) || 1)) *
-            100,
-        ),
-      )
-    : 0;
-
-  const occSeated = Number(occupancy?.boarded?.seated ?? occupancy?.current_seated ?? 0);
-  const occStanding = Number(occupancy?.boarded?.standing ?? occupancy?.current_standing ?? 0);
-  const occSeatedCap = Number(occupancy?.capacity?.seated ?? occupancy?.seated_capacity ?? 0);
-  const occStandingCap = Number(occupancy?.capacity?.standing ?? occupancy?.standing_capacity ?? 0);
-  const occTotalCap = Number(occupancy?.capacity?.total ?? occupancy?.total_capacity ?? 0);
-  const occupiedTotal = Math.max(0, occSeated + occStanding);
-  const fleetType = String(trip?.fleet_route?.fleet?.fleet_type || '').toLowerCase();
-  const seatsPerRow = fleetType.includes('mini') ? 3 : 4;
-  const seatedCapacity = occSeatedCap > 0
-    ? occSeatedCap
-    : Math.max(Math.round((occTotalCap || occupiedTotal || 24) * 0.7), 16);
-  const standingCapacity = occStandingCap > 0
-    ? occStandingCap
-    : Math.max((occTotalCap || occupiedTotal || 24) - seatedCapacity, 4);
-  const seatedRows = Math.ceil(seatedCapacity / seatsPerRow);
-
-  const buildRowSeats = (rowIndex) => {
-    const base = rowIndex * seatsPerRow;
-    const seats = Array.from({ length: seatsPerRow }).map((_, seatOffset) => {
-      const seatNumber = base + seatOffset + 1;
-      if (seatNumber > seatedCapacity) return null;
-      const occupied = seatNumber <= Math.min(occSeated, seatedCapacity);
-      return {
-        id: `seat-${seatNumber}`,
-        label: seatNumber,
-        occupied,
-      };
-    });
-
-    if (seatsPerRow === 4) {
-      return [seats[0], seats[1], 'aisle', seats[2], seats[3]];
-    }
-
-    return [seats[0], 'aisle', seats[1], seats[2]];
-  };
-
-  const pageTitle =
-    activeTab === 'trip'
-      ? 'Start Shift'
-      : activeTab === 'occupancy'
-        ? 'Ticketing'
-        : activeTab === 'passengers'
-            ? 'Passengers'
-            : activeTab === 'earnings'
-              ? 'End of Shift'
-              : 'Daily PIN';
+  const {
+    activeTab, setActiveTab,
+    assignedTripFilter,
+    profile,
+    trip,
+    occupancy,
+    passengers,
+    earnings,
+    pinInput, setPinInput,
+    pinStatus, setPinStatus,
+    scanUuid, setScanUuid,
+    scanResult, setScanResult,
+    groupScanResult, setGroupScanResult,
+    scannerRunning,
+    scannerBusy,
+    scannerError,
+    scannerStatus,
+    scannerPhase,
+    showScannerModal, setShowScannerModal,
+    onsiteReceipt,
+    onsiteForm, setOnsiteForm,
+    loading,
+    error,
+    actionMsg, setActionMsg,
+    twoFactorEnabled,
+    saving2fa,
+    checkoutInFlight,
+    confirmCheckout, setConfirmCheckout,
+    confirmDecline, setConfirmDecline,
+    declineReasonCode, setDeclineReasonCode,
+    declineSubmitting,
+    actionInFlight,
+    isAvailable,
+    availabilitySaving,
+    shiftState,
+    videoRef,
+    isPaired,
+    pairingReason,
+    hasActiveTrip,
+    todayAssignedTrip,
+    hasOpenShift,
+    upcomingTrip,
+    showNoCurrentTripState,
+    routeStops,
+    shiftStarted,
+    groupedPassengers,
+    filteredAssignedTrips,
+    todayAssignedTrips,
+    upcomingAssignedTrips,
+    printOnsiteReceipt,
+    occSeated,
+    occStanding,
+    occSeatedCap,
+    occStandingCap,
+    occTotalCap,
+    occupiedTotal,
+    standingCapacity,
+    seatedRows,
+    buildRowSeats,
+    pageTitle,
+    handleAssignedTripFilterChange,
+    handleTwoFactorToggle,
+    stopScanner,
+    loadData,
+    loadOccupancy,
+    loadEarnings,
+    handleStartShift,
+    handleConfirmedDecline,
+    handleAcceptTrip,
+    handleToggleAvailability,
+    handleEndShift,
+    handleScan,
+    startScanner,
+    handleAlight,
+    handleVerifyPin,
+    handleOnsiteCheckout,
+    handleConfirmedOnsiteCheckout,
+    handleLogout,
+  } = useConductorDashboardData({ onLogout, pairing });
 
   return (
     <div className="grid min-h-screen grid-cols-1 bg-slate-100 lg:grid-cols-[240px_1fr]">
@@ -1161,6 +318,20 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
               {pairing.loading ? 'Checking...' : isPaired ? '● Paired' : '○ Not paired'}
             </span>
             <button
+              type="button"
+              onClick={handleToggleAvailability}
+              disabled={availabilitySaving}
+              title="Available for extra/ad-hoc assignment — independent of shift or pairing state"
+              className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold transition disabled:opacity-60 ${
+                isAvailable
+                  ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                  : 'border-slate-200 bg-slate-100 text-slate-500 hover:bg-slate-200'
+              }`}
+            >
+              <span className={`h-2 w-2 rounded-full ${isAvailable ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+              {isAvailable ? 'Available' : 'Not Available'}
+            </button>
+            <button
               className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
               onClick={loadData}
             >
@@ -1202,14 +373,14 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
           </section>
         )}
 
-        {!loading && activeTab === 'trip' && !isPaired && (
+        {!loading && ['trip', 'occupancy'].includes(activeTab) && !isPaired && (
           <section className="rounded-xl border border-amber-200 bg-amber-50 p-6">
             <h3 className="text-lg font-bold text-amber-800">Pairing required to start shift</h3>
             <p className="mt-2 text-sm text-amber-700">{pairingReason}</p>
           </section>
         )}
 
-        {!loading && activeTab === 'trip' && isPaired && !showNoCurrentTripState && (
+        {!loading && (activeTab === 'trip' || (activeTab === 'occupancy' && !hasActiveTrip)) && isPaired && !showNoCurrentTripState && (
           <section className="mx-auto max-w-2xl">
             {/* Welcome heading */}
             <div className="mb-6 text-center">
@@ -1271,15 +442,28 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                 <Play className="h-4 w-4" />
               </button>
               <p className="mt-3 text-xs text-slate-400">This will take you to the Ticketing screen</p>
-              {['scheduled', 'delayed', 'boarding'].includes(String(todayAssignedTrip?.status || '').toLowerCase()) && (
-                <button
-                  type="button"
-                  className="mt-4 inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-white px-4 py-2 text-xs font-semibold text-red-600 transition hover:bg-red-50"
-                  onClick={() => setConfirmDecline(todayAssignedTrip)}
-                >
-                  ✕ Decline This Trip
-                </button>
-              )}
+              <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
+                {['scheduled', 'delayed', 'boarding'].includes(String(todayAssignedTrip?.status || '').toLowerCase()) && !todayAssignedTrip?.conductor_accepted_at && (
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100 disabled:opacity-50"
+                    onClick={() => handleAcceptTrip(todayAssignedTrip)}
+                    disabled={actionInFlight}
+                  >
+                    ✓ Accept This Trip
+                  </button>
+                )}
+                {['scheduled', 'delayed', 'boarding'].includes(String(todayAssignedTrip?.status || '').toLowerCase()) && (
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-white px-4 py-2 text-xs font-semibold text-red-600 transition hover:bg-red-50 disabled:opacity-50"
+                    onClick={() => setConfirmDecline(todayAssignedTrip)}
+                    disabled={actionInFlight}
+                  >
+                    ✕ Decline This Trip
+                  </button>
+                )}
+              </div>
             </div>
           </section>
         )}
@@ -1306,8 +490,8 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
               </article>
             ) : (
               <>
-                <TripCardGroup title="Today's Assigned Trip" trips={todayAssignedTrips} onDeclineTrip={setConfirmDecline} />
-                <TripCardGroup title="Upcoming Trips" trips={upcomingAssignedTrips} onDeclineTrip={setConfirmDecline} emptyMessage="No upcoming trips match this filter." />
+                <TripCardGroup title="Today's Assigned Trip" trips={todayAssignedTrips} onDeclineTrip={setConfirmDecline} onAcceptTrip={handleAcceptTrip} />
+                <TripCardGroup title="Upcoming Trips" trips={upcomingAssignedTrips} onDeclineTrip={setConfirmDecline} onAcceptTrip={handleAcceptTrip} emptyMessage="No upcoming trips match this filter." />
               </>
             )}
           </section>
@@ -1342,6 +526,26 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                 </div>
               </div>
             )}
+
+            {/* Batch 15, Item 8: consolidated "at a glance" strip — earnings
+                and passenger count are visible here directly, without
+                navigating to the separate Earnings/Passengers tabs. Those
+                tabs still exist for full detail (breakdown table, per-
+                passenger list). */}
+            <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+              <button type="button" onClick={() => setActiveTab('earnings')} className="rounded-xl border border-slate-200 bg-white p-3 text-left transition hover:bg-slate-50">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Earnings So Far</p>
+                <p className="font-data mt-1 text-lg font-bold text-slate-900">₱{earnings ? Number(earnings.total_fare).toFixed(2) : '0.00'}</p>
+              </button>
+              <button type="button" onClick={() => setActiveTab('passengers')} className="rounded-xl border border-slate-200 bg-white p-3 text-left transition hover:bg-slate-50">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Passengers Onboard</p>
+                <p className="font-data mt-1 text-lg font-bold text-slate-900">{passengers?.length ?? earnings?.passenger_count ?? 0}</p>
+              </button>
+              <button type="button" onClick={() => setActiveTab('pin')} className="rounded-xl border border-slate-200 bg-white p-3 text-left transition hover:bg-slate-50">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Daily PIN</p>
+                <p className="mt-1 text-sm font-semibold text-teal-600">View / Verify →</p>
+              </button>
+            </div>
             {!occupancy ? (
               <article className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-6">
                 <h3 className="text-lg font-bold text-slate-900">No Occupancy Data</h3>

@@ -1,5 +1,5 @@
 import { Suspense, lazy, useState } from 'react';
-import { Bell, Bus, Map, Ticket, User, LogOut, Gift, History, LayoutGrid, Menu, House, X } from 'lucide-react';
+import { Bell, Bus, Map as MapIcon, Ticket, User, LogOut, Gift, History, LayoutGrid, Menu, House, X } from 'lucide-react';
 import usePassengerDashboard from '../../../api/hooks/Passenger/usePassengerDashboard';
 import PassengerService from '../../../api/PassengerService/PassengerService';
 import TicketCard from '../Ticket/TicketCard';
@@ -25,7 +25,7 @@ const NAV_ITEMS = [
   { key: 'dashboard', label: 'Dashboard', icon: LayoutGrid, protected: false },
   { key: 'tickets', label: 'My Tickets', icon: Ticket, protected: true },
   { key: 'transactions', label: 'Transaction History', icon: History, protected: true },
-  { key: 'map', label: 'Track Bus', icon: Map, protected: false },
+  { key: 'map', label: 'Track Bus', icon: MapIcon, protected: false },
   { key: 'rewards', label: 'Rewards', icon: Gift, protected: true },
 ];
 
@@ -262,7 +262,7 @@ export default function Dashboard() {
             </Card>
             <Card className="flex items-center gap-4 p-5">
               <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-navy-50 text-navy-800">
-                <Map size={22} />
+                <MapIcon size={22} />
               </span>
               <div>
                 <p className="font-display text-2xl font-bold text-navy-950">{homeStats.nearbyRoutes}</p>

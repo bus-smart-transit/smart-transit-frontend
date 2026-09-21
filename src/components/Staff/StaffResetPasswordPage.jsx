@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Bus, KeyRound, Lock, Shield, TriangleAlert, CircleCheckBig } from 'lucide-react';
-import StaffService from '../../api/StaffService/StaffService';
+import StaffService from '../../api/StaffService/StaffBaseService';
 import Button from '../ui/Button';
 import FormInput from '../ui/FormInput';
 import Card from '../ui/Card';

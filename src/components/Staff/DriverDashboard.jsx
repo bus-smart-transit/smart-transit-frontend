@@ -1,13 +1,15 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
   AlertTriangle,
   Bell,
   Bus,
   Calendar,
+  CalendarDays,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Clock3,
   Gauge,
+  ListChecks,
   LogOut,
   Navigation,
   RefreshCw,
@@ -15,12 +17,9 @@ import {
   TrendingUp,
   User,
 } from 'lucide-react';
-import StaffService from '../../api/StaffService/StaffService';
 import PairingScreen from './PairingScreen';
 import DriverNavigationMap from './DriverNavigationMap';
-import { haversineM } from '../../utils/geo';
-import { isSameBusinessDay, getBusinessToday, getBusinessNowMs, toBusinessScheduleMs, debugLogBusinessTime } from '../../utils/dates';
-import { fetchTrafficStatus } from '../../services/trafficService';
+import { useDriverPairing, useDriverDashboardData } from '../../api/hooks/Staff/useDriverDashboard';
 
 const STATUS_COLOR = {
   scheduled: '#64748b',
@@ -35,6 +34,11 @@ const STATUS_COLOR = {
 const NAV_ITEMS = [
   { key: 'dashboard', label: 'Dashboard', icon: Gauge },
   { key: 'assigned', label: 'Assigned Routes', icon: Calendar },
+  // Batch 15, Items 5/6: Calendar (grid) and Schedule (chronological list)
+  // are distinct views from "Assigned Routes" (which is status/action
+  // oriented — decline/accept per trip). These are pure at-a-glance views.
+  { key: 'calendar', label: 'Calendar', icon: CalendarDays },
+  { key: 'schedule', label: 'Schedule', icon: ListChecks },
   { key: 'journey', label: 'Journey', icon: Route },
   { key: 'navigation', label: 'Navigation', icon: Navigation },
   { key: 'earnings', label: 'Earnings', icon: TrendingUp },
@@ -90,152 +94,8 @@ const formatTripSchedule = (tripLike) => {
   return dateLabel;
 };
 
-const isSameDay = (value) => isSameBusinessDay(value);
-
-const isCurrentOrSameDayTrip = (tripLike) => {
-  if (!tripLike?.trip_id) return false;
-  if (!isSameDay(tripLike?.trip_date)) return false;
-
-  const status = String(tripLike?.status || '').toLowerCase();
-  return status !== 'completed' && status !== 'cancelled';
-};
-
-const toTripScheduleMs = (tripLike) => {
-  const dateValue = String(tripLike?.trip_date || '').trim();
-  if (!dateValue) return Number.NaN;
-
-  const timeRaw = String(tripLike?.departure_time || tripLike?.fleet_route?.start_time || '00:00:00').trim();
-  return toBusinessScheduleMs(dateValue, timeRaw);
-};
-
-const getUpcomingTrip = (trips) => {
-  const nowMs = getBusinessNowMs();
-
-  return (trips || [])
-    .filter((item) => {
-      const status = String(item?.status || '').toLowerCase();
-      if (status === 'completed' || status === 'cancelled') return false;
-
-      const scheduleMs = toTripScheduleMs(item);
-      if (!Number.isFinite(scheduleMs)) return false;
-      return scheduleMs >= nowMs;
-    })
-    .sort((a, b) => toTripScheduleMs(a) - toTripScheduleMs(b))[0] || null;
-};
-
-const deriveJourneyProgressFromStops = (stops = [], tripStatus) => {
-  const normalized = (Array.isArray(stops) ? stops : [])
-    .map((stop, idx) => ({
-      ...stop,
-      sequence: Number(stop?.sequence_number ?? stop?.stop_order ?? idx + 1),
-      is_acknowledged: Boolean(stop?.is_acknowledged),
-    }))
-    .sort((a, b) => a.sequence - b.sequence);
-
-  const totalStops = normalized.length;
-  const status = String(tripStatus || '').toLowerCase();
-
-  if (totalStops === 0) {
-    return {
-      totalStops: 0,
-      completedStops: status === 'completed' ? 1 : 0,
-      progressPercent: status === 'completed' ? 100 : 0,
-      nextStopName: null,
-    };
-  }
-
-  const acknowledgedCount = normalized.filter((stop) => stop.is_acknowledged).length;
-  const completedStops = status === 'completed' ? totalStops : acknowledgedCount;
-  const clampedCompleted = Math.max(0, Math.min(totalStops, completedStops));
-  const progressPercent = totalStops > 0
-    ? Math.round((clampedCompleted / totalStops) * 100)
-    : 0;
-  const nextStop = normalized.find((stop) => !stop.is_acknowledged) ?? null;
-
-  return {
-    totalStops,
-    completedStops: clampedCompleted,
-    progressPercent,
-    nextStopName: nextStop?.stop_name ?? nextStop?.name ?? null,
-  };
-};
-
-const filterTripsByStatus = (trips, statusFilter) => {
-  if (statusFilter === 'completed') {
-    return (trips || []).filter((item) => String(item?.status || '').toLowerCase() === 'completed');
-  }
-
-  if (statusFilter === 'scheduled') {
-    return (trips || []).filter((item) => ['scheduled', 'delayed', 'boarding', 'departed', 'in-progress'].includes(String(item?.status || '').toLowerCase()));
-  }
-
-  return trips || [];
-};
-
 export default function DriverDashboard() {
-  const navigate = useNavigate();
-
-  // Start loading:false so the badge never flashes "Checking pairing..." on
-  // initial mount; the first API call fills in the real state within ~1 s.
-  const [pairing, setPairing] = useState({ loading: false, paired: false, reason: '' });
-  const didInitialPairingCheck = useRef(false);
-  const pairingRequestRef = useRef(null);
-
-  const refreshPairingStatus = useCallback(async () => {
-    if (pairingRequestRef.current) {
-      return pairingRequestRef.current;
-    }
-
-    pairingRequestRef.current = (async () => {
-      try {
-        const res = await StaffService.getPairingStatus('driver');
-        const data = res?.data ?? {};
-        const nextPaired = data?.paired === true;
-        const nextReason = data?.reason || '';
-        setPairing((prev) => {
-          if (!prev.loading && prev.paired === nextPaired && prev.reason === nextReason) {
-            return prev;
-          }
-
-          return {
-            loading: false,
-            paired: nextPaired,
-            reason: nextReason,
-          };
-        });
-      } catch {
-        setPairing((prev) => ({ ...prev, loading: false, paired: false }));
-      } finally {
-        pairingRequestRef.current = null;
-      }
-    })();
-
-    return pairingRequestRef.current;
-  }, []);
-
-  useEffect(() => {
-    if (didInitialPairingCheck.current) return;
-    didInitialPairingCheck.current = true;
-    void refreshPairingStatus();
-  }, [refreshPairingStatus]);
-
-  useEffect(() => {
-    if (pairing.paired) {
-      return undefined;
-    }
-    const timer = setInterval(() => {
-      if (!document.hidden && navigator.onLine) {
-        void refreshPairingStatus();
-      }
-    }, 90000); // Poll every 90 seconds while unpaired.
-
-    return () => clearInterval(timer);
-  }, [pairing.paired, refreshPairingStatus]);
-
-  const handleLogout = async () => {
-    await StaffService.logoutDriver().catch(() => {});
-    navigate('/employee/login');
-  };
+  const { pairing, refreshPairingStatus, handleLogout } = useDriverPairing();
 
   return (
     <DriverDashboardInner
@@ -247,635 +107,74 @@ export default function DriverDashboard() {
 }
 
 function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
-  const navigate = useNavigate();
-  const navigateRef = useRef(navigate);
-  useEffect(() => { navigateRef.current = navigate; }, [navigate]);
-  const [activeTab, setActiveTab] = useState('dashboard');
-  const [assignedTripFilter, setAssignedTripFilter] = useState('all');
-  const [profile, setProfile] = useState(null);
-  const [trip, setTrip] = useState(null);
-  const [assignedTrips, setAssignedTrips] = useState([]);
-  const [assignedTripsForView, setAssignedTripsForView] = useState([]);
-  const [stops, setStops] = useState([]);
-  const [pin, setPin] = useState(null);
-  const [showTripPin, setShowTripPin] = useState(false);
-  const [pinInput, setPinInput] = useState('');
-  const [pinStatus, setPinStatus] = useState('');
-  const [earnings, setEarnings] = useState(null);
-  const [shiftState, setShiftState] = useState({ openShift: null, latestShift: null, loading: false });
-  const [tripDetailsModal, setTripDetailsModal] = useState(null); // suggestion: trip info modal
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [actionMsg, setActionMsg] = useState('');
-  const [actionInFlight, setActionInFlight] = useState(false);
-  const [confirmComplete, setConfirmComplete] = useState(false);
-  // S2 (Batch 12): decline assigned trip — plain decline, reason code optional.
-  // Holds the trip object being declined (not just a boolean) so decline can
-  // be triggered per-row from the Assigned Trips list — today OR upcoming —
-  // per Batch 14 request: decline must work regardless of pairing status
-  // and regardless of whether the trip is scheduled today or in the future.
-  const [confirmDecline, setConfirmDecline] = useState(null);
-  const [declineReasonCode, setDeclineReasonCode] = useState('');
-  const [declineSubmitting, setDeclineSubmitting] = useState(false);
-  const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
-  const [saving2fa, setSaving2fa] = useState(false);
-  const [msg2fa, setMsg2fa] = useState('');
-  const [gpsActive, setGpsActive] = useState(false);
-  const [lastGps, setLastGps] = useState(null);
-  const [trafficStatus, setTrafficStatus] = useState({
-    level: 'normal',
-    label: 'Normal flow',
-    etaMinutes: 8,
-    delayMinutes: 0,
-    suggestion: 'Continue current route and keep monitoring the next stop.',
-  });
-  const isPaired = pairing?.paired === true;
-  const pairingReason = pairing?.reason || 'Waiting for pairing with your Conductor before enabling session-synced features.';
-  const hasActiveTrip = isCurrentOrSameDayTrip(trip);
-  // Batch 13, Issue #1: `hasActiveTrip` (derived from /driver/trips/current,
-  // which only resolves once a shift is OPEN) can never be true before the
-  // driver starts their shift — using it to gate the Start Shift button (or
-  // the tabs that contain it) created a deadlock: no shift can start
-  // because the button/section that starts it was hidden until a shift
-  // already existed. This is a day-based (not time-based) check against the
-  // driver's ASSIGNED trips, independent of whether a shift is open yet.
-  const hasTodayAssignedTrip = (assignedTrips || []).some((t) => {
-    const status = String(t?.status || '').toLowerCase();
-    if (['completed', 'cancelled'].includes(status)) return false;
-    return isSameDay(t?.trip_date);
-  });
-  // S2 (Batch 12) decline needs a trip reference even before a shift is
-  // open (trip/`getCurrentTrip()` is null until then) — fall back to the
-  // matching today-assigned trip from the trips list, same as Conductor.
-  const todayAssignedTrip = trip || (assignedTrips || []).find((t) => {
-    const status = String(t?.status || '').toLowerCase();
-    if (['completed', 'cancelled'].includes(status)) return false;
-    return isSameDay(t?.trip_date);
-  }) || null;
-  const hasOpenShift = Boolean(shiftState?.openShift && !shiftState?.openShift?.ended_at);
-  const didBootstrap = useRef(false);
-  const stopsLoadedRef = useRef(false);
-  const upcomingTrip = getUpcomingTrip(assignedTrips);
-  const gpsIntervalRef = useRef(null);
-  const gpsWatchRef = useRef(null);
-  const lastGpsRef = useRef(null);
-  const lastSentGpsRef = useRef(null); // tracks last successfully sent position for deduplication
-  const [proximityAlert, setProximityAlert] = useState(null); // { stop_name, count } | null
-  const showNoCurrentTripState = !loading && isPaired && !hasActiveTrip && !hasTodayAssignedTrip && ['dashboard', 'journey', 'navigation', 'trip'].includes(activeTab);
-
-  const currentRoute = trip?.fleet_route?.route;
-  const currentFleet = trip?.fleet_route?.fleet;
-  const nextStop = stops.find((stop) => !stop.is_acknowledged) ?? null;
-  const filteredAssignedTrips = assignedTripFilter === 'all' ? assignedTrips : assignedTripsForView;
-  const todayStart = getBusinessToday();
-  debugLogBusinessTime('DriverDashboard: assigned trips today/upcoming filter');
-  const todayAssignedTrips = filteredAssignedTrips.filter((item) => isSameBusinessDay(item?.trip_date, todayStart));
-  const upcomingAssignedTrips = filteredAssignedTrips.filter((item) => {
-    const tripDateStr = String(item?.trip_date || '').match(/^(\d{4}-\d{2}-\d{2})/)?.[1];
-    return !!tripDateStr && tripDateStr > todayStart;
-  });
-
-  const handleAssignedTripFilterChange = useCallback(async (value) => {
-    setAssignedTripFilter(value);
-
-    if (value === 'all') {
-      setAssignedTripsForView([]);
-      return;
-    }
-
-    try {
-      const res = await StaffService.getDriverTrips(value);
-      setAssignedTripsForView(Array.isArray(res?.data) ? res.data : []);
-    } catch {
-      setAssignedTripsForView([]);
-    }
-  }, []);
-
-  const stopProgress = deriveJourneyProgressFromStops(stops, trip?.status);
-  const tripProgress = stopProgress.progressPercent;
-
-  const loadData = useCallback(async () => {
-    setLoading(true);
-    setError('');
-    setShiftState((prev) => ({ ...prev, loading: true }));
-    try {
-      const [profileRes, tripRes, tripsRes, shiftRes] = await Promise.allSettled([
-        StaffService.getProfile('driver'),
-        StaffService.getCurrentTrip(),
-        StaffService.getDriverTrips(),
-        StaffService.getDriverShiftStatus(),
-      ]);
-      if (profileRes.status === 'fulfilled') {
-        setProfile(profileRes.value?.data);
-        if (typeof profileRes.value?.data?.user?.two_factor_enabled === 'boolean') {
-          setTwoFactorEnabled(profileRes.value.data.user.two_factor_enabled);
-        }
-      }
-      if (tripRes.status === 'fulfilled') setTrip(tripRes.value?.data);
-      if (tripsRes.status === 'fulfilled') {
-        const tripsData = tripsRes.value?.data ?? [];
-        setAssignedTrips(tripsData);
-        if (assignedTripFilter !== 'all') {
-          setAssignedTripsForView(filterTripsByStatus(tripsData, assignedTripFilter));
-        }
-      }
-      if (shiftRes.status === 'fulfilled') {
-        const payload = shiftRes.value?.data ?? {};
-        setShiftState({
-          openShift: payload?.open_shift ?? null,
-          latestShift: payload?.latest_shift ?? null,
-          loading: false,
-        });
-      } else {
-        setShiftState((prev) => ({ ...prev, loading: false }));
-      }
-    } catch {
-      setError('Failed to load dashboard data.');
-      setShiftState((prev) => ({ ...prev, loading: false }));
-    } finally {
-      setLoading(false);
-    }
-  }, [assignedTripFilter]);
-
-  const loadStops = useCallback(async () => {
-    if (!isPaired || !hasActiveTrip) {
-      setStops([]);
-      stopsLoadedRef.current = false;
-      return;
-    }
-    try {
-      const res = await StaffService.getCurrentTripStops();
-      const payload = res?.data ?? null;
-      if (Array.isArray(payload)) {
-        setStops(payload);
-      } else {
-        setStops(payload?.stops ?? []);
-      }
-      stopsLoadedRef.current = true;
-    } catch (err) {
-      setError(err.message);
-    }
-  }, [hasActiveTrip, isPaired]);
-
-  const loadPin = useCallback(async () => {
-    if (!isPaired || !hasActiveTrip) {
-      setPin(null);
-      setShowTripPin(false);
-      return;
-    }
-    try {
-      const res = await StaffService.getDriverPin();
-      setPin(res?.data);
-    } catch (err) {
-      setError(err.message);
-    }
-  }, [hasActiveTrip, isPaired]);
-
-  const loadEarnings = useCallback(async () => {
-    if (!isPaired || !hasActiveTrip) {
-      setEarnings(null);
-      return;
-    }
-    try {
-      const res = await StaffService.getTripEarnings('driver');
-      setEarnings(res?.data ?? null);
-    } catch {
-      setEarnings(null);
-    }
-  }, [hasActiveTrip, isPaired]);
-
-  useEffect(() => {
-    if (didBootstrap.current) return;
-    didBootstrap.current = true;
-    void loadData();
-  }, [loadData]);
-
-  // ── GPS push: runs only while driver has an active same-day trip ────────────
-  useEffect(() => {
-    if (!isPaired || !hasActiveTrip) {
-      // Clean up any running watcher/interval when trip becomes inactive
-      if (gpsWatchRef.current !== null) {
-        navigator.geolocation?.clearWatch(gpsWatchRef.current);
-        gpsWatchRef.current = null;
-      }
-      clearInterval(gpsIntervalRef.current);
-      gpsIntervalRef.current = null;
-      lastGpsRef.current = null;
-      lastSentGpsRef.current = null;
-      return;
-    }
-
-    if (!navigator.geolocation) return;
-
-    const pushLocation = (position) => {
-      const { latitude, longitude, heading, speed } = position.coords;
-      const nextLocation = {
-        latitude,
-        longitude,
-        heading: Number.isFinite(heading) ? heading : undefined,
-        speed_kmh: Number.isFinite(speed) ? Number((speed * 3.6).toFixed(1)) : undefined,
-      };
-      lastGpsRef.current = nextLocation;
-      setLastGps(nextLocation);
-      setGpsActive(true);
-    };
-
-    // Watch position continuously so lastGpsRef stays fresh
-    gpsWatchRef.current = navigator.geolocation.watchPosition(
-      pushLocation,
-      () => {
-        setGpsActive(false);
-      },
-      { enableHighAccuracy: true, maximumAge: 10000 }
-    );
-
-    // Push to backend every 10 seconds — only if moved > 30m since last send.
-    // Backoff: after 3 consecutive failures pause 30s before retrying.
-    const MIN_DISTANCE_M = 30;
-    let consecutiveFailures = 0;
-    let backoffUntil = 0;
-    const sendPing = async () => {
-      if (!lastGpsRef.current) return;
-      if (Date.now() < backoffUntil) return; // in backoff window — skip
-      const last = lastSentGpsRef.current;
-      if (last) {
-        const dLat = lastGpsRef.current.latitude - last.latitude;
-        const dLng = lastGpsRef.current.longitude - last.longitude;
-        const approxMeters = Math.sqrt(dLat * dLat + dLng * dLng) * 111320;
-        if (approxMeters < MIN_DISTANCE_M) return; // haven't moved enough — skip
-      }
-      try {
-        await StaffService.updateLocation(
-          lastGpsRef.current.latitude,
-          lastGpsRef.current.longitude,
-          lastGpsRef.current.heading ?? null,
-          lastGpsRef.current.speed_kmh ?? null,
-        );
-        lastSentGpsRef.current = { latitude: lastGpsRef.current.latitude, longitude: lastGpsRef.current.longitude };
-        consecutiveFailures = 0; // reset on success
-      } catch {
-        consecutiveFailures++;
-        if (consecutiveFailures >= 3) {
-          backoffUntil = Date.now() + 30000; // pause 30s after 3 failures
-          consecutiveFailures = 0;
-        }
-      }
-    };
-
-    void sendPing();
-    gpsIntervalRef.current = setInterval(() => { void sendPing(); }, 10000);
-    return () => {
-      navigator.geolocation?.clearWatch(gpsWatchRef.current);
-      gpsWatchRef.current = null;
-      clearInterval(gpsIntervalRef.current);
-      gpsIntervalRef.current = null;
-    };
-  }, [hasActiveTrip, isPaired]);
-
-  useEffect(() => {
-    // Fetch stops once per active trip — not on every tab switch.
-    // Re-fetch is triggered explicitly by handleAcknowledgeStop.
-    if (!hasActiveTrip || !isPaired) {
-      stopsLoadedRef.current = false;
-      return;
-    }
-    if (stopsLoadedRef.current) return;
-    if (['journey', 'navigation', 'trip', 'dashboard'].includes(activeTab)) {
-      const timer = setTimeout(() => { void loadStops(); }, 0);
-      return () => clearTimeout(timer);
-    }
-    return undefined;
-  }, [activeTab, hasActiveTrip, isPaired, loadStops]);
-
-  // ── Alighting proximity check (Feature 4) ─────────────────────────────────
-  // Runs every 15 seconds while a trip is active. When the driver is within
-  // 500m of an unacknowledged stop that has passengers alighting, show a
-  // batched banner notification instead of per-passenger spam.
-  useEffect(() => {
-    if (!hasActiveTrip || !isPaired) {
-      const timer = setTimeout(() => {
-        setProximityAlert(null);
-      }, 0);
-      return () => clearTimeout(timer);
-    }
-
-    const PROXIMITY_M = 500;
-
-    const check = () => {
-      const pos = lastGpsRef.current;
-      if (!pos) return;
-
-      const unacked = stops.filter(
-        (s) => !s.is_acknowledged && Number.isFinite(Number(s.latitude)) && Number.isFinite(Number(s.longitude))
-      );
-
-      for (const stop of unacked) {
-        const dist = haversineM(pos.latitude, pos.longitude, Number(stop.latitude), Number(stop.longitude));
-        if (dist <= PROXIMITY_M) {
-          // Count passengers alighting at this stop (from the occupancy by-stop data if available,
-          // otherwise we can't know per-passenger, so just show the stop name).
-          setProximityAlert({ stop_name: stop.stop_name ?? stop.name ?? 'next stop', distance_m: Math.round(dist) });
-          return;
-        }
-      }
-      setProximityAlert(null);
-    };
-
-    check();
-    const id = setInterval(check, 15000);
-    return () => clearInterval(id);
-  }, [hasActiveTrip, isPaired, stops]);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (['trip', 'account'].includes(activeTab) && hasActiveTrip && isPaired) {
-        void loadPin();
-      }
-    }, 0);
-
-    return () => clearTimeout(timer);
-  }, [activeTab, hasActiveTrip, isPaired, loadPin]);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (activeTab === 'earnings' && hasActiveTrip && isPaired) {
-        void loadEarnings();
-      }
-    }, 0);
-
-    return () => clearTimeout(timer);
-  }, [activeTab, hasActiveTrip, isPaired, loadEarnings]);
-
-  useEffect(() => {
-    if (activeTab !== 'earnings' || !hasActiveTrip || !isPaired) return undefined;
-
-    const intervalId = setInterval(() => {
-      void loadEarnings();
-    }, 15000);
-
-    return () => clearInterval(intervalId);
-  }, [activeTab, hasActiveTrip, isPaired, loadEarnings]);
-
-  const handleVerifyPin = async () => {
-    if (!trip?.trip_id) {
-      setPinStatus('No active trip assigned. PIN verification is unavailable.');
-      return;
-    }
-    try {
-      await StaffService.verifyDriverPin(pinInput);
-      setPinStatus('PIN verified successfully.');
-    } catch (err) {
-      setPinStatus(err.message);
-    }
-  };
-
-  // Immediately flush current GPS to backend — called on stop acknowledge so
-  // passengers see the updated bus position right away rather than waiting
-  // for the next 10-second scheduled ping.
-  const pushLocationNow = useCallback(async () => {
-    if (!lastGpsRef.current) return;
-    try {
-      await StaffService.updateLocation(
-        lastGpsRef.current.latitude,
-        lastGpsRef.current.longitude,
-        lastGpsRef.current.heading ?? null,
-        lastGpsRef.current.speed_kmh ?? null,
-      );
-    } catch {
-      // Silent — don't surface network errors on stop acknowledge
-    }
-  }, []);
-
-  const handleAcknowledgeStop = async (stopId) => {
-    if (actionInFlight) {
-      return;
-    }
-    if (!isPaired) {
-      setActionMsg(pairingReason);
-      return;
-    }
-    if (!stopId) {
-      setActionMsg('Stop identifier is missing. Please refresh route data.');
-      return;
-    }
-
-    setActionInFlight(true);
-    try {
-      await StaffService.acknowledgeStop(stopId);
-      setStops((prev) => {
-        const target = (prev || []).find((stop) => Number(stop?.stop_id) === Number(stopId));
-        const targetSeq = Number(target?.sequence_number ?? target?.stop_order ?? Number.POSITIVE_INFINITY);
-        return (prev || []).map((stop) => {
-          const seq = Number(stop?.sequence_number ?? stop?.stop_order ?? Number.POSITIVE_INFINITY);
-          if (Number.isFinite(targetSeq) && Number.isFinite(seq) && seq <= targetSeq) {
-            return { ...stop, is_acknowledged: true };
-          }
-          if (Number(stop?.stop_id) === Number(stopId)) {
-            return { ...stop, is_acknowledged: true };
-          }
-          return stop;
-        });
-      });
-      // Relay current GPS position immediately so passenger map
-      // reflects the bus at this stop without waiting for the next ping.
-      void pushLocationNow();
-      setActionMsg('Stop acknowledged. Location sent to passengers.');
-      void loadStops();
-    } catch (err) {
-      setActionMsg(err.message);
-    } finally {
-      setActionInFlight(false);
-    }
-  };
-
-  const handleTripAction = async (action) => {
-    const targetTripId = Number(trip?.trip_id ?? shiftState?.openShift?.trip_id ?? 0);
-    if (!targetTripId) return;
-    if (!isPaired && action === 'depart') {
-      setActionMsg(pairingReason);
-      return;
-    }
-    if ((action === 'boarding' || action === 'depart') && !hasOpenShift) {
-      setActionMsg('Start your shift first.');
-      return;
-    }
-    if (action === 'complete') {
-      setConfirmComplete(true);
-      return;
-    }
-    setActionInFlight(true);
-    try {
-      if (action === 'boarding') await StaffService.startBoardingTrip(targetTripId);
-      if (action === 'depart') await StaffService.departTrip(targetTripId);
-      setActionMsg(`Trip ${action} action completed.`);
-      await loadData();
-    } catch (err) {
-      setActionMsg(err.message);
-    } finally {
-      setActionInFlight(false);
-    }
-  };
-
-  const handleStartShift = async () => {
-    setActionInFlight(true);
-    try {
-      const res = await StaffService.startDriverShift();
-      const shift = res?.data?.shift ?? null;
-      setShiftState((prev) => ({
-        ...prev,
-        openShift: shift,
-        latestShift: shift,
-      }));
-      setActionMsg(res?.message || 'Driver shift started');
-      await loadData();
-    } catch (err) {
-      setActionMsg(err?.message || 'Unable to start shift right now.');
-    } finally {
-      setActionInFlight(false);
-    }
-  };
-
-  const handleEndShift = async () => {
-    setActionInFlight(true);
-    try {
-      const res = await StaffService.endDriverShift();
-      const shift = res?.data?.shift ?? null;
-      setShiftState((prev) => ({
-        ...prev,
-        openShift: null,
-        latestShift: shift,
-      }));
-      setActionMsg(res?.message || 'Driver shift ended');
-      await loadData();
-    } catch (err) {
-      setActionMsg(err?.message || 'Unable to end shift right now.');
-    } finally {
-      setActionInFlight(false);
-    }
-  };
-
-  const handleConfirmedComplete = async () => {
-    setConfirmComplete(false);
-    setActionInFlight(true);
-    try {
-      await StaffService.completeTrip(trip.trip_id);
-      setActionMsg('Trip completed successfully.');
-      void loadData();
-    } catch (err) {
-      setActionMsg(err.message);
-    } finally {
-      setActionInFlight(false);
-    }
-  };
-
-  // S2 (Batch 12): decline the assigned trip — returns it to the
-  // unassigned pool for the Operator to reassign. Reason is optional.
-  // Works for any status-eligible trip in the driver's assigned list —
-  // today or upcoming — and regardless of pairing status (Batch 14).
-  const handleConfirmedDecline = async () => {
-    const tripId = confirmDecline?.trip_id;
-    if (!tripId) return;
-    setDeclineSubmitting(true);
-    try {
-      await StaffService.declineDriverTrip(tripId, declineReasonCode ? { reason_code: declineReasonCode } : {});
-      setActionMsg('Trip declined. The Operator has been notified.');
-      setConfirmDecline(null);
-      setDeclineReasonCode('');
-      void loadData();
-    } catch (err) {
-      setActionMsg(err.message);
-    } finally {
-      setDeclineSubmitting(false);
-    }
-  };
-
-  const handleLogout = onLogout;
-
-  useEffect(() => {
-    const pos = lastGps;
-    const targetStop = nextStop ?? stops[0];
-    if (!pos || !targetStop || !Number.isFinite(Number(targetStop.latitude)) || !Number.isFinite(Number(targetStop.longitude))) {
-      return;
-    }
-
-    const distanceM = haversineM(
-      Number(pos.latitude),
-      Number(pos.longitude),
-      Number(targetStop.latitude),
-      Number(targetStop.longitude)
-    );
-
-    let cancelled = false;
-    void (async () => {
-      const nextStatus = await fetchTrafficStatus({
-        currentLat: pos.latitude,
-        currentLng: pos.longitude,
-        nextStop: targetStop,
-        route: currentRoute,
-      });
-      if (!cancelled) {
-        setTrafficStatus({
-          ...nextStatus,
-          etaMinutes: nextStatus.etaMinutes || Math.max(2, Math.round(distanceM / 280)),
-        });
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [currentRoute, lastGps, nextStop, stops]);
-
-  const notifications = [
-    {
-      title: trip?.status === 'boarding' ? 'Trip Ready for Departure' : 'Trip Status Updated',
-      note: currentRoute ? `${currentRoute.origin} to ${currentRoute.destination}` : 'Your assigned route is active.',
-      tone: 'danger',
-      time: 'Now',
-    },
-    {
-      title: nextStop ? `Next stop: ${nextStop.stop_name ?? nextStop.name ?? 'Pending stop'}` : 'Route on schedule',
-      note: nextStop ? `ETA ${trafficStatus.etaMinutes} min • ${trafficStatus.label.toLowerCase()}` : 'All available stops are acknowledged.',
-      tone: trafficStatus.level === 'heavy' ? 'warn' : 'info',
-      time: 'Updated',
-    },
-    {
-      title: trafficStatus.level === 'heavy' ? 'Traffic alert' : 'Route update available',
-      note: trafficStatus.suggestion,
-      tone: trafficStatus.level === 'heavy' ? 'warn' : 'info',
-      time: 'Today',
-    },
-    ...((Array.isArray(trafficStatus?.alerts) ? trafficStatus.alerts : []).slice(0, 3).map((alert, idx) => ({
-      title: `${String(alert?.road || 'Route segment')} • ${String(alert?.etaMinutes || 0)} min`,
-      note: String(alert?.detail || 'Traffic segment update available.'),
-      tone: alert?.severity === 'danger' ? 'danger' : alert?.severity === 'warn' ? 'warn' : 'info',
-      time: idx === 0 ? 'Live' : 'Updated',
-    }))),
-  ];
-
-  const journeyStatusLabel =
-    trip?.status === 'completed'
-      ? 'Journey Completed'
-      : trip?.status === 'departed' || trip?.status === 'in-progress'
-        ? 'Journey In Progress'
-        : 'Ready to Start';
-
-  const pageTitle =
-    activeTab === 'dashboard'
-      ? 'Dashboard'
-      : activeTab === 'assigned'
-        ? 'Assigned Routes'
-        : activeTab === 'journey'
-          ? 'Journey'
-          : activeTab === 'navigation'
-            ? 'Journey / Route Navigation'
-            : activeTab === 'earnings'
-              ? 'Trip Earnings'
-              : activeTab === 'alerts'
-                ? 'Traffic Alerts'
-                : activeTab === 'trip'
-                  ? 'Trip Status'
-                  : 'Account';
+  const {
+    activeTab, setActiveTab,
+    assignedTripFilter,
+    profile,
+    trip,
+    stops,
+    pin,
+    showTripPin, setShowTripPin,
+    pinInput, setPinInput,
+    pinStatus, setPinStatus,
+    earnings,
+    shiftState,
+    tripDetailsModal, setTripDetailsModal,
+    loading,
+    error,
+    actionMsg, setActionMsg,
+    actionInFlight,
+    confirmComplete, setConfirmComplete,
+    confirmDecline, setConfirmDecline,
+    declineReasonCode, setDeclineReasonCode,
+    declineSubmitting,
+    twoFactorEnabled,
+    saving2fa,
+    msg2fa,
+    isAvailable,
+    availabilitySaving,
+    calendarMonth, setCalendarMonth,
+    gpsActive,
+    trafficStatus,
+    proximityAlert, setProximityAlert,
+    isPaired,
+    pairingReason,
+    hasActiveTrip,
+    hasTodayAssignedTrip,
+    todayAssignedTrip,
+    hasOpenShift,
+    upcomingTrip,
+    showNoCurrentTripState,
+    currentRoute,
+    currentFleet,
+    nextStop,
+    filteredAssignedTrips,
+    todayAssignedTrips,
+    upcomingAssignedTrips,
+    calendarDays,
+    scheduleUpcoming,
+    schedulePast,
+    stopProgress,
+    tripProgress,
+    notifications,
+    journeyStatusLabel,
+    pageTitle,
+    lastGpsRef,
+    handleAssignedTripFilterChange,
+    loadData,
+    loadEarnings,
+    handleVerifyPin,
+    handleAcknowledgeStop,
+    handleTripAction,
+    handleStartShift,
+    handleEndShift,
+    handleConfirmedComplete,
+    handleConfirmedDecline,
+    handleAcceptTrip,
+    handleLogout,
+    handleToggleAvailability,
+    handleToggleTwoFactor,
+  } = useDriverDashboardData({ onLogout, pairing });
 
   return (
     <div className="grid min-h-screen grid-cols-1 bg-slate-100 text-slate-900 lg:grid-cols-[260px_1fr]">
@@ -967,6 +266,20 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
             >
               {pairing.loading ? 'Checking pairing...' : isPaired ? 'Paired' : 'Not paired'}
             </span>
+            <button
+              type="button"
+              onClick={handleToggleAvailability}
+              disabled={availabilitySaving}
+              title="Available for extra/ad-hoc assignment — independent of shift or pairing state"
+              className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold transition disabled:opacity-60 ${
+                isAvailable
+                  ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                  : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              <span className={`h-2 w-2 rounded-full ${isAvailable ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+              {isAvailable ? 'Available' : 'Not Available'}
+            </button>
             {hasActiveTrip && (
               <span
                 title={gpsActive ? 'GPS active — location is being sent to passengers' : 'Waiting for GPS fix…'}
@@ -1148,6 +461,16 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                 <button className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50" onClick={() => handleTripAction('complete')} disabled={actionInFlight || !isPaired || !['departed', 'in-progress'].includes(trip?.status)}>
                   ■ End Trip
                 </button>
+                {['scheduled', 'delayed', 'boarding'].includes(String(todayAssignedTrip?.status || '').toLowerCase()) && !todayAssignedTrip?.driver_accepted_at && (
+                  <button
+                    type="button"
+                    className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100 disabled:opacity-50"
+                    onClick={() => handleAcceptTrip(todayAssignedTrip)}
+                    disabled={actionInFlight}
+                  >
+                    ✓ Accept Trip
+                  </button>
+                )}
                 {['scheduled', 'delayed', 'boarding'].includes(String(todayAssignedTrip?.status || '').toLowerCase()) && (
                   <button
                     type="button"
@@ -1177,6 +500,12 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                   {trafficStatus.label}
                 </span>
               </div>
+
+              {trafficStatus.dataSource === 'fallback' && (
+                <p className="mb-3 rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-500">
+                  Estimated — live traffic data is unavailable right now. ETA/delay figures use a distance-based estimate, not real-time conditions.
+                </p>
+              )}
 
               <div className="grid gap-3 md:grid-cols-3">
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
@@ -1244,10 +573,130 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
               <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-5 text-sm text-slate-500">No trips match this filter.</div>
             ) : (
               <div className="space-y-5">
-                <DriverTripTable title="Today's Assigned Trips" trips={todayAssignedTrips} onSelectTrip={setTripDetailsModal} onDeclineTrip={setConfirmDecline} />
-                <DriverTripTable title="Upcoming Trips" trips={upcomingAssignedTrips} onSelectTrip={setTripDetailsModal} onDeclineTrip={setConfirmDecline} emptyMessage="No upcoming trips match this filter." />
+                <DriverTripTable title="Today's Assigned Trips" trips={todayAssignedTrips} onSelectTrip={setTripDetailsModal} onDeclineTrip={setConfirmDecline} onAcceptTrip={handleAcceptTrip} />
+                <DriverTripTable title="Upcoming Trips" trips={upcomingAssignedTrips} onSelectTrip={setTripDetailsModal} onDeclineTrip={setConfirmDecline} onAcceptTrip={handleAcceptTrip} emptyMessage="No upcoming trips match this filter." />
               </div>
             )}
+          </section>
+        )}
+
+        {/* Batch 15, Item 5: Calendar view — month grid, distinct from the
+            list-based Schedule view below. */}
+        {!loading && activeTab === 'calendar' && (
+          <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm">
+            <div className="mb-4 flex items-center justify-between">
+              <h4 className="text-base font-bold text-slate-900">
+                {calendarMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+              </h4>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  className="rounded-lg border border-slate-200 bg-white p-1.5 text-slate-600 transition hover:bg-slate-50"
+                  onClick={() => setCalendarMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))}
+                  aria-label="Previous month"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-600 transition hover:bg-slate-50"
+                  onClick={() => setCalendarMonth(() => { const t = new Date(); return new Date(t.getFullYear(), t.getMonth(), 1); })}
+                >
+                  Today
+                </button>
+                <button
+                  type="button"
+                  className="rounded-lg border border-slate-200 bg-white p-1.5 text-slate-600 transition hover:bg-slate-50"
+                  onClick={() => setCalendarMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))}
+                  aria-label="Next month"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+            <div className="grid grid-cols-7 gap-1 text-center text-xs font-semibold uppercase tracking-wide text-slate-400">
+              {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
+                <div key={d} className="py-1.5">{d}</div>
+              ))}
+            </div>
+            <div className="mt-1 grid grid-cols-7 gap-1">
+              {calendarDays.map((cell) => (
+                <button
+                  key={cell.dateKey}
+                  type="button"
+                  disabled={cell.trips.length === 0}
+                  onClick={() => cell.trips.length === 1 ? setTripDetailsModal(cell.trips[0]) : cell.trips.length > 1 ? setActiveTab('schedule') : null}
+                  className={`flex min-h-20 flex-col items-start gap-1 rounded-lg border p-1.5 text-left transition ${
+                    cell.isCurrentMonth ? 'bg-white' : 'bg-slate-50 text-slate-300'
+                  } ${cell.isToday ? 'border-teal-400 ring-1 ring-teal-200' : 'border-slate-100'} ${
+                    cell.trips.length > 0 ? 'hover:bg-teal-50 cursor-pointer' : 'cursor-default'
+                  }`}
+                >
+                  <span className={`text-xs font-semibold ${cell.isToday ? 'text-teal-600' : cell.isCurrentMonth ? 'text-slate-700' : 'text-slate-300'}`}>
+                    {cell.date.getDate()}
+                  </span>
+                  {cell.trips.slice(0, 2).map((t) => (
+                    <span
+                      key={t.trip_id}
+                      className="w-full truncate rounded px-1 py-0.5 text-[10px] font-semibold"
+                      style={{ background: `${STATUS_COLOR[t.status] || '#64748b'}20`, color: STATUS_COLOR[t.status] || '#64748b' }}
+                    >
+                      {t.fleet_route?.route?.route_name || `Trip #${t.trip_id}`}
+                    </span>
+                  ))}
+                  {cell.trips.length > 2 && (
+                    <span className="text-[10px] text-slate-400">+{cell.trips.length - 2} more</span>
+                  )}
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Batch 15, Item 6: Schedule view — chronological list (upcoming
+            then past), distinct from the Calendar grid above. */}
+        {!loading && activeTab === 'schedule' && (
+          <section className="space-y-5">
+            <div className="rounded-xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm">
+              <h4 className="mb-3 text-base font-bold text-slate-900">Upcoming</h4>
+              {scheduleUpcoming.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-5 text-sm text-slate-500">No upcoming trips scheduled.</div>
+              ) : (
+                <ul className="divide-y divide-slate-100">
+                  {scheduleUpcoming.map((item) => (
+                    <li key={item.trip_id} className="flex cursor-pointer items-center justify-between gap-3 py-3 hover:bg-slate-50" onClick={() => setTripDetailsModal(item)}>
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900">{item.fleet_route?.route?.origin || '-'} → {item.fleet_route?.route?.destination || '-'}</p>
+                        <p className="font-data text-xs text-slate-500">{formatTripSchedule(item)}</p>
+                      </div>
+                      <span className="rounded-full px-2.5 py-1 text-xs font-semibold" style={{ background: `${STATUS_COLOR[item.status] || '#64748b'}20`, color: STATUS_COLOR[item.status] || '#64748b' }}>
+                        {(item.status || 'pending').toUpperCase()}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm">
+              <h4 className="mb-3 text-base font-bold text-slate-900">Past</h4>
+              {schedulePast.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-5 text-sm text-slate-500">No past trips yet.</div>
+              ) : (
+                <ul className="divide-y divide-slate-100">
+                  {schedulePast.map((item) => (
+                    <li key={item.trip_id} className="flex cursor-pointer items-center justify-between gap-3 py-3 hover:bg-slate-50" onClick={() => setTripDetailsModal(item)}>
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900">{item.fleet_route?.route?.origin || '-'} → {item.fleet_route?.route?.destination || '-'}</p>
+                        <p className="font-data text-xs text-slate-500">{formatTripSchedule(item)}</p>
+                      </div>
+                      <span className="rounded-full px-2.5 py-1 text-xs font-semibold" style={{ background: `${STATUS_COLOR[item.status] || '#64748b'}20`, color: STATUS_COLOR[item.status] || '#64748b' }}>
+                        {(item.status || 'pending').toUpperCase()}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           </section>
         )}
 
@@ -1595,15 +1044,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                   </div>
                   <label className="relative inline-flex cursor-pointer items-center">
                     <input type="checkbox" className="sr-only peer" checked={twoFactorEnabled}
-                      onChange={async (e) => {
-                        const enabled = e.target.checked;
-                        setTwoFactorEnabled(enabled); setSaving2fa(true); setMsg2fa('');
-                        try {
-                          await StaffService.setTwoFactorPreference(enabled, 'driver');
-                          setMsg2fa(enabled ? '2FA enabled.' : '2FA disabled.');
-                        } catch (err) { setTwoFactorEnabled(!enabled); setMsg2fa(err?.message || 'Failed to update.'); }
-                        finally { setSaving2fa(false); }
-                      }} disabled={saving2fa} />
+                      onChange={(e) => handleToggleTwoFactor(e.target.checked)} disabled={saving2fa} />
                     <div className="h-6 w-11 rounded-full bg-slate-700 peer-checked:bg-teal-500 peer-focus:ring-2 peer-focus:ring-teal-400 transition-colors after:absolute after:top-0.5 after:left-0.5 after:h-5 after:w-5 after:rounded-full after:bg-white after:shadow after:transition-all peer-checked:after:translate-x-full" />
                   </label>
                 </div>
@@ -1717,7 +1158,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   );
 }
 
-function DriverTripTable({ title, trips, onSelectTrip, onDeclineTrip, emptyMessage = 'No trips in this section.' }) {
+function DriverTripTable({ title, trips, onSelectTrip, onDeclineTrip, onAcceptTrip, emptyMessage = 'No trips in this section.' }) {
   return (
     <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
       <h5 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">{title}</h5>
@@ -1753,15 +1194,26 @@ function DriverTripTable({ title, trips, onSelectTrip, onDeclineTrip, emptyMessa
                       </span>
                     </td>
                     <td className="py-3 pr-4">
-                      {canDecline && (
-                        <button
-                          type="button"
-                          className="rounded-lg border border-red-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-red-600 transition hover:bg-red-50"
-                          onClick={(event) => { event.stopPropagation(); onDeclineTrip?.(item); }}
-                        >
-                          Decline
-                        </button>
-                      )}
+                      <div className="flex flex-wrap gap-2">
+                        {canDecline && !item?.driver_accepted_at && (
+                          <button
+                            type="button"
+                            className="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100"
+                            onClick={(event) => { event.stopPropagation(); onAcceptTrip?.(item); }}
+                          >
+                            Accept
+                          </button>
+                        )}
+                        {canDecline && (
+                          <button
+                            type="button"
+                            className="rounded-lg border border-red-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-red-600 transition hover:bg-red-50"
+                            onClick={(event) => { event.stopPropagation(); onDeclineTrip?.(item); }}
+                          >
+                            Decline
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );

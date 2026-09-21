@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../useAuth';
 import PassengerService from '../../PassengerService/PassengerService';
+import { initFcmAndGetToken } from '../../../services/fcmService';
 
 const PROTECTED_TABS = new Set(['tickets', 'rewards', 'transactions', 'profile']);
 const TICKET_QR_CACHE_KEY = 'smart_transit_ticket_qr_cache_v1';
@@ -244,6 +245,28 @@ export default function usePassengerDashboard({ preloadMapView }) {
 
     return () => clearTimeout(timer);
   }, [isAuthenticated, loadPrivateData, clearPrivateData]);
+
+  // Notifications audit follow-up: register for push notifications (trip
+  // cancellation, payment failure alerts) once the passenger is logged in.
+  // Fail-soft — initFcmAndGetToken() resolves to null on any failure
+  // (unsupported browser, permission denied, missing config) and this
+  // effect simply does nothing further in that case.
+  useEffect(() => {
+    if (!isAuthenticated) return undefined;
+    let cancelled = false;
+    void (async () => {
+      const token = await initFcmAndGetToken();
+      if (!cancelled && token) {
+        try {
+          await PassengerService.registerFcmToken(token);
+        } catch {
+          // Non-critical — silently ignore, matches FcmService's fail-soft design.
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [isAuthenticated]);
+
 
   useEffect(() => {
     const paymentStatus = searchParams.get('payment');

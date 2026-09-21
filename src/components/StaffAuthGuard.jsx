@@ -1,27 +1,30 @@
 import { Navigate, Outlet } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { TokenManager } from '../utils/TokenManager.js';
-
-// Base URL for API calls — must match the Vite proxy / backend origin.
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '/api';
+import StaffService from '../api/StaffService/StaffBaseService';
 
 /**
  * Validates a staff token against the backend before allowing a redirect or
- * granting access. Returns 'loading' | 'valid' | 'invalid'.
+ * granting access. Returns 'invalid' | 'valid'.
+ *
+ * Architecture audit follow-up (CONF-06): previously called `fetch()`
+ * directly, bypassing BaseService's auth-header/error handling. Now goes
+ * through StaffService.getProfile(), which reads the same stored token.
  */
 async function validateStaffToken(token, role) {
   if (!token || !role) return 'invalid';
 
-  // Each role exposes its own profile endpoint; any 2xx means the token is live.
   try {
-    const res = await fetch(`${API_BASE}/${role}/profile`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    return res.ok ? 'valid' : 'invalid';
-  } catch {
-    // Network failure (e.g. CORS, offline) — treat as valid so we don't wipe
-    // a freshly-issued token just because the tunnel/backend is unreachable.
+    await StaffService.getProfile(role);
     return 'valid';
+  } catch (err) {
+    const status = err?.cause?.response?.status ?? err?.response?.status ?? null;
+
+    // Network failure (e.g. CORS, offline) has no HTTP status — treat as
+    // valid so we don't wipe a freshly-issued token just because the
+    // tunnel/backend is unreachable. Any real HTTP error status means the
+    // token itself was rejected.
+    return status === null ? 'valid' : 'invalid';
   }
 }
 

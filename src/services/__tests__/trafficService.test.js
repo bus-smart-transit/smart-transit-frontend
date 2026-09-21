@@ -102,4 +102,28 @@ describe('trafficService', () => {
     expect(result.dataSource).toBe('ors');
     expect(result.routeGeometry?.type).toBe('LineString');
   });
+
+  // Batch C: THESIS_OBJECTIVES_AUDIT.md item #6 — traffic alerts silently
+  // degrade to a distance-based estimate with no user-facing indication when
+  // no provider is configured. This test locks in the `dataSource: 'fallback'`
+  // signal that DriverDashboard.jsx now uses to show a visible
+  // "Estimated — live traffic data is unavailable" banner.
+  test('flags dataSource as fallback when no traffic provider is configured', async () => {
+    vi.stubEnv('VITE_TRAFFIC_PROVIDER', '');
+    vi.stubEnv('VITE_TRAFFIC_API_BASE', '');
+    vi.stubEnv('VITE_TRAFFIC_API_KEY', '');
+
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await fetchTrafficStatus({
+      currentLat: 7.087,
+      currentLng: 125.615,
+      nextStop: { latitude: 7.091, longitude: 125.62 },
+      route: { route_name: 'Route 7', origin: 'Davao', destination: 'Mati' },
+    });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(result.dataSource).toBe('fallback');
+  });
 });

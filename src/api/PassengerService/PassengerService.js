@@ -94,6 +94,12 @@ class PassengerService extends RoleAuthServiceBase {
   async setTwoFactorPreference(enabled) {
     return await this.request(`/${this.endpointBase}/two-factor`, "PATCH", { enabled });
   }
+
+  // Notifications audit follow-up: passenger-side FCM registration, so
+  // trip cancellation / payment failure pushes can reach the passenger.
+  async registerFcmToken(token) {
+    return await this.request(`/${this.endpointBase}/fcm-token`, "POST", { token });
+  }
 }
 
 export default new PassengerService();

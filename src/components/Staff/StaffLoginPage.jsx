@@ -14,7 +14,7 @@ import {
   TriangleAlert,
   Users,
 } from 'lucide-react';
-import StaffService from '../../api/StaffService/StaffService';
+import StaffService from '../../api/StaffService/StaffBaseService';
 import { TokenManager } from '../../utils/TokenManager.js';
 
 const ROLES = [

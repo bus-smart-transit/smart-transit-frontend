@@ -17,7 +17,10 @@ import { AuthProvider } from '../../../api/hooks/contexts/AuthProvider';
 import usePassengerDashboard from '../../../api/hooks/Passenger/usePassengerDashboard';
 
 // Services mocked per-suite
-import StaffService from '../../../api/StaffService/StaffService';
+// StaffLoginPage/StaffGuestRoute now use the shared StaffBaseService
+// singleton (architecture audit follow-up, CONF-04 — StaffService.js was
+// split into a shared base + per-role services), not the old monolith.
+import StaffService from '../../../api/StaffService/StaffBaseService';
 import PassengerService from '../../../api/PassengerService/PassengerService';
 
 // ─── Storage mock (shared across all suites) ─────────────────────────────────
@@ -52,11 +55,15 @@ function clearAllStorage() {
 }
 
 // ─── Bug 1: StaffGuestRoute must not redirect on stale/invalid token ─────────
+// validateStaffToken() (in StaffAuthGuard.jsx) goes through
+// StaffService.getProfile() rather than a raw fetch() call (architecture
+// audit follow-up, CONF-06) — so these tests mock that service method
+// instead of stubbing global fetch.
 
 describe('Bug 1 — StaffGuestRoute: stale token does not redirect to dashboard', () => {
   beforeEach(() => {
     clearAllStorage();
-    vi.stubGlobal('fetch', vi.fn());
+    vi.spyOn(StaffService, 'getProfile');
   });
 
   afterEach(() => {
@@ -65,7 +72,7 @@ describe('Bug 1 — StaffGuestRoute: stale token does not redirect to dashboard'
   });
 
   test('no token in storage → shows login page, fetch not called', async () => {
-    globalThis.fetch.mockResolvedValue({ ok: false, status: 401 });
+    StaffService.getProfile.mockRejectedValue({ response: { status: 401 } });
 
     render(
       <MemoryRouter initialEntries={['/employee/login']}>
@@ -83,14 +90,14 @@ describe('Bug 1 — StaffGuestRoute: stale token does not redirect to dashboard'
       expect(screen.getByTestId('login-page')).toBeInTheDocument();
     });
     expect(screen.queryByTestId('operator-dashboard')).not.toBeInTheDocument();
-    // fetch should not have been called (no token to validate)
-    expect(globalThis.fetch).not.toHaveBeenCalled();
+    // getProfile should not have been called (no token to validate)
+    expect(StaffService.getProfile).not.toHaveBeenCalled();
   });
 
   test('stale token in sessionStorage (backend returns 401) → stays on login page', async () => {
     sessionStorage.setItem('staff_token', 'expired-token-abc123');
     sessionStorage.setItem('staff_role', 'operator');
-    globalThis.fetch.mockResolvedValue({ ok: false, status: 401 });
+    StaffService.getProfile.mockRejectedValue({ response: { status: 401 } });
 
     render(
       <MemoryRouter initialEntries={['/employee/login']}>
@@ -117,7 +124,7 @@ describe('Bug 1 — StaffGuestRoute: stale token does not redirect to dashboard'
   test('valid token (backend returns 200) → redirects to role dashboard', async () => {
     sessionStorage.setItem('staff_token', 'valid-token-xyz');
     sessionStorage.setItem('staff_role', 'driver');
-    globalThis.fetch.mockResolvedValue({ ok: true, status: 200 });
+    StaffService.getProfile.mockResolvedValue({ data: { profile: {} } });
 
     render(
       <MemoryRouter initialEntries={['/employee/login']}>
@@ -142,7 +149,7 @@ describe('Bug 1 — StaffGuestRoute: stale token does not redirect to dashboard'
     // just because the tunnel/backend is briefly unreachable.
     sessionStorage.setItem('staff_token', 'some-token');
     sessionStorage.setItem('staff_role', 'conductor');
-    globalThis.fetch.mockRejectedValue(new Error('Network error'));
+    StaffService.getProfile.mockRejectedValue(new Error('Network error'));
 
     render(
       <MemoryRouter initialEntries={['/employee/login']}>

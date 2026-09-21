@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Bus, Mail, Shield, TriangleAlert, CircleCheckBig } from 'lucide-react';
-import StaffService from '../../api/StaffService/StaffService';
+import StaffService from '../../api/StaffService/StaffBaseService';
 import Button from '../ui/Button';
 import FormInput from '../ui/FormInput';
 import Card from '../ui/Card';

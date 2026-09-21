@@ -2,10 +2,11 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { Bus, Clock3, LocateFixed, MapPin, Route, Ruler, X } from 'lucide-react';
 import "maplibre-gl/dist/maplibre-gl.css";
 import { loadMapLib } from './mapDependencies';
-import PassengerService from '../../api/PassengerService/PassengerService';
+import { fetchRouteStopsForMap, fetchFleetLocationsForMap, fetchNearestFleetForMap } from '../../api/hooks/Passenger/useMapView';
 import { haversineM, lerp, lerpAngle } from '../../utils/geo';
 import { Navigation } from 'lucide-react';
 import { fetchTrafficStatus } from '../../services/trafficService';
+import { fetchDrivingRouteWithMetrics, geocodeLandmark } from '../../services/routingService';
 
 export default function MapView({ role = "passenger", trackedFleetId = null }) {
   const mapContainer = useRef(null);
@@ -71,7 +72,7 @@ export default function MapView({ role = "passenger", trackedFleetId = null }) {
     if (!mapObj || !maplibregl || !routeId) return;
 
     try {
-      const res = await PassengerService.getRouteStops(routeId);
+      const res = await fetchRouteStopsForMap(routeId);
       const stops = res?.data ?? [];
       const valid = stops.filter(
         (s) => Number.isFinite(Number(s?.longitude)) && Number.isFinite(Number(s?.latitude))
@@ -179,7 +180,7 @@ export default function MapView({ role = "passenger", trackedFleetId = null }) {
     if (!map.current || !maplibregl || role !== 'passenger') return;
 
     try {
-      const res = await PassengerService.getFleetLocations();
+      const res = await fetchFleetLocationsForMap();
       const locations = (res?.data ?? []).filter(
         (row) => Number.isFinite(Number(row?.longitude)) && Number.isFinite(Number(row?.latitude))
       );
@@ -473,7 +474,7 @@ export default function MapView({ role = "passenger", trackedFleetId = null }) {
     }
 
     try {
-      const res = await PassengerService.getNearestFleet({
+      const res = await fetchNearestFleetForMap({
         latitude: currentCoords.lat,
         longitude: currentCoords.lng,
       });
@@ -540,43 +541,30 @@ export default function MapView({ role = "passenger", trackedFleetId = null }) {
     setIsCalculating(true);
 
     try {
-      const geocodeUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
-        destinationInput
-      )}&viewbox=125.50,7.40,125.90,7.00&bounded=1&limit=1`;
+      const destinationCoords = await geocodeLandmark(destinationInput);
 
-      const geoResponse = await fetch(geocodeUrl, {
-        headers: { "Accept-Language": "en" }
-      });
-      const geoData = await geoResponse.json();
-
-      if (!geoData || geoData.length === 0) {
+      if (!destinationCoords) {
         alert("Location not found along the Davao-Tagum route. Please try a prominent landmark.");
         setIsCalculating(false);
         return;
       }
 
-      const destinationCoords = {
-        lng: parseFloat(geoData[0].lon),
-        lat: parseFloat(geoData[0].lat),
-        name: geoData[0].display_name.split(',')[0]
-      };
+      const routeResult = await fetchDrivingRouteWithMetrics([
+        [currentCoords.lng, currentCoords.lat],
+        [destinationCoords.lng, destinationCoords.lat],
+      ]);
 
-      const url = `https://router.project-osrm.org/route/v1/driving/${currentCoords.lng},${currentCoords.lat};${destinationCoords.lng},${destinationCoords.lat}?overview=full&geometries=geojson`;
-      const response = await fetch(url);
-      const data = await response.json();
-
-      if (!data.routes || data.routes.length === 0) {
+      if (!routeResult) {
         alert("No drivable route found to that location.");
         setIsCalculating(false);
         return;
       }
 
-      const route = data.routes[0];
-      const geometry = route.geometry;
+      const { geometry, distanceMeters, durationSeconds } = routeResult;
 
       setRouteMetrics({
-        distance: `${(route.distance / 1000).toFixed(2)} km`,
-        duration: `${Math.ceil(route.duration / 60)} mins`,
+        distance: `${(distanceMeters / 1000).toFixed(2)} km`,
+        duration: `${Math.ceil(durationSeconds / 60)} mins`,
       });
 
       if (map.current.getLayer("route-line")) map.current.removeLayer("route-line");

@@ -5,7 +5,12 @@ import { StrictMode } from 'react';
 import DriverDashboard from '../DriverDashboard';
 import ConductorDashboard from '../ConductorDashboard';
 import PairingScreen from '../PairingScreen';
-import StaffService from '../../../api/StaffService/StaffService';
+// StaffService.js was split into a shared base + per-role services
+// (architecture audit follow-up, CONF-04) — DriverDashboard/ConductorDashboard
+// now use their own role service, and PairingScreen uses the shared base.
+import DriverService from '../../../api/StaffService/DriverService';
+import ConductorService from '../../../api/StaffService/ConductorService';
+import StaffService from '../../../api/StaffService/StaffBaseService';
 import { getBusinessToday } from '../../../utils/dates';
 
 // Backend trip_date is a date-only value ('date' cast) representing the
@@ -20,13 +25,13 @@ function renderWithRouter(ui) {
 }
 
 function mockCommonDriverEndpoints({ paired = false } = {}) {
-  vi.spyOn(StaffService, 'getPairingStatus').mockResolvedValue({ data: { paired, reason: paired ? '' : 'Needs pairing' } });
-  vi.spyOn(StaffService, 'getProfile').mockResolvedValue({ data: { name: 'Driver One' } });
-  vi.spyOn(StaffService, 'getCurrentTrip').mockResolvedValue({ data: null });
-  vi.spyOn(StaffService, 'getDriverTrips').mockResolvedValue({ data: [] });
-  vi.spyOn(StaffService, 'getCurrentTripStops').mockResolvedValue({ data: [] });
-  vi.spyOn(StaffService, 'getDriverPin').mockResolvedValue({ data: { pin_code: '123456' } });
-  vi.spyOn(StaffService, 'logout').mockResolvedValue({});
+  vi.spyOn(DriverService, 'getPairingStatus').mockResolvedValue({ data: { paired, reason: paired ? '' : 'Needs pairing' } });
+  vi.spyOn(DriverService, 'getProfile').mockResolvedValue({ data: { name: 'Driver One' } });
+  vi.spyOn(DriverService, 'getCurrentTrip').mockResolvedValue({ data: null });
+  vi.spyOn(DriverService, 'getDriverTrips').mockResolvedValue({ data: [] });
+  vi.spyOn(DriverService, 'getCurrentTripStops').mockResolvedValue({ data: [] });
+  vi.spyOn(DriverService, 'getDriverPin').mockResolvedValue({ data: { pin_code: '123456' } });
+  vi.spyOn(DriverService, 'logout').mockResolvedValue({});
 }
 
 function mockCommonConductorEndpoints({ paired = true, withActiveTrip = false } = {}) {
@@ -39,14 +44,14 @@ function mockCommonConductorEndpoints({ paired = true, withActiveTrip = false } 
     }
     : null;
 
-  vi.spyOn(StaffService, 'getPairingStatus').mockResolvedValue({ data: { paired, reason: paired ? '' : 'Needs pairing' } });
-  vi.spyOn(StaffService, 'getProfile').mockResolvedValue({ data: { name: 'Conductor One' } });
-  vi.spyOn(StaffService, 'getConductorTrip').mockResolvedValue({ data: trip });
-  vi.spyOn(StaffService, 'getConductorTrips').mockResolvedValue({ data: trip ? [trip] : [] });
-  vi.spyOn(StaffService, 'getTripOccupancy').mockResolvedValue({ data: { boarded: { seated: 2, standing: 1 }, capacity: { total: 20 } } });
-  vi.spyOn(StaffService, 'getCurrentPassengers').mockResolvedValue({ data: [] });
-  vi.spyOn(StaffService, 'getConductorPin').mockResolvedValue({ data: { pin_code: '654321' } });
-  vi.spyOn(StaffService, 'logout').mockResolvedValue({});
+  vi.spyOn(ConductorService, 'getPairingStatus').mockResolvedValue({ data: { paired, reason: paired ? '' : 'Needs pairing' } });
+  vi.spyOn(ConductorService, 'getProfile').mockResolvedValue({ data: { name: 'Conductor One' } });
+  vi.spyOn(ConductorService, 'getConductorTrip').mockResolvedValue({ data: trip });
+  vi.spyOn(ConductorService, 'getConductorTrips').mockResolvedValue({ data: trip ? [trip] : [] });
+  vi.spyOn(ConductorService, 'getTripOccupancy').mockResolvedValue({ data: { boarded: { seated: 2, standing: 1 }, capacity: { total: 20 } } });
+  vi.spyOn(ConductorService, 'getCurrentPassengers').mockResolvedValue({ data: [] });
+  vi.spyOn(ConductorService, 'getConductorPin').mockResolvedValue({ data: { pin_code: '654321' } });
+  vi.spyOn(ConductorService, 'logout').mockResolvedValue({});
 }
 
 describe('Network Fetch Audit - Staff dashboards', () => {
@@ -70,12 +75,12 @@ describe('Network Fetch Audit - Staff dashboards', () => {
     );
 
     await waitFor(() => {
-      expect(StaffService.getPairingStatus).toHaveBeenCalledTimes(1);
+      expect(DriverService.getPairingStatus).toHaveBeenCalledTimes(1);
     });
 
-    expect(StaffService.getProfile).toHaveBeenCalledTimes(1);
-    expect(StaffService.getCurrentTrip).toHaveBeenCalledTimes(1);
-    expect(StaffService.getDriverTrips).toHaveBeenCalledTimes(1);
+    expect(DriverService.getProfile).toHaveBeenCalledTimes(1);
+    expect(DriverService.getCurrentTrip).toHaveBeenCalledTimes(1);
+    expect(DriverService.getDriverTrips).toHaveBeenCalledTimes(1);
   });
 
   test('driver pairing polling runs every 90s while unpaired and stops after unmount', async () => {
@@ -95,25 +100,25 @@ describe('Network Fetch Audit - Staff dashboards', () => {
     await act(async () => {
       await Promise.resolve();
     });
-    expect(StaffService.getPairingStatus).toHaveBeenCalledTimes(1);
+    expect(DriverService.getPairingStatus).toHaveBeenCalledTimes(1);
 
     await act(async () => {
       vi.advanceTimersByTime(89999);
       await Promise.resolve();
     });
-    expect(StaffService.getPairingStatus).toHaveBeenCalledTimes(1);
+    expect(DriverService.getPairingStatus).toHaveBeenCalledTimes(1);
 
     await act(async () => {
       vi.advanceTimersByTime(1);
       await Promise.resolve();
     });
-    expect(StaffService.getPairingStatus).toHaveBeenCalledTimes(2);
+    expect(DriverService.getPairingStatus).toHaveBeenCalledTimes(2);
 
     await act(async () => {
       vi.advanceTimersByTime(90000);
       await Promise.resolve();
     });
-    expect(StaffService.getPairingStatus).toHaveBeenCalledTimes(3);
+    expect(DriverService.getPairingStatus).toHaveBeenCalledTimes(3);
 
     unmount();
 
@@ -121,7 +126,7 @@ describe('Network Fetch Audit - Staff dashboards', () => {
       vi.advanceTimersByTime(180000);
       await Promise.resolve();
     });
-    expect(StaffService.getPairingStatus).toHaveBeenCalledTimes(3);
+    expect(DriverService.getPairingStatus).toHaveBeenCalledTimes(3);
   });
 
   test('conductor does not refetch pairing status on unrelated parent rerender', async () => {
@@ -139,7 +144,7 @@ describe('Network Fetch Audit - Staff dashboards', () => {
     const { rerender } = renderWithRouter(<Shell marker="one" />);
 
     await waitFor(() => {
-      expect(StaffService.getPairingStatus).toHaveBeenCalledTimes(1);
+      expect(ConductorService.getPairingStatus).toHaveBeenCalledTimes(1);
     });
 
     rerender(
@@ -148,7 +153,7 @@ describe('Network Fetch Audit - Staff dashboards', () => {
       </MemoryRouter>,
     );
 
-    expect(StaffService.getPairingStatus).toHaveBeenCalledTimes(1);
+    expect(ConductorService.getPairingStatus).toHaveBeenCalledTimes(1);
   });
 
   test('conductor occupancy fetch triggers exactly once when Ticketing tab is opened', async () => {
@@ -157,14 +162,14 @@ describe('Network Fetch Audit - Staff dashboards', () => {
     renderWithRouter(<ConductorDashboard />);
 
     await waitFor(() => {
-      expect(StaffService.getConductorTrip).toHaveBeenCalledTimes(1);
+      expect(ConductorService.getConductorTrip).toHaveBeenCalledTimes(1);
     });
 
     const occupancyTab = await screen.findByRole('button', { name: /Ticketing/i });
     fireEvent.click(occupancyTab);
 
     await waitFor(() => {
-      expect(StaffService.getTripOccupancy).toHaveBeenCalledTimes(1);
+      expect(ConductorService.getTripOccupancy).toHaveBeenCalledTimes(1);
     });
   });
 

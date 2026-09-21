@@ -5,6 +5,7 @@ import { loadMapLib } from '../../Map/mapDependencies';
 import PassengerService from '../../../api/PassengerService/PassengerService';
 import { haversineM } from '../../../utils/geo';
 import { fetchTrafficStatus } from '../../../services/trafficService';
+import { fetchRoadPathFromOsrm } from '../../../services/routingService';
 
 const POLL_MS = 12000;
 const ROUTE_SOURCE_ID = 'public-track-route';
@@ -26,21 +27,6 @@ const toLineGeometry = (coordinates = []) => ({
   type: 'LineString',
   coordinates,
 });
-
-const fetchRoadPathFromOsrm = async (coordinates = []) => {
-  if (!Array.isArray(coordinates) || coordinates.length < 2) return null;
-
-  const encoded = coordinates.map(([lng, lat]) => `${lng},${lat}`).join(';');
-  const url = `https://router.project-osrm.org/route/v1/driving/${encoded}?overview=full&geometries=geojson&steps=false`;
-  const response = await fetch(url);
-  if (!response.ok) return null;
-
-  const data = await response.json();
-  const roadCoords = data?.routes?.[0]?.geometry?.coordinates;
-  if (!Array.isArray(roadCoords) || roadCoords.length < 2) return null;
-
-  return roadCoords;
-};
 
 const deriveStopProgress = (stops = [], fleetLat, fleetLng, lastAcknowledgedStopId, tripStatus) => {
   const normalizedStops = (Array.isArray(stops) ? stops : [])

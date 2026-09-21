@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { loadMapLib } from '../Map/mapDependencies';
-import StaffService from '../../api/StaffService/StaffService';
+import DriverService from '../../api/StaffService/DriverService';
 import { nearestPointOnLine } from '../../utils/geo';
+import { fetchRoadPathFromOsrm } from '../../services/routingService';
 
 const DRIVER_ROUTE_SOURCE_ID = 'driver-route';
 const DRIVER_ROUTE_LINE_LAYER_ID = 'driver-route-line';
@@ -37,21 +38,6 @@ const buildStopFeatures = (validStops = [], acknowledgedStopIds = new Set(), rou
     };
   }),
 });
-
-const fetchRoadPathFromOsrm = async (coordinates = []) => {
-  if (!Array.isArray(coordinates) || coordinates.length < 2) return null;
-
-  const encoded = coordinates.map(([lng, lat]) => `${lng},${lat}`).join(';');
-  const url = `https://router.project-osrm.org/route/v1/driving/${encoded}?overview=full&geometries=geojson&steps=false`;
-  const response = await fetch(url);
-  if (!response.ok) return null;
-
-  const data = await response.json();
-  const roadCoords = data?.routes?.[0]?.geometry?.coordinates;
-  if (!Array.isArray(roadCoords) || roadCoords.length < 2) return null;
-
-  return roadCoords;
-};
 
 /**
  * Embedded MapLibre GL map for the driver's Navigation tab.
@@ -130,7 +116,7 @@ export default function DriverNavigationMap({ trip, stops, lastGpsRef, routeGeom
 
     (async () => {
       try {
-        const res      = await StaffService.getRouteStops(routeId);
+        const res      = await DriverService.getRouteStops(routeId);
         const stopList = res?.data ?? [];
         const valid    = stopList.filter(
           (s) => Number.isFinite(Number(s?.longitude)) && Number.isFinite(Number(s?.latitude))

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import StaffService from '../../api/StaffService/StaffService';
+import AdminService from '../../api/StaffService/AdminService';
 import { Plus, Edit, Trash2, AlertCircle, CheckCircle, Loader, ShieldCheck, MapPin, Route, Bus, Users, LogOut } from 'lucide-react';
 
 const TAB_ITEMS = [
@@ -45,7 +45,7 @@ export default function AdminPanel() {
   const loadStops = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await StaffService.getStops();
+      const res = await AdminService.getStops();
       setStops(res?.data ?? []);
     } catch (err) {
       showMessage(err.message || 'Failed to load stops', false);
@@ -59,12 +59,12 @@ export default function AdminPanel() {
     setLoading(true);
     try {
       if (editingStopId) {
-        await StaffService.updateStop(editingStopId, stopForm);
+        await AdminService.updateStop(editingStopId, stopForm);
         setStops(stops.map(s => s.stop_id === editingStopId ? { ...s, ...stopForm } : s));
         showMessage('Stop updated successfully!', true);
         setEditingStopId(null);
       } else {
-        const res = await StaffService.createStop(stopForm);
+        const res = await AdminService.createStop(stopForm);
         setStops([...stops, res.data]);
         showMessage('Stop created successfully!', true);
       }
@@ -79,7 +79,7 @@ export default function AdminPanel() {
   const handleDeleteStop = async (stopId) => {
     if (!window.confirm('Delete this stop?')) return;
     try {
-      await StaffService.deleteStop(stopId);
+      await AdminService.deleteStop(stopId);
       setStops(stops.filter(s => s.stop_id !== stopId));
       showMessage('Stop deleted successfully!', true);
     } catch (err) {
@@ -91,7 +91,7 @@ export default function AdminPanel() {
   const loadRoutes = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await StaffService.getRoutes();
+      const res = await AdminService.getRoutes();
       setRoutes(res?.data ?? []);
     } catch (err) {
       showMessage(err.message || 'Failed to load routes', false);
@@ -105,12 +105,12 @@ export default function AdminPanel() {
     setLoading(true);
     try {
       if (editingRouteId) {
-        await StaffService.updateRoute(editingRouteId, routeForm);
+        await AdminService.updateRoute(editingRouteId, routeForm);
         setRoutes(routes.map(r => r.route_id === editingRouteId ? { ...r, ...routeForm } : r));
         showMessage('Route updated successfully!', true);
         setEditingRouteId(null);
       } else {
-        const res = await StaffService.createRoute(routeForm);
+        const res = await AdminService.createRoute(routeForm);
         setRoutes([...routes, res.data]);
         showMessage('Route created successfully!', true);
       }
@@ -125,7 +125,7 @@ export default function AdminPanel() {
   const handleDeleteRoute = async (routeId) => {
     if (!window.confirm('Delete this route?')) return;
     try {
-      await StaffService.deleteRoute(routeId);
+      await AdminService.deleteRoute(routeId);
       setRoutes(routes.filter(r => r.route_id !== routeId));
       showMessage('Route deleted successfully!', true);
     } catch (err) {
@@ -137,7 +137,7 @@ export default function AdminPanel() {
   const loadFleets = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await StaffService.getAdminFleets();
+      const res = await AdminService.getAdminFleets();
       setFleets(res?.data ?? []);
     } catch (err) {
       showMessage(err.message || 'Failed to load fleets', false);
@@ -151,7 +151,7 @@ export default function AdminPanel() {
     setLoading(true);
     try {
       if (editingFleetId) {
-        await StaffService.updateFleet(editingFleetId, {
+        await AdminService.updateFleet(editingFleetId, {
           plate_number: fleetForm.plate_number,
           seated_capacity: parseInt(fleetForm.seated_capacity),
           standing_capacity: parseInt(fleetForm.standing_capacity),
@@ -161,7 +161,7 @@ export default function AdminPanel() {
         showMessage('Fleet updated successfully!', true);
         setEditingFleetId(null);
       } else {
-        const res = await StaffService.adminCreateFleet({
+        const res = await AdminService.adminCreateFleet({
           plate_number: fleetForm.plate_number,
           seated_capacity: parseInt(fleetForm.seated_capacity),
           standing_capacity: parseInt(fleetForm.standing_capacity),
@@ -181,7 +181,7 @@ export default function AdminPanel() {
   const handleDeleteFleet = async (fleetId) => {
     if (!window.confirm('Delete this fleet?')) return;
     try {
-      await StaffService.deleteFleet(fleetId);
+      await AdminService.deleteFleet(fleetId);
       setFleets(fleets.filter(f => f.fleet_id !== fleetId));
       showMessage('Fleet deleted successfully!', true);
     } catch (err) {
@@ -194,8 +194,8 @@ export default function AdminPanel() {
     setLoading(true);
     try {
       const [drivers, conductors] = await Promise.all([
-        StaffService.getAdminDrivers(),
-        StaffService.getAdminConductors(),
+        AdminService.getAdminDrivers(),
+        AdminService.getAdminConductors(),
       ]);
       setAllDrivers(drivers?.data ?? []);
       setAllConductors(conductors?.data ?? []);
@@ -210,7 +210,7 @@ export default function AdminPanel() {
     e.preventDefault();
     setLoading(true);
     try {
-      await StaffService.createAdminAccount(accountForm);
+      await AdminService.createAdminAccount(accountForm);
       showMessage('Account created successfully!', true);
       setAccountForm({ name: '', email: '', password: '', phone_num: '', address: '', birth_date: '', role: 'driver' });
       loadAccounts();

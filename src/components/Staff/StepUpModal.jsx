@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ShieldCheck, X } from 'lucide-react';
-import StaffService from '../../api/StaffService/StaffService';
+import StaffService from '../../api/StaffService/StaffBaseService';
 
 /**
  * Step-up re-authentication modal.
