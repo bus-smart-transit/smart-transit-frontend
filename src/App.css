@@ -158,7 +158,7 @@ body {
   max-height: 500px !important;
   background-color: #eaeaea;
   border-radius: 4px;
-  overflow: hidden !important; /* Locks entire outer frame */
+  overflow: hidden !important;
   box-sizing: border-box !important;
 }
 
@@ -721,8 +721,8 @@ a.menu-item.active-nav {
   padding: 15px;
   display: flex;
   flex-direction: column;
-  align-items: center !important; /* Tinitiyak na nasa gitna ang lahat ng bata element */
-  text-align: center !important;  /* Naka-center ang mga text tulad ng title at instruction */
+  align-items: center !important;
+  text-align: center !important;
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.04);
   border: 1px solid #e0e0e0;
 }
@@ -749,7 +749,7 @@ a.menu-item.active-nav {
   overflow: hidden;
   margin-bottom: 10px;
   margin-left: auto;
-  margin-right: auto; /* Sinisigurong naka-center ang box mismo sa loob ng card */
+  margin-right: auto;
 }
 
 .qr-icon {
@@ -821,7 +821,7 @@ a.menu-item.active-nav {
   flex: 1 !important;
   height: 290px !important; 
   max-height: 290px !important;
-  overflow-y: scroll !important; /* Forces vertical scrollbar */
+  overflow-y: scroll !important;
   overflow-x: auto !important;
   border: 1px solid #eee;
   border-radius: 4px;
@@ -1035,4 +1035,154 @@ a.menu-item.active-nav {
   height: 100% !important;
   object-fit: cover !important;
   border-radius: 12px;
+}
+
+/* ==========================================
+   PORTAL LOGIN CARD STYLES (Ginaya sa UI mo)
+   ========================================== */
+
+.portal-login-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  width: 100vw;
+  background-color: #0b0f19;
+  padding: 20px;
+  box-sizing: border-box;
+}
+
+.portal-login-card {
+  background-color: #111827;
+  border: 1px solid #1f2937;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 420px;
+  padding: 35px 30px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.4);
+  box-sizing: border-box;
+  text-align: center;
+}
+
+.portal-icon-container {
+  width: 54px;
+  height: 54px;
+  background-color: rgba(23, 138, 156, 0.15);
+  border: 1px solid rgba(23, 138, 156, 0.3);
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 16px auto;
+  color: #178a9c;
+  font-size: 24px;
+}
+
+.portal-header-text h2 {
+  color: #ffffff;
+  font-size: 22px;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.portal-header-text p {
+  color: #9ca3af;
+  font-size: 13px;
+  margin-bottom: 24px;
+}
+
+.portal-form {
+  text-align: left;
+}
+
+.portal-input-group {
+  margin-bottom: 16px;
+}
+
+.portal-input-group label {
+  display: block;
+  color: #d1d5db;
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.portal-input-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.portal-input-field i {
+  position: absolute;
+  left: 14px;
+  color: #6b7280;
+  font-size: 14px;
+}
+
+.portal-input-field input {
+  width: 100%;
+  background-color: #030712;
+  border: 1px solid #374151;
+  border-radius: 8px;
+  padding: 12px 14px 12px 40px;
+  color: #ffffff;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.portal-input-field input:focus {
+  border-color: #178a9c;
+  box-shadow: 0 0 0 2px rgba(23, 138, 156, 0.2);
+}
+
+.portal-input-field input::placeholder {
+  color: #4b5563;
+}
+
+.portal-btn-submit {
+  width: 100%;
+  background-color: #178a9c;
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  padding: 12px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 8px;
+  transition: background-color 0.2s, box-shadow 0.2s;
+  box-shadow: 0 4px 12px rgba(23, 138, 156, 0.3);
+}
+
+.portal-btn-submit:hover {
+  background-color: #126e7d;
+}
+
+.portal-credentials-box {
+  margin-top: 24px;
+  background-color: #030712;
+  border: 1px solid #1f2937;
+  border-radius: 8px;
+  padding: 12px;
+  text-align: left;
+}
+
+.portal-cred-title {
+  display: block;
+  color: #9ca3af;
+  font-size: 11px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.portal-cred-item {
+  color: #d1d5db;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.portal-cred-item strong {
+  color: #00e676;
 }
