@@ -1,25 +1,24 @@
 import {
   AlertTriangle,
-  Bell,
   Bus,
-  Calendar,
   CalendarDays,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
   Clock3,
   Gauge,
-  ListChecks,
-  LogOut,
-  Navigation,
+  KeyRound,
   RefreshCw,
-  Route,
   TrendingUp,
   User,
 } from 'lucide-react';
 import PairingScreen from './PairingScreen';
+import StaffPortalLayout from './StaffPortalLayout';
 import DriverNavigationMap from './DriverNavigationMap';
+import NotificationBellButton from './NotificationBellButton';
 import { useDriverPairing, useDriverDashboardData } from '../../api/hooks/Staff/useDriverDashboard';
+import { getBusinessTodayLabel } from '../../utils/dates';
+import DriverService from '../../api/StaffService/DriverService';
 
 const STATUS_COLOR = {
   scheduled: '#64748b',
@@ -31,19 +30,19 @@ const STATUS_COLOR = {
   cancelled: '#ef4444',
 };
 
+// Batch 19 Part A: consolidated sidebar. "Assigned Routes" folds into
+// Dashboard (assigned-route/schedule/vehicle data belongs on the landing
+// view per Part B); Calendar + Schedule merge into one Schedule view;
+// Journey/Navigation/Traffic Alerts/Trip Status/Shift Blocks merge into
+// Active Trip (Shift Blocks is live operational state, not a planning
+// view, so it groups here rather than with Schedule). Daily PIN gets its
+// own item under Preferences & Utilities, extracted out of Trip Status.
 const NAV_ITEMS = [
   { key: 'dashboard', label: 'Dashboard', icon: Gauge },
-  { key: 'assigned', label: 'Assigned Routes', icon: Calendar },
-  // Batch 15, Items 5/6: Calendar (grid) and Schedule (chronological list)
-  // are distinct views from "Assigned Routes" (which is status/action
-  // oriented — decline/accept per trip). These are pure at-a-glance views.
-  { key: 'calendar', label: 'Calendar', icon: CalendarDays },
-  { key: 'schedule', label: 'Schedule', icon: ListChecks },
-  { key: 'journey', label: 'Journey', icon: Route },
-  { key: 'navigation', label: 'Navigation', icon: Navigation },
+  { key: 'activeTrip', label: 'Active Trip', icon: Bus },
+  { key: 'schedule', label: 'Schedule', icon: CalendarDays },
   { key: 'earnings', label: 'Earnings', icon: TrendingUp },
-  { key: 'alerts', label: 'Traffic Alerts', icon: Bell },
-  { key: 'trip', label: 'Trip Status', icon: Bus },
+  { key: 'pin', label: 'Daily PIN', icon: KeyRound },
   { key: 'account', label: 'Account', icon: User },
 ];
 
@@ -120,6 +119,8 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     earnings,
     shiftState,
     tripDetailsModal, setTripDetailsModal,
+    dayScheduleModalDate, setDayScheduleModalDate,
+    tripsByDate,
     loading,
     error,
     actionMsg, setActionMsg,
@@ -160,6 +161,8 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     journeyStatusLabel,
     pageTitle,
     lastGpsRef,
+    shiftBlocks,
+    shiftBlockActionInFlight,
     handleAssignedTripFilterChange,
     loadData,
     loadEarnings,
@@ -171,78 +174,30 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     handleConfirmedComplete,
     handleConfirmedDecline,
     handleAcceptTrip,
+    handleConfirmShiftBlockTakeover,
     handleLogout,
     handleToggleAvailability,
     handleToggleTwoFactor,
   } = useDriverDashboardData({ onLogout, pairing });
 
   return (
-    <div className="grid min-h-screen grid-cols-1 bg-slate-100 text-slate-900 lg:grid-cols-[260px_1fr]">
-      {/* Sidebar */}
-      <aside className="flex flex-col justify-between bg-[#0D1B2A] p-4 lg:min-h-screen">
-        <div>
-          {/* Brand */}
-          <div className="mb-6 flex items-center gap-3 px-2 pt-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-teal-500">
-              <Bus className="h-5 w-5 text-white" />
-            </div>
-            <div>
-              <p className="text-sm font-bold text-white leading-none">SMARTTRANSIT</p>
-              <p className="text-xs text-slate-400">Driver Portal</p>
-            </div>
-          </div>
-
-          <nav className="flex flex-col gap-0.5">
-            {NAV_ITEMS.map((item) => {
-              const Icon = item.icon;
-              const isActive = activeTab === item.key;
-              return (
-                <button
-                  key={item.key}
-                  className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
-                    isActive
-                      ? 'bg-teal-500 text-white'
-                      : 'text-slate-400 hover:bg-white/10 hover:text-white'
-                  }`}
-                  onClick={() => { setActiveTab(item.key); setActionMsg(''); }}
-                >
-                  <Icon className="h-4 w-4 shrink-0" />
-                  {item.label}
-                </button>
-              );
-            })}
-          </nav>
-        </div>
-
-        {/* Bottom: profile + logout */}
-        <div className="space-y-3">
-          {profile && (
-            <div className="flex items-center gap-3 rounded-xl bg-white/10 px-3 py-2.5">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-teal-500 text-sm font-bold text-white">
-                {(profile.name || 'D')[0].toUpperCase()}
-              </div>
-              <div className="min-w-0">
-                <p className="truncate text-sm font-semibold text-white">{profile.name}</p>
-                <p className="text-xs text-slate-400">Driver</p>
-              </div>
-            </div>
-          )}
-          <button
-            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-red-400 hover:bg-white/10 hover:text-red-300 transition"
-            onClick={handleLogout}
-          >
-            <LogOut className="h-4 w-4" />
-            Sign Out
-          </button>
-        </div>
-      </aside>
-
-      <main className="min-h-screen bg-white p-4 sm:p-6">
+    <>
+    <StaffPortalLayout
+      brandLabel="Driver Portal"
+      brandIcon={Bus}
+      navItems={NAV_ITEMS}
+      activeTab={activeTab}
+      onTabChange={(key) => { setActiveTab(key); setActionMsg(''); }}
+      profile={profile}
+      profileRoleLabel="Driver"
+      profileInitialFallback="D"
+      onLogout={handleLogout}
+    >
         <header className="mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
           <div>
             <h1 className="text-2xl font-bold text-slate-900">{pageTitle}</h1>
             <p className="text-xs text-slate-500">
-              {new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} — Davao City
+              {getBusinessTodayLabel()} — Davao City
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -317,6 +272,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
               <RefreshCw className="h-3.5 w-3.5" />
               Refresh
             </button>
+            <NotificationBellButton service={DriverService} role="driver" />
           </div>
         </header>
 
@@ -370,22 +326,25 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
             )}
             <button
               className="mt-4 rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-xs font-semibold text-slate-300 transition hover:border-slate-500"
-              onClick={() => setActiveTab('assigned')}
+              onClick={() => setActiveTab('dashboard')}
             >
               View Assigned Trips
             </button>
           </section>
         )}
 
+        {/* Batch 19 Part B: dashboard data (assigned route, schedule,
+            vehicle) always displays — pairing only gates specific live
+            actions (each already disabled individually below with a
+            tooltip), not the whole tab. */}
         {!loading && activeTab === 'dashboard' && !isPaired && (
-          <section className="rounded-2xl border border-amber-800 bg-amber-950/20 p-6">
-            <h3 className="text-lg font-semibold text-amber-300">Live dashboard features are locked</h3>
-            <p className="mt-2 text-sm text-amber-200/90">{pairingReason}</p>
-            <p className="mt-2 text-sm text-slate-300">Assigned routes and schedule remain available under Assigned Routes.</p>
+          <section className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
+            <p className="text-sm font-semibold text-amber-800">Pairing required for live shift actions</p>
+            <p className="mt-1 text-xs text-amber-700">{pairingReason} Your assigned route, schedule, and vehicle info below stay visible — only shift/trip actions are disabled until paired.</p>
           </section>
         )}
 
-        {!loading && activeTab === 'dashboard' && isPaired && !showNoCurrentTripState && (
+        {!loading && activeTab === 'dashboard' && !showNoCurrentTripState && (
           <section className="grid gap-4 xl:grid-cols-4 md:grid-cols-2">
             {/* S1: consolidated current-trip card — was 4 separate cards
                 (Today's Trip / Next Stop / Trip Progress / Journey Status)
@@ -406,7 +365,10 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                       <div className="h-2 w-2 rounded-full bg-amber-400" />
                     </div>
                   )}
-                  <span className="text-sm font-bold capitalize text-slate-900">{trip?.status || 'Idle'}</span>
+                  {/* S3 (Batch 17): fall back to the today-assigned trip's
+                      status so this reads e.g. "Scheduled" pre-shift instead
+                      of the misleading "Idle" placeholder. */}
+                  <span className="text-sm font-bold capitalize text-slate-900">{(trip || todayAssignedTrip)?.status || 'Idle'}</span>
                 </div>
               </div>
 
@@ -414,7 +376,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Next Stop</p>
                   <p className="mt-1 text-sm font-bold text-slate-900">{nextStop?.stop_name ?? nextStop?.name ?? 'No pending stop'}</p>
-                  <p className="mt-1 inline-flex items-center gap-1 text-xs text-slate-500"><Clock3 className="h-3.5 w-3.5" /> ETA {formatTripSchedule(trip)}</p>
+                  <p className="mt-1 inline-flex items-center gap-1 text-xs text-slate-500"><Clock3 className="h-3.5 w-3.5" /> ETA {formatTripSchedule(trip || todayAssignedTrip)}</p>
                 </div>
 
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
@@ -440,9 +402,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
               </div>
 
               <div className="mt-4 flex flex-wrap gap-4 border-t border-slate-100 pt-3">
-                <button className="text-sm font-semibold text-teal-600 hover:text-teal-700" onClick={() => setActiveTab('assigned')}>View Details →</button>
-                <button className="text-sm font-semibold text-teal-600 hover:text-teal-700" onClick={() => setActiveTab('journey')}>View Journey →</button>
-                <button className="text-sm font-semibold text-teal-600 hover:text-teal-700" onClick={() => setActiveTab('trip')}>View Summary →</button>
+                <button className="text-sm font-semibold text-teal-600 hover:text-teal-700" onClick={() => setActiveTab('activeTrip')}>View Active Trip →</button>
               </div>
             </article>
 
@@ -471,7 +431,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                     ✓ Accept Trip
                   </button>
                 )}
-                {['scheduled', 'delayed', 'boarding'].includes(String(todayAssignedTrip?.status || '').toLowerCase()) && (
+                {['scheduled', 'delayed', 'boarding'].includes(String(todayAssignedTrip?.status || '').toLowerCase()) && !todayAssignedTrip?.driver_accepted_at && (
                   <button
                     type="button"
                     className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-red-200 bg-white px-4 py-2.5 text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:opacity-50"
@@ -550,8 +510,11 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
           </section>
         )}
 
-        {!loading && activeTab === 'assigned' && (
-          <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm">
+        {/* Batch 19 Part A: folded into Dashboard (was the standalone
+            "Assigned Routes" nav item). Accept/decline never depended on
+            pairing, so no gating needed here. */}
+        {!loading && activeTab === 'dashboard' && (
+          <section className="mt-4 rounded-xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm">
             <div className="mb-4 flex items-center justify-between">
               <h4 className="text-base font-bold text-slate-900">Assigned Routes</h4>
               <div className="flex items-center gap-2">
@@ -581,8 +544,10 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
         )}
 
         {/* Batch 15, Item 5: Calendar view — month grid, distinct from the
-            list-based Schedule view below. */}
-        {!loading && activeTab === 'calendar' && (
+            list-based Schedule view below. Batch 19 Part A: merged under
+            the single "Schedule" nav item (Shift Blocks moved out — that's
+            live operational state, not a planning view). */}
+        {!loading && activeTab === 'schedule' && (
           <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm">
             <div className="mb-4 flex items-center justify-between">
               <h4 className="text-base font-bold text-slate-900">
@@ -625,7 +590,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                   key={cell.dateKey}
                   type="button"
                   disabled={cell.trips.length === 0}
-                  onClick={() => cell.trips.length === 1 ? setTripDetailsModal(cell.trips[0]) : cell.trips.length > 1 ? setActiveTab('schedule') : null}
+                  onClick={() => cell.trips.length > 0 && setDayScheduleModalDate(cell.dateKey)}
                   className={`flex min-h-20 flex-col items-start gap-1 rounded-lg border p-1.5 text-left transition ${
                     cell.isCurrentMonth ? 'bg-white' : 'bg-slate-50 text-slate-300'
                   } ${cell.isToday ? 'border-teal-400 ring-1 ring-teal-200' : 'border-slate-100'} ${
@@ -700,14 +665,51 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
           </section>
         )}
 
-        {!loading && activeTab === 'journey' && !isPaired && (
-          <section className="rounded-2xl border border-amber-800 bg-amber-950/20 p-6">
-            <h3 className="text-lg font-semibold text-amber-300">Journey tracking is locked</h3>
-            <p className="mt-2 text-sm text-amber-200/90">{pairingReason}</p>
+        {/* Batch 18: Shift Block Hand-off System. Independent of pairing —
+            a scheduled block's takeover confirmation happens before any
+            per-leg pairing is relevant. Batch 19 Part A: grouped under
+            "Active Trip" (live operational state), not Schedule. */}
+        {!loading && activeTab === 'activeTrip' && (
+          <section className="rounded-2xl border border-slate-800 bg-slate-900 p-4 sm:p-6">
+            <h3 className="mb-4 text-base font-bold text-slate-100">My Shift Blocks</h3>
+            {shiftBlocks.length === 0 ? (
+              <p className="text-sm text-slate-500">No shift blocks assigned.</p>
+            ) : (
+              <div className="space-y-3">
+                {shiftBlocks.map((block) => (
+                  <div key={block.shift_block_id} className="rounded-xl border border-slate-800 bg-slate-950 p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-100 capitalize">{block.block_type} block — {block.scheduled_date}</p>
+                        <p className="text-xs text-slate-500">{block.fleet?.plate_number || 'Fleet -'} · {block.legs?.length ?? 0} legs</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="rounded-full px-2 py-0.5 text-xs font-semibold uppercase" style={{ background: `${STATUS_COLOR[block.status === 'in_progress' ? 'in-progress' : block.status] || '#64748b'}20`, color: STATUS_COLOR[block.status === 'in_progress' ? 'in-progress' : block.status] || '#64748b' }}>
+                          {block.status.replace('_', ' ')}
+                        </span>
+                        {block.status === 'scheduled' && (
+                          <button
+                            type="button"
+                            onClick={() => handleConfirmShiftBlockTakeover(block.shift_block_id)}
+                            disabled={shiftBlockActionInFlight}
+                            className="rounded-lg border border-emerald-700 bg-emerald-950/40 px-3 py-1.5 text-xs font-semibold text-emerald-300 hover:bg-emerald-950/60 disabled:opacity-50"
+                          >
+                            Confirm Takeover
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </section>
         )}
 
-        {!loading && activeTab === 'journey' && isPaired && !showNoCurrentTripState && (
+        {/* Batch 19 Part A: Journey folds into Active Trip (it's the live
+            stop-by-stop progress view for the current trip). Part B: data
+            always shows — only the Acknowledge action is pairing-gated. */}
+        {!loading && activeTab === 'activeTrip' && !showNoCurrentTripState && (
           <section className="grid gap-4 lg:grid-cols-2">
             <article className="rounded-2xl border border-slate-800 bg-slate-900 p-4 sm:p-6">
               <h4 className="mb-3 text-base font-semibold text-slate-100">Journey Stops</h4>
@@ -727,7 +729,8 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                         <button
                           className="rounded-lg bg-sky-500 px-2.5 py-1.5 text-xs font-semibold text-slate-950 transition hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-60"
                           onClick={() => handleAcknowledgeStop(stop.stop_id)}
-                          disabled={actionInFlight || !stop?.stop_id}
+                          disabled={actionInFlight || !stop?.stop_id || !isPaired}
+                          title={!isPaired ? 'Pairing is required to acknowledge stops.' : undefined}
                         >
                           Acknowledge
                         </button>
@@ -750,14 +753,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
           </section>
         )}
 
-        {!loading && activeTab === 'navigation' && !isPaired && (
-          <section className="rounded-2xl border border-amber-800 bg-amber-950/20 p-6">
-            <h3 className="text-lg font-semibold text-amber-300">Route navigation is locked</h3>
-            <p className="mt-2 text-sm text-amber-200/90">{pairingReason}</p>
-          </section>
-        )}
-
-        {!loading && activeTab === 'navigation' && isPaired && showNoCurrentTripState && upcomingTrip && (
+        {!loading && activeTab === 'activeTrip' && showNoCurrentTripState && upcomingTrip && (
           <section className="grid gap-4 lg:grid-cols-2">
             <article className="rounded-2xl border border-slate-800 bg-slate-900 p-4 sm:p-6 lg:col-span-2">
               <h4 className="mb-2 text-base font-semibold text-slate-100">Upcoming Route Preview</h4>
@@ -769,7 +765,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
           </section>
         )}
 
-        {!loading && activeTab === 'navigation' && isPaired && !showNoCurrentTripState && (
+        {!loading && activeTab === 'activeTrip' && !showNoCurrentTripState && (
           <section className="grid gap-4 lg:grid-cols-2">
             <article className="rounded-2xl border border-slate-800 bg-slate-900 p-4 sm:p-6 lg:col-span-2">
               <h4 className="mb-3 text-base font-semibold text-slate-100">Route Navigation</h4>
@@ -817,14 +813,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
           </section>
         )}
 
-        {!loading && activeTab === 'earnings' && !isPaired && (
-          <section className="rounded-2xl border border-amber-800 bg-amber-950/20 p-6">
-            <h3 className="text-lg font-semibold text-amber-300">Earnings locked</h3>
-            <p className="mt-2 text-sm text-amber-200/90">{pairingReason}</p>
-          </section>
-        )}
-
-        {!loading && activeTab === 'earnings' && isPaired && !showNoCurrentTripState && (
+        {!loading && activeTab === 'earnings' && !showNoCurrentTripState && (
           <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Total Fare Collected</p>
@@ -867,7 +856,8 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
           </section>
         )}
 
-        {!loading && activeTab === 'alerts' && (
+        {/* Batch 19 Part A: Traffic Alerts folds into Active Trip. */}
+        {!loading && activeTab === 'activeTrip' && (
           <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm">
             <div className="mb-4 flex items-center justify-between">
               <h4 className="text-base font-bold text-slate-900">Traffic Alerts</h4>
@@ -889,22 +879,29 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
           </section>
         )}
 
-        {!loading && activeTab === 'trip' && !isPaired && (
-          <section className="space-y-4">
-            <PairingScreen
-              role="driver"
-              paired={isPaired}
-              pairingReason={pairingReason}
-              onPaired={() => void refreshPairingStatus()}
-            />
-            <article className="rounded-2xl border border-amber-800 bg-amber-950/20 p-4">
-              <p className="text-sm text-amber-200/90">Start Trip and all active-trip tools stay locked until pairing is complete.</p>
-            </article>
+        {/* Batch 20 Item 3: pairing action moved to the Daily PIN page
+            (pairing is driven by PIN/QR generation, so that's its
+            semantically correct home) — Active Trip only shows a
+            reminder banner + keeps its data/actions individually gated,
+            no longer embeds the full PairingScreen widget here. */}
+        {!loading && activeTab === 'activeTrip' && !isPaired && (
+          <section className="rounded-2xl border border-amber-800 bg-amber-950/20 p-4">
+            <p className="text-sm font-semibold text-amber-300">Not paired with your conductor yet</p>
+            <p className="mt-1 text-sm text-amber-200/90">Live actions (start boarding, depart, end trip, acknowledge stops) stay disabled until pairing is complete. Trip data below stays visible.</p>
+            <button
+              type="button"
+              onClick={() => setActiveTab('pin')}
+              className="mt-3 rounded-lg border border-amber-700 bg-amber-950/40 px-3 py-1.5 text-xs font-semibold text-amber-200 transition hover:bg-amber-950/60"
+            >
+              Go to Daily PIN to pair →
+            </button>
           </section>
         )}
 
-        {!loading && activeTab === 'trip' && isPaired && !showNoCurrentTripState && (
-          <section className="grid gap-4 lg:grid-cols-2">
+        {/* Batch 19 Part A: Daily PIN extracted out to its own nav item
+            (see 'pin' tab below), no longer bundled inside Trip Status. */}
+        {!loading && activeTab === 'activeTrip' && !showNoCurrentTripState && (
+          <section className="grid gap-4">
             <article className="rounded-xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm">
               <div className="mb-4 flex items-center justify-between">
                 <h4 className="text-base font-bold text-slate-900">Trip Status</h4>
@@ -942,9 +939,25 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                 )}
               </div>
             </article>
+          </section>
+        )}
 
+        {!loading && activeTab === 'pin' && (
+          <section className="max-w-xl space-y-4">
+            {/* Batch 20 Item 3: pairing lives here now, not on Active Trip. */}
+            {!isPaired && (
+              <PairingScreen
+                role="driver"
+                paired={isPaired}
+                pairingReason={pairingReason}
+                onPaired={() => void refreshPairingStatus()}
+              />
+            )}
             <article className="rounded-2xl border border-slate-800 bg-slate-900 p-4 sm:p-6">
               <h4 className="mb-3 text-base font-semibold text-slate-100">Daily PIN Verification</h4>
+              {!isPaired && (
+                <p className="mb-3 rounded-lg border border-amber-800 bg-amber-950/20 px-3 py-2 text-xs text-amber-200/90">{pairingReason}</p>
+              )}
               {pin && (
                 <>
                   <div className="font-data mb-2 rounded-xl border border-dashed border-slate-700 bg-slate-950 p-3 text-center text-2xl font-bold tracking-[0.2em] text-slate-100">
@@ -1053,7 +1066,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
             </article>
           </section>
         )}
-      </main>
+    </StaffPortalLayout>
 
       {/* ── End Trip Confirmation Modal ───────────────────────────────── */}
       {confirmComplete && (
@@ -1107,6 +1120,62 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
       )}
 
       {/* ── Suggestion: Trip details modal ───────────────────────────────── */}
+      {/* S4 (Batch 17): calendar date-click modal — scoped to just the
+          clicked date's schedule, regardless of how many trips fall on it. */}
+      {dayScheduleModalDate && (() => {
+        const dayTrips = tripsByDate[dayScheduleModalDate] || [];
+        const dayLabel = new Date(`${dayScheduleModalDate}T00:00`).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+        return (
+          <div
+            style={{ position: 'fixed', inset: 0, zIndex: 100, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}
+            role="presentation"
+            onClick={() => setDayScheduleModalDate(null)}
+          >
+            <section
+              role="dialog"
+              aria-modal="true"
+              aria-label="Day schedule"
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900 p-6 text-slate-200"
+            >
+              <div className="mb-4 flex items-start justify-between">
+                <div>
+                  <h3 className="text-base font-bold text-slate-100">{dayLabel}</h3>
+                  <p className="text-xs text-slate-500">{dayTrips.length} trip{dayTrips.length === 1 ? '' : 's'} scheduled</p>
+                </div>
+                <button type="button" onClick={() => setDayScheduleModalDate(null)} className="text-slate-500 hover:text-slate-300 text-lg leading-none">✕</button>
+              </div>
+
+              {dayTrips.length === 0 ? (
+                <p className="py-4 text-center text-sm text-slate-500">No trips scheduled this day.</p>
+              ) : (
+                <div className="space-y-2">
+                  {dayTrips.map((t) => (
+                    <button
+                      key={t.trip_id}
+                      type="button"
+                      className="flex w-full items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950 px-3 py-2.5 text-left transition hover:border-slate-600"
+                      onClick={() => { setDayScheduleModalDate(null); setTripDetailsModal(t); }}
+                    >
+                      <div>
+                        <p className="text-sm font-semibold text-slate-100">{t.fleet_route?.route?.route_name || `Trip #${t.trip_id}`}</p>
+                        <p className="text-xs text-slate-500">{formatTripSchedule(t)}</p>
+                      </div>
+                      <span
+                        className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase"
+                        style={{ background: `${STATUS_COLOR[t.status] || '#64748b'}20`, color: STATUS_COLOR[t.status] || '#64748b' }}
+                      >
+                        {t.status}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </section>
+          </div>
+        );
+      })()}
+
       {tripDetailsModal && (() => {
         const td = tripDetailsModal;
         const route = td.fleet_route?.route || {};
@@ -1154,7 +1223,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
           </div>
         );
       })()}
-    </div>
+    </>
   );
 }
 
@@ -1204,7 +1273,7 @@ function DriverTripTable({ title, trips, onSelectTrip, onDeclineTrip, onAcceptTr
                             Accept
                           </button>
                         )}
-                        {canDecline && (
+                        {canDecline && !item?.driver_accepted_at && (
                           <button
                             type="button"
                             className="rounded-lg border border-red-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-red-600 transition hover:bg-red-50"

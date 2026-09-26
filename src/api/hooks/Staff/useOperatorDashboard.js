@@ -838,3 +838,102 @@ export function useReportsTab() {
     fetchReport,
   };
 }
+
+/**
+ * Batch 18: Shift Block Hand-off System — Operator/Dispatcher tab.
+ */
+export function useShiftBlocksTab() {
+  const [blocks, setBlocks] = useState([]);
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [loading, setLoading] = useState(true);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState('');
+  const [fleetRoutes, setFleetRoutes] = useState([]);
+
+  const loadBlocks = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await OperatorService.getShiftBlocks(statusFilter === 'all' ? null : statusFilter);
+      setBlocks(Array.isArray(res?.data) ? res.data : []);
+    } catch (err) {
+      setMsg(err?.message || 'Failed to load shift blocks.');
+    } finally {
+      setLoading(false);
+    }
+  }, [statusFilter]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      void loadBlocks();
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [loadBlocks]);
+
+  useEffect(() => {
+    OperatorService.getOperatorFleetRoutes().then((r) => setFleetRoutes(r?.data ?? [])).catch(() => {});
+  }, []);
+
+  const handleCreate = async (payload) => {
+    setSaving(true);
+    setMsg('');
+    try {
+      await OperatorService.createShiftBlock(payload);
+      setMsg('Shift block created.');
+      setShowCreateModal(false);
+      void loadBlocks();
+    } catch (err) {
+      setMsg(err?.message || 'Failed to create shift block.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCancel = async (shiftBlockId) => {
+    setMsg('');
+    try {
+      await OperatorService.cancelShiftBlock(shiftBlockId);
+      setMsg('Shift block cancelled.');
+      void loadBlocks();
+    } catch (err) {
+      setMsg(err?.message || 'Failed to cancel shift block.');
+    }
+  };
+
+  const handleOverrideHandoff = async (shiftBlockId) => {
+    setMsg('');
+    try {
+      await OperatorService.overrideShiftBlockHandoff(shiftBlockId);
+      setMsg('Hand-off forced.');
+      void loadBlocks();
+    } catch (err) {
+      setMsg(err?.message || 'Failed to force hand-off.');
+    }
+  };
+
+  const handleMarkReviewed = async (shiftBlockId) => {
+    setMsg('');
+    try {
+      await OperatorService.markShiftBlockReviewed(shiftBlockId);
+      setMsg('Marked reviewed.');
+      void loadBlocks();
+    } catch (err) {
+      setMsg(err?.message || 'Failed to mark reviewed.');
+    }
+  };
+
+  return {
+    blocks,
+    statusFilter, setStatusFilter,
+    loading,
+    showCreateModal, setShowCreateModal,
+    saving,
+    msg, setMsg,
+    fleetRoutes,
+    loadBlocks,
+    handleCreate,
+    handleCancel,
+    handleOverrideHandoff,
+    handleMarkReviewed,
+  };
+}

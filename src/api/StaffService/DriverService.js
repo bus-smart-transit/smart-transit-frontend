@@ -93,6 +93,15 @@ class DriverService extends StaffBaseService {
     if (Number.isFinite(speedKmh)) payload.speed_kmh = speedKmh;
     return await this.request('/driver/location', 'POST', payload);
   }
+
+  // Batch 18: Shift Block Hand-off System.
+  async getMyShiftBlocks() {
+    return await this.request('/driver/shift-blocks', 'GET');
+  }
+
+  async confirmShiftBlockTakeover(shiftBlockId) {
+    return await this.request(`/driver/shift-blocks/${shiftBlockId}/confirm-takeover`, 'POST');
+  }
 }
 
 export default new DriverService();

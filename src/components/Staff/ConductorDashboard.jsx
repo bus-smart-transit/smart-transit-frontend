@@ -1,32 +1,40 @@
 import {
   AlertCircle,
-  BarChart3,
   Bus,
   Camera,
-  Calendar,
+  CalendarDays,
   CheckCircle2,
-  Clock,
+  ChevronLeft,
+  ChevronRight,
   Download,
+  Gauge,
   KeyRound,
-  LogOut,
   Play,
   QrCode,
   RefreshCw,
   Ticket,
-  TrendingUp,
   UserCheck,
   Users,
-  XCircle,
 } from 'lucide-react';
 import PairingScreen from './PairingScreen';
+import StaffPortalLayout from './StaffPortalLayout';
+import NotificationBellButton from './NotificationBellButton';
 import { useConductorPairing, useConductorDashboardData } from '../../api/hooks/Staff/useConductorDashboard';
+import { getBusinessTodayLabel } from '../../utils/dates';
+import ConductorService from '../../api/StaffService/ConductorService';
 
+// Batch 19 Part A: consolidated sidebar. Ticketing & Fares is the
+// confirmed default landing screen (adviser requirement, Batch 15).
+// "Assigned Routes" folds into Dashboard; Live Passengers, Shift Blocks,
+// and Shift Summary merge into Active Shift (live operational state, not
+// planning — so it groups here, not with Schedule); Calendar becomes
+// Schedule. Start/End Shift move to the persistent header, matching the
+// Driver portal's existing pattern (see header buttons below).
 const NAV_ITEMS = [
-  { key: 'trip', label: 'Start', icon: Play },
-  { key: 'assigned', label: 'Assigned Routes', icon: Calendar },
-  { key: 'occupancy', label: 'Ticketing', icon: Ticket },
-  { key: 'earnings', label: 'End Shift', icon: BarChart3 },
-  { key: 'passengers', label: 'Passengers', icon: Users },
+  { key: 'dashboard', label: 'Dashboard', icon: Gauge },
+  { key: 'occupancy', label: 'Ticketing & Fares', icon: Ticket },
+  { key: 'activeShift', label: 'Active Shift', icon: Bus },
+  { key: 'schedule', label: 'Schedule', icon: CalendarDays },
   { key: 'pin', label: 'Daily PIN', icon: KeyRound },
   { key: 'account', label: 'Account', icon: UserCheck },
 ];
@@ -44,6 +52,16 @@ const formatDateTime = (value) => {
   const hh = String(date.getHours()).padStart(2, '0');
   const min = String(date.getMinutes()).padStart(2, '0');
   return `${yyyy}/${mm}/${dd} - ${hh}:${min}`;
+};
+
+const STATUS_COLOR = {
+  scheduled: '#64748b',
+  delayed: '#e11d48',
+  boarding: '#3b82f6',
+  departed: '#f59e0b',
+  'in-progress': '#f59e0b',
+  completed: '#22c55e',
+  cancelled: '#ef4444',
 };
 
 const toCompactTime = (value) => {
@@ -122,13 +140,15 @@ function TripCardGroup({ title, trips, onDeclineTrip, onAcceptTrip, emptyMessage
                         Accept
                       </button>
                     )}
-                    <button
-                      type="button"
-                      className="flex-1 rounded-lg border border-red-900/60 bg-red-950/20 px-3 py-2 text-xs font-semibold text-red-300 transition hover:bg-red-950/40"
-                      onClick={() => onDeclineTrip?.(item)}
-                    >
-                      Decline
-                    </button>
+                    {!item?.conductor_accepted_at && (
+                      <button
+                        type="button"
+                        className="flex-1 rounded-lg border border-red-900/60 bg-red-950/20 px-3 py-2 text-xs font-semibold text-red-300 transition hover:bg-red-950/40"
+                        onClick={() => onDeclineTrip?.(item)}
+                      >
+                        Decline
+                      </button>
+                    )}
                   </div>
                 )}
               </article>
@@ -180,6 +200,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     isPaired,
     pairingReason,
     hasActiveTrip,
+    hasTodayAssignedTrip,
     todayAssignedTrip,
     hasOpenShift,
     upcomingTrip,
@@ -190,6 +211,14 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     filteredAssignedTrips,
     todayAssignedTrips,
     upcomingAssignedTrips,
+    tripsByDate,
+    calendarDays,
+    calendarMonth, setCalendarMonth,
+    tripDetailsModal, setTripDetailsModal,
+    dayScheduleModalDate, setDayScheduleModalDate,
+    shiftBlocks,
+    shiftBlockEligibility,
+    shiftBlockActionInFlight,
     printOnsiteReceipt,
     occSeated,
     occStanding,
@@ -212,6 +241,8 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     handleAcceptTrip,
     handleToggleAvailability,
     handleEndShift,
+    checkShiftBlockEligibility,
+    handleInitiateShiftBlockHandoff,
     handleScan,
     startScanner,
     handleAlight,
@@ -222,78 +253,23 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   } = useConductorDashboardData({ onLogout, pairing });
 
   return (
-    <div className="grid min-h-screen grid-cols-1 bg-slate-100 lg:grid-cols-[240px_1fr]">
-      {/* Sidebar */}
-      <aside className="flex flex-col justify-between bg-[#0D1B2A] p-4 lg:min-h-screen">
-        <div>
-          {/* Brand */}
-          <div className="mb-2 px-2 pt-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Bus Operator</p>
-            <div className="mt-1 flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-500 shrink-0">
-                <Bus className="h-4 w-4 text-white" />
-              </div>
-              <p className="text-sm font-bold text-white leading-tight">Chauffeur Portal</p>
-            </div>
-          </div>
-
-          <div className="my-3 border-t border-white/10" />
-
-          <nav className="flex flex-col gap-0.5">
-            {NAV_ITEMS.map((item) => {
-              const Icon = item.icon;
-              const isActive = activeTab === item.key;
-              return (
-                <button
-                  key={item.key}
-                  className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
-                    isActive
-                      ? 'bg-teal-500 text-white'
-                      : 'text-slate-400 hover:bg-white/10 hover:text-white'
-                  }`}
-                  onClick={() => {
-                    setActiveTab(item.key);
-                    setActionMsg('');
-                    setScanResult(null);
-                  }}
-                >
-                  <Icon className="h-4 w-4 shrink-0" />
-                  {item.label}
-                </button>
-              );
-            })}
-          </nav>
-        </div>
-
-        {/* Bottom: profile + logout */}
-        <div className="space-y-3">
-          {profile && (
-            <div className="flex items-center gap-3 rounded-xl bg-white/10 px-3 py-2.5">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-teal-500 text-sm font-bold text-white">
-                {(profile.name || 'C')[0].toUpperCase()}
-              </div>
-              <div className="min-w-0">
-                <p className="truncate text-sm font-semibold text-white">{profile.name}</p>
-                <p className="text-xs text-slate-400">Chauffeur</p>
-              </div>
-            </div>
-          )}
-          <button
-            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-red-400 hover:bg-white/10 hover:text-red-300 transition"
-            onClick={handleLogout}
-          >
-            <LogOut className="h-4 w-4" />
-            Sign Out
-          </button>
-        </div>
-      </aside>
-
-      <main className="min-h-screen bg-white p-4 sm:p-6">
+    <>
+    <StaffPortalLayout
+      brandLabel="Chauffeur Portal"
+      brandIcon={Bus}
+      navItems={NAV_ITEMS}
+      activeTab={activeTab}
+      onTabChange={(key) => { setActiveTab(key); setActionMsg(''); setScanResult(null); }}
+      profile={profile}
+      profileRoleLabel="Chauffeur"
+      profileInitialFallback="C"
+      onLogout={handleLogout}
+    >
         <header className="mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
           <div>
             <h1 className="text-2xl font-bold text-slate-900">{pageTitle}</h1>
             <p className="text-xs text-slate-500">
-              {new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+              {getBusinessTodayLabel()}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -331,6 +307,24 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
               <span className={`h-2 w-2 rounded-full ${isAvailable ? 'bg-emerald-500' : 'bg-slate-400'}`} />
               {isAvailable ? 'Available' : 'Not Available'}
             </button>
+            {/* Batch 19 Part A: Start/End Shift move to the persistent
+                header, matching the Driver portal's pattern \u2014 no longer
+                buried as their own nav tabs. */}
+            <button
+              className="inline-flex items-center gap-2 rounded-xl border border-teal-200 bg-teal-50 px-3 py-2 text-xs font-semibold text-teal-700 transition hover:bg-teal-100 disabled:opacity-60"
+              onClick={handleStartShift}
+              disabled={actionInFlight || !isPaired || shiftStarted || !(hasActiveTrip || hasTodayAssignedTrip)}
+              title={!isPaired ? 'Pairing is required before starting shift.' : undefined}
+            >
+              Start Shift
+            </button>
+            <button
+              className="inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 transition hover:bg-rose-100 disabled:opacity-60"
+              onClick={handleEndShift}
+              disabled={actionInFlight || !hasOpenShift}
+            >
+              End Shift
+            </button>
             <button
               className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
               onClick={loadData}
@@ -338,6 +332,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
               <RefreshCw className="h-3.5 w-3.5" />
               Refresh
             </button>
+            <NotificationBellButton service={ConductorService} role="conductor" />
             {actionMsg && <span className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">{actionMsg}</span>}
           </div>
         </header>
@@ -373,14 +368,22 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
           </section>
         )}
 
-        {!loading && ['trip', 'occupancy'].includes(activeTab) && !isPaired && (
-          <section className="rounded-xl border border-amber-200 bg-amber-50 p-6">
-            <h3 className="text-lg font-bold text-amber-800">Pairing required to start shift</h3>
-            <p className="mt-2 text-sm text-amber-700">{pairingReason}</p>
+        {/* Batch 19 Part B: dashboard/ticketing data (assigned route,
+            schedule, vehicle) always displays — pairing only disables
+            the specific live actions below (each individually gated with
+            a tooltip), not the whole tab. */}
+        {!loading && ['dashboard', 'occupancy'].includes(activeTab) && !isPaired && (
+          <section className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
+            <p className="text-sm font-semibold text-amber-800">Pairing required for live shift actions</p>
+            <p className="mt-1 text-xs text-amber-700">{pairingReason} Your assignment info below stays visible — only shift/ticketing actions are disabled until paired.</p>
           </section>
         )}
 
-        {!loading && (activeTab === 'trip' || (activeTab === 'occupancy' && !hasActiveTrip)) && isPaired && !showNoCurrentTripState && (
+        {/* Batch 20 Item 2: this "pre-shift review" hero belongs to
+            Dashboard ONLY — it was previously also rendered on Ticketing &
+            Fares (activeTab === 'occupancy' && !hasActiveTrip), duplicating
+            Dashboard's content instead of showing Ticketing's own interface. */}
+        {!loading && activeTab === 'dashboard' && !showNoCurrentTripState && (
           <section className="mx-auto max-w-2xl">
             {/* Welcome heading */}
             <div className="mb-6 text-center">
@@ -436,7 +439,8 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
               <button
                 className="inline-flex items-center gap-2 rounded-lg bg-teal-500 px-8 py-3 text-sm font-bold text-white transition hover:bg-teal-600 disabled:cursor-not-allowed disabled:opacity-60"
                 onClick={handleStartShift}
-                disabled={shiftStarted}
+                disabled={shiftStarted || !isPaired}
+                title={!isPaired ? 'Pairing is required before starting shift.' : undefined}
               >
                 {shiftStarted ? 'SHIFT STARTED' : 'CONFIRM & START SHIFT'}
                 <Play className="h-4 w-4" />
@@ -453,7 +457,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                     ✓ Accept This Trip
                   </button>
                 )}
-                {['scheduled', 'delayed', 'boarding'].includes(String(todayAssignedTrip?.status || '').toLowerCase()) && (
+                {['scheduled', 'delayed', 'boarding'].includes(String(todayAssignedTrip?.status || '').toLowerCase()) && !todayAssignedTrip?.conductor_accepted_at && (
                   <button
                     type="button"
                     className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-white px-4 py-2 text-xs font-semibold text-red-600 transition hover:bg-red-50 disabled:opacity-50"
@@ -468,8 +472,32 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
           </section>
         )}
 
-        {!loading && activeTab === 'assigned' && (
-          <section className="grid gap-4 md:grid-cols-2">
+        {/* Batch 20 Item 2: Ticketing & Fares' own "not started yet" state
+            — distinct from Dashboard's hero, no duplicated Welcome/Confirm
+            & Start Shift block. Points the conductor back to Dashboard to
+            review/start their shift instead of repeating it here. */}
+        {!loading && activeTab === 'occupancy' && !hasActiveTrip && !showNoCurrentTripState && (
+          <section className="mx-auto max-w-md rounded-xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center">
+            <Ticket className="mx-auto mb-3 h-8 w-8 text-slate-400" />
+            <h3 className="text-base font-bold text-slate-900">Ticketing isn't active yet</h3>
+            <p className="mt-2 text-sm text-slate-500">
+              Start your shift from the Dashboard to unlock the ticket scanner and fare handling for today's trip.
+            </p>
+            <button
+              type="button"
+              onClick={() => setActiveTab('dashboard')}
+              className="mt-4 rounded-lg bg-teal-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-teal-600"
+            >
+              Go to Dashboard
+            </button>
+          </section>
+        )}
+
+        {/* Batch 19 Part A: folded into Dashboard (was the standalone
+            "Assigned Routes" nav item). Accept/decline never depended on
+            pairing, so no gating needed here. */}
+        {!loading && activeTab === 'dashboard' && (
+          <section className="mt-4 grid gap-4 md:grid-cols-2">
             <div className="md:col-span-2 flex items-center justify-end gap-2">
               <label htmlFor="conductor-assigned-filter" className="text-xs font-semibold uppercase tracking-wide text-slate-500">Filter</label>
               <select
@@ -497,14 +525,142 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
           </section>
         )}
 
-        {!loading && activeTab === 'occupancy' && !isPaired && (
-          <section className="rounded-xl border border-amber-200 bg-amber-50 p-6">
-            <h3 className="text-lg font-bold text-amber-800">Ticketing is locked</h3>
-            <p className="mt-2 text-sm text-amber-700">{pairingReason}</p>
+        {/* Batch 19 Part A: Calendar renamed to Schedule. Clicking any
+            date with a schedule opens a modal scoped to just that date,
+            rather than navigating away. */}
+        {!loading && activeTab === 'schedule' && (
+          <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm">
+            <div className="mb-4 flex items-center justify-between">
+              <h4 className="text-base font-bold text-slate-900">
+                {calendarMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+              </h4>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  className="rounded-lg border border-slate-200 bg-white p-1.5 text-slate-600 transition hover:bg-slate-50"
+                  onClick={() => setCalendarMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))}
+                  aria-label="Previous month"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-600 transition hover:bg-slate-50"
+                  onClick={() => setCalendarMonth(() => { const t = new Date(); return new Date(t.getFullYear(), t.getMonth(), 1); })}
+                >
+                  Today
+                </button>
+                <button
+                  type="button"
+                  className="rounded-lg border border-slate-200 bg-white p-1.5 text-slate-600 transition hover:bg-slate-50"
+                  onClick={() => setCalendarMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))}
+                  aria-label="Next month"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+            <div className="grid grid-cols-7 gap-1 text-center text-xs font-semibold uppercase tracking-wide text-slate-400">
+              {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
+                <div key={d} className="py-1.5">{d}</div>
+              ))}
+            </div>
+            <div className="mt-1 grid grid-cols-7 gap-1">
+              {calendarDays.map((cell) => (
+                <button
+                  key={cell.dateKey}
+                  type="button"
+                  disabled={cell.trips.length === 0}
+                  onClick={() => cell.trips.length > 0 && setDayScheduleModalDate(cell.dateKey)}
+                  className={`flex min-h-20 flex-col items-start gap-1 rounded-lg border p-1.5 text-left transition ${
+                    cell.isCurrentMonth ? 'bg-white' : 'bg-slate-50 text-slate-300'
+                  } ${cell.isToday ? 'border-teal-400 ring-1 ring-teal-200' : 'border-slate-100'} ${
+                    cell.trips.length > 0 ? 'hover:bg-teal-50 cursor-pointer' : 'cursor-default'
+                  }`}
+                >
+                  <span className={`text-xs font-semibold ${cell.isToday ? 'text-teal-600' : cell.isCurrentMonth ? 'text-slate-700' : 'text-slate-300'}`}>
+                    {cell.date.getDate()}
+                  </span>
+                  {cell.trips.slice(0, 2).map((t) => (
+                    <span
+                      key={t.trip_id}
+                      className="w-full truncate rounded px-1 py-0.5 text-[10px] font-semibold"
+                      style={{ background: `${STATUS_COLOR[t.status] || '#64748b'}20`, color: STATUS_COLOR[t.status] || '#64748b' }}
+                    >
+                      {t.fleet_route?.route?.route_name || `Trip #${t.trip_id}`}
+                    </span>
+                  ))}
+                  {cell.trips.length > 2 && (
+                    <span className="text-[10px] text-slate-400">+{cell.trips.length - 2} more</span>
+                  )}
+                </button>
+              ))}
+            </div>
           </section>
         )}
 
-        {!loading && activeTab === 'occupancy' && isPaired && !showNoCurrentTripState && (
+        {/* Batch 19 Part A: Shift Blocks folds into Active Shift (live
+            operational state, not a planning view). Independent of
+            pairing — eligibility/hand-off is checked per-block against the
+            block's own final-leg + GPS state. */}
+        {!loading && activeTab === 'activeShift' && (
+          <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm">
+            <h3 className="mb-4 text-base font-bold text-slate-900">My Shift Blocks</h3>
+            {shiftBlocks.length === 0 ? (
+              <p className="text-sm text-slate-500">No shift blocks assigned.</p>
+            ) : (
+              <div className="space-y-3">
+                {shiftBlocks.map((block) => {
+                  const eligibility = shiftBlockEligibility[block.shift_block_id];
+                  return (
+                    <div key={block.shift_block_id} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <p className="text-sm font-semibold text-slate-900 capitalize">{block.block_type} block — {block.scheduled_date}</p>
+                          <p className="text-xs text-slate-500">{block.fleet?.plate_number || 'Fleet -'} · {block.legs?.length ?? 0} legs</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="rounded-full px-2 py-0.5 text-xs font-semibold uppercase" style={{ background: `${STATUS_COLOR[block.status === 'in_progress' ? 'in-progress' : block.status] || '#64748b'}20`, color: STATUS_COLOR[block.status === 'in_progress' ? 'in-progress' : block.status] || '#64748b' }}>
+                            {block.status.replace('_', ' ')}
+                          </span>
+                          {block.status === 'in_progress' && (
+                            <button
+                              type="button"
+                              onClick={() => void checkShiftBlockEligibility(block.shift_block_id)}
+                              className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+                            >
+                              Check Eligibility
+                            </button>
+                          )}
+                          {block.status === 'in_progress' && (
+                            <button
+                              type="button"
+                              onClick={() => handleInitiateShiftBlockHandoff(block.shift_block_id)}
+                              disabled={shiftBlockActionInFlight || !eligibility?.eligible}
+                              title={!eligibility?.eligible ? (eligibility?.reason || 'Check eligibility first — hand-off unlocks once the final leg arrives at the home terminal.') : undefined}
+                              className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
+                            >
+                              End Shift / Initiate Hand-off
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      {eligibility && !eligibility.eligible && (
+                        <p className="mt-2 text-xs text-amber-600">{eligibility.reason}</p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+        )}
+
+        {/* Batch 20 Item 2: quick-tiles + seat layout only make sense once a
+            trip is actually active (earnings/passenger counts would
+            otherwise show stale/zero data before any shift has started) —
+            the !hasActiveTrip case is covered by the placeholder above. */}
+        {!loading && activeTab === 'occupancy' && hasActiveTrip && !showNoCurrentTripState && (
           <section className="max-w-5xl">
             {/* Bus + Passenger Load Header */}
             {occupancy && (
@@ -533,11 +689,11 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                 tabs still exist for full detail (breakdown table, per-
                 passenger list). */}
             <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
-              <button type="button" onClick={() => setActiveTab('earnings')} className="rounded-xl border border-slate-200 bg-white p-3 text-left transition hover:bg-slate-50">
+              <button type="button" onClick={() => setActiveTab('activeShift')} className="rounded-xl border border-slate-200 bg-white p-3 text-left transition hover:bg-slate-50">
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Earnings So Far</p>
                 <p className="font-data mt-1 text-lg font-bold text-slate-900">₱{earnings ? Number(earnings.total_fare).toFixed(2) : '0.00'}</p>
               </button>
-              <button type="button" onClick={() => setActiveTab('passengers')} className="rounded-xl border border-slate-200 bg-white p-3 text-left transition hover:bg-slate-50">
+              <button type="button" onClick={() => setActiveTab('activeShift')} className="rounded-xl border border-slate-200 bg-white p-3 text-left transition hover:bg-slate-50">
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Passengers Onboard</p>
                 <p className="font-data mt-1 text-lg font-bold text-slate-900">{passengers?.length ?? earnings?.passenger_count ?? 0}</p>
               </button>
@@ -747,7 +903,8 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                           type="button"
                           className="flex items-center gap-2 rounded-lg bg-teal-500 px-3 py-2 text-xs font-semibold text-white transition hover:bg-teal-600 disabled:cursor-not-allowed disabled:opacity-60"
                           onClick={() => void startScanner()}
-                          disabled={!hasOpenShift}
+                          disabled={!hasOpenShift || !isPaired}
+                          title={!isPaired ? 'Pairing is required to scan tickets.' : undefined}
                         >
                           <Camera className="h-4 w-4" />
                           Start Camera Scanner
@@ -854,14 +1011,9 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
           </section>
         )}
 
-        {!loading && activeTab === 'passengers' && !isPaired && (
-          <section className="rounded-2xl border border-amber-800 bg-amber-950/20 p-6">
-            <h3 className="text-lg font-semibold text-amber-300">Passengers and alighting are locked</h3>
-            <p className="mt-2 text-sm text-amber-200/90">{pairingReason}</p>
-          </section>
-        )}
-
-        {!loading && activeTab === 'passengers' && isPaired && !showNoCurrentTripState && (
+        {/* Batch 19 Part B: Live Passengers data always shows — only the
+            Record Alight action is pairing-gated. */}
+        {!loading && activeTab === 'activeShift' && !showNoCurrentTripState && (
           <section className="rounded-2xl border border-slate-800 bg-slate-900 p-4 sm:p-6">
             {groupedPassengers.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-slate-800 bg-slate-950 p-6">
@@ -907,8 +1059,10 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                                 <td className="py-3">
                                   {!p.alighted_at && (
                                     <button
-                                      className="inline-flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-950 px-2.5 py-1.5 text-xs font-semibold text-slate-300 transition hover:border-slate-500"
+                                      className="inline-flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-950 px-2.5 py-1.5 text-xs font-semibold text-slate-300 transition hover:border-slate-500 disabled:cursor-not-allowed disabled:opacity-60"
                                       onClick={() => handleAlight(p.ticket_id)}
+                                      disabled={!isPaired}
+                                      title={!isPaired ? 'Pairing is required to record alighting.' : undefined}
                                     >
                                       <UserCheck className="h-3.5 w-3.5" />
                                       Record Alight
@@ -928,18 +1082,15 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
           </section>
         )}
 
-        {!loading && activeTab === 'earnings' && !isPaired && (
-          <section className="rounded-xl border border-amber-200 bg-amber-50 p-6">
-            <h3 className="text-lg font-bold text-amber-800">End Shift locked</h3>
-            <p className="mt-2 text-sm text-amber-700">{pairingReason}</p>
-          </section>
-        )}
 
-        {!loading && activeTab === 'earnings' && isPaired && showNoCurrentTripState && (
+        {!loading && activeTab === 'activeShift' && showNoCurrentTripState && (
           <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-6 text-sm text-slate-500">No active trip. Shift summary is available during an active trip.</div>
         )}
 
-        {!loading && activeTab === 'earnings' && isPaired && !showNoCurrentTripState && (
+        {/* Batch 19 Part A: Shift Summary folds into Active Shift. Part B:
+            revenue/passenger data always shows — the End Shift action is
+            individually disabled below (also available in the header). */}
+        {!loading && activeTab === 'activeShift' && !showNoCurrentTripState && (
           <section>
             {/* Shift Summary Header */}
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -951,8 +1102,9 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                 </button>
                 <button
                   type="button"
-                  className="rounded-lg bg-teal-500 px-3 py-2 text-xs font-semibold text-white transition hover:bg-teal-600"
+                  className="rounded-lg bg-teal-500 px-3 py-2 text-xs font-semibold text-white transition hover:bg-teal-600 disabled:cursor-not-allowed disabled:opacity-60"
                   onClick={handleEndShift}
+                  disabled={actionInFlight || !hasOpenShift}
                 >
                   Verify &amp; End Shift
                 </button>
@@ -1110,7 +1262,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
             </article>
           </section>
         )}
-      </main>
+    </StaffPortalLayout>
 
       {/* ── Onsite Checkout Confirmation Modal ─────────────────────── */}
       {confirmCheckout && (
@@ -1162,6 +1314,102 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
           </div>
         </div>
       )}
-    </div>
+
+      {/* S4 (Batch 17): calendar date-click modal — scoped to just the
+          clicked date's schedule, regardless of how many trips fall on it. */}
+      {dayScheduleModalDate && (() => {
+        const dayTrips = tripsByDate[dayScheduleModalDate] || [];
+        const dayLabel = new Date(`${dayScheduleModalDate}T00:00`).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" role="presentation" onClick={() => setDayScheduleModalDate(null)}>
+            <section
+              role="dialog"
+              aria-modal="true"
+              aria-label="Day schedule"
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900 p-6 text-slate-200"
+            >
+              <div className="mb-4 flex items-start justify-between">
+                <div>
+                  <h3 className="text-base font-bold text-slate-100">{dayLabel}</h3>
+                  <p className="text-xs text-slate-500">{dayTrips.length} trip{dayTrips.length === 1 ? '' : 's'} scheduled</p>
+                </div>
+                <button type="button" onClick={() => setDayScheduleModalDate(null)} className="text-slate-500 hover:text-slate-300 text-lg leading-none">✕</button>
+              </div>
+
+              {dayTrips.length === 0 ? (
+                <p className="py-4 text-center text-sm text-slate-500">No trips scheduled this day.</p>
+              ) : (
+                <div className="space-y-2">
+                  {dayTrips.map((t) => (
+                    <button
+                      key={t.trip_id}
+                      type="button"
+                      className="flex w-full items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950 px-3 py-2.5 text-left transition hover:border-slate-600"
+                      onClick={() => { setDayScheduleModalDate(null); setTripDetailsModal(t); }}
+                    >
+                      <div>
+                        <p className="text-sm font-semibold text-slate-100">{t.fleet_route?.route?.route_name || `Trip #${t.trip_id}`}</p>
+                        <p className="text-xs text-slate-500">{formatTripSchedule(t)}</p>
+                      </div>
+                      <span
+                        className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase"
+                        style={{ background: `${STATUS_COLOR[t.status] || '#64748b'}20`, color: STATUS_COLOR[t.status] || '#64748b' }}
+                      >
+                        {t.status}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </section>
+          </div>
+        );
+      })()}
+
+      {tripDetailsModal && (() => {
+        const td = tripDetailsModal;
+        const route = td.fleet_route?.route || {};
+        const fleet = td.fleet_route?.fleet || {};
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" role="presentation" onClick={() => setTripDetailsModal(null)}>
+            <section
+              role="dialog"
+              aria-modal="true"
+              aria-label="Trip details"
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900 p-6 text-slate-200"
+            >
+              <div className="mb-4 flex items-start justify-between">
+                <div>
+                  <h3 className="text-base font-bold text-slate-100">Trip Details</h3>
+                  <p className="text-xs text-slate-500">RTE-{td.trip_id}</p>
+                </div>
+                <button type="button" onClick={() => setTripDetailsModal(null)} className="text-slate-500 hover:text-slate-300 text-lg leading-none">✕</button>
+              </div>
+
+              <div className="space-y-2 text-sm">
+                {[
+                  ['Route', `${route.origin || '—'} → ${route.destination || '—'}`],
+                  ['Route name', route.route_name || '—'],
+                  ['Date & time', formatDateTime(td.trip_date)],
+                  ['Status', td.status],
+                  ['Fleet', fleet.plate_number || '—'],
+                  ['Fleet type', fleet.fleet_type || '—'],
+                  ['Total capacity', fleet.capacity ?? '—'],
+                  ['Seated remaining', td.current_seated_capacity ?? '—'],
+                  ['Standing remaining', td.current_standing_capacity ?? '—'],
+                ].map(([k, v]) => (
+                  <div key={k} className="flex items-center justify-between gap-4 border-b border-slate-800 pb-2">
+                    <span className="text-slate-500 capitalize">{k}</span>
+                    <strong className="text-slate-100 capitalize text-right">{String(v)}</strong>
+                  </div>
+                ))}
+              </div>
+            </section>
+          </div>
+        );
+      })()}
+    </>
   );
 }

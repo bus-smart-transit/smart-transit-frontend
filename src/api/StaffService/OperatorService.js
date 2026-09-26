@@ -172,6 +172,43 @@ class OperatorService extends StaffBaseService {
     const extraHeaders = stepUpToken ? { 'X-Step-Up-Token': stepUpToken } : {};
     return await this.request(`/operator/fare-rules`, 'POST', fareData, extraHeaders);
   }
+
+  // ── Batch 18: Shift Block Hand-off System ──
+  async getShiftBlocks(statusFilter = null) {
+    return await this.request('/operator/shift-blocks', 'GET', statusFilter ? { status_filter: statusFilter } : {});
+  }
+
+  async getShiftBlock(shiftBlockId) {
+    return await this.request(`/operator/shift-blocks/${shiftBlockId}`, 'GET');
+  }
+
+  async createShiftBlock(payload) {
+    return await this.request('/operator/shift-blocks', 'POST', payload);
+  }
+
+  async updateShiftBlockAssignment(shiftBlockId, payload) {
+    return await this.request(`/operator/shift-blocks/${shiftBlockId}`, 'PATCH', payload);
+  }
+
+  async cancelShiftBlock(shiftBlockId) {
+    return await this.request(`/operator/shift-blocks/${shiftBlockId}/cancel`, 'PATCH');
+  }
+
+  async getPendingReviewShiftBlocks() {
+    return await this.request('/operator/shift-blocks/pending-review', 'GET');
+  }
+
+  async markShiftBlockReviewed(shiftBlockId) {
+    return await this.request(`/operator/shift-blocks/${shiftBlockId}/mark-reviewed`, 'PATCH');
+  }
+
+  async overrideShiftBlockHandoff(shiftBlockId) {
+    return await this.request(`/operator/shift-blocks/${shiftBlockId}/override-handoff`, 'POST');
+  }
+
+  async overrideShiftBlockTakeover(shiftBlockId) {
+    return await this.request(`/operator/shift-blocks/${shiftBlockId}/override-takeover`, 'POST');
+  }
 }
 
 export default new OperatorService();

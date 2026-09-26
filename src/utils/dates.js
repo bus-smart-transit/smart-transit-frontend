@@ -50,6 +50,28 @@ export function getBusinessToday() {
   return `${p.year}-${mm}-${dd}`;
 }
 
+/**
+ * Batch 17, Issue #2: staff dashboard headers previously rendered
+ * `new Date().toLocaleDateString()` — the VIEWER'S device-local calendar
+ * date — right next to trip/shift state that is always resolved against
+ * the Manila business date (see BUSINESS_TIMEZONE note above). For anyone
+ * testing from a timezone behind Manila, especially near the day boundary,
+ * this made a perfectly correct "today's trip" (per Manila business rules)
+ * look like a future-dated trip was granted shift/pairing access early.
+ * Use this instead of a raw `new Date()` format anywhere a staff header
+ * needs to show "today's date" — keeps the displayed date consistent with
+ * every other same-day comparison in the app.
+ */
+export function getBusinessTodayLabel() {
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: BUSINESS_TIMEZONE,
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  }).format(new Date());
+}
+
 // ── Dev-only business-time debug logger ──────────────────────────────────
 // Given how many past bugs traced back to Manila business-time vs. the
 // viewer's local browser time disagreeing, this makes that comparison

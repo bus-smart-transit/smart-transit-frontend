@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import DriverService from '../../StaffService/DriverService';
 import { haversineM } from '../../../utils/geo';
 import { isSameBusinessDay, getBusinessToday, getBusinessNowMs, toBusinessScheduleMs, debugLogBusinessTime } from '../../../utils/dates';
+import { buildCalendarGrid } from '../../../utils/calendarGrid';
 import { fetchTrafficStatus } from '../../../services/trafficService';
 import { initFcmAndGetToken } from '../../../services/fcmService';
 
@@ -93,30 +94,6 @@ const filterTripsByStatus = (trips, statusFilter) => {
   }
 
   return trips || [];
-};
-
-// Batch 15, Item 5: builds a 6-row (42-cell) month grid starting on Sunday,
-// including the trailing/leading days from adjacent months needed to fill
-// whole weeks — a standard calendar-grid layout. `tripsByDate` maps a
-// 'YYYY-MM-DD' key to the trips scheduled that day.
-const buildCalendarGrid = (monthDate, tripsByDate) => {
-  const year = monthDate.getFullYear();
-  const month = monthDate.getMonth();
-  const firstOfMonth = new Date(year, month, 1);
-  const startOffset = firstOfMonth.getDay(); // 0 = Sunday
-  const gridStart = new Date(year, month, 1 - startOffset);
-
-  return Array.from({ length: 42 }, (_, i) => {
-    const cellDate = new Date(gridStart.getFullYear(), gridStart.getMonth(), gridStart.getDate() + i);
-    const dateKey = `${cellDate.getFullYear()}-${String(cellDate.getMonth() + 1).padStart(2, '0')}-${String(cellDate.getDate()).padStart(2, '0')}`;
-    return {
-      date: cellDate,
-      dateKey,
-      isCurrentMonth: cellDate.getMonth() === month,
-      isToday: dateKey === getBusinessToday(),
-      trips: tripsByDate[dateKey] || [],
-    };
-  });
 };
 
 /**
@@ -213,7 +190,14 @@ export function useDriverDashboardData({ onLogout, pairing }) {
   const [pinStatus, setPinStatus] = useState('');
   const [earnings, setEarnings] = useState(null);
   const [shiftState, setShiftState] = useState({ openShift: null, latestShift: null, loading: false });
+  // Batch 18: Shift Block Hand-off System.
+  const [shiftBlocks, setShiftBlocks] = useState([]);
+  const [shiftBlockActionInFlight, setShiftBlockActionInFlight] = useState(false);
   const [tripDetailsModal, setTripDetailsModal] = useState(null); // suggestion: trip info modal
+  // S4 (Batch 17): calendar date-click modal — holds the clicked
+  // 'YYYY-MM-DD' key (or null when closed), scoped to just that date's
+  // schedule rather than navigating away or dumping every trip at once.
+  const [dayScheduleModalDate, setDayScheduleModalDate] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [actionMsg, setActionMsg] = useState('');
@@ -275,15 +259,21 @@ export function useDriverDashboardData({ onLogout, pairing }) {
   const didBootstrap = useRef(false);
   const stopsLoadedRef = useRef(false);
   const upcomingTrip = getUpcomingTrip(assignedTrips);
+
   const gpsIntervalRef = useRef(null);
   const gpsWatchRef = useRef(null);
   const lastGpsRef = useRef(null);
   const lastSentGpsRef = useRef(null); // tracks last successfully sent position for deduplication
   const [proximityAlert, setProximityAlert] = useState(null); // { stop_name, count } | null
-  const showNoCurrentTripState = !loading && isPaired && !hasActiveTrip && !hasTodayAssignedTrip && ['dashboard', 'journey', 'navigation', 'trip'].includes(activeTab);
+  const showNoCurrentTripState = !loading && isPaired && !hasActiveTrip && !hasTodayAssignedTrip && ['dashboard', 'activeTrip'].includes(activeTab);
 
-  const currentRoute = trip?.fleet_route?.route;
-  const currentFleet = trip?.fleet_route?.fleet;
+  // S3 (Batch 17): before shift starts, `trip` (from /trips/current) is
+  // still null — fall back to the today-assigned trip so the dashboard can
+  // show known route/schedule/vehicle info read-only instead of a blank
+  // placeholder state. Live-only data (stops/GPS/progress) still requires
+  // an actual open shift and is unaffected by this fallback.
+  const currentRoute = trip?.fleet_route?.route ?? todayAssignedTrip?.fleet_route?.route;
+  const currentFleet = trip?.fleet_route?.fleet ?? todayAssignedTrip?.fleet_route?.fleet;
   const nextStop = stops.find((stop) => !stop.is_acknowledged) ?? null;
   const filteredAssignedTrips = assignedTripFilter === 'all' ? assignedTrips : assignedTripsForView;
   const todayStart = getBusinessToday();
@@ -332,11 +322,12 @@ export function useDriverDashboardData({ onLogout, pairing }) {
     setError('');
     setShiftState((prev) => ({ ...prev, loading: true }));
     try {
-      const [profileRes, tripRes, tripsRes, shiftRes] = await Promise.allSettled([
+      const [profileRes, tripRes, tripsRes, shiftRes, shiftBlocksRes] = await Promise.allSettled([
         DriverService.getProfile('driver'),
         DriverService.getCurrentTrip(),
         DriverService.getDriverTrips(),
         DriverService.getDriverShiftStatus(),
+        DriverService.getMyShiftBlocks(),
       ]);
       if (profileRes.status === 'fulfilled') {
         setProfile(profileRes.value?.data);
@@ -354,6 +345,9 @@ export function useDriverDashboardData({ onLogout, pairing }) {
         if (assignedTripFilter !== 'all') {
           setAssignedTripsForView(filterTripsByStatus(tripsData, assignedTripFilter));
         }
+      }
+      if (shiftBlocksRes.status === 'fulfilled') {
+        setShiftBlocks(Array.isArray(shiftBlocksRes.value?.data) ? shiftBlocksRes.value.data : []);
       }
       if (shiftRes.status === 'fulfilled') {
         const payload = shiftRes.value?.data ?? {};
@@ -535,7 +529,7 @@ export function useDriverDashboardData({ onLogout, pairing }) {
       return;
     }
     if (stopsLoadedRef.current) return;
-    if (['journey', 'navigation', 'trip', 'dashboard'].includes(activeTab)) {
+    if (['activeTrip', 'dashboard'].includes(activeTab)) {
       const timer = setTimeout(() => { void loadStops(); }, 0);
       return () => clearTimeout(timer);
     }
@@ -583,7 +577,7 @@ export function useDriverDashboardData({ onLogout, pairing }) {
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (['trip', 'account'].includes(activeTab) && hasActiveTrip && isPaired) {
+      if (['pin', 'account'].includes(activeTab) && hasActiveTrip && isPaired) {
         void loadPin();
       }
     }, 0);
@@ -804,6 +798,21 @@ export function useDriverDashboardData({ onLogout, pairing }) {
 
   const handleLogout = onLogout;
 
+  // Batch 18: Shift Block Hand-off System.
+  const handleConfirmShiftBlockTakeover = async (shiftBlockId) => {
+    setShiftBlockActionInFlight(true);
+    setActionMsg('');
+    try {
+      await DriverService.confirmShiftBlockTakeover(shiftBlockId);
+      setActionMsg('Takeover confirmed. Shift block is now in progress.');
+      void loadData();
+    } catch (err) {
+      setActionMsg(err.message);
+    } finally {
+      setShiftBlockActionInFlight(false);
+    }
+  };
+
   // Batch 15, Item 4: toggle "Available for extra assignment" — independent
   // of shift/pairing state, visible to the Operator on the staff list.
   const handleToggleAvailability = async () => {
@@ -909,23 +918,15 @@ export function useDriverDashboardData({ onLogout, pairing }) {
   const pageTitle =
     activeTab === 'dashboard'
       ? 'Dashboard'
-      : activeTab === 'assigned'
-        ? 'Assigned Routes'
-        : activeTab === 'calendar'
-          ? 'Calendar'
-          : activeTab === 'schedule'
-            ? 'Schedule'
-            : activeTab === 'journey'
-              ? 'Journey'
-              : activeTab === 'navigation'
-                ? 'Journey / Route Navigation'
-                : activeTab === 'earnings'
-                  ? 'Trip Earnings'
-                  : activeTab === 'alerts'
-                    ? 'Traffic Alerts'
-                    : activeTab === 'trip'
-                      ? 'Trip Status'
-                      : 'Account';
+      : activeTab === 'activeTrip'
+        ? 'Active Trip'
+        : activeTab === 'schedule'
+          ? 'Schedule'
+          : activeTab === 'earnings'
+            ? 'Trip Earnings'
+            : activeTab === 'pin'
+              ? 'Daily PIN'
+              : 'Account';
 
   return {
     activeTab, setActiveTab,
@@ -941,6 +942,8 @@ export function useDriverDashboardData({ onLogout, pairing }) {
     earnings,
     shiftState,
     tripDetailsModal, setTripDetailsModal,
+    dayScheduleModalDate, setDayScheduleModalDate,
+    tripsByDate,
     loading,
     error,
     actionMsg, setActionMsg,
@@ -981,6 +984,8 @@ export function useDriverDashboardData({ onLogout, pairing }) {
     journeyStatusLabel,
     pageTitle,
     lastGpsRef,
+    shiftBlocks,
+    shiftBlockActionInFlight,
     handleAssignedTripFilterChange,
     loadData,
     loadEarnings,
@@ -992,6 +997,7 @@ export function useDriverDashboardData({ onLogout, pairing }) {
     handleConfirmedComplete,
     handleConfirmedDecline,
     handleAcceptTrip,
+    handleConfirmShiftBlockTakeover,
     handleLogout,
     handleToggleAvailability,
     handleToggleTwoFactor,

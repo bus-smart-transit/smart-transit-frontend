@@ -88,6 +88,19 @@ class ConductorService extends StaffBaseService {
   async checkoutOnsite(payload) {
     return await this.request('/conductor/checkout', 'POST', payload);
   }
+
+  // Batch 18: Shift Block Hand-off System.
+  async getMyShiftBlocks() {
+    return await this.request('/conductor/shift-blocks', 'GET');
+  }
+
+  async getShiftBlockHandoffEligibility(shiftBlockId) {
+    return await this.request(`/conductor/shift-blocks/${shiftBlockId}/handoff-eligibility`, 'GET');
+  }
+
+  async initiateShiftBlockHandoff(shiftBlockId) {
+    return await this.request(`/conductor/shift-blocks/${shiftBlockId}/initiate-handoff`, 'POST');
+  }
 }
 
 export default new ConductorService();

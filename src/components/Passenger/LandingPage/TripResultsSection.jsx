@@ -1,7 +1,7 @@
 import { MapPin, Clock, Bus, Users, Loader, AlertCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { useMemo, useState } from 'react';
-import { parseAppDate, formatAppDate } from '../../../utils/dates';
+import { useMemo } from 'react';
+import { parseAppDate } from '../../../utils/dates';
 
 const toCompactTime = (value) => {
   if (!value) return '--:--';
@@ -22,16 +22,40 @@ const formatTripDate = (dateStr) => {
   });
 };
 
-const resolveTripBaseFare = (trip) => {
-  const directFare = Number(trip?.fare ?? trip?.base_fare ?? trip?.fleet_route?.base_fare);
-  if (Number.isFinite(directFare) && directFare > 0) return directFare;
+// Batch 19 Part D: "Class" reuses the existing fleet_type distinction
+// (public/private) already used elsewhere (e.g. standing-capacity rules in
+// BuyTicket) rather than introducing a new schema field — confirmed with
+// the reporter that public/private terminology is an acceptable stand-in
+// for an economy/premium-style class tier.
+const resolveTripClassLabel = (trip) => {
+  const fleetType = String(trip?.fleet_route?.fleet?.fleet_type || '').toLowerCase();
+  if (fleetType === 'private') return 'Private';
+  if (fleetType === 'public') return 'Public';
+  return 'Standard';
+};
 
-  const fareRules = trip?.fleet_route?.fleet?.fare_rules || trip?.fleet_route?.fleet?.fareRules || [];
-  const fares = fareRules
-    .map((rule) => Number(rule?.base_fare))
-    .filter((value) => Number.isFinite(value) && value > 0);
+// No per-trip duration is stored anywhere in the schema (confirmed during
+// Batch 17/18 investigation). Estimate using the route's total distance
+// (last stop's distance_from_origin_km) against the same 38 km/h average
+// speed already assumed elsewhere in the driver-facing trip summaries,
+// rather than inventing a second, inconsistent assumption.
+const AVERAGE_SPEED_KMH = 38;
 
-  return fares.length > 0 ? Math.min(...fares) : null;
+const resolveTripEstimatedDuration = (trip) => {
+  const routeStops = trip?.fleet_route?.route?.route_stops || trip?.fleet_route?.route?.routeStops || [];
+  if (!Array.isArray(routeStops) || routeStops.length === 0) return null;
+  const distances = routeStops
+    .map((stop) => Number(stop?.distance_from_origin_km))
+    .filter((value) => Number.isFinite(value) && value >= 0);
+  if (distances.length === 0) return null;
+  const totalKm = Math.max(...distances);
+  if (totalKm <= 0) return null;
+  const totalMinutes = Math.round((totalKm / AVERAGE_SPEED_KMH) * 60);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours <= 0) return `${minutes}m`;
+  if (minutes === 0) return `${hours}h`;
+  return `${hours}h ${minutes}m`;
 };
 
 function TripCard({ trip, index, onBookSeat }) {
@@ -61,8 +85,14 @@ function TripCard({ trip, index, onBookSeat }) {
     ? Number(explicitStandingAvailable)
     : Math.max(0, standingTotal - Number(trip?.current_standing_capacity ?? 0));
   const totalLeft = seatedLeft + standingLeft;
-  const listedFare = resolveTripBaseFare(trip);
-  const hasListedFare = Number.isFinite(listedFare) && listedFare > 0;
+  const classLabel = resolveTripClassLabel(trip);
+  const estimatedDuration = resolveTripEstimatedDuration(trip);
+  const statusLabel = String(trip?.status || 'scheduled').toLowerCase();
+  const statusToneClass = statusLabel === 'boarding'
+    ? 'bg-emerald-100 text-emerald-700'
+    : statusLabel === 'delayed'
+      ? 'bg-amber-100 text-amber-700'
+      : 'bg-slate-100 text-slate-600';
 
   return (
     <div className="flex items-start gap-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-teal-200 hover:shadow-md">
@@ -73,14 +103,28 @@ function TripCard({ trip, index, onBookSeat }) {
 
       {/* Route info */}
       <div className="flex-1 min-w-0">
-        <p className="font-semibold text-slate-900">
-          {origin} <span className="text-slate-400">→</span> {destination}
-        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="font-semibold text-slate-900">
+            {origin} <span className="text-slate-400">→</span> {destination}
+          </p>
+          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wide text-slate-600">
+            {classLabel}
+          </span>
+          <span className={`rounded-full px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wide ${statusToneClass}`}>
+            {statusLabel}
+          </span>
+        </div>
         <div className="mt-1.5 flex flex-wrap items-center gap-3 text-xs text-slate-500">
           <span className="flex items-center gap-1">
             <Clock className="h-3.5 w-3.5 shrink-0" />
             {departureTime}
           </span>
+          {estimatedDuration && (
+            <span className="flex items-center gap-1">
+              <Clock className="h-3.5 w-3.5 shrink-0" />
+              ~{estimatedDuration}
+            </span>
+          )}
           <span className="flex items-center gap-1">
             <Bus className="h-3.5 w-3.5 shrink-0" />
             {busName}
@@ -92,14 +136,13 @@ function TripCard({ trip, index, onBookSeat }) {
         </div>
       </div>
 
-      {/* Price + actions */}
+      {/* Batch 19 Part D: fare is intentionally not shown on this
+          browsing/listing view — it only appears once the passenger
+          reaches the quote/payment step (BuyTicket), which also keeps
+          the displayed price from ever drifting out of sync with the
+          actual computed/charged fare (Batch 15 Item 10 concern). */}
       <div className="flex shrink-0 flex-col items-end gap-2">
-        <div className="text-right">
-          <p className="text-lg font-bold text-slate-900">
-            {hasListedFare ? `₱${listedFare.toFixed(0)}` : 'Fare depends on drop-off'}
-          </p>
-          <p className="text-xs text-slate-400">{hasListedFare ? 'base fare per passenger' : 'select drop-off to see exact price'}</p>
-        </div>
+        <p className="text-xs text-slate-400">View fare at checkout</p>
         <div className="flex gap-2">
           <button
             type="button"

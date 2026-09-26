@@ -1,13 +1,14 @@
 import { useState, useEffect, useRef } from 'react'
+import StaffPortalLayout from './StaffPortalLayout'
 import { buildOperatorForecast } from './routeForecast'
 import { loadMapLib } from '../Map/mapDependencies'
 import { parseAppDate, getBusinessToday, debugLogBusinessTime } from '../../utils/dates'
 import { nearestPointOnLine } from '../../utils/geo'
-import { useOperatorDashboardData, useNotificationBell, useDispatchDecisions, fetchOperatorRouteStops, useFleetsTab, useRoutesTab, useTripsTab, useReportsTab } from '../../api/hooks/Staff/useOperatorDashboard'
+import { useOperatorDashboardData, useNotificationBell, useDispatchDecisions, fetchOperatorRouteStops, useFleetsTab, useRoutesTab, useTripsTab, useReportsTab, useShiftBlocksTab } from '../../api/hooks/Staff/useOperatorDashboard'
 import {
   LayoutDashboard, Bus, MapPin, Clock, PieChart, Users, Settings,
-  LogOut, Plus, Eye, RefreshCw, Shield, Download,
-  X, ChevronDown, ChevronUp, Loader2, AlertTriangle, Bell,
+  Plus, Eye, RefreshCw, Shield, Download,
+  X, ChevronDown, ChevronUp, Loader2, AlertTriangle, Bell, ArrowLeftRight,
 } from 'lucide-react'
 
 const fmt = (v) => {
@@ -44,13 +45,14 @@ const STATUS_CHIP = {
 }
 
 const NAV = [
-  { id: 'dashboard',  label: 'Dashboard',  icon: LayoutDashboard },
-  { id: 'staffs',     label: 'Staffs',     icon: Users },
-  { id: 'fleets',     label: 'Fleets',     icon: Bus },
-  { id: 'routes',     label: 'Routes',     icon: MapPin },
-  { id: 'trips',      label: 'Trips',      icon: Clock },
-  { id: 'reports',    label: 'Reports',    icon: PieChart },
-  { id: 'account',    label: 'Account',    icon: Settings },
+  { key: 'dashboard',  label: 'Dashboard',  icon: LayoutDashboard },
+  { key: 'staffs',     label: 'Staffs',     icon: Users },
+  { key: 'fleets',     label: 'Fleets',     icon: Bus },
+  { key: 'routes',     label: 'Routes',     icon: MapPin },
+  { key: 'trips',      label: 'Trips',      icon: Clock },
+  { key: 'shiftBlocks', label: 'Shift Blocks', icon: ArrowLeftRight },
+  { key: 'reports',    label: 'Reports',    icon: PieChart },
+  { key: 'account',    label: 'Account',    icon: Settings },
 ]
 
 const getStaffFullName = (row) => row?.name || row?.user?.name || row?.user?.username || row?.username || '-'
@@ -59,33 +61,6 @@ const getStaffEmail = (row) => row?.user?.email || row?.email || '-'
 const getStaffRole = (row) => row?.user?.role || row?.role || '-'
 const getStaffJoinedAt = (row) => row?.user?.created_at || row?.created_at || null
 const getStaffCompanyUserId = (row) => row?.company_user_id || row?.user_id || row?.id
-
-function Sidebar({ activeTab, onTabChange, onLogout }) {
-  return (
-    <aside className="flex w-56 shrink-0 flex-col bg-[#0A1324] px-3 py-7">
-      <div className="mb-8 flex items-center gap-2 px-2">
-        <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-700 bg-[#111C33]">
-          <Bus className="h-6 w-6 text-slate-100" strokeWidth={1.8} />
-        </div>
-      </div>
-      <nav className="flex flex-1 flex-col gap-1.5">
-        {NAV.map(({ id, label, icon: Icon }) => (
-          <button key={id} type="button" onClick={() => onTabChange(id)}
-            className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold transition-colors ${
-              activeTab === id ? 'bg-slate-700/60 text-white' : 'text-slate-300 hover:bg-slate-800/70 hover:text-white'
-            }`}>
-            <Icon className="h-4 w-4 shrink-0" strokeWidth={1.75} />
-            {label}
-          </button>
-        ))}
-      </nav>
-      <button type="button" onClick={onLogout}
-        className="mt-4 flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-300 hover:bg-slate-800/70 transition-colors">
-        <LogOut className="h-4 w-4 shrink-0" />Logout
-      </button>
-    </aside>
-  )
-}
 
 function Modal({ title, onClose, children }) {
   return (
@@ -742,14 +717,14 @@ function StaffDirectoryTab({ drivers, conductors, onRefresh, onCreateAccount }) 
         <table className="w-full text-sm">
           <thead className="bg-slate-50">
             <tr className="border-b border-slate-200">
-              {['Username', 'Email', 'Role', 'Joined'].map((header) => (
+              {['Username', 'Email', 'Role', 'Availability', 'Joined'].map((header) => (
                 <th key={header} className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{header}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {filteredStaff.length === 0 ? (
-              <tr><td colSpan={4} className="px-5 py-8 text-center text-sm text-slate-400">No staff found for this filter.</td></tr>
+              <tr><td colSpan={5} className="px-5 py-8 text-center text-sm text-slate-400">No staff found for this filter.</td></tr>
             ) : (
               filteredStaff.map((row) => (
                 <tr key={`${getStaffRole(row)}-${getStaffCompanyUserId(row)}`} className="border-b border-slate-100 hover:bg-slate-50">
@@ -757,6 +732,19 @@ function StaffDirectoryTab({ drivers, conductors, onRefresh, onCreateAccount }) 
                   <td className="px-5 py-3 text-slate-600">{getStaffEmail(row)}</td>
                   <td className="px-5 py-3">
                     <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-700 capitalize">{getStaffRole(row) || row._resolvedRole}</span>
+                  </td>
+                  <td className="px-5 py-3">
+                    {/* Batch 15, Item 4/9 completion (Batch 17, Issue #3):
+                        Available/Not Available was already toggleable by the
+                        Driver/Conductor themselves but never surfaced here. */}
+                    <span className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-semibold ${
+                      row?.is_available
+                        ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                        : 'border-slate-200 bg-slate-100 text-slate-500'
+                    }`}>
+                      <span className={`h-1.5 w-1.5 rounded-full ${row?.is_available ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+                      {row?.is_available ? 'Available' : 'Not Available'}
+                    </span>
                   </td>
                   <td className="px-5 py-3 text-slate-500">{fmtDate(getStaffJoinedAt(row))}</td>
                 </tr>
@@ -1625,7 +1613,7 @@ function TripsTab({ trips, drivers, conductors, onRefresh }) {
             <RefreshCw className="h-4 w-4" /> Refresh
           </button>
           <button type="button" onClick={() => { setShowModal(true); setMsg('') }} className="flex items-center gap-1.5 rounded-lg bg-teal-600 px-3 py-2 text-sm font-semibold text-white hover:bg-teal-700">
-            <Plus className="h-4 w-4" /> Schedule Trip
+            <Plus className="h-4 w-4" /> Schedule Ad Hoc Trip
           </button>
         </div>
       </div>
@@ -1661,7 +1649,12 @@ function TripsTab({ trips, drivers, conductors, onRefresh }) {
                         <td className="px-4 py-3 font-mono text-xs text-slate-600">#{t.trip_id}</td>
                         <td className="px-4 py-3 text-slate-700 whitespace-nowrap">{fmtDate(t.trip_date)}</td>
                         <td className="px-4 py-3 text-slate-700 whitespace-nowrap">{String(t.departure_time || t.fleet_route?.start_time || '--:--').slice(0, 5)}</td>
-                        <td className="px-4 py-3 text-slate-700 max-w-30 truncate">{t.fleet_route?.route?.route_name || '-'}</td>
+                        <td className="px-4 py-3 text-slate-700 max-w-30 truncate">
+                          {t.fleet_route?.route?.route_name || '-'}
+                          {t.shift_block_id
+                            ? <span className="ml-1.5 rounded-full bg-indigo-100 px-1.5 py-0.5 text-[0.65rem] font-semibold text-indigo-700" title="Auto-generated from a Shift Block">Block</span>
+                            : <span className="ml-1.5 rounded-full bg-slate-100 px-1.5 py-0.5 text-[0.65rem] font-semibold text-slate-500" title="Manually created ad hoc/charter trip">Ad hoc</span>}
+                        </td>
                         <td className="px-4 py-3 text-slate-700">{t.fleet_route?.fleet?.plate_number || '-'}</td>
                         <td className="px-4 py-3">
                           {driverName ? <span className="text-slate-700">{driverName}</span>
@@ -1702,7 +1695,15 @@ function TripsTab({ trips, drivers, conductors, onRefresh }) {
       ))}
 
       {showModal && (
-        <Modal title="Schedule Trip" onClose={() => setShowModal(false)}>
+        <Modal title="Schedule Ad Hoc Trip" onClose={() => setShowModal(false)}>
+          {/* Batch 19 Part C: regular Davao–Tagum service now comes from
+              Shift Blocks (see the Shift Blocks tab), which auto-generate
+              each day's legs. Use this form only for one-off/charter public
+              trips outside that schedule — same booking/seating model as
+              any other trip, just manually created. */}
+          <p className="-mt-2 mb-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            For ad hoc/charter trips only. Regular scheduled service is created automatically from Shift Blocks.
+          </p>
           <form className="space-y-4" onSubmit={handleSchedule}>
             <Field label="Fleet Route" required>
               <select value={form.fleet_route_id} onChange={e => setForm(p => ({...p, fleet_route_id: e.target.value}))} required className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500">
@@ -1878,6 +1879,197 @@ function TripsTab({ trips, drivers, conductors, onRefresh }) {
         </Modal>
       )}
     </div>
+  )
+}
+
+const BLOCK_STATUS_CHIP = {
+  scheduled: 'bg-slate-100 text-slate-700',
+  in_progress: 'bg-amber-100 text-amber-700',
+  completed: 'bg-emerald-100 text-emerald-700',
+  cancelled: 'bg-red-100 text-red-700',
+}
+const AUDIT_STATUS_CHIP = {
+  not_applicable: 'bg-slate-100 text-slate-500',
+  pending_review: 'bg-amber-100 text-amber-700',
+  reviewed: 'bg-emerald-100 text-emerald-700',
+}
+
+// Batch 18: Shift Block Hand-off System — Operator/Dispatcher tab.
+// Section 4.1's dynamic action-button table: Scheduled -> Cancel;
+// In Progress -> Dispatcher override hand-off (exception handling,
+// Section 4.3 — normal hand-off is conductor-initiated from their own
+// portal once the GPS/final-leg eligibility check passes); Completed ->
+// audit_status badge + Mark Reviewed.
+function ShiftBlocksTab({ drivers, conductors }) {
+  const {
+    blocks,
+    statusFilter, setStatusFilter,
+    loading,
+    showCreateModal, setShowCreateModal,
+    saving,
+    msg, setMsg,
+    fleetRoutes,
+    handleCreate,
+    handleCancel,
+    handleOverrideHandoff,
+    handleMarkReviewed,
+  } = useShiftBlocksTab()
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-bold text-slate-900">Shift Blocks</h2>
+        <div className="flex flex-wrap items-center gap-2">
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
+            <option value="all">All</option>
+            <option value="scheduled">Scheduled</option>
+            <option value="in_progress">In Progress</option>
+            <option value="completed">Completed</option>
+            <option value="cancelled">Cancelled</option>
+          </select>
+          <button type="button" onClick={() => { setShowCreateModal(true); setMsg('') }} className="flex items-center gap-1.5 rounded-lg bg-teal-600 px-3 py-2 text-sm font-semibold text-white hover:bg-teal-700">
+            <Plus className="h-4 w-4" /> Create Shift Block
+          </button>
+        </div>
+      </div>
+
+      {msg && <p className="rounded-lg bg-teal-50 border border-teal-200 px-4 py-2 text-sm text-teal-800">{msg}</p>}
+
+      <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+        <table className="w-full text-sm">
+          <thead className="bg-slate-50">
+            <tr className="border-b border-slate-200">
+              {['Date', 'Type', 'Fleet', 'Driver', 'Conductor', 'Status', 'Audit', 'Actions'].map((h) => (
+                <th key={h} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 whitespace-nowrap">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <tr><td colSpan={8} className="px-5 py-8 text-center text-sm text-slate-400">Loading…</td></tr>
+            ) : blocks.length === 0 ? (
+              <tr><td colSpan={8} className="px-5 py-8 text-center text-sm text-slate-400">No shift blocks found.</td></tr>
+            ) : blocks.map((b) => (
+              <tr key={b.shift_block_id} className="border-b border-slate-100 hover:bg-slate-50">
+                <td className="px-4 py-3 text-slate-700 whitespace-nowrap">{fmtDate(b.scheduled_date)}</td>
+                <td className="px-4 py-3 text-slate-700 capitalize">{b.block_type}</td>
+                <td className="px-4 py-3 text-slate-700">{b.fleet?.plate_number || '-'}</td>
+                <td className="px-4 py-3 text-slate-700">{getStaffFullName(b.driver) || `#${b.driver_id}`}</td>
+                <td className="px-4 py-3 text-slate-700">{getStaffFullName(b.conductor) || `#${b.conductor_id}`}</td>
+                <td className="px-4 py-3">
+                  <span className={`rounded-full px-2 py-0.5 text-xs font-semibold whitespace-nowrap ${BLOCK_STATUS_CHIP[b.status] ?? 'bg-slate-100 text-slate-600'}`}>{b.status}</span>
+                </td>
+                <td className="px-4 py-3">
+                  <span className={`rounded-full px-2 py-0.5 text-xs font-semibold whitespace-nowrap ${AUDIT_STATUS_CHIP[b.audit_status] ?? 'bg-slate-100 text-slate-600'}`}>{b.audit_status}</span>
+                </td>
+                <td className="px-4 py-3">
+                  <div className="flex flex-wrap gap-1">
+                    {b.status === 'scheduled' && (
+                      <button type="button" onClick={() => handleCancel(b.shift_block_id)} className="rounded px-2 py-1 text-xs bg-red-100 text-red-700 hover:bg-red-200">Cancel</button>
+                    )}
+                    {b.status === 'in_progress' && (
+                      <button type="button" onClick={() => handleOverrideHandoff(b.shift_block_id)} className="rounded px-2 py-1 text-xs bg-indigo-100 text-indigo-700 hover:bg-indigo-200" title="Dispatcher override — force hand-off regardless of GPS state (exception handling)">Override Hand-off</button>
+                    )}
+                    {b.status === 'completed' && b.audit_status === 'pending_review' && (
+                      <button type="button" onClick={() => handleMarkReviewed(b.shift_block_id)} className="rounded px-2 py-1 text-xs bg-emerald-100 text-emerald-700 hover:bg-emerald-200">Mark Reviewed</button>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {showCreateModal && (
+        <CreateShiftBlockModal
+          drivers={drivers}
+          conductors={conductors}
+          fleetRoutes={fleetRoutes}
+          saving={saving}
+          msg={msg}
+          onClose={() => setShowCreateModal(false)}
+          onSave={handleCreate}
+        />
+      )}
+    </div>
+  )
+}
+
+function CreateShiftBlockModal({ drivers, conductors, fleetRoutes, saving, msg, onClose, onSave }) {
+  const [form, setForm] = useState({
+    fleet_route_id: '',
+    driver_id: '',
+    conductor_id: '',
+    block_type: 'morning',
+    scheduled_date: '',
+    leg_departure_times: ['06:00', '08:30', '11:00', '13:30'],
+  })
+
+  const updateLegTime = (index, value) => {
+    setForm((prev) => ({ ...prev, leg_departure_times: prev.leg_departure_times.map((t, i) => (i === index ? value : t)) }))
+  }
+
+  const handleSubmit = (e) => {
+    e.preventDefault()
+    onSave({
+      fleet_route_id: Number(form.fleet_route_id),
+      driver_id: Number(form.driver_id),
+      conductor_id: Number(form.conductor_id),
+      block_type: form.block_type,
+      scheduled_date: form.scheduled_date,
+      leg_departure_times: form.leg_departure_times,
+    })
+  }
+
+  return (
+    <Modal title="Create Shift Block" onClose={onClose}>
+      <form className="space-y-4" onSubmit={handleSubmit}>
+        <Field label="Fleet Route" required>
+          <select value={form.fleet_route_id} onChange={(e) => setForm((p) => ({ ...p, fleet_route_id: e.target.value }))} required className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500">
+            <option value="">Select a fleet route…</option>
+            {fleetRoutes.map((fr) => (
+              <option key={fr.fleet_route_id} value={fr.fleet_route_id}>{fr.fleet?.plate_number} — {fr.route?.route_name}</option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Block Type" required>
+          <select value={form.block_type} onChange={(e) => setForm((p) => ({ ...p, block_type: e.target.value }))} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500">
+            <option value="morning">Morning</option>
+            <option value="afternoon">Afternoon</option>
+          </select>
+        </Field>
+        <Field label="Scheduled Date" type="date" value={form.scheduled_date} onChange={(e) => setForm((p) => ({ ...p, scheduled_date: e.target.value }))} required />
+        <Field label="Driver" required>
+          <select value={form.driver_id} onChange={(e) => setForm((p) => ({ ...p, driver_id: e.target.value }))} required className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500">
+            <option value="">Select a driver…</option>
+            {drivers.map((d) => (
+              <option key={getStaffCompanyUserId(d)} value={getStaffCompanyUserId(d)}>{getStaffFullName(d) || getStaffUsername(d)}</option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Conductor" required>
+          <select value={form.conductor_id} onChange={(e) => setForm((p) => ({ ...p, conductor_id: e.target.value }))} required className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500">
+            <option value="">Select a conductor…</option>
+            {conductors.map((c) => (
+              <option key={getStaffCompanyUserId(c)} value={getStaffCompanyUserId(c)}>{getStaffFullName(c) || getStaffUsername(c)}</option>
+            ))}
+          </select>
+        </Field>
+        <div className="grid grid-cols-2 gap-2">
+          {form.leg_departure_times.map((t, i) => (
+            <Field key={i} label={`Leg ${i + 1} Departure`} type="time" value={t} onChange={(e) => updateLegTime(i, e.target.value)} required />
+          ))}
+        </div>
+        {msg && <p className="text-sm text-red-600">{msg}</p>}
+        <div className="flex justify-end gap-2 pt-2">
+          <button type="button" onClick={onClose} className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50">Cancel</button>
+          <button type="submit" disabled={saving} className="flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-60">
+            {saving && <Loader2 className="h-4 w-4 animate-spin" />}Create
+          </button>
+        </div>
+      </form>
+    </Modal>
   )
 }
 
@@ -2185,9 +2377,17 @@ export default function OperatorDashboard() {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-50">
-      <Sidebar activeTab={activeTab} onTabChange={setActiveTab} onLogout={handleLogout} />
-      <main className="flex-1 overflow-y-auto p-6">
+    <StaffPortalLayout
+      brandLabel="Operator Portal"
+      brandIcon={Bus}
+      navItems={NAV}
+      activeTab={activeTab}
+      onTabChange={setActiveTab}
+      profile={profile ? { name: profile?.name || profile?.user?.name || profile?.user?.username || profile?.user?.email || 'Operator' } : null}
+      profileRoleLabel="Operator"
+      profileInitialFallback="O"
+      onLogout={handleLogout}
+    >
         <div className="mb-4 flex justify-end">
           <NotificationBell />
         </div>
@@ -2198,10 +2398,10 @@ export default function OperatorDashboard() {
         {activeTab === 'fleets'     && <FleetsTab fleets={fleets} routes={routes} trips={trips} onRefresh={loadFull} />}
         {activeTab === 'routes'     && <RoutesTab routes={routes} stops={stops} trips={trips} onRefresh={loadFull} />}
         {activeTab === 'trips'      && <TripsTab trips={trips} drivers={drivers} conductors={conductors} onRefresh={loadFull} />}
+        {activeTab === 'shiftBlocks' && <ShiftBlocksTab drivers={drivers} conductors={conductors} />}
         {activeTab === 'reports'    && <ReportsTab fleets={fleets} />}
         {activeTab === 'account'    && <AccountTab profile={profile} />}
-      </main>
-    </div>
+    </StaffPortalLayout>
   )
 }
 

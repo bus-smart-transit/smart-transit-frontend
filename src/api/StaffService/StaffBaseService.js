@@ -112,6 +112,20 @@ export class StaffBaseService extends BaseService {
     return await this.request(`/${role}/pairing-status`, 'GET');
   }
 
+  // ── Notification bell (S1, Batch 17 — shared, parameterized by role) ──
+  async getNotifications(role) {
+    // role = 'driver' | 'conductor'
+    return await this.request(`/${role}/notifications`, 'GET');
+  }
+
+  async markNotificationRead(role, notificationId) {
+    return await this.request(`/${role}/notifications/${notificationId}/read`, 'PATCH');
+  }
+
+  async markAllNotificationsRead(role) {
+    return await this.request(`/${role}/notifications/read-all`, 'PATCH');
+  }
+
   // Batch 15, Items 2/3: register this user's FCM device token (shared
   // endpoint across all staff roles).
   async registerFcmToken(token) {

@@ -5,6 +5,7 @@ import ConductorService from '../../StaffService/ConductorService';
 import usePassengersByTrip from './usePassengersByTrip';
 import useOnsiteReceiptPrinter from './useOnsiteReceiptPrinter';
 import { isSameBusinessDay, getBusinessToday, getBusinessNowMs, toBusinessScheduleMs, debugLogBusinessTime } from '../../../utils/dates';
+import { buildCalendarGrid } from '../../../utils/calendarGrid';
 
 // Architecture audit follow-up (CONF-03): ConductorDashboard.jsx previously
 // called ConductorService directly from ~22 sites spread across the
@@ -189,6 +190,20 @@ export function useConductorDashboardData({ onLogout, pairing }) {
   const [isAvailable, setIsAvailable] = useState(false);
   const [availabilitySaving, setAvailabilitySaving] = useState(false);
   const [shiftState, setShiftState] = useState({ openShift: null, latestShift: null, loading: false });
+  // Batch 18: Shift Block Hand-off System.
+  const [shiftBlocks, setShiftBlocks] = useState([]);
+  const [shiftBlockEligibility, setShiftBlockEligibility] = useState({});
+  const [shiftBlockActionInFlight, setShiftBlockActionInFlight] = useState(false);
+  // S4 (Batch 17): Calendar view, extended from Driver's Batch 15 Item 5 to
+  // the Conductor portal. `tripDetailsModal` mirrors DriverDashboard.jsx's
+  // single-trip drill-down; `dayScheduleModalDate` holds the clicked
+  // 'YYYY-MM-DD' key (or null) for the date-scoped schedule modal.
+  const [calendarMonth, setCalendarMonth] = useState(() => {
+    const today = new Date();
+    return new Date(today.getFullYear(), today.getMonth(), 1);
+  });
+  const [tripDetailsModal, setTripDetailsModal] = useState(null);
+  const [dayScheduleModalDate, setDayScheduleModalDate] = useState(null);
   const isPaired = pairing?.paired === true;
   const pairingReason = pairing?.reason || 'Waiting for pairing with your Driver before live trip features unlock.';
   const hasActiveTrip = isCurrentOrSameDayTrip(trip);
@@ -219,7 +234,7 @@ export function useConductorDashboardData({ onLogout, pairing }) {
   const scannerBusyRef = useRef(false);
   const lastDetectedRef = useRef({ value: '', at: 0 });
   const upcomingTrip = getUpcomingTrip(assignedTrips);
-  const showNoCurrentTripState = !loading && isPaired && !hasActiveTrip && !hasTodayAssignedTrip && ['trip', 'occupancy', 'passengers', 'pin'].includes(activeTab);
+  const showNoCurrentTripState = !loading && isPaired && !hasActiveTrip && !hasTodayAssignedTrip && ['dashboard', 'occupancy', 'activeShift', 'pin'].includes(activeTab);
   const routeStops = trip?.fleet_route?.route?.route_stops || trip?.fleet_route?.route?.routeStops || [];
   const shiftStarted = hasOpenShift;
   const groupedPassengers = usePassengersByTrip(passengers, trip);
@@ -231,6 +246,16 @@ export function useConductorDashboardData({ onLogout, pairing }) {
     const tripDateStr = String(item?.trip_date || '').match(/^(\d{4}-\d{2}-\d{2})/)?.[1];
     return !!tripDateStr && tripDateStr > todayStart;
   });
+  // S4 (Batch 17): Calendar derives from the full assigned-trips list
+  // (today + upcoming + past), independent of the Assigned Trips tab's own
+  // scheduled/completed filter above — same approach as DriverDashboard.jsx.
+  const tripsByDate = assignedTrips.reduce((acc, item) => {
+    const dateKey = String(item?.trip_date || '').match(/^(\d{4}-\d{2}-\d{2})/)?.[1];
+    if (!dateKey) return acc;
+    (acc[dateKey] ??= []).push(item);
+    return acc;
+  }, {});
+  const calendarDays = buildCalendarGrid(calendarMonth, tripsByDate);
   const { printOnsiteReceipt } = useOnsiteReceiptPrinter();
 
   const handleAssignedTripFilterChange = useCallback(async (value) => {
@@ -322,11 +347,12 @@ export function useConductorDashboardData({ onLogout, pairing }) {
     setError('');
     setShiftState((prev) => ({ ...prev, loading: true }));
     try {
-      const [profileRes, tripRes, tripsRes, shiftRes] = await Promise.allSettled([
+      const [profileRes, tripRes, tripsRes, shiftRes, shiftBlocksRes] = await Promise.allSettled([
         ConductorService.getProfile('conductor'),
         ConductorService.getConductorTrip(),
         ConductorService.getConductorTrips(),
         ConductorService.getConductorShiftStatus(),
+        ConductorService.getMyShiftBlocks(),
       ]);
       if (profileRes.status === 'fulfilled') {
         const nextProfile = profileRes.value?.data;
@@ -345,6 +371,9 @@ export function useConductorDashboardData({ onLogout, pairing }) {
         if (assignedTripFilter !== 'all') {
           setAssignedTripsForView(filterTripsByStatus(tripsData, assignedTripFilter));
         }
+      }
+      if (shiftBlocksRes.status === 'fulfilled') {
+        setShiftBlocks(Array.isArray(shiftBlocksRes.value?.data) ? shiftBlocksRes.value.data : []);
       }
       if (shiftRes.status === 'fulfilled') {
         const payload = shiftRes.value?.data ?? {};
@@ -437,7 +466,7 @@ export function useConductorDashboardData({ onLogout, pairing }) {
       // Batch 15, Item 8: also load on the Ticketing tab (the default
       // landing screen) so the consolidated glance panel has real data
       // without requiring a visit to the Passengers tab first.
-      if (['passengers', 'occupancy'].includes(activeTab) && hasActiveTrip && isPaired) void loadPassengers();
+      if (['passengers', 'occupancy', 'activeShift'].includes(activeTab) && hasActiveTrip && isPaired) void loadPassengers();
     }, 0);
 
     return () => clearTimeout(timer);
@@ -455,14 +484,14 @@ export function useConductorDashboardData({ onLogout, pairing }) {
     const timer = setTimeout(() => {
       // Batch 15, Item 8: also load on the Ticketing tab, same reasoning
       // as the passengers effect above.
-      if (['earnings', 'occupancy'].includes(activeTab) && hasActiveTrip && isPaired) void loadEarnings();
+      if (['earnings', 'occupancy', 'activeShift'].includes(activeTab) && hasActiveTrip && isPaired) void loadEarnings();
     }, 0);
 
     return () => clearTimeout(timer);
   }, [activeTab, hasActiveTrip, isPaired, loadEarnings]);
 
   useEffect(() => {
-    if (!['earnings', 'occupancy'].includes(activeTab) || !hasActiveTrip || !isPaired) return undefined;
+    if (!['earnings', 'occupancy', 'activeShift'].includes(activeTab) || !hasActiveTrip || !isPaired) return undefined;
 
     const intervalId = setInterval(() => {
       void loadEarnings();
@@ -545,6 +574,30 @@ export function useConductorDashboardData({ onLogout, pairing }) {
       setActionMsg(err.message);
     } finally {
       setAvailabilitySaving(false);
+    }
+  };
+
+  // Batch 18: Shift Block Hand-off System.
+  const checkShiftBlockEligibility = async (shiftBlockId) => {
+    try {
+      const res = await ConductorService.getShiftBlockHandoffEligibility(shiftBlockId);
+      setShiftBlockEligibility((prev) => ({ ...prev, [shiftBlockId]: res?.data ?? null }));
+    } catch {
+      setShiftBlockEligibility((prev) => ({ ...prev, [shiftBlockId]: null }));
+    }
+  };
+
+  const handleInitiateShiftBlockHandoff = async (shiftBlockId) => {
+    setShiftBlockActionInFlight(true);
+    setActionMsg('');
+    try {
+      await ConductorService.initiateShiftBlockHandoff(shiftBlockId);
+      setActionMsg('Hand-off initiated. You will be signed out.');
+      void loadData();
+    } catch (err) {
+      setActionMsg(err.message);
+    } finally {
+      setShiftBlockActionInFlight(false);
     }
   };
 
@@ -1000,15 +1053,17 @@ export function useConductorDashboardData({ onLogout, pairing }) {
   };
 
   const pageTitle =
-    activeTab === 'trip'
-      ? 'Start Shift'
+    activeTab === 'dashboard'
+      ? 'Dashboard'
       : activeTab === 'occupancy'
-        ? 'Ticketing'
-        : activeTab === 'passengers'
-            ? 'Passengers'
-            : activeTab === 'earnings'
-              ? 'End of Shift'
-              : 'Daily PIN';
+        ? 'Ticketing & Fares'
+        : activeTab === 'activeShift'
+            ? 'Active Shift'
+            : activeTab === 'schedule'
+              ? 'Schedule'
+              : activeTab === 'pin'
+                ? 'Daily PIN'
+                : 'Account';
 
   return {
     activeTab, setActiveTab,
@@ -1060,6 +1115,14 @@ export function useConductorDashboardData({ onLogout, pairing }) {
     filteredAssignedTrips,
     todayAssignedTrips,
     upcomingAssignedTrips,
+    tripsByDate,
+    calendarDays,
+    calendarMonth, setCalendarMonth,
+    tripDetailsModal, setTripDetailsModal,
+    dayScheduleModalDate, setDayScheduleModalDate,
+    shiftBlocks,
+    shiftBlockEligibility,
+    shiftBlockActionInFlight,
     printOnsiteReceipt,
     occSeated,
     occStanding,
@@ -1085,6 +1148,8 @@ export function useConductorDashboardData({ onLogout, pairing }) {
     handleAcceptTrip,
     handleToggleAvailability,
     handleEndShift,
+    checkShiftBlockEligibility,
+    handleInitiateShiftBlockHandoff,
     handleScan,
     handleGroupScan,
     startScanner,
