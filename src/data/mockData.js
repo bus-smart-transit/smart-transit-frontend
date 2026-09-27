@@ -1,3 +1,21 @@
+export const LOCATIONS = {
+  davao: [7.0736, 125.6128],
+  'davao city': [7.0736, 125.6128],
+  tagum: [7.4475, 125.8078],
+  'tagum city': [7.4475, 125.8078],
+  mati: [6.9551, 126.2165],
+  'mati city': [6.9551, 126.2165],
+  boston: [7.8617, 126.3689],
+  carmen: [7.3606, 125.7068],
+  malita: [6.4108, 125.6114],
+  'santo tomas': [7.5336, 125.6239],
+  'santo tomas davao del norte': [7.5336, 125.6239],
+  panabo: [7.3081, 125.6842],
+  digos: [6.7498, 125.3572],
+  samal: [7.0731, 125.7089],
+  'davao del sur': [6.7667, 125.35],
+}
+
 export const stats = [
   { label: 'Active Buses', value: '13/15', highlight: true },
   { label: 'Fleets on Trip', value: '11 Fleets' },
@@ -87,6 +105,7 @@ export const scheduleTrips = [
   {
     busId: 'B-107',
     route: 'Davao City - Cateel',
+    departureDate: '2026-09-28',
     driver: 'John Kyle Licong',
     chauffeur: 'Hassanal Guiabar',
     departureTime: '5:00 AM',
@@ -96,6 +115,7 @@ export const scheduleTrips = [
   {
     busId: 'B-101',
     route: 'Davao City - Tagum City',
+    departureDate: '2026-09-28',
     driver: 'JM Murcia',
     chauffeur: 'Rafael Dutosme',
     departureTime: '7:00 AM',
@@ -105,6 +125,7 @@ export const scheduleTrips = [
   {
     busId: 'B-110',
     route: 'Davao City - Digos City',
+    departureDate: '2026-09-28',
     driver: 'Everest Ang',
     chauffeur: 'Jb de Vila',
     departureTime: '8:00 AM',
@@ -114,6 +135,7 @@ export const scheduleTrips = [
   {
     busId: 'B-105',
     route: 'Davao City - Mati City',
+    departureDate: '2026-09-28',
     driver: 'Joshua Galo',
     chauffeur: 'Jossua Bongo',
     departureTime: '10:00 AM',
@@ -123,6 +145,7 @@ export const scheduleTrips = [
   {
     busId: 'B-106',
     route: 'Davao City - Boston',
+    departureDate: '2026-09-28',
     driver: 'Ram Llanes',
     chauffeur: 'Clarynz Masudog',
     departureTime: '11:00 AM',
@@ -132,6 +155,7 @@ export const scheduleTrips = [
   {
     busId: 'B-102',
     route: 'Davao City - Carmen',
+    departureDate: '2026-09-28',
     driver: 'Jake Maunas',
     chauffeur: 'Daniel Padilla',
     departureTime: '12:00 AM',
@@ -141,7 +165,8 @@ export const scheduleTrips = [
   {
     busId: 'B-112',
     route: 'Davao City - Malita',
-    driver: 'Prince Sestoso',
+    departureDate: '2026-09-28',
+    driver: '',
     chauffeur: 'Piolo Pascual',
     departureTime: '1:00 PM',
     serviceType: 'Non-Aircon',
@@ -150,8 +175,9 @@ export const scheduleTrips = [
   {
     busId: 'B-103',
     route: 'Davao City - Santo Tomas',
+    departureDate: '2026-09-28',
     driver: 'Rafael Ababa',
-    chauffeur: 'Coco Martin',
+    chauffeur: '',
     departureTime: '2:00 PM',
     serviceType: 'Aircon',
     status: 'Upcoming',

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { X } from 'lucide-react'
+import { ChevronDown, X } from 'lucide-react'
 
 const emptyTripForm = {
   busId: '',
@@ -7,12 +7,16 @@ const emptyTripForm = {
   destination: '',
   driver: '',
   chauffeur: '',
-  departureTime: '',
+  departureDate: '',
+  departureHour: '',
+  departureMinute: '',
+  departurePeriod: '',
   serviceType: 'Aircon',
 }
 
 export default function AddTripModal({ onClose, onAdd, staff }) {
   const [form, setForm] = useState(emptyTripForm)
+  const [isTimeDropdownOpen, setIsTimeDropdownOpen] = useState(false)
 
   const drivers = staff.filter(
     (member) => member.position === 'Driver'
@@ -40,7 +44,10 @@ export default function AddTripModal({ onClose, onAdd, staff }) {
       !form.destination ||
       !form.driver ||
       !form.chauffeur ||
-      !form.departureTime
+      !form.departureDate ||
+      !form.departureHour ||
+      !form.departureMinute ||
+      !form.departurePeriod
     ) {
       return
     }
@@ -52,7 +59,8 @@ export default function AddTripModal({ onClose, onAdd, staff }) {
       route: `${form.departure} - ${form.destination}`,
       driver: form.driver,
       chauffeur: form.chauffeur,
-      departureTime: form.departureTime,
+      departureDate: form.departureDate,
+      departureTime: `${form.departureHour}:${form.departureMinute} ${form.departurePeriod}`,
       serviceType: form.serviceType,
       status: 'Upcoming',
     })
@@ -65,7 +73,7 @@ export default function AddTripModal({ onClose, onAdd, staff }) {
       <div className="w-full max-w-lg rounded-2xl bg-[#131a2e] p-6 shadow-xl">
         <div className="mb-6 flex items-center justify-between">
           <h2 className="text-xl font-bold text-gray-100">
-            Add Trip
+            Schedule Trip
           </h2>
 
           <button
@@ -99,19 +107,95 @@ export default function AddTripModal({ onClose, onAdd, staff }) {
 
             <label className="block">
               <span className="mb-1 block text-sm font-medium text-gray-400">
-                Departure Time
+                Departure Date
               </span>
-
               <input
-                type="text"
-                name="departureTime"
-                value={form.departureTime}
+                type="date"
+                name="departureDate"
+                value={form.departureDate}
                 onChange={handleChange}
-                placeholder="e.g. 5:00 AM"
-                className="w-full rounded-lg border border-gray-700 bg-[#0d1220] px-3 py-2 text-sm text-gray-100 outline-none placeholder:text-gray-500 focus:border-[#4d8eff] focus:ring-1 focus:ring-[#4d8eff]"
+                className="w-full rounded-lg border border-gray-700 bg-[#0d1220] px-3 py-2 text-sm text-gray-100 outline-none focus:border-[#4d8eff] focus:ring-1 focus:ring-[#4d8eff]"
               />
             </label>
           </div>
+
+          <label className="block">
+            <span className="mb-1 block text-sm font-medium text-gray-400">
+              Departure Time
+            </span>
+            <div className="relative">
+              <button
+                type="button"
+                aria-label="Departure time"
+                aria-expanded={isTimeDropdownOpen}
+                onClick={() => setIsTimeDropdownOpen((open) => !open)}
+                className="flex w-full items-center justify-between rounded-lg border border-gray-700 bg-[#0d1220] px-3 py-2 text-left text-sm text-gray-100 outline-none focus:border-[#4d8eff] focus:ring-1 focus:ring-[#4d8eff]"
+              >
+                <span className={form.departureHour ? 'text-gray-100' : 'text-gray-500'}>
+                  {form.departureHour && form.departureMinute && form.departurePeriod
+                    ? `${form.departureHour}:${form.departureMinute} ${form.departurePeriod}`
+                    : 'Select departure time'}
+                </span>
+                <ChevronDown className="h-4 w-4" />
+              </button>
+
+              {isTimeDropdownOpen && (
+                <div className="absolute left-0 right-0 top-full z-20 mt-1 grid grid-cols-3 gap-2 rounded-lg border border-gray-700 bg-[#131a2e] p-3 shadow-xl">
+                  <label className="text-xs font-medium text-gray-400">
+                    Hour
+                    <select
+                      aria-label="Departure hour"
+                      name="departureHour"
+                      value={form.departureHour}
+                      onChange={handleChange}
+                      className="mt-1 w-full rounded-md border border-gray-700 bg-[#0d1220] px-2 py-2 text-sm text-gray-100 outline-none focus:border-[#4d8eff]"
+                    >
+                      <option value="">Hour</option>
+                      {Array.from({ length: 12 }, (_, index) => String(index + 1)).map((hour) => (
+                        <option key={hour} value={hour}>{hour}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="text-xs font-medium text-gray-400">
+                    Minute
+                    <select
+                      aria-label="Departure minute"
+                      name="departureMinute"
+                      value={form.departureMinute}
+                      onChange={handleChange}
+                      className="mt-1 w-full rounded-md border border-gray-700 bg-[#0d1220] px-2 py-2 text-sm text-gray-100 outline-none focus:border-[#4d8eff]"
+                    >
+                      <option value="">Minute</option>
+                      {Array.from({ length: 60 }, (_, index) => String(index).padStart(2, '0')).map((minute) => (
+                        <option key={minute} value={minute}>{minute}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="text-xs font-medium text-gray-400">
+                    AM/PM
+                    <select
+                      aria-label="Departure AM or PM"
+                      name="departurePeriod"
+                      value={form.departurePeriod}
+                      onChange={handleChange}
+                      className="mt-1 w-full rounded-md border border-gray-700 bg-[#0d1220] px-2 py-2 text-sm text-gray-100 outline-none focus:border-[#4d8eff]"
+                    >
+                      <option value="">Select</option>
+                      <option value="AM">AM</option>
+                      <option value="PM">PM</option>
+                    </select>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setIsTimeDropdownOpen(false)}
+                    className="col-span-3 rounded-md bg-[#4d8eff] px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-[#3b7de0]"
+                  >
+                    Done
+                  </button>
+                </div>
+              )}
+            </div>
+          </label>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <label className="block">
@@ -233,7 +317,7 @@ export default function AddTripModal({ onClose, onAdd, staff }) {
               type="submit"
               className="rounded-lg bg-[#4d8eff] px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-[#3b7de0]"
             >
-              Add Trip
+              Schedule Trip
             </button>
           </div>
         </form>

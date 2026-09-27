@@ -1,17 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ArrowLeft } from 'lucide-react'
-import {
-  MapContainer,
-  TileLayer,
-  Marker,
-  Popup,
-  Polyline,
-  CircleMarker,
-  ZoomControl,
-  useMap,
-} from 'react-leaflet'
-import L from 'leaflet'
-import 'leaflet/dist/leaflet.css'
+import MapView from '../Map/MapViewFleet.web.jsx'
 
 const LOCATIONS = {
   davao: [7.0736, 125.6128],
@@ -30,43 +19,6 @@ const LOCATIONS = {
   samal: [7.0731, 125.7089],
   'davao del sur': [6.7667, 125.3500],
 }
-
-const busIcon = L.divIcon({
-  className: 'bus-location-icon',
-  html: `
-    <div
-      style="
-        width: 48px;
-        height: 48px;
-        border-radius: 50%;
-        background: white;
-        border: 3px solid #f59e0b;
-        box-shadow: 0 3px 12px rgba(0,0,0,0.35);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      "
-    >
-      <div
-        style="
-          width: 34px;
-          height: 34px;
-          border-radius: 9px;
-          background: #f59e0b;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 20px;
-        "
-      >
-        🚌
-      </div>
-    </div>
-  `,
-  iconSize: [48, 48],
-  iconAnchor: [24, 24],
-  popupAnchor: [0, -25],
-})
 
 function normalizeLocation(name) {
   if (!name) return ''
@@ -229,17 +181,6 @@ function getCompletedRoute(route, progress) {
   return completed
 }
 
-function MapUpdater({ position }) {
-  const map = useMap()
-
-  useEffect(() => {
-    if (!position) return
-    map.panTo(position, { animate: true, duration: 0.8 })
-  }, [map, position])
-
-  return null
-}
-
 function TrackingRow({ trip, active, onSelect }) {
   const progress = Math.max(0, Math.min(1, Number(trip.progress) || 0))
 
@@ -275,11 +216,9 @@ function TrackingRow({ trip, active, onSelect }) {
   )
 }
 
-const LIVE_GPS_ZOOM = 14
-
 export default function FleetMapView({ selectedTrip, fleetTrips, onBack }) {
-  const mapRef = useRef(null)
   const [liveTrips, setLiveTrips] = useState(fleetTrips)
+  const [focusRequest, setFocusRequest] = useState(null)
 
   useEffect(() => {
     setLiveTrips(fleetTrips)
@@ -386,8 +325,8 @@ export default function FleetMapView({ selectedTrip, fleetTrips, onBack }) {
   const mapCenter = origin || [7.0736, 125.6128]
 
   const handleLiveGpsClick = () => {
-    if (!mapRef.current || !busPosition) return
-    mapRef.current.flyTo(busPosition, LIVE_GPS_ZOOM, { animate: true, duration: 1 })
+    if (!busPosition) return
+    setFocusRequest({ position: busPosition, timestamp: Date.now() })
   }
 
   return (
@@ -405,111 +344,17 @@ export default function FleetMapView({ selectedTrip, fleetTrips, onBack }) {
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[2.2fr_1fr]">
         <div className="relative h-[500px] overflow-hidden rounded-xl border border-white/5">
-          <MapContainer
-            ref={mapRef}
+          <MapView
+            role="fleet"
+            route={routeLoading ? [] : roadRoute}
+            completedRoute={routeLoading ? [] : completedRoute}
+            busPosition={routeLoading ? null : busPosition}
+            origin={origin}
+            destination={destination}
             center={mapCenter}
-            zoom={10}
-            scrollWheelZoom={true}
-            zoomControl={false}
-            className="h-full w-full"
-          >
-            <ZoomControl position="topright" />
-
-            <TileLayer
-              attribution='&copy; OpenStreetMap contributors'
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            />
-
-            {!routeLoading && roadRoute.length > 1 && (
-              <Polyline
-                positions={roadRoute}
-                pathOptions={{
-                  color: '#f6c66b',
-                  weight: 7,
-                  opacity: 0.75,
-                  lineCap: 'round',
-                  lineJoin: 'round',
-                }}
-              />
-            )}
-
-            {!routeLoading && completedRoute.length > 0 && (
-              <Polyline
-                positions={completedRoute}
-                pathOptions={{
-                  color: '#f59e0b',
-                  weight: 7,
-                  opacity: 1,
-                  lineCap: 'round',
-                  lineJoin: 'round',
-                }}
-              />
-            )}
-
-            {origin && (
-              <CircleMarker
-                center={origin}
-                radius={9}
-                pathOptions={{
-                  color: '#0a0e1a',
-                  weight: 3,
-                  fillColor: '#3b82f6',
-                  fillOpacity: 1,
-                }}
-              >
-                <Popup>
-                  <div className="text-sm">
-                    <strong>{originName}</strong>
-                    <br />
-                    Departure
-                  </div>
-                </Popup>
-              </CircleMarker>
-            )}
-
-            {destination && (
-              <CircleMarker
-                center={destination}
-                radius={9}
-                pathOptions={{
-                  color: '#0a0e1a',
-                  weight: 3,
-                  fillColor: '#16a34a',
-                  fillOpacity: 1,
-                }}
-              >
-                <Popup>
-                  <div className="text-sm">
-                    <strong>{destinationName}</strong>
-                    <br />
-                    Destination
-                  </div>
-                </Popup>
-              </CircleMarker>
-            )}
-
-            {!routeLoading && busPosition && (
-              <Marker position={busPosition} icon={busIcon} zIndexOffset={1000}>
-                <Popup>
-                  <div className="min-w-[180px] text-sm">
-                    <div className="mb-2 text-base font-bold">🚌 {activeTrip.busId}</div>
-                    <div>
-                      <strong>Departure:</strong> {originName}
-                    </div>
-                    <div>
-                      <strong>Destination:</strong> {destinationName}
-                    </div>
-                    <div>
-                      <strong>Status:</strong> {activeTrip.status}
-                    </div>
-                    <div className="mt-1 font-semibold text-orange-500">
-                      Progress: {Math.round(Number(activeTrip.progress) * 100)}%
-                    </div>
-                  </div>
-                </Popup>
-              </Marker>
-            )}
-          </MapContainer>
+            trip={{ ...activeTrip, originName, destinationName }}
+            focusRequest={focusRequest}
+          />
 
           {routeLoading && (
             <div className="absolute inset-0 z-[1000] flex items-center justify-center bg-[#0a0e1a]/70">
