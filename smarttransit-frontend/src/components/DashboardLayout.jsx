@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import {
-  BusIcon,
   HomeIcon,
   GridIcon,
   TicketIcon,
@@ -15,6 +14,7 @@ import {
 } from "./Icons.jsx";
 import AppTopBar from "./AppTopBar.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
+import Logo from "./Logo.jsx";
 
 const MAIN_LINKS = [
   { to: "/dashboard", label: "Dashboard", icon: GridIcon },
@@ -57,10 +57,7 @@ export default function DashboardLayout({ children }) {
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-white">
-            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/10">
-              <BusIcon size={20} />
-            </span>
-            <span className="font-display text-base font-bold">SmartTransit</span>
+            <Logo className="h-10" onDark />
           </div>
           <button
             className="rounded-lg p-1.5 text-navy-200 hover:bg-white/10 lg:hidden"

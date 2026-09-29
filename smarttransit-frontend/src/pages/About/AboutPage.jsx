@@ -9,12 +9,6 @@ import {
   BusIcon,
 } from "../../components/Icons.jsx";
 
-const STATS = [
-  { value: "5", label: "Terminals across Davao Region XI" },
-  { value: "24/7", label: "GPS tracking on active routes" },
-  { value: "100%", label: "Online seat reservation" },
-];
-
 const BENEFITS = [
   {
     icon: ClockIcon,
@@ -41,33 +35,41 @@ const BENEFITS = [
 export default function AboutPage() {
   return (
     <PublicLayout>
-      <section className="bg-navy-900 py-16 sm:py-20">
-        <div className="container-page">
-          <p className="text-sm font-semibold uppercase tracking-wide text-teal-300">
-            About SmartTransit
-          </p>
-          <h1 className="mt-3 max-w-2xl font-display text-3xl font-bold text-white sm:text-4xl">
-            Built for commuters travelling across Davao Region XI
-          </h1>
-          <p className="mt-4 max-w-2xl text-base leading-relaxed text-navy-200">
-            SmartTransit is a bus transportation platform focused on the daily commuting routes
-            connecting Davao City to Tagum, Panabo, Digos, and Mati. Instead of guessing when the
-            next bus arrives or lining up at a terminal window, riders can check live schedules,
-            reserve a seat, and pay for their trip before they ever leave the house.
-          </p>
+      {/* Photo banner with a slanted left edge */}
+      <div className="bg-white">
+        <div
+          className="relative h-56 overflow-hidden rounded-bl-[2.5rem] sm:h-72 lg:h-[26rem]"
+          style={{ clipPath: "polygon(4% 0, 100% 0, 100% 100%, 0 100%)" }}
+        >
+          <img
+            src="/images/about-davao.jpg"
+            alt="Aerial view of Davao City with the Davao Gulf and mountains in the distance"
+            className="h-full w-full object-cover"
+          />
+        </div>
+      </div>
 
-          <div className="mt-10 grid gap-4 sm:grid-cols-3">
-            {STATS.map((stat) => (
-              <div key={stat.label} className="rounded-2xl bg-white/5 p-6 ring-1 ring-white/10">
-                <p className="font-display text-3xl font-bold text-white">{stat.value}</p>
-                <p className="mt-1 text-sm text-navy-200">{stat.label}</p>
-              </div>
-            ))}
+      <section className="bg-white pb-16 pt-12 sm:pb-20 sm:pt-16">
+        <div className="container-page">
+          <h1 className="font-display text-4xl font-extrabold uppercase tracking-[0.12em] text-navy-950 sm:text-6xl">
+            About SmartTransit
+          </h1>
+
+          <div className="mt-8 max-w-3xl">
+            <h2 className="font-display text-2xl font-bold text-navy-900 sm:text-3xl">
+              Built for commuters travelling across Davao Region XI
+            </h2>
+            <p className="mt-4 text-base leading-relaxed text-slate-600">
+              SmartTransit is a bus transportation platform focused on the daily commuting routes
+              connecting Davao City to Tagum, Panabo, Digos, and Mati. Instead of guessing when the
+              next bus arrives or lining up at a terminal window, riders can check live schedules,
+              reserve a seat, and pay for their trip before they ever leave the house.
+            </p>
           </div>
         </div>
       </section>
 
-      <section className="bg-white py-16 sm:py-20">
+      <section className="bg-white pb-16 sm:pb-20">
         <div className="container-page grid gap-6 lg:grid-cols-2">
           <div className="rounded-2xl border border-slate-200 p-8">
             <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-navy-50 text-navy-800">

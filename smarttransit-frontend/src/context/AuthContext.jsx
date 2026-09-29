@@ -61,6 +61,32 @@ export function AuthProvider({ children }) {
     }
 
     const { password: _pw, ...publicUser } = match;
+    startSession(publicUser, rememberMe);
+    return { ok: true };
+  };
+
+  // loginWithGoogle: signs in with a Google profile, creating the account on first use.
+  const loginWithGoogle = (profile, rememberMe = true) => {
+    const users = loadUsers();
+    const existing = users.find(
+      (u) => u.email.toLowerCase() === profile.email.toLowerCase()
+    );
+
+    let account = existing;
+    if (existing) {
+      account = { ...existing, picture: profile.picture };
+      saveUsers(users.map((u) => (u === existing ? account : u)));
+    } else {
+      account = { ...profile, phone: "", provider: "google" };
+      saveUsers([...users, account]);
+    }
+
+    const { password: _pw, ...publicUser } = account;
+    startSession(publicUser, rememberMe);
+    return { ok: true };
+  };
+
+  const startSession = (publicUser, rememberMe) => {
     setUser(publicUser);
 
     const payload = JSON.stringify(publicUser);
@@ -71,8 +97,6 @@ export function AuthProvider({ children }) {
       sessionStorage.setItem(AUTH_STORAGE_KEY, payload);
       localStorage.removeItem(AUTH_STORAGE_KEY);
     }
-
-    return { ok: true };
   };
 
   // register: returns { ok: true } or { ok: false, error }
@@ -129,6 +153,7 @@ export function AuthProvider({ children }) {
         user,
         isAuthenticated: Boolean(user),
         login,
+        loginWithGoogle,
         register,
         logout,
         updateProfile,

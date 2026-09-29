@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
-import { BusIcon, MenuIcon, CloseIcon, GridIcon, TicketIcon, ClockIcon, MapPinIcon, GiftIcon, UserIcon, LogoutIcon } from "./Icons.jsx";
+import { MenuIcon, CloseIcon, GridIcon, TicketIcon, ClockIcon, MapPinIcon, GiftIcon, UserIcon, LogoutIcon } from "./Icons.jsx";
 import ProfileDropdown from "./ProfileDropdown.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import Button from "./ui/Button.jsx";
+import Logo from "./Logo.jsx";
 
 const NAV_LINKS = [
   { label: "Home", to: "/" },
@@ -42,10 +43,7 @@ export default function Navbar() {
     <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur">
       <div className="container-page flex h-16 items-center justify-between sm:h-20">
         <Link to="/" className="flex items-center gap-2 text-navy-900" onClick={() => setMenuOpen(false)}>
-          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-navy-800 text-white">
-            <BusIcon size={22} />
-          </span>
-          <span className="font-display text-lg font-bold tracking-tight">SmartTransit</span>
+          <Logo className="h-10 sm:h-12" />
         </Link>
 
         <nav className="hidden items-center gap-8 md:flex">

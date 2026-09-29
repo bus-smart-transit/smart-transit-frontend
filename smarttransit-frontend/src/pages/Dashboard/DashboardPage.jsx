@@ -183,7 +183,7 @@ export default function DashboardPage() {
             <Card className="p-6">
               <h2 className="font-display text-lg font-semibold text-navy-950">Calendar</h2>
               <div className="mt-4">
-                <CalendarWidget year={2026} month={5} highlightDays={[10]} />
+                <CalendarWidget tripDates={UPCOMING_TRIPS.map((trip) => trip.date)} />
               </div>
             </Card>
 

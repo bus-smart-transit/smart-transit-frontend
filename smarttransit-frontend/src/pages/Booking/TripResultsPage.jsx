@@ -14,7 +14,7 @@ export default function TripResultsPage() {
 
   const handleBookSeat = (trip) => {
     selectTrip(trip);
-    navigate("/booking/seats");
+    navigate("/booking/details");
   };
 
   return (

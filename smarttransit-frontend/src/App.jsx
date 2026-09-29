@@ -17,9 +17,8 @@ import RewardsPage from "./pages/Rewards/RewardsPage.jsx";
 import ProfilePage from "./pages/Profile/ProfilePage.jsx";
 
 import TripResultsPage from "./pages/Booking/TripResultsPage.jsx";
-import SeatSelectionPage from "./pages/Booking/SeatSelectionPage.jsx";
-import PaymentPage from "./pages/Booking/PaymentPage.jsx";
-import GCashPlaceholderPage from "./pages/Booking/GCashPlaceholderPage.jsx";
+import TripDetailsPage from "./pages/Booking/TripDetailsPage.jsx";
+import CheckoutPage from "./pages/Booking/CheckoutPage.jsx";
 import ConfirmationPage from "./pages/Booking/ConfirmationPage.jsx";
 
 // Main router for the app. Each page lives in its own folder under
@@ -83,7 +82,7 @@ export default function App() {
         }
       />
 
-      {/* Booking flow: search -> seats -> payment -> gcash -> confirmation */}
+      {/* Booking flow: search -> trip details -> checkout -> confirmation */}
       <Route
         path="/booking"
         element={
@@ -93,26 +92,18 @@ export default function App() {
         }
       />
       <Route
-        path="/booking/seats"
+        path="/booking/details"
         element={
           <RequireAuth>
-            <SeatSelectionPage />
+            <TripDetailsPage />
           </RequireAuth>
         }
       />
       <Route
-        path="/booking/payment"
+        path="/booking/checkout"
         element={
           <RequireAuth>
-            <PaymentPage />
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/booking/gcash"
-        element={
-          <RequireAuth>
-            <GCashPlaceholderPage />
+            <CheckoutPage />
           </RequireAuth>
         }
       />

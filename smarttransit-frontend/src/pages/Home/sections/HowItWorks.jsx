@@ -38,7 +38,7 @@ const STEPS = [
 // Simpler and less error-prone than one layout trying to do both.
 export default function HowItWorks() {
   return (
-    <section className="bg-white py-16 sm:py-20">
+    <section className="bg-white pb-16 pt-8 sm:pb-20 sm:pt-10">
       <div className="container-page">
         <div className="max-w-2xl">
           <p className="text-sm font-semibold uppercase tracking-wide text-teal-600">

@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
-import { BusIcon, MailIcon, PhoneIcon, MapPinIcon } from "./Icons.jsx";
+import { MailIcon, PhoneIcon, MapPinIcon } from "./Icons.jsx";
+import Logo from "./Logo.jsx";
 
 const QUICK_LINKS = [
   { label: "Home", to: "/" },
@@ -21,10 +22,7 @@ export default function Footer() {
       <div className="container-page grid gap-10 py-14 sm:grid-cols-2 lg:grid-cols-4">
         <div className="sm:col-span-2 lg:col-span-1">
           <div className="flex items-center gap-2 text-white">
-            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/10">
-              <BusIcon size={22} />
-            </span>
-            <span className="font-display text-lg font-bold">SmartTransit</span>
+            <Logo className="h-12" onDark />
           </div>
           <p className="mt-4 max-w-xs text-sm leading-relaxed text-slate-400">
             Real-time bus tracking, digital tickets, and trip management for commuters

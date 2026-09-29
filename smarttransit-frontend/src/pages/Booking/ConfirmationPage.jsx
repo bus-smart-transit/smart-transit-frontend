@@ -4,19 +4,22 @@ import { CheckCircleIcon, CoinIcon } from "../../components/Icons.jsx";
 import QrPlaceholder from "../../components/QrPlaceholder.jsx";
 import Button from "../../components/ui/Button.jsx";
 import { useBooking } from "../../context/BookingContext.jsx";
+import { findStop, formatTravelDate } from "../../utils/route.js";
 
 export default function ConfirmationPage() {
   const navigate = useNavigate();
   const { booking, resetBooking } = useBooking();
-  const { selectedTrip, selectedSeat, receipt } = booking;
+  const { selectedTrip, details, receipt } = booking;
 
   useEffect(() => {
-    if (!selectedTrip || !selectedSeat) navigate("/booking", { replace: true });
-  }, [selectedTrip, selectedSeat, navigate]);
+    if (!selectedTrip || !details) navigate("/booking", { replace: true });
+  }, [selectedTrip, details, navigate]);
 
-  if (!selectedTrip || !selectedSeat) return null;
+  if (!selectedTrip || !details) return null;
 
-  const amountPaid = receipt ? receipt.amountPaid : selectedTrip.fare;
+  const amountPaid = receipt ? receipt.amountPaid : details.grossTotal;
+  const originStop = findStop(details.originStop);
+  const destinationStop = findStop(details.destinationStop);
 
   const handleBackHome = () => {
     resetBooking();
@@ -41,9 +44,9 @@ export default function ConfirmationPage() {
 
         <div className="mt-6 rounded-2xl border border-dashed border-slate-300 p-5 text-left">
           <div className="flex items-center justify-center gap-2 text-sm font-semibold text-navy-950">
-            <span>{selectedTrip.origin}</span>
+            <span>{originStop.name}</span>
             <span className="text-slate-300">→</span>
-            <span>{selectedTrip.destination}</span>
+            <span>{destinationStop.name}</span>
           </div>
 
           <div className="my-5 border-t border-dashed border-slate-200" />
@@ -59,11 +62,15 @@ export default function ConfirmationPage() {
             </div>
             <div>
               <p className="text-xs text-slate-400">Date</p>
-              <p className="font-semibold text-navy-950">{selectedTrip.departure}</p>
+              <p className="font-semibold text-navy-950">
+                {formatTravelDate(details.travelDate)} · {selectedTrip.departure}
+              </p>
             </div>
             <div>
-              <p className="text-xs text-slate-400">Passenger</p>
-              <p className="font-semibold text-navy-950">Seat {selectedSeat}</p>
+              <p className="text-xs text-slate-400">Tickets</p>
+              <p className="font-semibold capitalize text-navy-950">
+                {details.quantity} × {details.seatType}
+              </p>
             </div>
             <div>
               <p className="text-xs text-slate-400">Fare Paid</p>

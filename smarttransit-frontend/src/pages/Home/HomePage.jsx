@@ -31,7 +31,7 @@ export default function HomePage() {
   // Booking a seat needs an account -- guests are sent to sign in first.
   const handleBookSeat = (trip) => {
     selectTrip(trip);
-    navigate(isAuthenticated ? "/booking/seats" : "/login");
+    navigate(isAuthenticated ? "/booking/details" : "/login");
   };
 
   return (
@@ -43,7 +43,7 @@ export default function HomePage() {
       </div>
 
       {searchResults && (
-        <section className="bg-white py-14">
+        <section className="bg-white pb-14 pt-4">
           <div className="container-page">
             <TripList
               trips={SAMPLE_TRIPS}

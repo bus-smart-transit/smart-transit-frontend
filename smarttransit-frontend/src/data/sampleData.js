@@ -42,13 +42,29 @@ export const SAMPLE_TRIPS = [
   },
 ];
 
-// 49-seat layout: 11 rows x 4 seats (A/B aisle C/D) plus a 5-seat back bench.
-export const BUS_SEAT_COLUMNS = ["A", "B", "C", "D"];
-export const BUS_SEAT_ROWS = 11;
-export const BACK_BENCH_SEAT_COUNT = 5;
+// Stops along the Ecoland → Tagum route, used by Travel Advice and the stop pickers.
+//   type: "terminal" = start/end of the route
+//         "stop"     = passengers can board and get off here
+//         "pass"     = the bus only passes through
+//   offset: minutes after departure · km: distance from Ecoland Terminal
+export const ROUTE_INFO = {
+  bus: "Aircon",
+  via: "Via Panabo and Carmen",
+  bound: "Bound for Tagum City",
+};
 
-// A handful of seats are already booked, just for realism.
-export const TAKEN_SEATS = ["3", "7", "14", "21", "28", "33", "46", "48"];
+export const ROUTE_STOPS = [
+  { id: "ecoland", name: "Ecoland Terminal (DCOTT)", area: "Davao City", km: 0, offset: 0, type: "terminal" },
+  { id: "maa", name: "Ma-a", area: "Davao City", km: 4.2, offset: 8, type: "pass" },
+  { id: "buhangin", name: "Buhangin", area: "Davao City", km: 9.1, offset: 18, type: "pass" },
+  { id: "airport", name: "Davao International Airport area", area: "Davao City", km: 13.4, offset: 24, type: "pass" },
+  { id: "panacan", name: "Panacan", area: "Davao City", km: 17.2, offset: 30, type: "pass" },
+  { id: "tibungco", name: "Tibungco / Bunawan", area: "Davao City", km: 22.5, offset: 38, type: "pass" },
+  { id: "lasang", name: "Lasang", area: "Davao City boundary", km: 27.8, offset: 44, type: "pass" },
+  { id: "panabo", name: "Panabo City", area: "Davao del Norte", km: 33.6, offset: 50, type: "stop" },
+  { id: "carmen", name: "Carmen", area: "Davao del Norte", km: 43.1, offset: 65, type: "stop" },
+  { id: "tagum", name: "Tagum Integrated Terminal", area: "Tagum City", km: 55.7, offset: 90, type: "terminal" },
+];
 
 export const UPCOMING_TRIPS = [
   {
@@ -289,6 +305,7 @@ export const REWARDS_ACTIVITY = [
 export const NEWS_ITEMS = [
   {
     id: "news-1",
+    image: "/images/news/davao-city.jpg",
     category: "Route Update",
     date: "June 3, 2026",
     title: "New Ecoland–Tagum express trip added at 5:30 AM",
@@ -302,6 +319,7 @@ export const NEWS_ITEMS = [
   },
   {
     id: "news-2",
+    image: "/images/news/road-repair.jpg",
     category: "Service Advisory",
     date: "May 28, 2026",
     title: "Panabo route detour due to road repair",
@@ -315,6 +333,7 @@ export const NEWS_ITEMS = [
   },
   {
     id: "news-3",
+    image: "/images/news/davao-chinatown.jpg",
     category: "Holiday Schedule",
     date: "May 20, 2026",
     title: "Adjusted trips for the Davao Fiesta holiday",
@@ -328,6 +347,7 @@ export const NEWS_ITEMS = [
   },
   {
     id: "news-4",
+    image: "/images/news/phone-payment.jpg",
     category: "Product Update",
     date: "May 12, 2026",
     title: "SmartPoints can now be used directly at checkout",
@@ -341,6 +361,7 @@ export const NEWS_ITEMS = [
   },
   {
     id: "news-5",
+    image: "/images/news/gps-map.jpg",
     category: "Safety",
     date: "April 30, 2026",
     title: "All buses now equipped with live GPS tracking",
@@ -353,6 +374,7 @@ export const NEWS_ITEMS = [
   },
   {
     id: "news-6",
+    image: "/images/news/bus-terminal.jpg",
     category: "Service Advisory",
     date: "April 18, 2026",
     title: "Terminal window hours extended at Ecoland Terminal",

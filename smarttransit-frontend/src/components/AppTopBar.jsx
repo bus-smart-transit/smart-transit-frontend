@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { BusIcon, BellIcon, ArrowLeftIcon, CoinIcon } from "./Icons.jsx";
+import { BellIcon, ArrowLeftIcon, CoinIcon } from "./Icons.jsx";
 import { NOTIFICATIONS } from "../data/sampleData.js";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useRewards } from "../context/RewardsContext.jsx";
+import Logo from "./Logo.jsx";
 
 export default function AppTopBar({ backTo, backLabel = "Back" }) {
   const navigate = useNavigate();
@@ -25,10 +26,7 @@ export default function AppTopBar({ backTo, backLabel = "Back" }) {
           </button>
         ) : (
           <Link to="/dashboard" className="flex items-center gap-2 text-navy-900">
-            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-navy-800 text-white">
-              <BusIcon size={20} />
-            </span>
-            <span className="hidden font-display text-base font-bold sm:inline">SmartTransit</span>
+            <Logo className="h-9 sm:h-10" />
           </Link>
         )}
       </div>

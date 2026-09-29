@@ -7,8 +7,9 @@ const initialState = {
   destination: "",
   date: "",
   selectedTrip: null, // the trip card the passenger clicked "Book Seat" on
-  selectedSeat: null, // e.g. "13"
-  useSmartPoints: false, // whether the passenger toggled "Use SmartPoints" on at checkout
+  // Filled in on the trip details page: { seatType, quantity, bookingOption, travelDate,
+  // paymentMethod, useSmartPoints, dropOffMode, originStop, destinationStop, unitFare, grossTotal }
+  details: null,
   receipt: null, // { fare, pointsUsed, discount, amountPaid, pointsEarned } set once payment succeeds
 };
 
@@ -23,18 +24,13 @@ export function BookingProvider({ children }) {
     setBooking((prev) => ({
       ...prev,
       selectedTrip: trip,
-      selectedSeat: null,
-      useSmartPoints: false,
+      details: null,
       receipt: null,
     }));
   };
 
-  const selectSeat = (seat) => {
-    setBooking((prev) => ({ ...prev, selectedSeat: seat }));
-  };
-
-  const setUseSmartPoints = (useSmartPoints) => {
-    setBooking((prev) => ({ ...prev, useSmartPoints }));
+  const setDetails = (details) => {
+    setBooking((prev) => ({ ...prev, details, receipt: null }));
   };
 
   const setReceipt = (receipt) => {
@@ -49,8 +45,7 @@ export function BookingProvider({ children }) {
         booking,
         updateSearch,
         selectTrip,
-        selectSeat,
-        setUseSmartPoints,
+        setDetails,
         setReceipt,
         resetBooking,
       }}

@@ -1,56 +1,30 @@
-import Button from "../../../components/ui/Button.jsx";
 import BookingWidget from "../../../components/BookingWidget.jsx";
-import { useAuth } from "../../../context/AuthContext.jsx";
 
 export default function Hero({ onSearch }) {
-  const { isAuthenticated } = useAuth();
-
   return (
-    <section
-      className="relative overflow-hidden rounded-b-[48px] bg-navy-900 bg-cover bg-center"
-      style={{ backgroundImage: `url(https://images.pexels.com/photos/1178448/pexels-photo-1178448.jpeg)` }}
-    >
-      {/* dark navy overlay so text stays readable on top of the photo */}
-      <div className="absolute inset-0 bg-navy-900/70" />
-      <div className="absolute inset-0 bg-gradient-to-b from-navy-900/40 via-navy-900/60 to-navy-900/85" />
+    <section className="relative bg-white">
+      <div
+        className="relative overflow-hidden rounded-b-[48px] bg-navy-900 bg-cover bg-center"
+        style={{ backgroundImage: `url(https://images.pexels.com/photos/1178448/pexels-photo-1178448.jpeg)` }}
+      >
+        {/* navy overlay so the centered text stays readable on top of the photo */}
+        <div className="absolute inset-0 bg-gradient-to-b from-navy-950/50 via-navy-900/40 to-navy-950/70" />
 
-      <div className="container-page relative py-16 lg:py-24">
-        <span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3.5 py-1.5 text-xs font-semibold uppercase tracking-wide text-teal-300">
-          <span className="relative flex h-2 w-2">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-teal-400 opacity-75" />
-            <span className="relative inline-flex h-2 w-2 rounded-full bg-teal-400" />
-          </span>
-          Real-Time GPS Active
-        </span>
-
-        <h1 className="mt-5 font-display text-4xl font-bold leading-tight text-white sm:text-5xl">
-          Ride smarter,
-          <br />
-          arrive on time.
-        </h1>
-
-        <p className="mt-5 max-w-lg text-base leading-relaxed text-navy-100 sm:text-lg">
-          Track your bus, manage your trips, access your tickets, and enjoy a smarter public
-          transit experience across Davao Region XI.
-        </p>
-
-        <div className="mt-8 flex flex-wrap gap-3">
-          {isAuthenticated ? (
-            <Button to="/dashboard" variant="accent" size="lg">
-              Go to Dashboard
-            </Button>
-          ) : (
-            <Button to="/signup" variant="accent" size="lg">
-              Get Started
-            </Button>
-          )}
-          <Button to="/track-bus" variant="white" size="lg">
-            Track a Bus
-          </Button>
+        <div className="container-page relative flex min-h-[420px] flex-col items-center justify-center pb-36 pt-20 text-center sm:min-h-[480px] sm:pb-40 lg:min-h-[540px]">
+          <p className="font-display text-xl font-medium text-white/90 sm:text-3xl">
+            Travel across Davao Region XI
+          </p>
+          <h1 className="mt-2 font-display text-5xl font-extrabold uppercase leading-none tracking-wide text-white sm:text-7xl lg:text-8xl">
+            Ride Smarter
+          </h1>
+          <p className="mt-5 text-sm font-medium text-white/85 sm:text-base">
+            Book your seat, track your bus, and arrive on time.
+          </p>
         </div>
       </div>
 
-      <div className="container-page relative pb-16 lg:pb-24">
+      {/* Search card overlaps the bottom edge of the photo */}
+      <div className="container-page relative z-10 -mt-24 pb-6 sm:-mt-28 sm:pb-8">
         <BookingWidget onSearch={onSearch} />
       </div>
     </section>
