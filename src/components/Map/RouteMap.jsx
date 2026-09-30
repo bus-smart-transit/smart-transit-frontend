@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import 'maplibre-gl/dist/maplibre-gl.css'
 import { loadMapLib } from './mapDependencies'
 import { fetchRouteMapData } from '../../services/routeMapService'
 import { computeVehicleState } from '../../utils/vehicleState'
 import { haversineM, lerp } from '../../utils/geo'
 import { getRegion, regionMapBounds } from '../../services/regionService'
+import { MAP_CONFIG } from '../../config/mapConfig'
 import { emptyCollection, fitToPoints, renderRouteLayers } from './routeLayers'
-
-const BASEMAP_STYLE = 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json'
+import { watchMapHealth } from './mapHealth'
+import MapUnavailable from './MapUnavailable'
 
 const SRC_VEHICLE = 'rm-vehicle'
 const LYR_VEHICLE_HALO = 'rm-vehicle-halo'
@@ -39,8 +41,17 @@ const NO_STOPS = []
  * highlight: { fromStopId, toStopId } dims everything outside the journey.
  * acknowledgedStopIds: stop ids already passed on this leg.
  * onMapReady(map, maplibregl): lets a host add its own overlays.
+ *
+ * A map never fails silently (Batch 25): if the basemap cannot be drawn the
+ * box says "Map unavailable" with a Retry button (which remounts the map), and
+ * if route data fails the base map still renders with a message on top.
  */
-export default function RouteMap({
+export default function RouteMap(props) {
+  const [attempt, setAttempt] = useState(0)
+  return <RouteMapInner key={attempt} {...props} onRetry={() => setAttempt((n) => n + 1)} />
+}
+
+function RouteMapInner({
   routeId,
   direction = 'outbound',
   vehicle = null,
@@ -51,6 +62,7 @@ export default function RouteMap({
   onRouteStatus,
   onRouteData,
   onMapReady,
+  onRetry,
   className = 'relative h-full min-h-64 w-full',
 }) {
   const containerRef = useRef(null)
@@ -63,7 +75,9 @@ export default function RouteMap({
   const animRef = useRef(null)
 
   const [mapReady, setMapReady] = useState(false)
-  const [mapError, setMapError] = useState('')
+  // { blocking, message } | null. Blocking = the basemap could not be drawn.
+  const [mapIssue, setMapIssue] = useState(null)
+  const [routeAttempt, setRouteAttempt] = useState(0)
   const [fetched, setFetched] = useState({ key: null, data: null, error: '' })
   const [nowMs, setNowMs] = useState(() => Date.now())
 
@@ -109,6 +123,7 @@ export default function RouteMap({
   useEffect(() => {
     if (mapRef.current || !containerRef.current) return undefined
     let cancelled = false
+    let stopWatching = null
 
     ;(async () => {
       try {
@@ -119,23 +134,39 @@ export default function RouteMap({
         libRef.current = maplibregl
         const map = new maplibregl.Map({
           container: containerRef.current,
-          style: BASEMAP_STYLE,
+          style: MAP_CONFIG.basemapStyleUrl,
           bounds: regionMapBounds(region),
           fitBoundsOptions: { padding: 16 },
         })
         mapRef.current = map
+        stopWatching = watchMapHealth(map, {
+          onFail: (reason) => setMapIssue({
+            blocking: true,
+            message: reason === 'timeout'
+              ? 'The base map took too long to load. Check your connection and try again.'
+              : 'The base map could not be loaded. Check your connection and try again.',
+          }),
+          onTrouble: () => setMapIssue({ blocking: false, message: 'Some map tiles could not be loaded.' }),
+          onRecover: () => setMapIssue(null),
+        })
         map.once('load', () => {
           if (cancelled) return
           setMapReady(true)
           onMapReadyRef.current?.(map, maplibregl)
         })
       } catch {
-        if (!cancelled) setMapError('The map could not be loaded (region configuration unavailable).')
+        if (!cancelled) {
+          setMapIssue({
+            blocking: true,
+            message: 'The map could not be started (region settings or graphics support unavailable).',
+          })
+        }
       }
     })()
 
     return () => {
       cancelled = true
+      stopWatching?.()
       if (animRef.current) cancelAnimationFrame(animRef.current)
       animRef.current = null
       if (mapRef.current) {
@@ -160,7 +191,7 @@ export default function RouteMap({
     return () => {
       cancelled = true
     }
-  }, [requestKey, routeId, direction])
+  }, [requestKey, routeId, direction, routeAttempt])
 
   // 3. Route line, journey segment and stop markers.
   useEffect(() => {
@@ -257,7 +288,12 @@ export default function RouteMap({
 
   return (
     <div className={className}>
-      <div ref={containerRef} className="absolute inset-0" />
+      <div className="absolute inset-0">
+        {/* The map owns this element: MapLibre's stylesheet forces position:relative on
+            it (unlayered CSS beats Tailwind v4 utilities), so it is sized with h-full/w-full
+            inside an absolutely positioned wrapper, never with absolute/inset on itself. */}
+        <div ref={containerRef} className="h-full w-full" />
+      </div>
       {showStatus && (
         <div className={`pointer-events-none absolute left-3 top-3 max-w-[80%] rounded-full px-3 py-1 text-xs font-semibold shadow ${style.chip}`}>
           {vehicleState.label}
@@ -271,14 +307,22 @@ export default function RouteMap({
         </div>
       )}
       {loadError && (
-        <div className="pointer-events-none absolute inset-x-3 top-12 rounded-lg bg-red-600/90 px-3 py-2 text-xs text-white">
-          {loadError}
+        <div className="absolute inset-x-3 top-12 flex items-center justify-between gap-3 rounded-lg bg-red-600/90 px-3 py-2 text-xs text-white">
+          <span>{loadError}</span>
+          <button
+            type="button"
+            onClick={() => {
+              setFetched({ key: null, data: null, error: '' })
+              setRouteAttempt((n) => n + 1)
+            }}
+            className="rounded-full bg-white/20 px-3 py-1 font-semibold hover:bg-white/30"
+          >
+            Retry
+          </button>
         </div>
       )}
-      {mapError && (
-        <div className="absolute inset-x-3 top-12 rounded-lg bg-red-600/90 px-3 py-2 text-xs text-white">
-          {mapError}
-        </div>
+      {mapIssue && (
+        <MapUnavailable blocking={mapIssue.blocking} message={mapIssue.message} onRetry={onRetry} />
       )}
     </div>
   )

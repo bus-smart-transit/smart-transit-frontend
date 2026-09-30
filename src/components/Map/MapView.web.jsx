@@ -12,6 +12,8 @@ import { fetchDrivingRouteWithMetrics, geocodeLandmark } from '../../services/ro
 import { MAP_CONFIG } from '../../config/mapConfig';
 import { boundsFromPoints } from '../../utils/routeGeometry';
 import { getRegion, regionMapBounds } from '../../services/regionService';
+import { watchMapHealth } from './mapHealth';
+import MapUnavailable from './MapUnavailable';
 
 const IDLE_ETA = {
   level: 'idle',
@@ -21,7 +23,13 @@ const IDLE_ETA = {
   suggestion: 'Pin your location and find the nearest active bus to view ETA.',
 };
 
-export default function MapView({ role = "passenger", trackedFleetId = null }) {
+// A map that cannot load says so (Batch 25); Retry remounts it with clean state.
+export default function MapView(props) {
+  const [attempt, setAttempt] = useState(0);
+  return <MapViewInner key={attempt} {...props} onRetry={() => setAttempt((n) => n + 1)} />;
+}
+
+function MapViewInner({ role = "passenger", trackedFleetId = null, onRetry }) {
   const mapContainer = useRef(null);
   const map = useRef(null);
   const mapLibRef = useRef(null);
@@ -53,6 +61,8 @@ export default function MapView({ role = "passenger", trackedFleetId = null }) {
   const [selectedFleetId, setSelectedFleetId] = useState(null);
   const [showSidebar, setShowSidebar] = useState(false);
   const [isTracking, setIsTracking] = useState(false);
+  // { blocking, message } | null
+  const [mapIssue, setMapIssue] = useState(null);
 
   const clearFleetMarkers = useCallback(() => {
     cancelAnimationFrame(rafIdRef.current);
@@ -94,26 +104,47 @@ export default function MapView({ role = "passenger", trackedFleetId = null }) {
     if (map.current) return;
 
     let disposed = false;
+    let stopWatching = null;
 
     const initMap = async () => {
       // Default view = the configured region; a selected fleet's route later
       // fits the map to that route's bounds (drawFleetRoute).
-      const [{ default: maplibregl }, region] = await Promise.all([loadMapLib(), getRegion().catch(() => null)]);
-      if (disposed || map.current || !region) return;
+      try {
+        const [{ default: maplibregl }, region] = await Promise.all([loadMapLib(), getRegion()]);
+        if (disposed || map.current) return;
 
-      mapLibRef.current = maplibregl;
-      map.current = new maplibregl.Map({
-        container: mapContainer.current,
-        style: "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json",
-        bounds: regionMapBounds(region),
-        fitBoundsOptions: { padding: 16 },
-      });
+        mapLibRef.current = maplibregl;
+        map.current = new maplibregl.Map({
+          container: mapContainer.current,
+          style: MAP_CONFIG.basemapStyleUrl,
+          bounds: regionMapBounds(region),
+          fitBoundsOptions: { padding: 16 },
+        });
+        stopWatching = watchMapHealth(map.current, {
+          onFail: (reason) => setMapIssue({
+            blocking: true,
+            message: reason === 'timeout'
+              ? 'The base map took too long to load. Check your connection and try again.'
+              : 'The base map could not be loaded. Check your connection and try again.',
+          }),
+          onTrouble: () => setMapIssue({ blocking: false, message: 'Some map tiles could not be loaded.' }),
+          onRecover: () => setMapIssue(null),
+        });
+      } catch {
+        if (!disposed) {
+          setMapIssue({
+            blocking: true,
+            message: 'The map could not be started (region settings or graphics support unavailable).',
+          });
+        }
+      }
     };
 
     void initMap();
 
     return () => {
       disposed = true;
+      stopWatching?.();
     };
   }, []);
 
@@ -556,6 +587,9 @@ export default function MapView({ role = "passenger", trackedFleetId = null }) {
   return (
     <div className="relative h-[75vh] min-h-135 overflow-hidden rounded-2xl border border-slate-800 bg-slate-900">
       <div ref={mapContainer} className="h-full w-full" />
+      {mapIssue && (
+        <MapUnavailable blocking={mapIssue.blocking} message={mapIssue.message} onRetry={onRetry} />
+      )}
 
       {/* Track My Bus banner */}
       {isTracking && trackedFleetId && (
