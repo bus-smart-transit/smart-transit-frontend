@@ -1,11 +1,18 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { StyleSheet, View, Text, TextInput, TouchableOpacity, Dimensions } from 'react-native';
 import MapLibreGL from '@maplibre/maplibre-react-native';
+import { getRegion } from '../../services/regionService';
 
 MapLibreGL.setAccessToken(null);
 
 export default function MapView({ role = 'passenger' }) {
     const [destination, setDestination] = useState('');
+    const [region, setRegion] = useState(null);
+
+    // Default view = the configured region (server config), never a fixed city.
+    useEffect(() => {
+        getRegion().then(setRegion).catch(() => {});
+    }, []);
 
     return (
         <View style={styles.container}>
@@ -15,10 +22,14 @@ export default function MapView({ role = 'passenger' }) {
                 styleURL="https://demotiles.maplibre.org/style.json"
                 logoEnabled={false}
             >
-                <MapLibreGL.Camera
-                    zoomLevel={13}
-                    centerCoordinate={[125.6092, 7.0707]} // Centered on Davao City
-                />
+                {region && (
+                    <MapLibreGL.Camera
+                        bounds={{
+                            ne: [region.bounds.maxLng, region.bounds.maxLat],
+                            sw: [region.bounds.minLng, region.bounds.minLat],
+                        }}
+                    />
+                )}
             </MapLibreGL.MapView>
 
             {/* ── FOREGROUND LAYER: Passenger Native UI Overlay ── */}

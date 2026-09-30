@@ -80,10 +80,6 @@ class PassengerService extends RoleAuthServiceBase {
     return await this.request(`/tickets/lookup`, "GET", payload);
   }
 
-  async getRouteStops(routeId) {
-    return await this.request(`/routes/${routeId}/stops`, "GET");
-  }
-
   async verifyOtp(userId, otp) {
     return await this.request(`/${this.endpointBase}/verify-otp`, "POST", {
       user_id: userId,

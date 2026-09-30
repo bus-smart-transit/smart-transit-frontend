@@ -16,8 +16,10 @@ import {
   UserRound,
 } from 'lucide-react';
 import { useSignUp } from '../../../api/hooks/Passenger/signup';
+import { useRegion } from '../../../api/hooks/useRegion';
 
 export default function SignUpPage() {
+  const region = useRegion();
   const {
     step,
     setStep,
@@ -92,7 +94,7 @@ export default function SignUpPage() {
         </div>
 
         <p className="text-xs text-slate-500">
-          © {new Date().getFullYear()} SmartTransit. Davao Region XI.
+          © {new Date().getFullYear()} SmartTransit.{region?.name ? ` ${region.name}.` : ''}
         </p>
       </div>
 
@@ -190,7 +192,7 @@ export default function SignUpPage() {
                 </label>
                 <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 focus-within:ring-2 focus-within:ring-teal-500 focus-within:border-transparent pointer-events-auto cursor-text">
                   <MapPin className="h-4 w-4 text-slate-400 shrink-0" />
-                  <input id="signup-address" type="text" className="h-11 w-full bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400 cursor-text pointer-events-auto" placeholder="123 Rizal St, Davao City" value={form.address} onChange={e => update('address', e.target.value)} autoComplete="street-address" />
+                  <input id="signup-address" type="text" className="h-11 w-full bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400 cursor-text pointer-events-auto" placeholder="House no., street, barangay, city or municipality" value={form.address} onChange={e => update('address', e.target.value)} autoComplete="street-address" />
                 </div>
               </div>
 

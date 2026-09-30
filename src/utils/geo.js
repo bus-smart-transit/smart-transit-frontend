@@ -82,3 +82,30 @@ export function nearestPointOnLine(point, line, maxSnapDistanceM = 400) {
   const snapDistanceM = haversineM(py, px, best[1], best[0]);
   return snapDistanceM <= maxSnapDistanceM ? best : point;
 }
+
+/**
+ * Sub-line of `line` running from the vertex nearest `fromPoint` to the
+ * vertex nearest `toPoint` (both [lng, lat]); order-insensitive. Display
+ * helper for highlighting a boarding-to-alighting segment.
+ */
+export function sliceLineBetween(line, fromPoint, toPoint) {
+  if (!Array.isArray(line) || line.length < 2) return [];
+
+  const nearestIndex = (point) => {
+    let bestIdx = 0;
+    let bestDist = Infinity;
+    line.forEach(([lng, lat], idx) => {
+      const dist = haversineM(point[1], point[0], lat, lng);
+      if (dist < bestDist) {
+        bestDist = dist;
+        bestIdx = idx;
+      }
+    });
+    return bestIdx;
+  };
+
+  const a = nearestIndex(fromPoint);
+  const b = nearestIndex(toPoint);
+  const [start, end] = a <= b ? [a, b] : [b, a];
+  return line.slice(start, end + 1);
+}

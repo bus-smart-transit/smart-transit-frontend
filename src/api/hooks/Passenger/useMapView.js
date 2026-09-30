@@ -9,10 +9,6 @@ import PassengerService from '../../PassengerService/PassengerService';
 // are thin wrapper functions, not a stateful hook. The map/marker/animation
 // logic itself stays in the component.
 
-export async function fetchRouteStopsForMap(routeId) {
-  return await PassengerService.getRouteStops(routeId);
-}
-
 export async function fetchFleetLocationsForMap() {
   return await PassengerService.getFleetLocations();
 }

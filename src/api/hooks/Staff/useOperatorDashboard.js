@@ -147,6 +147,49 @@ export function useOperatorDashboardData() {
 }
 
 /**
+ * C6: pending "For Approval" decline requests from drivers/Chauffeurs. The
+ * server decides; this only lists and forwards approve/reject.
+ */
+export function useTripRequests(onDecided) {
+  const [requests, setRequests] = useState([]);
+  const [busyId, setBusyId] = useState(null);
+  const [error, setError] = useState('');
+
+  const load = useCallback(async () => {
+    try {
+      const res = await OperatorService.getTripRequests();
+      setRequests(Array.isArray(res?.data?.requests) ? res.data.requests : []);
+    } catch {
+      // Keep last-known list on transient errors.
+    }
+  }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => { void load(); }, 0);
+    const interval = setInterval(() => { void load(); }, 30000);
+    return () => { clearTimeout(timer); clearInterval(interval); };
+  }, [load]);
+
+  const decide = useCallback(async (id, decision) => {
+    setBusyId(id);
+    setError('');
+    try {
+      if (decision === 'approve') await OperatorService.approveTripRequest(id);
+      else await OperatorService.rejectTripRequest(id);
+      await load();
+      onDecided?.();
+    } catch (err) {
+      setError(err?.message || 'Could not update the request.');
+      await load();
+    } finally {
+      setBusyId(null);
+    }
+  }, [load, onDecided]);
+
+  return { requests, busyId, error, decide };
+}
+
+/**
  * Operator-facing notification bell/badge — currently only populated by
  * trip declines (Driver/Chauffeur declining an assignment). Previously the
  * `NotificationBell()` component's own state/effects.
@@ -250,7 +293,7 @@ export function useDispatchDecisions(trips) {
 
     const payload = {
       decision,
-      route: meta.alternativeRoute || routeName,
+      route: meta.alternativeRoute || meta.routeName || routeName,
       reason: meta.reason || meta.recommendation || `${decision === 'accept' ? 'Operator accepted the reroute recommendation.' : 'Operator kept the current route.'}`,
     };
 
@@ -267,17 +310,6 @@ export function useDispatchDecisions(trips) {
 }
 
 /**
- * Thin wrapper so FleetTrackingMap (a map-lifecycle-bound component whose
- * route-geometry cache is a per-instance ref tied to its own MapLibre
- * instance) doesn't import OperatorService directly. The caching/draw
- * logic stays in the component since it's tightly coupled to the map
- * instance's lifecycle, not general application data.
- */
-export async function fetchOperatorRouteStops(routeId) {
-  return await OperatorService.getRouteStops(routeId);
-}
-
-/**
  * All state, effects, and handlers for FleetsTab (fleet creation, route
  * assignment, fare rules, live GPS locations, focused-trip map view).
  * Previously FleetsTab's own state/effects.
@@ -287,8 +319,8 @@ export function useFleetsTab({ onRefresh }) {
   const [fleetLocations, setFleetLocations] = useState([]);
   const [manageMsg, setManageMsg] = useState('');
   const [manageSaving, setManageSaving] = useState(false);
-  const [fleetForm, setFleetForm] = useState({ plate_number: '', seated_capacity: '', standing_capacity: '', fleet_type: 'public' });
-  const [assignForm, setAssignForm] = useState({ fleet_id: '', route_id: '' });
+  const [fleetForm, setFleetForm] = useState({ plate_number: '', seated_capacity: '', standing_capacity: '', fleet_type: 'public', route_id: '', start_time: '06:00', end_time: '22:00' });
+  const [assignForm, setAssignForm] = useState({ fleet_id: '', route_id: '', start_time: '06:00', end_time: '22:00' });
   const [fareForm, setFareForm] = useState({ fleet_id: '', seat_type: 'seated', base_fare: '', fare_per_km: '', step_up_token: '' });
   const [fareSaving, setFareSaving] = useState(false);
   const [fareMsg, setFareMsg] = useState('');
@@ -373,8 +405,11 @@ export function useFleetsTab({ onRefresh }) {
         seated_capacity: Number(fleetForm.seated_capacity),
         standing_capacity: Number(fleetForm.standing_capacity),
         fleet_type: fleetForm.fleet_type,
+        ...(fleetForm.route_id
+          ? { routes: [{ route_id: Number(fleetForm.route_id), start_time: String(fleetForm.start_time || '').trim(), end_time: String(fleetForm.end_time || '').trim() }] }
+          : {}),
       });
-      setFleetForm({ plate_number: '', seated_capacity: '', standing_capacity: '', fleet_type: 'public' });
+      setFleetForm({ plate_number: '', seated_capacity: '', standing_capacity: '', fleet_type: 'public', route_id: '', start_time: '06:00', end_time: '22:00' });
       setManageMsg('Fleet created successfully.');
       onRefresh();
     } catch (err) {
@@ -389,8 +424,12 @@ export function useFleetsTab({ onRefresh }) {
     setManageMsg('');
     setManageSaving(true);
     try {
-      await OperatorService.assignRouteToFleet(Number(assignForm.fleet_id), { route_id: Number(assignForm.route_id) });
-      setAssignForm({ fleet_id: '', route_id: '' });
+      await OperatorService.assignRouteToFleet(Number(assignForm.fleet_id), {
+        route_id: Number(assignForm.route_id),
+        start_time: String(assignForm.start_time || '').trim(),
+        end_time: String(assignForm.end_time || '').trim(),
+      });
+      setAssignForm({ fleet_id: '', route_id: '', start_time: '06:00', end_time: '22:00' });
       setManageMsg('Route assigned to fleet successfully.');
       onRefresh();
     } catch (err) {
@@ -645,7 +684,18 @@ export function useTripsTab({ trips, onRefresh }) {
   const [confirmComplete, setConfirmComplete] = useState(null); // trip object pending confirmation
   const [statusOverrideSaving, setStatusOverrideSaving] = useState(false);
   const [statusOverrideMsg, setStatusOverrideMsg] = useState('');
-  const [form, setForm] = useState({ fleet_route_id: '', trip_date: '', departure_time: '', trip_type: 'one_way', return_departure_time: '', driver_id: '', conductor_id: '', notes: '' });
+  const [form, setForm] = useState({
+    fleet_route_id: '',
+    trip_date: '',
+    departure_time: '',
+    trip_type: 'one_way',
+    return_departure_time: '',
+    driver_id: '',
+    conductor_id: '',
+    notes: '',
+    block_type: 'morning',
+    leg_departure_times: ['06:00', '08:30', '11:00', '13:30'],
+  });
   const [assignId, setAssignId] = useState('');
   const [saving, setSaving] = useState(false);
   const [actionInFlight, setActionInFlight] = useState(null); // tripId currently being actioned
@@ -688,17 +738,46 @@ export function useTripsTab({ trips, onRefresh }) {
   const handleSchedule = async (e) => {
     e.preventDefault(); setSaving(true); setMsg('');
     try {
-      await OperatorService.scheduleTrip({
-        fleet_route_id: Number(form.fleet_route_id),
-        trip_date: form.trip_date,
-        departure_time: form.departure_time,
-        trip_type: form.trip_type,
-        return_departure_time: form.trip_type === 'round_trip' ? form.return_departure_time : null,
-        driver_id: Number(form.driver_id),
-        conductor_id: Number(form.conductor_id),
-        notes: form.notes,
+      if (form.trip_type === 'round_trip') {
+        await OperatorService.createShiftBlock({
+          fleet_route_id: Number(form.fleet_route_id),
+          driver_id: Number(form.driver_id),
+          conductor_id: Number(form.conductor_id),
+          block_type: form.block_type,
+          scheduled_date: form.trip_date,
+          leg_departure_times: Array.isArray(form.leg_departure_times)
+            ? form.leg_departure_times
+            : ['06:00', '08:30', '11:00', '13:30'],
+        });
+        setMsg('Shift block scheduled.');
+      } else {
+        await OperatorService.scheduleTrip({
+          fleet_route_id: Number(form.fleet_route_id),
+          trip_date: form.trip_date,
+          departure_time: form.departure_time,
+          trip_type: 'one_way',
+          return_departure_time: null,
+          driver_id: Number(form.driver_id),
+          conductor_id: Number(form.conductor_id),
+          notes: form.notes,
+        });
+        setMsg('Ad hoc trip scheduled.');
+      }
+
+      setForm({
+        fleet_route_id: '',
+        trip_date: '',
+        departure_time: '',
+        trip_type: 'one_way',
+        return_departure_time: '',
+        driver_id: '',
+        conductor_id: '',
+        notes: '',
+        block_type: 'morning',
+        leg_departure_times: ['06:00', '08:30', '11:00', '13:30'],
       });
-      setMsg('Trip scheduled.'); setForm({ fleet_route_id: '', trip_date: '', departure_time: '', trip_type: 'one_way', return_departure_time: '', driver_id: '', conductor_id: '', notes: '' }); setShowModal(false); onRefresh();
+      setShowModal(false);
+      onRefresh();
     } catch (err) { setMsg(err?.message || 'Failed.'); }
     finally { setSaving(false); }
   };

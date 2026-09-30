@@ -162,6 +162,19 @@ class OperatorService extends StaffBaseService {
     return await this.request('/operator/notifications/read-all', 'PATCH');
   }
 
+  // ── Assignment decline requests (Batch 24, C6) ──
+  async getTripRequests() {
+    return await this.request('/operator/trip-requests', 'GET');
+  }
+
+  async approveTripRequest(id) {
+    return await this.request(`/operator/trip-requests/${id}/approve`, 'PATCH');
+  }
+
+  async rejectTripRequest(id) {
+    return await this.request(`/operator/trip-requests/${id}/reject`, 'PATCH');
+  }
+
   // ── Fleet Route Assignment ──
   async assignRouteToFleet(fleetId, routeData) {
     return await this.request(`/operator/fleets/${fleetId}/routes`, 'POST', routeData);

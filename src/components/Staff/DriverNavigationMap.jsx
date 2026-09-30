@@ -1,404 +1,63 @@
-import { useEffect, useRef, useState } from 'react';
-import { loadMapLib } from '../Map/mapDependencies';
-import DriverService from '../../api/StaffService/DriverService';
-import { nearestPointOnLine } from '../../utils/geo';
-import { fetchRoadPathFromOsrm } from '../../services/routingService';
+﻿import { useEffect, useMemo, useState } from 'react';
+import RouteMap from '../Map/RouteMap';
 
-const DRIVER_ROUTE_SOURCE_ID = 'driver-route';
-const DRIVER_ROUTE_LINE_LAYER_ID = 'driver-route-line';
-const DRIVER_ROUTE_STOPS_SOURCE_ID = 'driver-route-stops';
-const DRIVER_ROUTE_STOPS_LAYER_ID = 'driver-route-stops-layer';
-const DRIVER_ROUTE_STOPS_LABEL_LAYER_ID = 'driver-route-stops-label-layer';
-
-// S4: builds the stop-marker GeoJSON feature collection, tagging each stop
-// as completed (already acknowledged by the driver) or upcoming so the map
-// layer's circle-color expression can distinguish them.
-// Batch 13, Issue #2: each stop's marker position is snapped onto the
-// drawn route line (routeCoords) rather than plotted at its raw lat/lng —
-// otherwise a stop whose recorded coordinate isn't exactly on the
-// OSRM-snapped road geometry renders visibly off the path.
-const buildStopFeatures = (validStops = [], acknowledgedStopIds = new Set(), routeCoords = []) => ({
-  type: 'FeatureCollection',
-  features: validStops.map((stop, idx) => {
-    const rawCoord = [Number(stop.longitude), Number(stop.latitude)];
-    const displayCoord = routeCoords.length >= 2 ? nearestPointOnLine(rawCoord, routeCoords) : rawCoord;
-    return {
-      type: 'Feature',
-      properties: {
-        stopName: stop.stop_name || `Stop ${idx + 1}`,
-        stopOrder: idx + 1,
-        isFirst: idx === 0,
-        isLast: idx === validStops.length - 1,
-        isAcknowledged: acknowledgedStopIds.has(Number(stop.stop_id)),
-      },
-      geometry: {
-        type: 'Point',
-        coordinates: displayCoord,
-      },
-    };
-  }),
-});
+const ROUTE_STATUS_TEXT = {
+  idle: 'No route assigned',
+  loading: 'Loading route…',
+  ready: '✓ Route loaded',
+  no_geometry: 'Route path not generated yet',
+  error: 'Route could not be loaded',
+};
 
 /**
- * Embedded MapLibre GL map for the driver's Navigation tab.
- * Shows:
- *   - Driver's live GPS position (green pulsing dot, updated from lastGpsRef)
- *   - Route polyline connecting all stops (sky-blue)
- *   - Origin marker (green), destination marker (red), intermediate stops (sky dots)
+ * Driver Route Navigation (B8), built on the shared RouteMap layer.
  *
- * Race-condition fix: all drawing happens AFTER the MapLibre 'load' event fires,
- * not at component mount time (when map is still async-initialising).
+ * - The line is the trip's canonical geometry for the current leg direction;
+ *   the old dashed straight "reroute" overlay is gone.
+ * - The driver's own fix is shown only when accurate enough; otherwise the map
+ *   says "GPS signal weak", and when the fix is far from the route it says
+ *   "Location not on route" with the distance. No connecting line is drawn.
+ * - Header and progress come from the trip, its route and its acknowledged
+ *   stops, never from constants.
  */
-export default function DriverNavigationMap({ trip, stops, lastGpsRef, routeGeometry = null }) {
-  const mapContainer = useRef(null);
-  const mapRef       = useRef(null);
-  const mapLibRef    = useRef(null);
-  const driverSourceAddedRef = useRef(false);
-  const routeDrawnRef     = useRef(false);
-  const gpsIntervalRef    = useRef(null);
-  // Route-level stops fetched once (with lat/lng), kept so the S4
-  // completed/upcoming coloring effect can rebuild the same feature list
-  // whenever the trip's per-stop acknowledgment state changes.
-  const routeStopsRef     = useRef([]);
-  // Batch 13, Issue #2: the drawn route line's coordinates (possibly
-  // OSRM road-snapped), kept so stop markers can be re-snapped onto it
-  // whenever acknowledgment state changes without re-fetching/re-drawing
-  // the whole route.
-  const routeLineCoordsRef = useRef([]);
+export default function DriverNavigationMap({ trip, stops = [], lastGpsRef }) {
+  const route = trip?.fleet_route?.route;
+  const routeId = route?.route_id ?? null;
+  const isReturnLeg = trip?.leg_direction === 'reverse';
+  const direction = isReturnLeg ? 'reverse' : 'outbound';
+  const originLabel = (isReturnLeg ? route?.destination : route?.origin) || 'Origin';
+  const destinationLabel = (isReturnLeg ? route?.origin : route?.destination) || 'Destination';
 
-  const [mapReady, setMapReady]         = useState(false);
-  const [routeLoaded, setRouteLoaded]   = useState(false);
-  const [mapError, setMapError]         = useState('');
+  const [vehicle, setVehicle] = useState(null);
+  const [routeStatus, setRouteStatus] = useState('loading');
 
-  const routeId          = trip?.fleet_route?.route?.route_id ?? null;
-  const originLabel      = trip?.fleet_route?.route?.origin       || 'Origin';
-  const destinationLabel = trip?.fleet_route?.route?.destination  || 'Destination';
-
-  // ── 1. Initialise map ─────────────────────────────────────────────────────
   useEffect(() => {
-    if (mapRef.current || !mapContainer.current) return;
-    let cancelled = false;
-
-    (async () => {
-      try {
-        const { default: maplibregl } = await loadMapLib();
-        if (cancelled || !mapContainer.current) return;
-
-        mapLibRef.current = maplibregl;
-        const map = new maplibregl.Map({
-          container: mapContainer.current,
-          style: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json',
-          center: [4.33, 52.07], // Netherlands default — overridden when route loads
-          zoom: 11,
-        });
-        mapRef.current = map;
-
-        // Signal all dependent effects only once base tiles have rendered.
-        map.once('load', () => {
-          if (!cancelled) setMapReady(true);
-        });
-      } catch {
-        if (!cancelled) setMapError('Map failed to load. Check your internet connection.');
-      }
-    })();
-
-    return () => { cancelled = true; };
-  }, []);
-
-  // ── 2. Draw route polyline + stop markers (fires once map is ready) ───────
-  useEffect(() => {
-    if (!mapReady || routeDrawnRef.current) return;
-    const map        = mapRef.current;
-    const maplibregl = mapLibRef.current;
-    if (!map || !maplibregl || !routeId) return;
-
-    routeDrawnRef.current = true; // prevent double-draw in StrictMode
-
-    (async () => {
-      try {
-        const res      = await DriverService.getRouteStops(routeId);
-        const stopList = res?.data ?? [];
-        const valid    = stopList.filter(
-          (s) => Number.isFinite(Number(s?.longitude)) && Number.isFinite(Number(s?.latitude))
-        );
-        if (valid.length < 2) { routeDrawnRef.current = false; return; }
-        routeStopsRef.current = valid;
-
-        const stopCoords = valid.map((s) => [Number(s.longitude), Number(s.latitude)]);
-        let routeCoords = stopCoords;
-
-        try {
-          const roadCoords = await fetchRoadPathFromOsrm(stopCoords);
-          if (Array.isArray(roadCoords) && roadCoords.length >= 2) {
-            routeCoords = roadCoords;
-          }
-        } catch {
-          // Keep fallback geometry from stop coordinates when OSRM is unavailable.
+    // The GPS watcher keeps lastGpsRef fresh; sample it once a second.
+    const id = setInterval(() => {
+      const fix = lastGpsRef?.current;
+      setVehicle((prev) => {
+        if (!fix) return prev === null ? prev : null;
+        if (prev && prev.recordedAt === fix.recordedAt && prev.latitude === fix.latitude && prev.longitude === fix.longitude) {
+          return prev;
         }
-        routeLineCoordsRef.current = routeCoords;
+        return {
+          latitude: fix.latitude,
+          longitude: fix.longitude,
+          accuracy: fix.accuracy,
+          recordedAt: fix.recordedAt,
+        };
+      });
+    }, 1000);
+    return () => clearInterval(id);
+  }, [lastGpsRef]);
 
-        // Route polyline
-        map.addSource(DRIVER_ROUTE_SOURCE_ID, {
-          type: 'geojson',
-          data: { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: routeCoords } },
-        });
-        map.addLayer({
-          id: DRIVER_ROUTE_LINE_LAYER_ID,
-          type: 'line',
-          source: DRIVER_ROUTE_SOURCE_ID,
-          layout: { 'line-join': 'round', 'line-cap': 'round' },
-          paint: { 'line-color': '#38bdf8', 'line-width': 5, 'line-opacity': 0.85 },
-        });
+  const acknowledgedStopIds = useMemo(
+    () => (Array.isArray(stops) ? stops : []).filter((s) => s?.is_acknowledged).map((s) => Number(s?.stop_id)),
+    [stops],
+  );
 
-        // Route stop pins as map layers, so they stay correctly anchored while zooming/panning.
-        const acknowledgedStopIds = new Set(
-          (Array.isArray(stops) ? stops : [])
-            .filter((s) => s?.is_acknowledged)
-            .map((s) => Number(s?.stop_id)),
-        );
-        map.addSource(DRIVER_ROUTE_STOPS_SOURCE_ID, {
-          type: 'geojson',
-          data: buildStopFeatures(valid, acknowledgedStopIds, routeCoords),
-        });
-
-        map.addLayer({
-          id: DRIVER_ROUTE_STOPS_LAYER_ID,
-          type: 'circle',
-          source: DRIVER_ROUTE_STOPS_SOURCE_ID,
-          paint: {
-            'circle-radius': [
-              'case',
-              ['get', 'isFirst'], 8,
-              ['get', 'isLast'], 8,
-              6,
-            ],
-            // Completed (acknowledged) stops take priority so a passed origin
-            // or intermediate stop reads as "done" rather than by position.
-            'circle-color': [
-              'case',
-              ['get', 'isAcknowledged'], '#2dd4bf',
-              ['get', 'isLast'], '#ef4444',
-              ['get', 'isFirst'], '#22c55e',
-              '#38bdf8',
-            ],
-            'circle-stroke-color': '#ffffff',
-            'circle-stroke-width': 2,
-          },
-        });
-
-        map.addLayer({
-          id: DRIVER_ROUTE_STOPS_LABEL_LAYER_ID,
-          type: 'symbol',
-          source: DRIVER_ROUTE_STOPS_SOURCE_ID,
-          layout: {
-            'text-field': ['concat', ['to-string', ['get', 'stopOrder']], '. ', ['get', 'stopName']],
-            'text-size': 11,
-            'text-offset': [0, 1.25],
-            'text-anchor': 'top',
-            'text-allow-overlap': false,
-          },
-          paint: {
-            'text-color': '#dbeafe',
-            'text-halo-color': '#0f172a',
-            'text-halo-width': 1,
-          },
-        });
-
-        map.on('click', DRIVER_ROUTE_STOPS_LAYER_ID, (ev) => {
-          const feature = ev?.features?.[0];
-          if (!feature) return;
-          const coordinates = feature?.geometry?.coordinates;
-          if (!Array.isArray(coordinates)) return;
-          const stopName = feature?.properties?.stopName || 'Stop';
-          new maplibregl.Popup({ offset: 12 })
-            .setLngLat(coordinates)
-            .setHTML(
-              `<p style="margin:0;font-size:12px;font-weight:700;color:#0f172a;">${stopName}</p>`
-            )
-            .addTo(map);
-        });
-
-        // Fit to full route extent
-        const bounds = routeCoords.reduce(
-          (acc, c) => acc.extend(c),
-          new maplibregl.LngLatBounds(routeCoords[0], routeCoords[0])
-        );
-        map.fitBounds(bounds, { padding: 60, maxZoom: 14 });
-        setRouteLoaded(true);
-      } catch {
-        routeDrawnRef.current = false; // allow retry on next render
-      }
-    })();
-  }, [mapReady, routeId, stops]);
-
-  // ── 2b. Re-sync completed/upcoming stop coloring whenever the driver
-  //         acknowledges a new stop (stops prop changes) — updates the same
-  //         source in place rather than redrawing the whole route. ─────────
-  useEffect(() => {
-    if (!routeLoaded || !mapRef.current) return;
-    const validStops = routeStopsRef.current;
-    if (!validStops.length) return;
-
-    const acknowledgedStopIds = new Set(
-      (Array.isArray(stops) ? stops : [])
-        .filter((s) => s?.is_acknowledged)
-        .map((s) => Number(s?.stop_id)),
-    );
-
-    const source = mapRef.current.getSource(DRIVER_ROUTE_STOPS_SOURCE_ID);
-    if (source) source.setData(buildStopFeatures(validStops, acknowledgedStopIds, routeLineCoordsRef.current));
-  }, [stops, routeLoaded]);
-
-  // ── 3. Driver position (GeoJSON circle layer, updated every 1 s) ──────────
-  // Reading lastGpsRef at 1-second granularity is smooth because
-  // watchPosition fires every few hundred ms on modern mobile — the ref is
-  // always fresh, so 1 s intervals produce near-continuous movement.
-  useEffect(() => {
-    if (!mapReady || !routeGeometry || !mapRef.current || !mapLibRef.current) return;
-
-    const map = mapRef.current;
-    const maplibregl = mapLibRef.current;
-    const geometry = routeGeometry && routeGeometry.type === 'LineString' ? routeGeometry : null;
-    if (!geometry || !Array.isArray(geometry.coordinates) || geometry.coordinates.length < 2) return;
-
-    if (map.getLayer('driver-reroute-line')) map.removeLayer('driver-reroute-line');
-    if (map.getSource('driver-reroute-route')) map.removeSource('driver-reroute-route');
-
-    map.addSource('driver-reroute-route', {
-      type: 'geojson',
-      data: { type: 'Feature', properties: {}, geometry },
-    });
-
-    map.addLayer({
-      id: 'driver-reroute-line',
-      type: 'line',
-      source: 'driver-reroute-route',
-      layout: { 'line-cap': 'round', 'line-join': 'round' },
-      paint: {
-        'line-color': '#f59e0b',
-        'line-width': 5,
-        'line-dasharray': [2, 1],
-        'line-opacity': 0.9,
-      },
-    });
-
-    const bounds = geometry.coordinates.reduce(
-      (acc, coord) => acc.extend(coord),
-      new maplibregl.LngLatBounds(geometry.coordinates[0], geometry.coordinates[0])
-    );
-    if (map.getZoom() < 10) {
-      map.fitBounds(bounds, { padding: 60, maxZoom: 14 });
-    }
-
-    return () => {
-      if (map.getLayer('driver-reroute-line')) map.removeLayer('driver-reroute-line');
-      if (map.getSource('driver-reroute-route')) map.removeSource('driver-reroute-route');
-    };
-  }, [mapReady, routeGeometry]);
-
-  useEffect(() => {
-    if (!mapReady) return;
-    const map = mapRef.current;
-    if (!map) return;
-
-    const DRIVER_POS_SOURCE = 'driver-position';
-    const DRIVER_POS_PULSE  = 'driver-position-pulse';
-    const DRIVER_POS_DOT    = 'driver-position-dot';
-
-    const updatePosition = () => {
-      const pos = lastGpsRef?.current;
-      if (!pos || !Number.isFinite(pos.latitude) || !Number.isFinite(pos.longitude)) return;
-
-      const rawCoords = [Number(pos.longitude), Number(pos.latitude)];
-      // Snap the live position onto the drawn route line — raw GPS fixes
-      // jitter side-to-side even on a straight road, so this keeps the
-      // driver/operator's tracked dot moving smoothly along the path
-      // instead of drifting off it (same fix as the Issue #2 stop markers).
-      const routeCoords = routeLineCoordsRef.current;
-      const coords = Array.isArray(routeCoords) && routeCoords.length >= 2
-        ? nearestPointOnLine(rawCoords, routeCoords)
-        : rawCoords;
-      const geoData = {
-        type: 'Feature',
-        properties: {},
-        geometry: { type: 'Point', coordinates: coords },
-      };
-
-      if (driverSourceAddedRef.current) {
-        // Update in place — no DOM churn, no teleport flicker.
-        const src = map.getSource(DRIVER_POS_SOURCE);
-        if (src) {
-          src.setData(geoData);
-          map.panTo(coords, { duration: 900, easing: (t) => t * (2 - t) });
-        }
-      } else if (map.isStyleLoaded()) {
-        map.addSource(DRIVER_POS_SOURCE, { type: 'geojson', data: geoData });
-
-        // Outer pulse ring
-        map.addLayer({
-          id: DRIVER_POS_PULSE,
-          type: 'circle',
-          source: DRIVER_POS_SOURCE,
-          paint: {
-            'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 18, 16, 26],
-            'circle-color': 'rgba(34,197,94,0.12)',
-            'circle-stroke-color': 'rgba(34,197,94,0.5)',
-            'circle-stroke-width': 2,
-          },
-        });
-
-        // Inner position dot
-        map.addLayer({
-          id: DRIVER_POS_DOT,
-          type: 'circle',
-          source: DRIVER_POS_SOURCE,
-          paint: {
-            'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 7, 16, 11],
-            'circle-color': '#22c55e',
-            'circle-stroke-color': '#ffffff',
-            'circle-stroke-width': 3,
-          },
-        });
-
-        driverSourceAddedRef.current = true;
-        map.flyTo({ center: coords, zoom: 13, duration: 800 });
-      }
-    };
-
-    updatePosition();
-    gpsIntervalRef.current = setInterval(updatePosition, 1000);
-    return () => clearInterval(gpsIntervalRef.current);
-  }, [mapReady, lastGpsRef]);
-
-  // ── 4. Cleanup on unmount ─────────────────────────────────────────────────
-  useEffect(() => () => {
-    clearInterval(gpsIntervalRef.current);
-
-    const map = mapRef.current;
-    if (map) {
-      if (map.getLayer('driver-position-dot'))   map.removeLayer('driver-position-dot');
-      if (map.getLayer('driver-position-pulse'))  map.removeLayer('driver-position-pulse');
-      if (map.getSource('driver-position'))       map.removeSource('driver-position');
-      if (map.getLayer(DRIVER_ROUTE_STOPS_LABEL_LAYER_ID)) map.removeLayer(DRIVER_ROUTE_STOPS_LABEL_LAYER_ID);
-      if (map.getLayer(DRIVER_ROUTE_STOPS_LAYER_ID)) map.removeLayer(DRIVER_ROUTE_STOPS_LAYER_ID);
-      if (map.getSource(DRIVER_ROUTE_STOPS_SOURCE_ID)) map.removeSource(DRIVER_ROUTE_STOPS_SOURCE_ID);
-      if (map.getLayer(DRIVER_ROUTE_LINE_LAYER_ID)) map.removeLayer(DRIVER_ROUTE_LINE_LAYER_ID);
-      if (map.getSource(DRIVER_ROUTE_SOURCE_ID)) map.removeSource(DRIVER_ROUTE_SOURCE_ID);
-    }
-
-    mapRef.current?.remove();
-    mapRef.current        = null;
-    routeDrawnRef.current = false;
-    driverSourceAddedRef.current = false;
-  }, []);
-
-  if (mapError) {
-    return (
-      <div className="flex items-center justify-center rounded-xl border border-red-900 bg-red-950/30 p-6 text-sm text-red-300">
-        {mapError}
-      </div>
-    );
-  }
+  const completed = acknowledgedStopIds.length;
+  const total = Array.isArray(stops) ? stops.length : 0;
 
   return (
     <div className="relative overflow-hidden rounded-xl border border-slate-800 bg-slate-900">
@@ -408,19 +67,27 @@ export default function DriverNavigationMap({ trip, stops, lastGpsRef, routeGeom
         <span className="text-slate-500">→</span>
         <span className="h-3 w-3 shrink-0 rounded-full bg-red-400" />
         <span className="text-sm font-semibold text-slate-100">{destinationLabel}</span>
-        <span className="ml-auto text-xs text-slate-500">
-          {!mapReady ? 'Loading map…' : routeLoaded ? '✓ Route loaded' : 'Drawing route…'}
+        <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[11px] font-semibold text-slate-300">
+          {isReturnLeg ? 'Return leg' : 'Outbound leg'}
         </span>
+        <span className="ml-auto text-xs text-slate-400">{ROUTE_STATUS_TEXT[routeStatus] || ''}</span>
       </div>
-      <div ref={mapContainer} style={{ height: '420px', width: '100%' }} />
+      <RouteMap
+        routeId={routeId}
+        direction={direction}
+        vehicle={vehicle}
+        acknowledgedStopIds={acknowledgedStopIds}
+        onRouteStatus={setRouteStatus}
+        className="relative h-105 w-full"
+      />
       <div className="flex flex-wrap gap-4 border-t border-slate-800 px-4 py-2 text-xs text-slate-400">
-        <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded-full bg-emerald-400" />Your position</span>
+        <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded-full bg-teal-600" />Your position</span>
         <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded-full bg-teal-400" />Completed stop</span>
-        <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded-full bg-sky-400" />Upcoming stop</span>
-        <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded-full bg-red-400" />Destination</span>
-        {stops.length > 0 && (
+        <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded-full bg-sky-600" />Upcoming stop</span>
+        <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded-full bg-blue-900" />Terminal</span>
+        {total > 0 && (
           <span className="ml-auto">
-            {stops.filter((s) => s.is_acknowledged).length} of {stops.length} Stops Completed — {Math.round((stops.filter((s) => s.is_acknowledged).length / stops.length) * 100)}%
+            {completed} of {total} Stops Completed — {Math.round((completed / total) * 100)}%
           </span>
         )}
       </div>

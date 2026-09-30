@@ -6,6 +6,7 @@ import usePassengersByTrip from './usePassengersByTrip';
 import useOnsiteReceiptPrinter from './useOnsiteReceiptPrinter';
 import { isSameBusinessDay, getBusinessToday, getBusinessNowMs, toBusinessScheduleMs, debugLogBusinessTime } from '../../../utils/dates';
 import { buildCalendarGrid } from '../../../utils/calendarGrid';
+import { extractFieldErrors } from '../../../utils/assignmentRequest';
 
 // Architecture audit follow-up (CONF-03): ConductorDashboard.jsx previously
 // called ConductorService directly from ~22 sites spread across the
@@ -182,14 +183,14 @@ export function useConductorDashboardData({ onLogout, pairing }) {
   // can be triggered per-card from the Assigned Trips list — today OR
   // upcoming — and regardless of pairing status (Batch 14).
   const [confirmDecline, setConfirmDecline] = useState(null);
-  const [declineReasonCode, setDeclineReasonCode] = useState('');
+  const [declineErrors, setDeclineErrors] = useState({});
   const [declineSubmitting, setDeclineSubmitting] = useState(false);
   const [actionInFlight, setActionInFlight] = useState(false);
   // Batch 15, Item 9: "Available" status — distinct from shift/pairing
   // state; can be toggled on even while off-shift.
   const [isAvailable, setIsAvailable] = useState(false);
   const [availabilitySaving, setAvailabilitySaving] = useState(false);
-  const [shiftState, setShiftState] = useState({ openShift: null, latestShift: null, loading: false });
+  const [shiftState, setShiftState] = useState({ openShift: null, latestShift: null, endBlockedReason: null, loading: false });
   // Batch 18: Shift Block Hand-off System.
   const [shiftBlocks, setShiftBlocks] = useState([]);
   const [shiftBlockEligibility, setShiftBlockEligibility] = useState({});
@@ -236,7 +237,6 @@ export function useConductorDashboardData({ onLogout, pairing }) {
   const upcomingTrip = getUpcomingTrip(assignedTrips);
   const showNoCurrentTripState = !loading && isPaired && !hasActiveTrip && !hasTodayAssignedTrip && ['dashboard', 'occupancy', 'activeShift', 'pin'].includes(activeTab);
   const routeStops = trip?.fleet_route?.route?.route_stops || trip?.fleet_route?.route?.routeStops || [];
-  const shiftStarted = hasOpenShift;
   const groupedPassengers = usePassengersByTrip(passengers, trip);
   const filteredAssignedTrips = assignedTripFilter === 'all' ? assignedTrips : assignedTripsForView;
   const todayStart = getBusinessToday();
@@ -380,6 +380,7 @@ export function useConductorDashboardData({ onLogout, pairing }) {
         setShiftState({
           openShift: payload?.open_shift ?? null,
           latestShift: payload?.latest_shift ?? null,
+          endBlockedReason: payload?.end_blocked_reason ?? null,
           loading: false,
         });
       } else {
@@ -508,6 +509,23 @@ export function useConductorDashboardData({ onLogout, pairing }) {
     return () => clearTimeout(timer);
   }, [showScannerModal, stopScanner]);
 
+  // C7: the server decides whether End Shift is allowed (unfinished legs in the
+  // shift block, trip still boarding/in transit); re-read it after any change.
+  const refreshEndBlockedReason = useCallback(async () => {
+    try {
+      const res = await ConductorService.getConductorShiftStatus();
+      setShiftState((prev) => ({ ...prev, endBlockedReason: res?.data?.end_blocked_reason ?? null }));
+    } catch {
+      // Keep the last known state; the server still enforces the rule.
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!hasOpenShift) return undefined;
+    const intervalId = setInterval(() => { void refreshEndBlockedReason(); }, 20000);
+    return () => clearInterval(intervalId);
+  }, [hasOpenShift, refreshEndBlockedReason]);
+
   const handleStartShift = async () => {
     try {
       const res = await ConductorService.startConductorShift();
@@ -517,6 +535,7 @@ export function useConductorDashboardData({ onLogout, pairing }) {
         openShift: shift,
         latestShift: shift,
       }));
+      void refreshEndBlockedReason();
       setActionMsg(res?.message || 'Conductor shift started');
       setActiveTab('occupancy');
     } catch (err) {
@@ -524,22 +543,25 @@ export function useConductorDashboardData({ onLogout, pairing }) {
     }
   };
 
-  // S2 (Batch 12): decline the assigned trip — returns it to the
-  // unassigned pool for the Operator to reassign. Reason is optional.
-  // Works for any status-eligible trip in the conductor's assigned list —
-  // today or upcoming — and regardless of pairing status (Batch 14).
-  const handleConfirmedDecline = async () => {
+  // C6: a decline is a request the Operator approves ("For Approval"), not an
+  // immediate release. On failure the dialog stays open with the typed text
+  // and the server's field errors; nothing the Chauffeur entered is lost.
+  const handleConfirmedDecline = async ({ reasonCode, reasonText }) => {
     const tripId = confirmDecline?.trip_id;
     if (!tripId) return;
     setDeclineSubmitting(true);
+    setDeclineErrors({});
     try {
-      await ConductorService.declineConductorTrip(tripId, declineReasonCode ? { reason_code: declineReasonCode } : {});
-      setActionMsg('Trip declined. The Operator has been notified.');
+      const payload = {};
+      if (reasonCode) payload.reason_code = reasonCode;
+      if (reasonCode === 'other' && reasonText) payload.reason_text = reasonText;
+      await ConductorService.declineConductorTrip(tripId, payload);
+      setActionMsg('Request sent. It is now waiting for Operator approval.');
       setConfirmDecline(null);
-      setDeclineReasonCode('');
       void loadData();
     } catch (err) {
-      setActionMsg(err.message);
+      const fields = extractFieldErrors(err);
+      setDeclineErrors(Object.keys(fields).length > 0 ? fields : { request: err?.message || 'Unable to send the request.' });
     } finally {
       setDeclineSubmitting(false);
     }
@@ -613,6 +635,7 @@ export function useConductorDashboardData({ onLogout, pairing }) {
       setActionMsg(res?.message || 'Conductor shift ended');
     } catch (err) {
       setActionMsg(err?.message || 'Unable to end shift right now.');
+      void refreshEndBlockedReason();
     }
   };
 
@@ -1094,7 +1117,7 @@ export function useConductorDashboardData({ onLogout, pairing }) {
     checkoutInFlight,
     confirmCheckout, setConfirmCheckout,
     confirmDecline, setConfirmDecline,
-    declineReasonCode, setDeclineReasonCode,
+    declineErrors, setDeclineErrors,
     declineSubmitting,
     actionInFlight,
     isAvailable,
@@ -1110,7 +1133,6 @@ export function useConductorDashboardData({ onLogout, pairing }) {
     upcomingTrip,
     showNoCurrentTripState,
     routeStops,
-    shiftStarted,
     groupedPassengers,
     filteredAssignedTrips,
     todayAssignedTrips,

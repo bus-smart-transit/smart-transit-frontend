@@ -403,7 +403,7 @@ export default function Dashboard() {
     }
 
     if (visibleTab === 'map') {
-      return <PublicTrackingSection showHeader={false} compact />;
+      return <PublicTrackingSection showHeader={false} compact activeTicket={upcomingTicket} />;
     }
 
     if (!isAuthenticated && PROTECTED_TABS.has(visibleTab)) {

@@ -83,14 +83,11 @@ class DriverService extends StaffBaseService {
     return await this.request('/driver/shift/start', 'POST');
   }
 
-  async endDriverShift() {
-    return await this.request('/driver/shift/end', 'POST');
-  }
-
-  async updateLocation(latitude, longitude, heading = null, speedKmh = null) {
+  async updateLocation(latitude, longitude, heading = null, speedKmh = null, accuracy = null) {
     const payload = { latitude, longitude };
     if (Number.isFinite(heading)) payload.heading = heading;
     if (Number.isFinite(speedKmh)) payload.speed_kmh = speedKmh;
+    if (Number.isFinite(accuracy)) payload.accuracy = accuracy;
     return await this.request('/driver/location', 'POST', payload);
   }
 

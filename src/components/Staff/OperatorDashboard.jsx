@@ -1,10 +1,13 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useMemo } from 'react'
 import StaffPortalLayout from './StaffPortalLayout'
 import { buildOperatorForecast } from './routeForecast'
-import { loadMapLib } from '../Map/mapDependencies'
+import RouteMap from '../Map/RouteMap'
+import CalendarSummaryStrip from './CalendarSummaryStrip'
+import HistoricalForecastPanel from './HistoricalForecastPanel'
+import { openPrintReport } from '../../utils/printReport'
+import OperatorService from '../../api/StaffService/OperatorService'
 import { parseAppDate, getBusinessToday, debugLogBusinessTime } from '../../utils/dates'
-import { nearestPointOnLine } from '../../utils/geo'
-import { useOperatorDashboardData, useNotificationBell, useDispatchDecisions, fetchOperatorRouteStops, useFleetsTab, useRoutesTab, useTripsTab, useReportsTab, useShiftBlocksTab } from '../../api/hooks/Staff/useOperatorDashboard'
+import { useOperatorDashboardData, useNotificationBell, useTripRequests, useDispatchDecisions, useFleetsTab, useRoutesTab, useTripsTab, useReportsTab, useShiftBlocksTab } from '../../api/hooks/Staff/useOperatorDashboard'
 import {
   LayoutDashboard, Bus, MapPin, Clock, PieChart, Users, Settings,
   Plus, Eye, RefreshCw, Shield, Download,
@@ -21,18 +24,6 @@ const fmtDate = (v) => {
   const d = new Date(String(v).includes('T') ? v : v + 'T00:00')
   if (Number.isNaN(d.getTime())) return v
   return d.toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' })
-}
-const riskSeverity = (risk) => {
-  const value = Number(risk || 0)
-  if (value >= 75) return { label: 'Severe', tone: 'bg-red-100 text-red-700', bar: 'bg-red-500' }
-  if (value >= 50) return { label: 'High', tone: 'bg-amber-100 text-amber-700', bar: 'bg-amber-500' }
-  if (value >= 30) return { label: 'Moderate', tone: 'bg-yellow-100 text-yellow-700', bar: 'bg-yellow-500' }
-  return { label: 'Low', tone: 'bg-emerald-100 text-emerald-700', bar: 'bg-emerald-500' }
-}
-const timeSlotWindow = {
-  morning: '6:00 AM - 11:59 AM',
-  afternoon: '12:00 PM - 5:59 PM',
-  evening: '6:00 PM - 11:59 PM',
 }
 const STATUS_CHIP = {
   scheduled:     'bg-slate-100 text-slate-700',
@@ -154,8 +145,43 @@ function Field({ label, type = 'text', value, onChange, required, placeholder, c
   )
 }
 
-function DashboardTab({ trips, drivers, conductors, fleets }) {
-  const { selectedDispatch, dispatching, handleDispatchDecision } = useDispatchDecisions(trips)
+const REQUEST_REASON_LABELS = { sick: 'Sick', vehicle_issue: 'Vehicle issue', schedule_conflict: 'Schedule conflict', other: 'Others' }
+
+// C6: staff decline requests waiting for the Operator ("For Approval").
+function TripRequestsPanel({ onDecided }) {
+  const { requests, busyId, error, decide } = useTripRequests(onDecided)
+  if (requests.length === 0 && !error) return null
+
+  return (
+    <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+      <h2 className="text-sm font-bold text-amber-800">For Approval ({requests.length})</h2>
+      {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
+      <ul className="mt-3 space-y-2">
+        {requests.map((r) => {
+          const route = r.trip?.fleet_route?.route
+          const staffName = r.staff?.user?.name || r.staff?.name || 'Staff'
+          const reason = r.reason_text || REQUEST_REASON_LABELS[r.reason_code] || 'No reason given'
+          return (
+            <li key={r.id} className="flex flex-col gap-2 rounded-xl border border-amber-100 bg-white p-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="text-sm">
+                <p className="font-semibold text-slate-900">{staffName} <span className="font-normal text-slate-500">({r.role})</span></p>
+                <p className="text-xs text-slate-600">{route?.origin || '-'} → {route?.destination || '-'} · {r.trip?.trip_date}</p>
+                <p className="text-xs text-slate-500">Reason: {reason}</p>
+              </div>
+              <div className="flex gap-2">
+                <button type="button" disabled={busyId === r.id} onClick={() => decide(r.id, 'approve')} className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50">Approve</button>
+                <button type="button" disabled={busyId === r.id} onClick={() => decide(r.id, 'reject')} className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50">Reject</button>
+              </div>
+          </li>
+          )
+        })}
+      </ul>
+    </section>
+  )
+}
+
+function DashboardTab({ trips, drivers, conductors, fleets, onRequestDecided }) {
+  const { selectedDispatch } = useDispatchDecisions(trips)
 
   const total     = trips.length
   const active    = trips.filter(t => ['departed','in-progress','boarding'].includes(t.status)).length
@@ -175,7 +201,6 @@ function DashboardTab({ trips, drivers, conductors, fleets }) {
   const liveRefreshNotice = needsAttention === 0 ? 'All routes are within normal operating range.' : `${needsAttention} route item(s) need attention.`
   const forecast = buildOperatorForecast(trips)
   const predictiveReroutes = forecast.rerouteRecommendations ?? []
-  const routeComparisons = forecast.routeComparison ?? []
   const dispatchDecisionCount = Object.keys(selectedDispatch).length
   const routeDelaySummary = Object.values(activeTrips.reduce((acc, trip) => {
     const routeName = trip.fleet_route?.route?.route_name || 'Unassigned Route'
@@ -285,6 +310,8 @@ function DashboardTab({ trips, drivers, conductors, fleets }) {
 
   return (
     <div className="space-y-6">
+      <TripRequestsPanel onDecided={onRequestDecided} />
+      <CalendarSummaryStrip service={OperatorService} refreshKey={trips} />
       <div className="rounded-2xl border border-teal-100 bg-linear-to-r from-teal-600 via-teal-500 to-cyan-500 p-5 text-white shadow-sm">
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
@@ -320,7 +347,7 @@ function DashboardTab({ trips, drivers, conductors, fleets }) {
           </div>
         ))}
       </div>
-      <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+      <div className="staff-card staff-card-roomy">
         <div className="mb-4 flex items-center justify-between gap-3">
           <h2 className="text-base font-semibold text-slate-900">Route Health Summary</h2>
           <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-slate-600">Live Ops</span>
@@ -337,7 +364,7 @@ function DashboardTab({ trips, drivers, conductors, fleets }) {
           ))}
         </div>
       </div>
-      <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+      <div className="staff-card staff-card-roomy">
         <div className="mb-4 flex items-center justify-between gap-3">
           <h2 className="text-base font-semibold text-slate-900">Dispatch Decision Board</h2>
           <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-slate-600">Live</span>
@@ -355,39 +382,6 @@ function DashboardTab({ trips, drivers, conductors, fleets }) {
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Status</p>
             <p className="mt-2 text-lg font-bold text-slate-900">{dispatchDecisionCount > 0 ? 'Reviewing' : 'Awaiting route action'}</p>
           </div>
-        </div>
-      </div>
-      <div className="staff-card staff-card-roomy">
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <h2 className="text-base font-semibold text-slate-900">Historical Forecast</h2>
-          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-600">Trend</span>
-        </div>
-        <div className="grid gap-3 md:grid-cols-3">
-          <div className="rounded-xl bg-slate-50 p-4">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">Avg. revenue</p>
-            <p className="mt-2 text-2xl font-bold text-slate-900">{fmt(forecast.avgRevenue)}</p>
-          </div>
-          <div className="rounded-xl bg-slate-50 p-4">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">Traffic risk severity</p>
-            <p className="mt-2 text-2xl font-bold text-slate-900">{Math.round(forecast.forecastRisk)}%</p>
-            <span className={`mt-2 inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] ${riskSeverity(forecast.forecastRisk).tone}`}>{riskSeverity(forecast.forecastRisk).label}</span>
-          </div>
-          <div className="rounded-xl bg-slate-50 p-4">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">Most at-risk route</p>
-            <p className="mt-2 text-lg font-bold text-slate-900">{forecast.highestRisk?.route || 'No risk route detected'}</p>
-          </div>
-        </div>
-        <div className="mt-5 grid gap-3 md:grid-cols-3">
-          {Object.entries(forecast.timeSlotForecast ?? {}).map(([slot, value]) => (
-            <div key={slot} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">{value.label} ({timeSlotWindow[slot] || 'Peak window'})</p>
-              <p className="mt-2 text-xl font-bold text-slate-900">{value.risk}%</p>
-              <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-200">
-                <div className={`h-full ${riskSeverity(value.risk).bar}`} style={{ width: `${Math.min(100, Math.max(0, Number(value.risk || 0)))}%` }} />
-              </div>
-              <p className="mt-2 text-xs text-slate-600">{value.note}</p>
-            </div>
-          ))}
         </div>
       </div>
       <div className="staff-card staff-card-roomy">
@@ -456,110 +450,6 @@ function DashboardTab({ trips, drivers, conductors, fleets }) {
       </div>
       <div className="staff-card staff-card-roomy">
         <div className="mb-4 flex items-center justify-between gap-3">
-          <h2 className="text-base font-semibold text-slate-900">Predictive Reroute Plan</h2>
-          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-600">Forecast</span>
-        </div>
-        {predictiveReroutes.length === 0 ? (
-          <p className="text-sm text-slate-500">No reroute suggestions available.</p>
-        ) : (
-          <div className="space-y-3">
-            {predictiveReroutes.map(rec => (
-              <div key={rec.route} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <p className="text-sm font-semibold text-slate-900">{rec.route}</p>
-                    <p className="text-xs text-slate-500">Peak risk window: {rec.peakSlot}</p>
-                  </div>
-                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] ${rec.priority === 'high' ? 'bg-red-100 text-red-700' : rec.priority === 'medium' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
-                    {rec.priority}
-                  </span>
-                </div>
-                <div className="mt-3 grid gap-2 text-xs text-slate-600 sm:grid-cols-2">
-                  <div className="rounded-lg bg-white px-3 py-2"><span className="block text-slate-400">Risk score</span><strong className="text-slate-900">{rec.riskScore}%</strong></div>
-                  <div className="rounded-lg bg-white px-3 py-2"><span className="block text-slate-400">Alt route</span><strong className="text-slate-900">{rec.alternativeRoute}</strong></div>
-                </div>
-                <div className="mt-2 grid gap-2 text-xs text-slate-600 sm:grid-cols-2">
-                  <div className="rounded-lg bg-white px-3 py-2"><span className="block text-slate-400">Crew state</span><strong className="text-slate-900">{rec.crewState}</strong></div>
-                  <div className="rounded-lg bg-white px-3 py-2"><span className="block text-slate-400">Emergency state</span><strong className="text-slate-900">{rec.emergencyState}</strong></div>
-                </div>
-                <p className="mt-3 text-sm text-slate-600">{rec.recommendedAction}</p>
-                <p className="mt-2 text-xs text-slate-500">{rec.reason}</p>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <button type="button" disabled={!!dispatching[rec.route]} onClick={() => handleDispatchDecision(rec.route, 'accept', {
-                    alternativeRoute: rec.alternativeRoute,
-                    recommendation: rec.recommendedAction,
-                    reason: rec.reason,
-                  })} className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60">
-                    {dispatching[rec.route] ? 'Saving...' : 'Accept reroute'}
-                  </button>
-                  <button type="button" disabled={!!dispatching[rec.route]} onClick={() => handleDispatchDecision(rec.route, 'keep', {
-                    alternativeRoute: rec.alternativeRoute,
-                    recommendation: rec.recommendedAction,
-                    reason: rec.reason,
-                  })} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60">
-                    Keep current route
-                  </button>
-                </div>
-                {selectedDispatch[rec.route] && (
-                  <p className="mt-2 text-xs text-slate-600">Dispatch status: {selectedDispatch[rec.route] === 'accept' ? rec.dispatchAction : 'Current route retained.'}</p>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-      <div className="staff-card staff-card-roomy">
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <h2 className="text-base font-semibold text-slate-900">Assigned Route vs. Alternative</h2>
-          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-600">Comparison</span>
-        </div>
-        {routeComparisons.length === 0 ? (
-          <p className="text-sm text-slate-500">No route comparison data is available.</p>
-        ) : (
-          <div className="space-y-3">
-            {routeComparisons.map(item => (
-              <div key={item.route} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <p className="text-sm font-semibold text-slate-900">{item.route}</p>
-                    <p className="text-xs text-slate-500">{item.trafficLevel}</p>
-                  </div>
-                  <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-600">
-                    Save {item.timeSavedMinutes} min
-                  </span>
-                </div>
-                <div className="mt-3 grid gap-2 text-xs text-slate-600 sm:grid-cols-3">
-                  <div className="rounded-lg bg-white px-3 py-2"><span className="block text-slate-400">Current</span><strong className="text-slate-900">{item.currentEtaMinutes} min</strong></div>
-                  <div className="rounded-lg bg-white px-3 py-2"><span className="block text-slate-400">Alternative</span><strong className="text-slate-900">{item.alternateEtaMinutes} min</strong></div>
-                  <div className="rounded-lg bg-white px-3 py-2"><span className="block text-slate-400">Route</span><strong className="text-slate-900">{item.alternativeRoute}</strong></div>
-                </div>
-                <p className="mt-3 text-sm text-slate-600">{item.recommendation}</p>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <button type="button" disabled={!!dispatching[item.route]} onClick={() => handleDispatchDecision(item.route, 'accept', {
-                    alternativeRoute: item.alternativeRoute,
-                    recommendation: item.recommendation,
-                    reason: item.recommendation,
-                  })} className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60">
-                    {dispatching[item.route] ? 'Saving...' : 'Accept reroute'}
-                  </button>
-                  <button type="button" disabled={!!dispatching[item.route]} onClick={() => handleDispatchDecision(item.route, 'keep', {
-                    alternativeRoute: item.alternativeRoute,
-                    recommendation: item.recommendation,
-                    reason: item.recommendation,
-                  })} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60">
-                    Keep current route
-                  </button>
-                </div>
-                {selectedDispatch[item.route] && (
-                  <p className="mt-2 text-xs text-slate-600">Dispatch status: {selectedDispatch[item.route] === 'accept' ? item.dispatchAction : 'Current route retained.'}</p>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-      <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-        <div className="mb-4 flex items-center justify-between gap-3">
           <h2 className="text-base font-semibold text-slate-900">Fleet Response View</h2>
           <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-slate-600">Dispatch</span>
         </div>
@@ -588,7 +478,7 @@ function DashboardTab({ trips, drivers, conductors, fleets }) {
           </div>
         )}
       </div>
-      <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+      <div className="staff-card staff-card-roomy">
         <div className="mb-4 flex items-center justify-between gap-3">
           <h2 className="text-base font-semibold text-slate-900">Operational Alerts</h2>
           <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-amber-700">{alerts.length} Active</span>
@@ -613,7 +503,7 @@ function DashboardTab({ trips, drivers, conductors, fleets }) {
           </div>
         )}
       </div>
-      <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+      <div className="staff-card staff-card-roomy">
         <h2 className="mb-4 text-base font-semibold text-slate-900">Recent Trips</h2>
         {recent.length === 0 ? <p className="text-sm text-slate-400">No trips found.</p> : (
           <div className="overflow-x-auto">
@@ -789,225 +679,32 @@ function StaffDirectoryTab({ drivers, conductors, onRefresh, onCreateAccount }) 
 }
 
 function FleetTrackingMap({ trip, location }) {
-  const mapContainerRef = useRef(null)
-  const mapRef = useRef(null)
-  const mapLibRef = useRef(null)
-  const markerRef = useRef(null)
-  const routeGeometryCacheRef = useRef(new Map())
-
-  useEffect(() => {
-    if (mapRef.current || !mapContainerRef.current) return
-    let cancelled = false
-
-    ;(async () => {
-      try {
-        const { default: maplibregl } = await loadMapLib()
-        if (cancelled || !mapContainerRef.current) return
-
-        mapLibRef.current = maplibregl
-        mapRef.current = new maplibregl.Map({
-          container: mapContainerRef.current,
-          style: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json',
-          center: [125.6128, 7.0731],
-          zoom: 11,
-        })
-      } catch {
-        // Keep silent; fallback panel remains visible.
+  // B4: the Operator map is the shared RouteMap layer. The line is the
+  // assigned trip's canonical geometry (per leg direction) and the bus is the
+  // server-projected, accuracy-filtered position, with an explicit
+  // no-GPS / stale / weak / off-route state instead of a floating icon.
+  const routeId = Number(location?.route_id ?? trip?.fleet_route?.route?.route_id)
+  const vehicle = useMemo(() => (location
+    ? {
+        latitude: location.latitude,
+        longitude: location.longitude,
+        accuracy: location.accuracy_m,
+        recordedAt: location.recorded_at || location.updated_at,
+        routePosition: location.route_position,
       }
-    })()
+    : null), [location])
 
-    return () => {
-      cancelled = true
-      if (mapRef.current) {
-        mapRef.current.remove()
-        mapRef.current = null
-      }
-      markerRef.current = null
-    }
-  }, [])
-
-  useEffect(() => {
-    const map = mapRef.current
-    const maplibregl = mapLibRef.current
-    if (!map || !maplibregl) return
-    const lat = Number(location?.latitude)
-    const lng = Number(location?.longitude)
-    const hasLiveMarker = Number.isFinite(lat) && Number.isFinite(lng)
-    const liveCoord = hasLiveMarker ? [lng, lat] : null
-    const routeId = Number(location?.route_id ?? trip?.fleet_route?.route?.route_id)
-
-    const removeRoute = () => {
-      if (map.getLayer('operator-route-line')) map.removeLayer('operator-route-line')
-      if (map.getLayer('operator-route-glow')) map.removeLayer('operator-route-glow')
-      if (map.getSource('operator-route')) map.removeSource('operator-route')
-    }
-
-    const createBusMarker = () => {
-      const outerEl = document.createElement('div')
-      outerEl.className = 'operator-fleet-marker'
-      outerEl.style.width = '38px'
-      outerEl.style.height = '38px'
-      outerEl.style.borderRadius = '9999px'
-      outerEl.style.display = 'grid'
-      outerEl.style.placeItems = 'center'
-      outerEl.style.background = 'linear-gradient(135deg, #0f766e, #22c55e)'
-      outerEl.style.boxShadow = '0 12px 28px rgba(15, 118, 110, 0.35)'
-      outerEl.style.border = '2px solid rgba(255,255,255,0.92)'
-
-      const innerEl = document.createElement('div')
-      innerEl.textContent = '🚌'
-      innerEl.style.fontSize = '18px'
-      innerEl.style.lineHeight = '1'
-
-      outerEl.appendChild(innerEl)
-      return outerEl
-    }
-
-    const draw = (coords = []) => {
-      removeRoute()
-
-      if (coords.length >= 2) {
-        map.addSource('operator-route', {
-          type: 'geojson',
-          data: {
-            type: 'Feature',
-            properties: {},
-            geometry: {
-              type: 'LineString',
-              coordinates: coords,
-            },
-          },
-        })
-
-        map.addLayer({
-          id: 'operator-route-glow',
-          type: 'line',
-          source: 'operator-route',
-          layout: { 'line-join': 'round', 'line-cap': 'round' },
-          paint: {
-            'line-color': '#facc15',
-            'line-width': 10,
-            'line-opacity': 0.18,
-          },
-        })
-
-        map.addLayer({
-          id: 'operator-route-line',
-          type: 'line',
-          source: 'operator-route',
-          layout: { 'line-join': 'round', 'line-cap': 'round' },
-          paint: {
-            'line-color': '#f59e0b',
-            'line-width': 5,
-            'line-opacity': 0.9,
-          },
-        })
-      }
-
-      // Snap the live fleet position onto the drawn route path so the
-      // Operator's tracked marker moves smoothly along it instead of
-      // drifting off due to raw GPS jitter (mirrors the driver-side fix).
-      const snappedLiveCoord = hasLiveMarker && coords.length >= 2
-        ? nearestPointOnLine(liveCoord, coords)
-        : liveCoord
-
-      if (hasLiveMarker) {
-        if (markerRef.current) markerRef.current.remove()
-        const popupHtml = `
-          <div style="font-family: sans-serif; color: #0f172a; font-size: 12px;">
-            <p style="margin:0;font-weight:700;">${trip?.fleet_route?.fleet?.plate_number || 'Active Bus'}</p>
-            <p style="margin:4px 0 0;">${trip?.fleet_route?.route?.route_name || 'Route pending'}</p>
-            <p style="margin:4px 0 0;color:#64748b;text-transform:capitalize;">Status: ${trip?.status || 'scheduled'}</p>
-          </div>
-        `
-        const popup = new maplibregl.Popup({ closeButton: false, closeOnClick: false }).setHTML(popupHtml)
-
-        markerRef.current = new maplibregl.Marker({ element: createBusMarker() })
-          .setLngLat(snappedLiveCoord)
-          .setPopup(popup)
-          .addTo(map)
-
-        const markerEl = markerRef.current.getElement()
-        markerEl.addEventListener('mouseenter', () => popup.addTo(map))
-        markerEl.addEventListener('mouseleave', () => popup.remove())
-        markerEl.style.cursor = 'pointer'
-      }
-
-      const boundsSeed = [...coords, ...(snappedLiveCoord ? [snappedLiveCoord] : [])]
-      if (boundsSeed.length > 0) {
-        const bounds = boundsSeed.reduce(
-          (acc, point) => acc.extend(point),
-          new maplibregl.LngLatBounds(boundsSeed[0], boundsSeed[0]),
-        )
-        map.fitBounds(bounds, { padding: 50, maxZoom: 14 })
-
-        if (snappedLiveCoord) {
-          map.flyTo({ center: snappedLiveCoord, zoom: Math.max(map.getZoom(), 13), duration: 700 })
-        }
-      }
-    }
-
-    let cancelled = false
-
-    const drawWhenReady = (coords = []) => {
-      if (map.isStyleLoaded()) draw(coords)
-      else map.once('load', () => draw(coords))
-    }
-
-    const loadRouteAndDraw = async () => {
-      let routeCoords
-
-      const embeddedStops = trip?.fleet_route?.route?.route_stops || trip?.fleet_route?.route?.routeStops || []
-      routeCoords = embeddedStops
-        .slice()
-        .sort((a, b) => Number(a?.stop_order ?? 0) - Number(b?.stop_order ?? 0))
-        .map((stop) => {
-          const stopLat = Number(stop?.stop?.latitude ?? stop?.latitude)
-          const stopLng = Number(stop?.stop?.longitude ?? stop?.longitude)
-          return Number.isFinite(stopLat) && Number.isFinite(stopLng) ? [stopLng, stopLat] : null
-        })
-        .filter(Boolean)
-
-      if (routeCoords.length < 2 && Number.isFinite(routeId) && routeId > 0) {
-        const cached = routeGeometryCacheRef.current.get(routeId)
-        if (cached) {
-          routeCoords = cached
-        } else {
-          try {
-            const stopsRes = await fetchOperatorRouteStops(routeId)
-            const routeStops = Array.isArray(stopsRes?.data) ? stopsRes.data : []
-            routeCoords = routeStops
-              .map((stop) => {
-                const stopLat = Number(stop?.latitude)
-                const stopLng = Number(stop?.longitude)
-                return Number.isFinite(stopLat) && Number.isFinite(stopLng) ? [stopLng, stopLat] : null
-              })
-              .filter(Boolean)
-            if (routeCoords.length >= 2) {
-              routeGeometryCacheRef.current.set(routeId, routeCoords)
-            }
-          } catch {
-            routeCoords = []
-          }
-        }
-      }
-
-      if (!cancelled) {
-        drawWhenReady(routeCoords)
-      }
-    }
-
-    void loadRouteAndDraw()
-
-    return () => {
-      cancelled = true
-    }
-  }, [trip, location])
-
-  return <div ref={mapContainerRef} className="h-107.5 w-full" />
+  return (
+    <RouteMap
+      routeId={Number.isFinite(routeId) && routeId > 0 ? routeId : null}
+      direction={location?.leg_direction || trip?.leg_direction || 'outbound'}
+      vehicle={vehicle}
+      className="relative h-107.5 w-full"
+    />
+  )
 }
-
 function FleetsTab({ fleets, routes, trips, onRefresh }) {
+  const { selectedDispatch, dispatching, handleDispatchDecision } = useDispatchDecisions(trips)
   const {
     focusedTripId, setFocusedTripId,
     manageMsg,
@@ -1041,6 +738,10 @@ function FleetsTab({ fleets, routes, trips, onRefresh }) {
 
   const cards = displayTrips.slice(0, 9)
   const focusedTrip = cards.find((trip) => String(trip.trip_id) === String(focusedTripId)) || null
+  const focusedRouteName = focusedTrip?.fleet_route?.route?.route_name || 'Unassigned Route'
+  const rerouteForecast = buildOperatorForecast(trips)
+  const focusedReroute = (rerouteForecast.rerouteRecommendations || []).find((item) => item.route === focusedRouteName) || null
+  const focusedComparison = (rerouteForecast.routeComparison || []).find((item) => item.route === focusedRouteName) || null
   const focusedFleetId = focusedTrip?.fleet_route?.fleet?.fleet_id
   const focusedLocation = getLocationForTrip(focusedTrip)
   const focusedLat = Number(focusedLocation?.latitude)
@@ -1079,6 +780,16 @@ function FleetsTab({ fleets, routes, trips, onRefresh }) {
             </select>
             <input type="number" min="0" value={fleetForm.seated_capacity} onChange={(event) => setFleetForm((prev) => ({ ...prev, seated_capacity: event.target.value }))} required placeholder="Seated capacity" className="rounded-lg border border-slate-600 bg-[#0B1324] px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-teal-500" />
             <input type="number" min="0" value={fleetForm.standing_capacity} onChange={(event) => setFleetForm((prev) => ({ ...prev, standing_capacity: event.target.value }))} required placeholder="Standing capacity" className="rounded-lg border border-slate-600 bg-[#0B1324] px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-teal-500" />
+            <select value={fleetForm.route_id} onChange={(event) => setFleetForm((prev) => ({ ...prev, route_id: event.target.value }))} className="rounded-lg border border-slate-600 bg-[#0B1324] px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-teal-500 sm:col-span-2">
+              <option value="">Route (optional)</option>
+              {routes.map((route) => <option key={`create-route-${route.route_id}`} value={route.route_id}>{route.route_name}</option>)}
+            </select>
+            {fleetForm.route_id && (
+              <>
+                <input type="time" value={fleetForm.start_time} onChange={(event) => setFleetForm((prev) => ({ ...prev, start_time: event.target.value }))} required title="Route operating start time" className="rounded-lg border border-slate-600 bg-[#0B1324] px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-teal-500" />
+                <input type="time" value={fleetForm.end_time} onChange={(event) => setFleetForm((prev) => ({ ...prev, end_time: event.target.value }))} required title="Route operating end time" className="rounded-lg border border-slate-600 bg-[#0B1324] px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-teal-500" />
+              </>
+            )}
           </div>
           <button type="submit" disabled={manageSaving} className="mt-3 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-500 disabled:opacity-60">Create Fleet</button>
         </form>
@@ -1094,6 +805,22 @@ function FleetsTab({ fleets, routes, trips, onRefresh }) {
               <option value="">Select route</option>
               {routes.map((route) => <option key={route.route_id} value={route.route_id}>{route.route_name}</option>)}
             </select>
+            <input
+              type="time"
+              value={assignForm.start_time}
+              onChange={(event) => setAssignForm((prev) => ({ ...prev, start_time: event.target.value }))}
+              required
+              className="rounded-lg border border-slate-600 bg-[#0B1324] px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-teal-500"
+              title="Route operating start time"
+            />
+            <input
+              type="time"
+              value={assignForm.end_time}
+              onChange={(event) => setAssignForm((prev) => ({ ...prev, end_time: event.target.value }))}
+              required
+              className="rounded-lg border border-slate-600 bg-[#0B1324] px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-teal-500"
+              title="Route operating end time"
+            />
           </div>
           <button type="submit" disabled={manageSaving} className="mt-3 rounded-lg bg-cyan-600 px-4 py-2 text-sm font-semibold text-white hover:bg-cyan-500 disabled:opacity-60">Assign Route</button>
         </form>
@@ -1181,20 +908,88 @@ function FleetsTab({ fleets, routes, trips, onRefresh }) {
             Back
           </button>
 
-          <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">
-            <div className="relative overflow-hidden rounded-xl border border-slate-700 bg-slate-950">
-              <FleetTrackingMap trip={focusedTrip} location={focusedLocation} />
-              <div className="pointer-events-none absolute left-3 top-3 rounded-full border border-slate-700 bg-[#0d162b]/90 px-3 py-1 text-xs font-semibold text-slate-100">
-                Live GPS
+          <div className="staff-grid lg:grid-cols-[2fr_1fr]">
+            <div className="space-y-4">
+              <div className="relative overflow-hidden rounded-xl border border-slate-700 bg-slate-950">
+                <FleetTrackingMap trip={focusedTrip} location={focusedLocation} />
+                <div className="pointer-events-none absolute left-3 top-3 rounded-full border border-slate-700 bg-[#0d162b]/90 px-3 py-1 text-xs font-semibold text-slate-100">
+                  Live GPS
+                </div>
+                <div className="pointer-events-none absolute bottom-3 left-3 rounded-xl border border-slate-700 bg-[#0d162b]/90 px-3 py-2 text-xs text-slate-200">
+                  <p className="text-xs text-slate-400">Current Bus</p>
+                  <p className="text-base font-bold text-white">{focusedTrip?.fleet_route?.fleet?.plate_number || 'B-000'}</p>
+                </div>
+                <div className="pointer-events-none absolute bottom-3 right-3 rounded-xl border border-slate-700 bg-[#0d162b]/90 px-3 py-2 text-xs text-slate-200">
+                  <p className="text-xs text-slate-400">Route</p>
+                  <p className="text-base font-bold text-white">{focusedTrip?.fleet_route?.route?.route_name || 'Route pending'}</p>
+                </div>
               </div>
-              <div className="pointer-events-none absolute bottom-3 left-3 rounded-xl border border-slate-700 bg-[#0d162b]/90 px-3 py-2 text-xs text-slate-200">
-                <p className="text-[11px] text-slate-400">Current Bus</p>
-                <p className="text-base font-bold text-white">{focusedTrip?.fleet_route?.fleet?.plate_number || 'B-000'}</p>
-              </div>
-              <div className="pointer-events-none absolute bottom-3 right-3 rounded-xl border border-slate-700 bg-[#0d162b]/90 px-3 py-2 text-xs text-slate-200">
-                <p className="text-[11px] text-slate-400">Route</p>
-                <p className="text-base font-bold text-white">{focusedTrip?.fleet_route?.route?.route_name || 'Route pending'}</p>
-              </div>
+
+              <section className="rounded-xl border border-slate-700 bg-[#121D33] p-4 text-slate-100">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <h5 className="text-sm font-semibold uppercase tracking-[0.14em] text-slate-300">Predictive Reroute</h5>
+                  {focusedReroute && (
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-semibold uppercase tracking-[0.12em] ${focusedReroute.priority === 'high' ? 'bg-red-100 text-red-700' : focusedReroute.priority === 'medium' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                      {focusedReroute.priority}
+                    </span>
+                  )}
+                </div>
+                {!focusedReroute && !focusedComparison ? (
+                  <p className="text-xs text-slate-400">No reroute guidance is available for this fleet route right now.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {focusedReroute && (
+                      <div className="rounded-lg border border-slate-700 bg-[#0D162B] p-3 text-xs">
+                        <p className="font-semibold text-slate-100">{focusedReroute.route}</p>
+                        <p className="mt-1 text-slate-300">{focusedReroute.recommendedAction}</p>
+                        <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                          <p className="rounded-md bg-slate-900 px-2 py-1"><span className="text-slate-400">Risk:</span> <strong>{focusedReroute.riskScore}%</strong></p>
+                          <p className="rounded-md bg-slate-900 px-2 py-1"><span className="text-slate-400">Next peak:</span> <strong>{focusedReroute.peakSlot}</strong></p>
+                        </div>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            disabled={!!dispatching[focusedReroute.route]}
+                            onClick={() => handleDispatchDecision(focusedReroute.route, 'accept', {
+                              recommendation: focusedReroute.recommendedAction,
+                              reason: focusedReroute.reason,
+                            })}
+                            className="rounded bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-emerald-500 disabled:opacity-60"
+                          >
+                            {dispatching[focusedReroute.route] ? 'Saving...' : 'Acknowledge risk'}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={!!dispatching[focusedReroute.route]}
+                            onClick={() => handleDispatchDecision(focusedReroute.route, 'keep', {
+                              recommendation: focusedReroute.recommendedAction,
+                              reason: focusedReroute.reason,
+                            })}
+                            className="rounded border border-slate-600 bg-slate-900 px-2.5 py-1 text-xs font-semibold text-slate-200 hover:bg-slate-800 disabled:opacity-60"
+                          >
+                            Keep current route
+                          </button>
+                        </div>
+                        {selectedDispatch[focusedReroute.route] && (
+                          <p className="mt-2 text-xs text-slate-400">Dispatch status: {selectedDispatch[focusedReroute.route] === 'accept' ? focusedReroute.dispatchAction : 'Current route retained.'}</p>
+                        )}
+                      </div>
+                    )}
+
+                    {focusedComparison && (
+                      <div className="rounded-lg border border-slate-700 bg-[#0D162B] p-3 text-xs">
+                        <p className="font-semibold text-slate-100">Live traffic comparison</p>
+                        <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                          <p className="rounded-md bg-slate-900 px-2 py-1"><span className="text-slate-400">Assigned ETA:</span> <strong>{focusedComparison.currentEtaMinutes == null ? 'Unavailable' : `${focusedComparison.currentEtaMinutes} min`}</strong></p>
+                          <p className="rounded-md bg-slate-900 px-2 py-1"><span className="text-slate-400">Alternate ETA:</span> <strong>{focusedComparison.alternateEtaMinutes == null ? 'Unavailable' : `${focusedComparison.alternateEtaMinutes} min`}</strong></p>
+                          <p className="rounded-md bg-slate-900 px-2 py-1"><span className="text-slate-400">Time saved:</span> <strong>{focusedComparison.timeSavedMinutes == null ? 'Unavailable' : `${focusedComparison.timeSavedMinutes} min`}</strong></p>
+                        </div>
+                        <p className="mt-2 text-slate-300">{focusedComparison.recommendation}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </section>
             </div>
 
             <aside className="rounded-xl border border-slate-700 bg-[#121D33] p-3">
@@ -1207,6 +1002,11 @@ function FleetsTab({ fleets, routes, trips, onRefresh }) {
                   <div className="rounded-xl bg-[#222F45] p-3">
                     <p className="text-xl font-bold text-white">{fleet?.plate_number || `Fleet ${fleet?.fleet_id || '-'}`}</p>
                     <p className="text-sm text-slate-300">{fleet?.fleet_type || 'public'} fleet</p>
+                    <p className="text-sm text-slate-300">
+                      {Array.isArray(fleet?.fleet_routes) && fleet.fleet_routes.length > 0
+                        ? `Routes: ${fleet.fleet_routes.map((fr) => fr?.route?.route_name).filter(Boolean).join(', ') || 'assigned'}`
+                        : 'No route assigned'}
+                    </p>
                     <p className="text-sm text-slate-300">Pending trip assignment</p>
                   </div>
                 </article>
@@ -1594,6 +1394,19 @@ function TripsTab({ trips, drivers, conductors, onRefresh }) {
     return tripDateStr < todayStart && !['completed', 'cancelled'].includes(trip?.status)
   }
 
+  const defaultLegTimesByBlock = {
+    morning: ['06:00', '08:30', '11:00', '13:30'],
+    afternoon: ['12:00', '14:30', '17:00', '19:30'],
+  }
+
+  const updateLegTime = (index, value) => {
+    setForm((prev) => ({
+      ...prev,
+      leg_departure_times: (Array.isArray(prev.leg_departure_times) ? prev.leg_departure_times : defaultLegTimesByBlock[prev.block_type] || defaultLegTimesByBlock.morning)
+        .map((time, i) => (i === index ? value : time)),
+    }))
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -1613,7 +1426,7 @@ function TripsTab({ trips, drivers, conductors, onRefresh }) {
             <RefreshCw className="h-4 w-4" /> Refresh
           </button>
           <button type="button" onClick={() => { setShowModal(true); setMsg('') }} className="flex items-center gap-1.5 rounded-lg bg-teal-600 px-3 py-2 text-sm font-semibold text-white hover:bg-teal-700">
-            <Plus className="h-4 w-4" /> Schedule Ad Hoc Trip
+            <Plus className="h-4 w-4" /> +Schedule
           </button>
         </div>
       </div>
@@ -1695,14 +1508,9 @@ function TripsTab({ trips, drivers, conductors, onRefresh }) {
       ))}
 
       {showModal && (
-        <Modal title="Schedule Ad Hoc Trip" onClose={() => setShowModal(false)}>
-          {/* Batch 19 Part C: regular Davao–Tagum service now comes from
-              Shift Blocks (see the Shift Blocks tab), which auto-generate
-              each day's legs. Use this form only for one-off/charter public
-              trips outside that schedule — same booking/seating model as
-              any other trip, just manually created. */}
-          <p className="-mt-2 mb-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-            For ad hoc/charter trips only. Regular scheduled service is created automatically from Shift Blocks.
+        <Modal title="Schedule Service" onClose={() => setShowModal(false)}>
+          <p className="-mt-2 mb-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-800">
+            One unified schedule form: choose <strong>One-way</strong> for ad hoc/charter trips, or <strong>Round trip</strong> for shift-block scheduling.
           </p>
           <form className="space-y-4" onSubmit={handleSchedule}>
             <Field label="Fleet Route" required>
@@ -1716,13 +1524,45 @@ function TripsTab({ trips, drivers, conductors, onRefresh }) {
             <Field label="Trip Date" type="date" value={form.trip_date} onChange={e => setForm(p => ({...p, trip_date: e.target.value}))} required />
             <Field label="Trip Type" required>
               <select value={form.trip_type} onChange={e => setForm(p => ({ ...p, trip_type: e.target.value }))} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500">
-                <option value="one_way">One-way</option>
-                <option value="round_trip">Round Trip</option>
+                <option value="one_way">One-way (Ad hoc / Charter)</option>
+                <option value="round_trip">Round trip (Shift Block)</option>
               </select>
             </Field>
-            <Field label="Departure Time" type="time" value={form.departure_time} onChange={e => setForm(p => ({...p, departure_time: e.target.value}))} required />
-            {form.trip_type === 'round_trip' && (
-              <Field label="Return Departure Time" type="time" value={form.return_departure_time} onChange={e => setForm(p => ({ ...p, return_departure_time: e.target.value }))} required />
+
+            {form.trip_type === 'one_way' ? (
+              <>
+                <Field label="Departure Time" type="time" value={form.departure_time} onChange={e => setForm(p => ({...p, departure_time: e.target.value}))} required />
+                <Field label="Notes (optional)" value={form.notes} onChange={e => setForm(p => ({...p, notes: e.target.value}))} placeholder="Any notes…" />
+              </>
+            ) : (
+              <>
+                <Field label="Block Type" required>
+                  <select
+                    value={form.block_type}
+                    onChange={e => setForm(p => ({
+                      ...p,
+                      block_type: e.target.value,
+                      leg_departure_times: defaultLegTimesByBlock[e.target.value] || defaultLegTimesByBlock.morning,
+                    }))}
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500"
+                  >
+                    <option value="morning">Morning</option>
+                    <option value="afternoon">Afternoon</option>
+                  </select>
+                </Field>
+                <div className="grid grid-cols-2 gap-2">
+                  {(Array.isArray(form.leg_departure_times) ? form.leg_departure_times : defaultLegTimesByBlock[form.block_type] || defaultLegTimesByBlock.morning).map((time, index) => (
+                    <Field
+                      key={`leg-time-${index}`}
+                      label={`Leg ${index + 1} Departure`}
+                      type="time"
+                      value={time}
+                      onChange={(e) => updateLegTime(index, e.target.value)}
+                      required
+                    />
+                  ))}
+                </div>
+              </>
             )}
             <Field label="Driver" required>
               <select value={form.driver_id} onChange={e => setForm(p => ({ ...p, driver_id: e.target.value }))} required className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500">
@@ -1744,7 +1584,6 @@ function TripsTab({ trips, drivers, conductors, onRefresh }) {
                 ))}
               </select>
             </Field>
-            <Field label="Notes (optional)" value={form.notes} onChange={e => setForm(p => ({...p, notes: e.target.value}))} placeholder="Any notes…" />
             {msg && <p className="text-sm text-red-600">{msg}</p>}
             <div className="flex justify-end gap-2 pt-2">
               <button type="button" onClick={() => setShowModal(false)} className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50">Cancel</button>
@@ -1900,16 +1739,12 @@ const AUDIT_STATUS_CHIP = {
 // Section 4.3 — normal hand-off is conductor-initiated from their own
 // portal once the GPS/final-leg eligibility check passes); Completed ->
 // audit_status badge + Mark Reviewed.
-function ShiftBlocksTab({ drivers, conductors }) {
+function ShiftBlocksTab({ onOpenScheduler }) {
   const {
     blocks,
     statusFilter, setStatusFilter,
     loading,
-    showCreateModal, setShowCreateModal,
-    saving,
-    msg, setMsg,
-    fleetRoutes,
-    handleCreate,
+    msg,
     handleCancel,
     handleOverrideHandoff,
     handleMarkReviewed,
@@ -1927,8 +1762,8 @@ function ShiftBlocksTab({ drivers, conductors }) {
             <option value="completed">Completed</option>
             <option value="cancelled">Cancelled</option>
           </select>
-          <button type="button" onClick={() => { setShowCreateModal(true); setMsg('') }} className="flex items-center gap-1.5 rounded-lg bg-teal-600 px-3 py-2 text-sm font-semibold text-white hover:bg-teal-700">
-            <Plus className="h-4 w-4" /> Create Shift Block
+          <button type="button" onClick={onOpenScheduler} className="flex items-center gap-1.5 rounded-lg bg-teal-600 px-3 py-2 text-sm font-semibold text-white hover:bg-teal-700">
+            <Plus className="h-4 w-4" /> +Schedule
           </button>
         </div>
       </div>
@@ -1981,99 +1816,12 @@ function ShiftBlocksTab({ drivers, conductors }) {
         </table>
       </div>
 
-      {showCreateModal && (
-        <CreateShiftBlockModal
-          drivers={drivers}
-          conductors={conductors}
-          fleetRoutes={fleetRoutes}
-          saving={saving}
-          msg={msg}
-          onClose={() => setShowCreateModal(false)}
-          onSave={handleCreate}
-        />
-      )}
     </div>
   )
 }
 
-function CreateShiftBlockModal({ drivers, conductors, fleetRoutes, saving, msg, onClose, onSave }) {
-  const [form, setForm] = useState({
-    fleet_route_id: '',
-    driver_id: '',
-    conductor_id: '',
-    block_type: 'morning',
-    scheduled_date: '',
-    leg_departure_times: ['06:00', '08:30', '11:00', '13:30'],
-  })
-
-  const updateLegTime = (index, value) => {
-    setForm((prev) => ({ ...prev, leg_departure_times: prev.leg_departure_times.map((t, i) => (i === index ? value : t)) }))
-  }
-
-  const handleSubmit = (e) => {
-    e.preventDefault()
-    onSave({
-      fleet_route_id: Number(form.fleet_route_id),
-      driver_id: Number(form.driver_id),
-      conductor_id: Number(form.conductor_id),
-      block_type: form.block_type,
-      scheduled_date: form.scheduled_date,
-      leg_departure_times: form.leg_departure_times,
-    })
-  }
-
-  return (
-    <Modal title="Create Shift Block" onClose={onClose}>
-      <form className="space-y-4" onSubmit={handleSubmit}>
-        <Field label="Fleet Route" required>
-          <select value={form.fleet_route_id} onChange={(e) => setForm((p) => ({ ...p, fleet_route_id: e.target.value }))} required className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500">
-            <option value="">Select a fleet route…</option>
-            {fleetRoutes.map((fr) => (
-              <option key={fr.fleet_route_id} value={fr.fleet_route_id}>{fr.fleet?.plate_number} — {fr.route?.route_name}</option>
-            ))}
-          </select>
-        </Field>
-        <Field label="Block Type" required>
-          <select value={form.block_type} onChange={(e) => setForm((p) => ({ ...p, block_type: e.target.value }))} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500">
-            <option value="morning">Morning</option>
-            <option value="afternoon">Afternoon</option>
-          </select>
-        </Field>
-        <Field label="Scheduled Date" type="date" value={form.scheduled_date} onChange={(e) => setForm((p) => ({ ...p, scheduled_date: e.target.value }))} required />
-        <Field label="Driver" required>
-          <select value={form.driver_id} onChange={(e) => setForm((p) => ({ ...p, driver_id: e.target.value }))} required className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500">
-            <option value="">Select a driver…</option>
-            {drivers.map((d) => (
-              <option key={getStaffCompanyUserId(d)} value={getStaffCompanyUserId(d)}>{getStaffFullName(d) || getStaffUsername(d)}</option>
-            ))}
-          </select>
-        </Field>
-        <Field label="Conductor" required>
-          <select value={form.conductor_id} onChange={(e) => setForm((p) => ({ ...p, conductor_id: e.target.value }))} required className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500">
-            <option value="">Select a conductor…</option>
-            {conductors.map((c) => (
-              <option key={getStaffCompanyUserId(c)} value={getStaffCompanyUserId(c)}>{getStaffFullName(c) || getStaffUsername(c)}</option>
-            ))}
-          </select>
-        </Field>
-        <div className="grid grid-cols-2 gap-2">
-          {form.leg_departure_times.map((t, i) => (
-            <Field key={i} label={`Leg ${i + 1} Departure`} type="time" value={t} onChange={(e) => updateLegTime(i, e.target.value)} required />
-          ))}
-        </div>
-        {msg && <p className="text-sm text-red-600">{msg}</p>}
-        <div className="flex justify-end gap-2 pt-2">
-          <button type="button" onClick={onClose} className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50">Cancel</button>
-          <button type="submit" disabled={saving} className="flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-60">
-            {saving && <Loader2 className="h-4 w-4 animate-spin" />}Create
-          </button>
-        </div>
-      </form>
-    </Modal>
-  )
-}
-
-function ReportsTab({ fleets }) {
+function ReportsTab({ fleets, trips, routes }) {
+  const [view, setView] = useState('fleet')
   const {
     selectedFleet, setSelectedFleet,
     reportType, setReportType,
@@ -2186,62 +1934,26 @@ function ReportsTab({ fleets }) {
               ? 'Daily Summary'
               : 'Payment Channels';
 
-    const popup = window.open('', '_blank', 'width=1200,height=780');
-    if (!popup) {
-      setMsg('Unable to open print preview. Please allow pop-ups for this site.');
-      return;
-    }
-
-    const tableHead = reportColumns
-      .map((column) => `<th>${column.replace(/_/g, ' ')}</th>`)
-      .join('');
-
-    const tableRows = reportRows
-      .map((row) => `<tr>${reportColumns.map((column) => `<td>${String(renderValue(row?.[column]) || '-')}</td>`).join('')}</tr>`)
-      .join('');
-
-    popup.document.write(`
-      <html>
-        <head>
-          <title>${reportLabel} - ${fleetLabel}</title>
-          <style>
-            @page { size: A4 landscape; margin: 12mm; }
-            body { font-family: Arial, sans-serif; color: #0f172a; margin: 0; }
-            .page { padding: 8px; }
-            h1 { margin: 0; font-size: 20px; }
-            .meta { margin-top: 8px; color: #334155; font-size: 12px; }
-            table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 11px; }
-            th, td { border: 1px solid #cbd5e1; padding: 6px; text-align: left; vertical-align: top; }
-            th { background: #e2e8f0; text-transform: uppercase; font-size: 10px; letter-spacing: 0.04em; }
-            tr:nth-child(even) td { background: #f8fafc; }
-            .footer { margin-top: 10px; font-size: 10px; color: #64748b; }
-          </style>
-        </head>
-        <body>
-          <div class="page">
-            <h1>Smart Transit Fleet Report</h1>
-            <div class="meta">
-              <div><strong>Fleet:</strong> ${fleetLabel}</div>
-              <div><strong>Report:</strong> ${reportLabel}</div>
-              <div><strong>Generated:</strong> ${new Date().toLocaleString()}</div>
-            </div>
-            <table>
-              <thead><tr>${tableHead}</tr></thead>
-              <tbody>${tableRows}</tbody>
-            </table>
-            <p class="footer">Generated from Operator Dashboard Reports. This print view is PDF-ready via browser print dialog.</p>
-          </div>
-          <script>window.onload = function () { window.print(); };</script>
-        </body>
-      </html>
-    `);
-
-    popup.document.close();
+    const opened = openPrintReport({
+      title: `${reportLabel} - ${fleetLabel}`,
+      meta: [['Fleet', fleetLabel], ['Report', reportLabel]],
+      columns: reportColumns,
+      rows: reportRows,
+      format: (value) => String(renderValue(value)),
+    });
+    if (!opened) setMsg('Unable to open print preview. Please allow pop-ups for this site.');
   }
-
   return (
     <div className="space-y-5">
-      <h2 className="text-xl font-bold text-slate-900">Fleet Reports</h2>
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-xl font-bold text-slate-900">{view === 'forecast' ? 'Historical Forecast' : 'Fleet Reports'}</h2>
+        <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 text-sm font-semibold">
+          {[['fleet', 'Fleet Reports'], ['forecast', 'Historical Forecast']].map(([key, label]) => (
+            <button key={key} type="button" onClick={() => setView(key)} className={`rounded-md px-3 py-1.5 ${view === key ? 'bg-teal-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`}>{label}</button>
+          ))}
+        </div>
+      </div>
+      {view === 'forecast' ? (<HistoricalForecastPanel trips={trips} routes={routes} fleets={fleets} />) : (<>
       <div className="flex flex-wrap gap-3">
         <div className="flex-1 min-w-40">
           <label className="mb-1 block text-xs font-medium text-slate-600">Fleet</label>
@@ -2308,6 +2020,7 @@ function ReportsTab({ fleets }) {
           )}
         </div>
       )}
+      </>)}
     </div>
   )
 }
@@ -2391,17 +2104,20 @@ export default function OperatorDashboard() {
         <div className="mb-4 flex justify-end">
           <NotificationBell />
         </div>
-        {activeTab === 'dashboard'  && <DashboardTab trips={trips} drivers={drivers} conductors={conductors} fleets={fleets} />}
+        {activeTab === 'dashboard'  && <DashboardTab trips={trips} drivers={drivers} conductors={conductors} fleets={fleets} onRequestDecided={loadFull} />}
         {activeTab === 'staffs'     && (
           <StaffDirectoryTab drivers={drivers} conductors={conductors} onRefresh={loadFull} onCreateAccount={handleCreateAccount} />
         )}
         {activeTab === 'fleets'     && <FleetsTab fleets={fleets} routes={routes} trips={trips} onRefresh={loadFull} />}
         {activeTab === 'routes'     && <RoutesTab routes={routes} stops={stops} trips={trips} onRefresh={loadFull} />}
         {activeTab === 'trips'      && <TripsTab trips={trips} drivers={drivers} conductors={conductors} onRefresh={loadFull} />}
-        {activeTab === 'shiftBlocks' && <ShiftBlocksTab drivers={drivers} conductors={conductors} />}
-        {activeTab === 'reports'    && <ReportsTab fleets={fleets} />}
+        {activeTab === 'shiftBlocks' && <ShiftBlocksTab onOpenScheduler={() => setActiveTab('trips')} />}
+        {activeTab === 'reports'    && <ReportsTab fleets={fleets} trips={trips} routes={routes} />}
         {activeTab === 'account'    && <AccountTab profile={profile} />}
     </StaffPortalLayout>
   )
 }
+
+
+
 

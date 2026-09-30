@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { loadMapLib } from '../../../components/Map/mapDependencies';
 import { nearestPointOnLine } from '../../../utils/geo';
+import { boundsFromPoints } from '../../../utils/routeGeometry';
+import { getRegion, regionMapBounds } from '../../../services/regionService';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
-const FALLBACK_CENTER = [125.6047, 7.0707];
 const ROUTE_SOURCE_ID = 'buy-ticket-route-source';
 const ROUTE_LAYER_ID = 'buy-ticket-route-layer';
 const ROUTE_GLOW_LAYER_ID = 'buy-ticket-route-glow-layer';
@@ -384,13 +385,28 @@ export default function useDropoffPicker({
       mapLibRef.current = maplibregl;
 
       const originCoords = extractStopCoordinates(selectedOriginStop);
-      const center = originCoords ? [originCoords.lng, originCoords.lat] : FALLBACK_CENTER;
+
+      // Initial view: the selected origin, else the route's own stops, else the
+      // configured region. Never a fixed corridor or city centre.
+      let viewOptions;
+      if (originCoords) {
+        viewOptions = { center: [originCoords.lng, originCoords.lat], zoom: 13.5 };
+      } else {
+        const stopBounds = boundsFromPoints((selectedStops || []).map(toRouteCoordinate).filter(Boolean));
+        if (stopBounds) {
+          viewOptions = { bounds: [[stopBounds.minLng, stopBounds.minLat], [stopBounds.maxLng, stopBounds.maxLat]], fitBoundsOptions: { padding: 40 } };
+        } else {
+          const region = await getRegion().catch(() => null);
+          if (!region) return;
+          viewOptions = { bounds: regionMapBounds(region), fitBoundsOptions: { padding: 16 } };
+        }
+      }
+      if (disposed || mapRef.current || !mapContainerRef.current) return;
 
       mapRef.current = new maplibregl.Map({
         container: mapContainerRef.current,
         style: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json',
-        center,
-        zoom: originCoords ? 13.5 : 11.5,
+        ...viewOptions,
       });
 
       if (originCoords) {

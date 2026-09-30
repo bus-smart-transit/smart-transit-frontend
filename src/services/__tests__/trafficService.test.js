@@ -50,22 +50,15 @@ describe('trafficService', () => {
     expect(requestUrl.searchParams.get('api_key')).toBe('demo-key');
     expect(requestUrl.searchParams.get('start')).toContain('125.615,7.087');
     expect(requestUrl.searchParams.get('end')).toContain('125.62,7.091');
-    expect(requestUrl.searchParams.get('alternatives')).toBe('true');
     expect(requestUrl.searchParams.get('instructions')).toBe('true');
     expect(fetchMock.mock.calls[0][1]?.headers?.Accept).toContain('application/geo+json');
 
     expect(result.level).toBe('moderate');
     expect(result.etaMinutes).toBe(11);
     expect(result.routeName).toBe('Route 7');
-    expect(result.assignedRoute).toBe(true);
-    expect(result.rerouteRoute).toContain('Route 7');
     expect(result.suggestion).toContain('Route 7');
-    expect(result.routeGeometry).toBeTruthy();
-    expect(result.routeGeometry.type).toBe('LineString');
-    expect(result.alternateEtaMinutes).toBeGreaterThan(0);
-    expect(result.alternateRouteGeometry).toBeTruthy();
-    expect(result.alternateRouteGeometry.type).toBe('LineString');
-    expect(result.timeSavedMinutes).toBeGreaterThanOrEqual(0);
+    expect(result).not.toHaveProperty('rerouteRoute');
+    expect(result).not.toHaveProperty('alternateRoute');
     expect(Array.isArray(result.alerts)).toBe(true);
     expect(result.alerts[0].road).toContain('Quirino');
     expect(result.dataSource).toBe('ors');
@@ -100,7 +93,6 @@ describe('trafficService', () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(result.dataSource).toBe('ors');
-    expect(result.routeGeometry?.type).toBe('LineString');
   });
 
   // Batch C: THESIS_OBJECTIVES_AUDIT.md item #6 — traffic alerts silently
@@ -125,5 +117,61 @@ describe('trafficService', () => {
 
     expect(fetchMock).not.toHaveBeenCalled();
     expect(result.dataSource).toBe('fallback');
+    expect(result.etaMinutes).toBeNull();
+    expect(result.delayMinutes).toBeNull();
+    expect(result.label).toBe('Live traffic unavailable');
+    expect(result.suggestion.toLowerCase()).toContain('unavailable');
+  });
+
+  test('provider success without a duration is "unavailable", never a default ETA', async () => {
+    vi.stubEnv('VITE_TRAFFIC_PROVIDER', 'ors');
+    vi.stubEnv('VITE_TRAFFIC_API_BASE', 'https://api.openrouteservice.org');
+    vi.stubEnv('VITE_TRAFFIC_API_KEY', 'demo-key');
+
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ routes: [{ summary: {}, segments: [{ steps: [] }] }] }),
+    }));
+
+    const result = await fetchTrafficStatus({
+      currentLat: 7.087,
+      currentLng: 125.615,
+      nextStop: { latitude: 7.091, longitude: 125.62 },
+      route: { route_name: 'Route 9' },
+    });
+
+    expect(result.etaMinutes).toBeNull();
+    expect(result.delayMinutes).toBeNull();
+    expect(result.label).toBe('ETA unavailable');
+    expect(result.level).toBe('unknown');
+    expect(result.dataSource).toBe('ors');
+  });
+
+  test('names the corridor from the route stops municipalities, and shows no name without them', async () => {
+    vi.stubEnv('VITE_TRAFFIC_PROVIDER', 'ors');
+    vi.stubEnv('VITE_TRAFFIC_API_BASE', 'https://api.openrouteservice.org');
+    vi.stubEnv('VITE_TRAFFIC_API_KEY', 'demo-key');
+
+    const ok = () => vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ routes: [{ summary: { duration: 900 }, segments: [{ steps: [] }] }] }),
+    });
+    const base = { currentLat: 7.087, currentLng: 125.615, nextStop: { latitude: 7.091, longitude: 125.62 }, route: { route_name: 'Route 9' } };
+
+    vi.stubGlobal('fetch', ok());
+    const named = await fetchTrafficStatus({
+      ...base,
+      stops: [
+        { stop_order: 1, municipality: 'Town A' },
+        { stop_order: 2, municipality: 'Town B' },
+      ],
+    });
+    expect(named.corridorName).toBe('Town A – Town B');
+    expect(named.suggestion).toContain('(Town A – Town B)');
+
+    vi.stubGlobal('fetch', ok());
+    const unnamed = await fetchTrafficStatus({ ...base, stops: [{ stop_order: 1 }] });
+    expect(unnamed.corridorName).toBeNull();
+    expect(unnamed.suggestion).not.toContain('(');
   });
 });

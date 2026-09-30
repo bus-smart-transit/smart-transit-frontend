@@ -6,6 +6,8 @@ import { isSameBusinessDay, getBusinessToday, getBusinessNowMs, toBusinessSchedu
 import { buildCalendarGrid } from '../../../utils/calendarGrid';
 import { fetchTrafficStatus } from '../../../services/trafficService';
 import { initFcmAndGetToken } from '../../../services/fcmService';
+import { MAP_CONFIG } from '../../../config/mapConfig';
+import { extractFieldErrors } from '../../../utils/assignmentRequest';
 
 // Architecture audit follow-up (CONF-03): DriverDashboard.jsx previously
 // called DriverService directly from ~24 sites spread across the
@@ -209,7 +211,7 @@ export function useDriverDashboardData({ onLogout, pairing }) {
   // per Batch 14 request: decline must work regardless of pairing status
   // and regardless of whether the trip is scheduled today or in the future.
   const [confirmDecline, setConfirmDecline] = useState(null);
-  const [declineReasonCode, setDeclineReasonCode] = useState('');
+  const [declineErrors, setDeclineErrors] = useState({});
   const [declineSubmitting, setDeclineSubmitting] = useState(false);
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
   const [saving2fa, setSaving2fa] = useState(false);
@@ -226,11 +228,11 @@ export function useDriverDashboardData({ onLogout, pairing }) {
   const [gpsActive, setGpsActive] = useState(false);
   const [lastGps, setLastGps] = useState(null);
   const [trafficStatus, setTrafficStatus] = useState({
-    level: 'normal',
-    label: 'Normal flow',
-    etaMinutes: 8,
-    delayMinutes: 0,
-    suggestion: 'Continue current route and keep monitoring the next stop.',
+    level: 'unknown',
+    label: 'Live traffic unavailable',
+    etaMinutes: null,
+    delayMinutes: null,
+    suggestion: 'Live provider traffic data is unavailable right now.',
   });
   const isPaired = pairing?.paired === true;
   const pairingReason = pairing?.reason || 'Waiting for pairing with your Conductor before enabling session-synced features.';
@@ -457,10 +459,12 @@ export function useDriverDashboardData({ onLogout, pairing }) {
     if (!navigator.geolocation) return;
 
     const pushLocation = (position) => {
-      const { latitude, longitude, heading, speed } = position.coords;
+      const { latitude, longitude, heading, speed, accuracy } = position.coords;
       const nextLocation = {
         latitude,
         longitude,
+        accuracy: Number.isFinite(accuracy) ? Number(accuracy.toFixed(1)) : undefined,
+        recordedAt: Number.isFinite(position.timestamp) ? position.timestamp : Date.now(),
         heading: Number.isFinite(heading) ? heading : undefined,
         speed_kmh: Number.isFinite(speed) ? Number((speed * 3.6).toFixed(1)) : undefined,
       };
@@ -486,6 +490,9 @@ export function useDriverDashboardData({ onLogout, pairing }) {
     const sendPing = async () => {
       if (!lastGpsRef.current) return;
       if (Date.now() < backoffUntil) return; // in backoff window — skip
+      // Weak fixes are never sent: they would move the bus off its real position.
+      const fixAccuracy = lastGpsRef.current.accuracy;
+      if (Number.isFinite(fixAccuracy) && fixAccuracy > MAP_CONFIG.maxAccuracyM) return;
       const last = lastSentGpsRef.current;
       if (last) {
         const dLat = lastGpsRef.current.latitude - last.latitude;
@@ -499,6 +506,7 @@ export function useDriverDashboardData({ onLogout, pairing }) {
           lastGpsRef.current.longitude,
           lastGpsRef.current.heading ?? null,
           lastGpsRef.current.speed_kmh ?? null,
+          lastGpsRef.current.accuracy ?? null,
         );
         lastSentGpsRef.current = { latitude: lastGpsRef.current.latitude, longitude: lastGpsRef.current.longitude };
         consecutiveFailures = 0; // reset on success
@@ -724,25 +732,6 @@ export function useDriverDashboardData({ onLogout, pairing }) {
     }
   };
 
-  const handleEndShift = async () => {
-    setActionInFlight(true);
-    try {
-      const res = await DriverService.endDriverShift();
-      const shift = res?.data?.shift ?? null;
-      setShiftState((prev) => ({
-        ...prev,
-        openShift: null,
-        latestShift: shift,
-      }));
-      setActionMsg(res?.message || 'Driver shift ended');
-      await loadData();
-    } catch (err) {
-      setActionMsg(err?.message || 'Unable to end shift right now.');
-    } finally {
-      setActionInFlight(false);
-    }
-  };
-
   const handleConfirmedComplete = async () => {
     setConfirmComplete(false);
     setActionInFlight(true);
@@ -757,22 +746,25 @@ export function useDriverDashboardData({ onLogout, pairing }) {
     }
   };
 
-  // S2 (Batch 12): decline the assigned trip — returns it to the
-  // unassigned pool for the Operator to reassign. Reason is optional.
-  // Works for any status-eligible trip in the driver's assigned list —
-  // today or upcoming — and regardless of pairing status (Batch 14).
-  const handleConfirmedDecline = async () => {
+  // C6: a decline is a request the Operator approves ("For Approval"), not an
+  // immediate release. On failure the dialog stays open with the typed text
+  // and the server's field errors; nothing the driver entered is lost.
+  const handleConfirmedDecline = async ({ reasonCode, reasonText }) => {
     const tripId = confirmDecline?.trip_id;
     if (!tripId) return;
     setDeclineSubmitting(true);
+    setDeclineErrors({});
     try {
-      await DriverService.declineDriverTrip(tripId, declineReasonCode ? { reason_code: declineReasonCode } : {});
-      setActionMsg('Trip declined. The Operator has been notified.');
+      const payload = {};
+      if (reasonCode) payload.reason_code = reasonCode;
+      if (reasonCode === 'other' && reasonText) payload.reason_text = reasonText;
+      await DriverService.declineDriverTrip(tripId, payload);
+      setActionMsg('Request sent. It is now waiting for Operator approval.');
       setConfirmDecline(null);
-      setDeclineReasonCode('');
       void loadData();
     } catch (err) {
-      setActionMsg(err.message);
+      const fields = extractFieldErrors(err);
+      setDeclineErrors(Object.keys(fields).length > 0 ? fields : { request: err?.message || 'Unable to send the request.' });
     } finally {
       setDeclineSubmitting(false);
     }
@@ -853,13 +845,6 @@ export function useDriverDashboardData({ onLogout, pairing }) {
       return;
     }
 
-    const distanceM = haversineM(
-      Number(pos.latitude),
-      Number(pos.longitude),
-      Number(targetStop.latitude),
-      Number(targetStop.longitude)
-    );
-
     let cancelled = false;
     void (async () => {
       const nextStatus = await fetchTrafficStatus({
@@ -867,12 +852,10 @@ export function useDriverDashboardData({ onLogout, pairing }) {
         currentLng: pos.longitude,
         nextStop: targetStop,
         route: currentRoute,
+        stops,
       });
       if (!cancelled) {
-        setTrafficStatus({
-          ...nextStatus,
-          etaMinutes: nextStatus.etaMinutes || Math.max(2, Math.round(distanceM / 280)),
-        });
+        setTrafficStatus(nextStatus);
       }
     })();
 
@@ -890,7 +873,9 @@ export function useDriverDashboardData({ onLogout, pairing }) {
     },
     {
       title: nextStop ? `Next stop: ${nextStop.stop_name ?? nextStop.name ?? 'Pending stop'}` : 'Route on schedule',
-      note: nextStop ? `ETA ${trafficStatus.etaMinutes} min • ${trafficStatus.label.toLowerCase()}` : 'All available stops are acknowledged.',
+      note: nextStop
+        ? `${trafficStatus.etaMinutes == null ? 'ETA unavailable' : `ETA ${trafficStatus.etaMinutes} min`} • ${trafficStatus.label.toLowerCase()}`
+        : 'All available stops are acknowledged.',
       tone: trafficStatus.level === 'heavy' ? 'warn' : 'info',
       time: 'Updated',
     },
@@ -901,7 +886,7 @@ export function useDriverDashboardData({ onLogout, pairing }) {
       time: 'Today',
     },
     ...((Array.isArray(trafficStatus?.alerts) ? trafficStatus.alerts : []).slice(0, 3).map((alert, idx) => ({
-      title: `${String(alert?.road || 'Route segment')} • ${String(alert?.etaMinutes || 0)} min`,
+      title: `${String(alert?.road || 'Route segment')} • ${alert?.etaMinutes == null ? 'ETA unavailable' : `${String(alert?.etaMinutes)} min`}`,
       note: String(alert?.detail || 'Traffic segment update available.'),
       tone: alert?.severity === 'danger' ? 'danger' : alert?.severity === 'warn' ? 'warn' : 'info',
       time: idx === 0 ? 'Live' : 'Updated',
@@ -950,7 +935,7 @@ export function useDriverDashboardData({ onLogout, pairing }) {
     actionInFlight,
     confirmComplete, setConfirmComplete,
     confirmDecline, setConfirmDecline,
-    declineReasonCode, setDeclineReasonCode,
+    declineErrors, setDeclineErrors,
     declineSubmitting,
     twoFactorEnabled,
     saving2fa,
@@ -993,7 +978,6 @@ export function useDriverDashboardData({ onLogout, pairing }) {
     handleAcknowledgeStop,
     handleTripAction,
     handleStartShift,
-    handleEndShift,
     handleConfirmedComplete,
     handleConfirmedDecline,
     handleAcceptTrip,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildOperatorForecast } from '../routeForecast'
+import { buildOperatorForecast, filterForecastTrips } from '../routeForecast'
 
 describe('buildOperatorForecast', () => {
   it('summarizes route performance and produces a forecast risk score', () => {
@@ -25,7 +25,7 @@ describe('buildOperatorForecast', () => {
     expect(result.rerouteRecommendations[0]).toMatchObject({
       route: expect.any(String),
       priority: expect.any(String),
-      alternativeRoute: expect.any(String),
+      alternativeRoute: null,
       crewState: expect.any(String),
       emergencyState: expect.any(String),
       recommendedAction: expect.any(String),
@@ -36,11 +36,29 @@ describe('buildOperatorForecast', () => {
     expect(result.routeComparison[0]).toMatchObject({
       route: expect.any(String),
       trafficLevel: expect.any(String),
-      currentEtaMinutes: expect.any(Number),
-      alternativeRoute: expect.any(String),
-      timeSavedMinutes: expect.any(Number),
+      currentEtaMinutes: null,
+      alternativeRoute: null,
+      timeSavedMinutes: null,
       recommendation: expect.any(String),
       dispatchAction: expect.any(String),
     })
+  })
+})
+
+describe('filterForecastTrips', () => {
+  const trips = [
+    { trip_id: 1, trip_date: '2026-09-01', fleet_route: { route_id: 1, fleet_id: 10 } },
+    { trip_id: 2, trip_date: '2026-09-05', fleet_route: { route_id: 2, fleet_id: 10 } },
+    { trip_id: 3, trip_date: '2026-09-09', fleet_route: { route_id: 1, fleet_id: 11 } },
+  ]
+
+  it('returns everything when no filter is set', () => {
+    expect(filterForecastTrips(trips)).toHaveLength(3)
+  })
+
+  it('filters by inclusive date range, route and fleet together', () => {
+    expect(filterForecastTrips(trips, { from: '2026-09-05', to: '2026-09-09' }).map((t) => t.trip_id)).toEqual([2, 3])
+    expect(filterForecastTrips(trips, { routeId: '1' }).map((t) => t.trip_id)).toEqual([1, 3])
+    expect(filterForecastTrips(trips, { routeId: 1, fleetId: 11 }).map((t) => t.trip_id)).toEqual([3])
   })
 })

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import {
   AlertCircle,
   Bus,
@@ -18,9 +19,13 @@ import {
 } from 'lucide-react';
 import PairingScreen from './PairingScreen';
 import StaffPortalLayout from './StaffPortalLayout';
+import DeclineTripModal from './DeclineTripModal';
+import CalendarSummaryStrip from './CalendarSummaryStrip';
 import NotificationBellButton from './NotificationBellButton';
 import { useConductorPairing, useConductorDashboardData } from '../../api/hooks/Staff/useConductorDashboard';
 import { getBusinessTodayLabel } from '../../utils/dates';
+import { deriveTripStatus } from '../../utils/tripStatus';
+import { FOR_APPROVAL_LABEL, canRespondToAssignment, getAssignmentRequestStatus, isForApproval } from '../../utils/assignmentRequest';
 import ConductorService from '../../api/StaffService/ConductorService';
 
 // Batch 19 Part A: consolidated sidebar. Ticketing & Fares is the
@@ -92,6 +97,28 @@ const formatTripSchedule = (tripLike) => {
   return dateLabel;
 };
 
+const resolveConductorHeaderBadge = ({
+  pairingLoading,
+  isPaired,
+  hasTodayAssignedTrip,
+  forApproval,
+  hasOpenShift,
+  isAvailable,
+  hasActiveTrip,
+  tripStatus,
+}) => {
+  if (pairingLoading) return { label: 'Checking pairing', tone: 'border-slate-200 bg-slate-50 text-slate-600' };
+  if (!isPaired) return { label: 'Pairing required', tone: 'border-amber-200 bg-amber-50 text-amber-700' };
+  if (!hasTodayAssignedTrip) return { label: 'No assigned trip', tone: 'border-slate-200 bg-slate-50 text-slate-600' };
+  // C6: assignment-level status, shown through this single badge (D6).
+  if (forApproval) return { label: FOR_APPROVAL_LABEL, tone: 'border-amber-200 bg-amber-50 text-amber-700' };
+  if (!hasOpenShift) return { label: 'Shift not started', tone: 'border-sky-200 bg-sky-50 text-sky-700' };
+  if (!isAvailable) return { label: 'Marked unavailable', tone: 'border-slate-200 bg-slate-50 text-slate-600' };
+  // A1: once the trip is live the badge is the trip's own derived status.
+  if (hasActiveTrip && tripStatus) return { label: tripStatus.label, tone: tripStatus.tone };
+  return { label: 'Ready', tone: 'border-emerald-200 bg-emerald-50 text-emerald-700' };
+};
+
 export default function ConductorDashboard() {
   const { pairing, refreshPairingStatus, handleLogout } = useConductorPairing();
 
@@ -131,7 +158,7 @@ function TripCardGroup({ title, trips, onDeclineTrip, onAcceptTrip, emptyMessage
                 </div>
                 {canDecline && (
                   <div className="mt-4 flex gap-2">
-                    {!item?.conductor_accepted_at && (
+                    {canRespondToAssignment(item, 'conductor') && (
                       <button
                         type="button"
                         className="flex-1 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100"
@@ -140,7 +167,7 @@ function TripCardGroup({ title, trips, onDeclineTrip, onAcceptTrip, emptyMessage
                         Accept
                       </button>
                     )}
-                    {!item?.conductor_accepted_at && (
+                    {canRespondToAssignment(item, 'conductor') && (
                       <button
                         type="button"
                         className="flex-1 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 transition hover:bg-red-100"
@@ -148,6 +175,9 @@ function TripCardGroup({ title, trips, onDeclineTrip, onAcceptTrip, emptyMessage
                       >
                         Decline
                       </button>
+                    )}
+                    {getAssignmentRequestStatus(item, 'conductor') === 'for_approval' && (
+                      <span className="flex-1 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-center text-xs font-semibold text-amber-700">{FOR_APPROVAL_LABEL}</span>
                     )}
                   </div>
                 )}
@@ -161,6 +191,7 @@ function TripCardGroup({ title, trips, onDeclineTrip, onAcceptTrip, emptyMessage
 }
 
 function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
+  const [confirmStart, setConfirmStart] = useState(false);
   const {
     activeTab, setActiveTab,
     assignedTripFilter,
@@ -190,11 +221,10 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     checkoutInFlight,
     confirmCheckout, setConfirmCheckout,
     confirmDecline, setConfirmDecline,
-    declineReasonCode, setDeclineReasonCode,
+    declineErrors, setDeclineErrors,
     declineSubmitting,
     actionInFlight,
     isAvailable,
-    availabilitySaving,
     shiftState,
     videoRef,
     isPaired,
@@ -206,7 +236,6 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     upcomingTrip,
     showNoCurrentTripState,
     routeStops,
-    shiftStarted,
     groupedPassengers,
     filteredAssignedTrips,
     todayAssignedTrips,
@@ -239,7 +268,6 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     handleStartShift,
     handleConfirmedDecline,
     handleAcceptTrip,
-    handleToggleAvailability,
     handleEndShift,
     checkShiftBlockEligibility,
     handleInitiateShiftBlockHandoff,
@@ -251,6 +279,35 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     handleConfirmedOnsiteCheckout,
     handleLogout,
   } = useConductorDashboardData({ onLogout, pairing });
+
+  const headerBadge = resolveConductorHeaderBadge({
+    pairingLoading: pairing.loading,
+    isPaired,
+    hasTodayAssignedTrip,
+    forApproval: isForApproval(todayAssignedTrip, 'conductor'),
+    hasOpenShift,
+    isAvailable,
+    hasActiveTrip,
+    tripStatus: deriveTripStatus(trip || todayAssignedTrip),
+  });
+
+  const busRouteLabel = `${todayAssignedTrip?.fleet_route?.fleet?.plate_number || 'Fleet pending'} · ${todayAssignedTrip?.fleet_route?.route?.route_name || 'Route pending'}`;
+
+  const shiftAction = hasOpenShift
+    ? {
+      label: 'End Shift',
+      onClick: handleEndShift,
+      disabled: actionInFlight || !hasOpenShift || Boolean(shiftState?.endBlockedReason),
+      title: shiftState?.endBlockedReason || undefined,
+      className: 'inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 transition hover:bg-rose-100 disabled:opacity-60',
+    }
+    : {
+      label: 'Start Shift',
+      onClick: () => setConfirmStart(true),
+      disabled: actionInFlight || !isPaired || !(hasActiveTrip || hasTodayAssignedTrip),
+      title: !isPaired ? 'Pairing is required before starting shift.' : undefined,
+      className: 'inline-flex items-center gap-2 rounded-xl border border-teal-200 bg-teal-50 px-3 py-2 text-xs font-semibold text-teal-700 transition hover:bg-teal-100 disabled:opacity-60',
+    };
 
   return (
     <>
@@ -265,65 +322,28 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
       profileInitialFallback="C"
       onLogout={handleLogout}
     >
-        <header className="mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
+        <header className="crew-header mb-4">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h1 className="text-2xl font-bold text-slate-900">{pageTitle}</h1>
             <p className="text-xs text-slate-500">
               {getBusinessTodayLabel()}
             </p>
           </div>
-          <div className="flex items-center gap-2">
-            <span
-              className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${
-                hasOpenShift
-                  ? 'border-teal-200 bg-teal-50 text-teal-700'
-                  : 'border-slate-200 bg-slate-100 text-slate-500'
-              }`}
-            >
-              {shiftState.loading ? 'Checking shift...' : hasOpenShift ? 'Shift Active' : 'Shift Not Started'}
+          <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+            <span className="crew-chip">
+              {busRouteLabel}
             </span>
-            <span
-              className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${
-                pairing.loading
-                  ? 'border-slate-200 bg-slate-100 text-slate-500'
-                  : isPaired
-                    ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                    : 'border-amber-200 bg-amber-50 text-amber-700'
-              }`}
-            >
-              {pairing.loading ? 'Checking...' : isPaired ? '● Paired' : '○ Not paired'}
+            <span className={`crew-chip ${headerBadge.tone}`}>
+              {headerBadge.label}
             </span>
             <button
-              type="button"
-              onClick={handleToggleAvailability}
-              disabled={availabilitySaving}
-              title="Available for extra/ad-hoc assignment — independent of shift or pairing state"
-              className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold transition disabled:opacity-60 ${
-                isAvailable
-                  ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-                  : 'border-slate-200 bg-slate-100 text-slate-500 hover:bg-slate-200'
-              }`}
+              className={shiftAction.className}
+              onClick={shiftAction.onClick}
+              disabled={shiftAction.disabled}
+              title={shiftAction.title}
             >
-              <span className={`h-2 w-2 rounded-full ${isAvailable ? 'bg-emerald-500' : 'bg-slate-400'}`} />
-              {isAvailable ? 'Available' : 'Not Available'}
-            </button>
-            {/* Batch 19 Part A: Start/End Shift move to the persistent
-                header, matching the Driver portal's pattern \u2014 no longer
-                buried as their own nav tabs. */}
-            <button
-              className="inline-flex items-center gap-2 rounded-xl border border-teal-200 bg-teal-50 px-3 py-2 text-xs font-semibold text-teal-700 transition hover:bg-teal-100 disabled:opacity-60"
-              onClick={handleStartShift}
-              disabled={actionInFlight || !isPaired || shiftStarted || !(hasActiveTrip || hasTodayAssignedTrip)}
-              title={!isPaired ? 'Pairing is required before starting shift.' : undefined}
-            >
-              Start Shift
-            </button>
-            <button
-              className="inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 transition hover:bg-rose-100 disabled:opacity-60"
-              onClick={handleEndShift}
-              disabled={actionInFlight || !hasOpenShift}
-            >
-              End Shift
+              {shiftAction.label}
             </button>
             <button
               className="crew-chip-button"
@@ -333,7 +353,8 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
               Refresh
             </button>
             <NotificationBellButton service={ConductorService} role="conductor" />
-            {actionMsg && <span className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">{actionMsg}</span>}
+            {actionMsg && <span className="basis-full rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">{actionMsg}</span>}
+          </div>
           </div>
         </header>
         {loading && <div className="rounded-xl border border-slate-200 bg-slate-50 p-6 text-sm text-slate-500">Loading dashboard data...</div>}
@@ -434,20 +455,11 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
               </div>
             </div>
 
-            {/* Start shift button */}
+            {/* Start Shift lives only in the header toggle (single entry point);
+                it opens a confirm dialog after the assignment review above. */}
             <div className="mt-6 text-center">
-              <button
-                className="inline-flex items-center gap-2 rounded-lg bg-teal-500 px-8 py-3 text-sm font-bold text-white transition hover:bg-teal-600 disabled:cursor-not-allowed disabled:opacity-60"
-                onClick={handleStartShift}
-                disabled={shiftStarted || !isPaired}
-                title={!isPaired ? 'Pairing is required before starting shift.' : undefined}
-              >
-                {shiftStarted ? 'SHIFT STARTED' : 'CONFIRM & START SHIFT'}
-                <Play className="h-4 w-4" />
-              </button>
-              <p className="mt-3 text-xs text-slate-400">This will take you to the Ticketing screen</p>
               <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
-                {['scheduled', 'delayed', 'boarding'].includes(String(todayAssignedTrip?.status || '').toLowerCase()) && !todayAssignedTrip?.conductor_accepted_at && (
+                {canRespondToAssignment(todayAssignedTrip, 'conductor') && (
                   <button
                     type="button"
                     className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100 disabled:opacity-50"
@@ -457,7 +469,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                     ✓ Accept This Trip
                   </button>
                 )}
-                {['scheduled', 'delayed', 'boarding'].includes(String(todayAssignedTrip?.status || '').toLowerCase()) && !todayAssignedTrip?.conductor_accepted_at && (
+                {canRespondToAssignment(todayAssignedTrip, 'conductor') && (
                   <button
                     type="button"
                     className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-white px-4 py-2 text-xs font-semibold text-red-600 transition hover:bg-red-50 disabled:opacity-50"
@@ -466,6 +478,12 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                   >
                     ✕ Decline This Trip
                   </button>
+                )}
+                {getAssignmentRequestStatus(todayAssignedTrip, 'conductor') === 'for_approval' && (
+                  <span className="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-xs font-semibold text-amber-700">{FOR_APPROVAL_LABEL}</span>
+                )}
+                {getAssignmentRequestStatus(todayAssignedTrip, 'conductor') === 'rejected' && (
+                  <span className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-semibold text-slate-600">Request rejected: please proceed</span>
                 )}
               </div>
             </div>
@@ -528,6 +546,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
         {/* Batch 19 Part A: Calendar renamed to Schedule. Clicking any
             date with a schedule opens a modal scoped to just that date,
             rather than navigating away. */}
+        {!loading && activeTab === 'schedule' && <CalendarSummaryStrip service={ConductorService} className="mb-4" />}
         {!loading && activeTab === 'schedule' && (
           <section className="staff-card">
             <div className="mb-4 flex items-center justify-between">
@@ -1264,6 +1283,25 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
         )}
     </StaffPortalLayout>
 
+      {/* Start Shift confirmation (header toggle is the only entry point) */}
+      {confirmStart && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-sm rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl">
+            <h3 className="mb-2 text-base font-bold text-slate-100">Start Shift?</h3>
+            <p className="mb-4 text-sm text-slate-400">Confirm your assignment. You will be taken to the Ticketing screen.</p>
+            <dl className="mb-4 space-y-2 rounded-lg bg-slate-800 p-3 text-sm">
+              <div className="flex justify-between"><dt className="text-slate-500">Fleet</dt><dd className="font-semibold text-slate-100">{todayAssignedTrip?.fleet_route?.fleet?.plate_number ?? '-'}</dd></div>
+              <div className="flex justify-between"><dt className="text-slate-500">Route</dt><dd className="font-semibold text-slate-100">{todayAssignedTrip?.fleet_route?.route?.route_name ?? '-'}</dd></div>
+              <div className="flex justify-between"><dt className="text-slate-500">Schedule</dt><dd className="font-data text-slate-100">{formatTripSchedule(todayAssignedTrip)}</dd></div>
+            </dl>
+            <div className="flex gap-2">
+              <button type="button" onClick={() => setConfirmStart(false)} className="flex-1 rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800">Cancel</button>
+              <button type="button" onClick={() => { setConfirmStart(false); handleStartShift(); }} className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-teal-500 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-600">Start Shift <Play className="h-4 w-4" /></button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Onsite Checkout Confirmation Modal ─────────────────────── */}
       {confirmCheckout && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
@@ -1282,37 +1320,17 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
         </div>
       )}
 
-      {/* ── S2 (Batch 12): Decline Trip Confirmation Modal ─────────────── */}
+      {/* C6: decline request dialog, shared by Driver and Chauffeur */}
       {confirmDecline && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-          <div className="w-full max-w-sm rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl">
-            <h3 className="mb-2 text-base font-bold text-slate-100">Decline This Trip?</h3>
-            <p className="mb-3 text-sm text-slate-300">
-              {confirmDecline?.fleet_route?.route?.origin || '-'} → {confirmDecline?.fleet_route?.route?.destination || '-'} · {formatTripSchedule(confirmDecline)}
-            </p>
-            <p className="mb-4 text-sm text-slate-400">
-              The trip will return to the unassigned pool and the Operator will be notified to find a replacement.
-            </p>
-            <label className="mb-4 block text-sm text-slate-300">
-              Reason (optional)
-              <select
-                value={declineReasonCode}
-                onChange={(e) => setDeclineReasonCode(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 outline-none focus:border-teal-500"
-              >
-                <option value="">No reason given</option>
-                <option value="sick">Sick</option>
-                <option value="vehicle_issue">Vehicle issue</option>
-                <option value="schedule_conflict">Schedule conflict</option>
-                <option value="other">Other</option>
-              </select>
-            </label>
-            <div className="flex gap-2">
-              <button type="button" onClick={() => { setConfirmDecline(null); setDeclineReasonCode(''); }} className="flex-1 rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800" disabled={declineSubmitting}>Cancel</button>
-              <button type="button" onClick={handleConfirmedDecline} className="flex-1 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60" disabled={declineSubmitting}>{declineSubmitting ? 'Declining...' : 'Yes, Decline'}</button>
-            </div>
-          </div>
-        </div>
+        <DeclineTripModal
+          key={confirmDecline.trip_id}
+          trip={confirmDecline}
+          scheduleLabel={formatTripSchedule(confirmDecline)}
+          submitting={declineSubmitting}
+          errors={declineErrors}
+          onCancel={() => { setConfirmDecline(null); setDeclineErrors({}); }}
+          onSubmit={handleConfirmedDecline}
+        />
       )}
 
       {/* S4 (Batch 17): calendar date-click modal — scoped to just the
@@ -1413,3 +1431,5 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     </>
   );
 }
+
+

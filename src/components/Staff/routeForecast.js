@@ -1,21 +1,9 @@
-const buildAlternativeRouteName = (routeName = '') => {
-  const normalized = String(routeName).toLowerCase()
-
-  if (normalized.includes('downtown')) return `${routeName} via North Bypass`
-  if (normalized.includes('central')) return `${routeName} via East Relief Corridor`
-  if (normalized.includes('toril') || normalized.includes('sasa') || normalized.includes('matina')) return `${routeName} via South Relief Corridor`
-  if (normalized.includes('agdao') || normalized.includes('ma-a')) return `${routeName} via Parallel Bypass Route`
-
-  return `${routeName} via Parallel Bypass Route`
-}
+import { FORECAST_CONFIG } from '../../config/forecastConfig'
 
 export function buildOperatorForecast(trips = []) {
   const routes = new Map()
-  const timeSlots = {
-    morning: { weight: 0.28, multiplier: 1.1 },
-    afternoon: { weight: 0.34, multiplier: 1.25 },
-    evening: { weight: 0.38, multiplier: 1.35 },
-  }
+  const { riskWeights, routeStatusThresholds, forecastRiskBoost, slotWeightScale, slotNoteThresholds, priorityThresholds } = FORECAST_CONFIG
+  const timeSlots = FORECAST_CONFIG.timeSlots
 
   for (const trip of trips) {
     const routeName = trip?.fleet_route?.route?.route_name || 'Unassigned Route'
@@ -48,12 +36,12 @@ export function buildOperatorForecast(trips = []) {
   const routePerformance = [...routes.values()].map(row => {
     const completionRate = row.trips > 0 ? (row.completed / row.trips) * 100 : 0
     const riskScore = Math.min(100, Math.round(
-      (row.cancelled * 28) +
-      (row.boarding * 16) +
-      (row.missingCrew * 18) +
-      (row.emergencyAlerts * 20) +
-      (Math.max(0, row.active - row.completed) * 12) +
-      (100 - completionRate) * 0.5
+      (row.cancelled * riskWeights.cancelled) +
+      (row.boarding * riskWeights.boarding) +
+      (row.missingCrew * riskWeights.missingCrew) +
+      (row.emergencyAlerts * riskWeights.emergencyAlert) +
+      (Math.max(0, row.active - row.completed) * riskWeights.activeUnfinished) +
+      (100 - completionRate) * riskWeights.incompletionPerPercent
     ))
 
     return {
@@ -65,89 +53,75 @@ export function buildOperatorForecast(trips = []) {
       crewAssigned: row.crewAssigned,
       missingCrew: row.missingCrew,
       emergencyAlerts: row.emergencyAlerts,
-      status: riskScore >= 60 ? 'High risk' : riskScore >= 35 ? 'Watch' : 'Stable',
+      status: riskScore >= routeStatusThresholds.highRisk ? 'High risk' : riskScore >= routeStatusThresholds.watch ? 'Watch' : 'Stable',
     }
   }).sort((a, b) => b.riskScore - a.riskScore)
 
   const totalTrips = trips.length
   const avgRevenue = totalTrips > 0 ? trips.reduce((sum, trip) => sum + Number(trip?.total_revenue ?? 0), 0) / totalTrips : 0
   const highestRisk = routePerformance[0] ?? null
-  const forecastRisk = highestRisk ? Math.min(100, highestRisk.riskScore + 10) : 0
+  const forecastRisk = highestRisk ? Math.min(100, highestRisk.riskScore + forecastRiskBoost) : 0
 
   const timeSlotForecast = Object.fromEntries(
     Object.entries(timeSlots).map(([slot, config]) => {
-      const risk = Math.min(100, Math.round((forecastRisk * config.multiplier) + (config.weight * 25)))
+      const risk = Math.min(100, Math.round((forecastRisk * config.multiplier) + (config.weight * slotWeightScale)))
       return [slot, {
         label: slot.charAt(0).toUpperCase() + slot.slice(1),
         risk,
-        note: risk >= 70 ? 'Heavy pressure expected' : risk >= 45 ? 'Moderate delays likely' : 'Low disruption expected',
+        note: risk >= slotNoteThresholds.heavy
+          ? 'Heavy operational pressure expected.'
+          : risk >= slotNoteThresholds.moderate
+            ? 'Moderate operational pressure expected.'
+            : 'Low operational pressure expected.',
       }]
     })
   )
 
   const rerouteRecommendations = routePerformance.length > 0
     ? routePerformance.slice(0, 3).map(row => {
-        const priority = row.riskScore >= 70 ? 'high' : row.riskScore >= 45 ? 'medium' : 'low'
+        const priority = row.riskScore >= priorityThresholds.high ? 'high' : row.riskScore >= priorityThresholds.medium ? 'medium' : 'low'
         const peakSlot = Object.entries(timeSlotForecast).sort((a, b) => b[1].risk - a[1].risk)[0][0]
         const crewState = row.missingCrew > 0 ? 'Crew assignment gap' : 'Crew ready'
         const emergencyState = row.emergencyAlerts > 0 ? 'Emergency or incident alert active' : 'Normal service monitoring'
-        const alternativeRoute = buildAlternativeRouteName(row.route)
 
-        let recommendedAction = `Keep ${row.route} on its current schedule and monitor traffic.`
+        let recommendedAction = `Continue ${row.route} and monitor live telemetry for delays.`
         let dispatchAction = `Keep ${row.route} on the assigned path and continue monitoring.`
         if (priority === 'high') {
-          recommendedAction = `Reroute ${row.route} through ${alternativeRoute} and assign relief staff before the next ${peakSlot} window.`
-          dispatchAction = `Dispatch ${row.route} via ${alternativeRoute} and notify the driver.`
+          recommendedAction = `High risk detected on ${row.route}. Verify live traffic provider data and coordinate dispatch review before any reroute decision.`
+          dispatchAction = `Escalate ${row.route} for dispatcher review and monitor live traffic signals.`
         } else if (priority === 'medium') {
-          recommendedAction = `Shift ${row.route} to ${alternativeRoute} with a longer buffer and dispatch updates in the ${peakSlot} period.`
-          dispatchAction = `Send reroute notice for ${row.route} through ${alternativeRoute}.`
+          recommendedAction = `Moderate risk on ${row.route}. Keep schedule buffers and monitor driver updates during the ${peakSlot} period.`
+          dispatchAction = `Issue monitoring advisory for ${row.route} and re-evaluate if risk increases.`
         }
 
         return {
           route: row.route,
           priority,
           riskScore: row.riskScore,
-          alternativeRoute,
+          alternativeRoute: null,
           crewState,
           emergencyState,
           recommendedAction,
           dispatchAction,
           reason: row.status === 'High risk'
-            ? 'Delay risk is high because traffic pressure, crew coverage, and incident conditions are all trending negative.'
-            : 'The route is under moderate stress and would benefit from a lower-risk alternate corridor during the next peak period.',
+            ? 'High risk is driven by trip cancellations, incomplete crew coverage, and active operational alerts.'
+            : 'Route pressure is elevated, so dispatch should monitor and decide using live traffic telemetry.',
           peakSlot,
         }
       })
     : []
 
   const routeComparison = routePerformance.length > 0
-    ? routePerformance.slice(0, 3).map(row => {
-        const trafficLevel = row.riskScore >= 70 ? 'Heavy congestion' : row.riskScore >= 45 ? 'Moderate congestion' : 'Stable'
-        const currentEtaMinutes = Math.max(6, Math.round(row.riskScore / 7))
-        const altEtaMinutes = Math.max(4, Math.round(currentEtaMinutes * (row.riskScore >= 70 ? 0.62 : row.riskScore >= 45 ? 0.78 : 0.92)))
-        const deltaMinutes = Math.max(2, currentEtaMinutes - altEtaMinutes)
-        const alternative = buildAlternativeRouteName(row.route)
-        const recommendation = row.riskScore >= 70
-          ? `Current route is slower by ${deltaMinutes} minutes. Reassign this trip to ${alternative} to reduce delays.`
-          : row.riskScore >= 45
-            ? `Current route is mildly congested. Consider ${alternative} to save about ${deltaMinutes} minutes.`
-            : `${row.route} is stable; keep the assigned route and monitor traffic only.`
-
-        return {
-          route: row.route,
-          trafficLevel,
-          currentEtaMinutes,
-          alternativeRoute: alternative,
-          alternateEtaMinutes: altEtaMinutes,
-          timeSavedMinutes: deltaMinutes,
-          recommendation,
-          dispatchAction: row.riskScore >= 70
-            ? `Approve reroute to ${alternative}`
-            : row.riskScore >= 45
-              ? `Inform driver about ${alternative}`
-              : 'Keep current route and continue monitoring',
-        }
-      })
+    ? routePerformance.slice(0, 3).map(row => ({
+        route: row.route,
+        trafficLevel: row.riskScore >= priorityThresholds.high ? 'High operational risk' : row.riskScore >= priorityThresholds.medium ? 'Moderate operational risk' : 'Stable',
+        currentEtaMinutes: null,
+        alternativeRoute: null,
+        alternateEtaMinutes: null,
+        timeSavedMinutes: null,
+        recommendation: 'ETA comparison is unavailable without provider-backed live traffic geometry.',
+        dispatchAction: 'Use live traffic provider data before issuing reroute instructions.',
+      }))
     : []
 
   return {
@@ -161,4 +135,20 @@ export function buildOperatorForecast(trips = []) {
     routeComparison,
     generatedAt: new Date().toISOString(),
   }
+}
+
+/**
+ * B6: narrow the trips a forecast is built from. Dates are business-day
+ * 'YYYY-MM-DD' strings compared as text (no timezone conversion); empty
+ * filters mean "all".
+ */
+export function filterForecastTrips(trips = [], { from = '', to = '', routeId = '', fleetId = '' } = {}) {
+  return trips.filter((trip) => {
+    const date = String(trip?.trip_date || '').slice(0, 10)
+    if (from && date < from) return false
+    if (to && date > to) return false
+    if (routeId && String(trip?.fleet_route?.route_id ?? '') !== String(routeId)) return false
+    if (fleetId && String(trip?.fleet_route?.fleet_id ?? '') !== String(fleetId)) return false
+    return true
+  })
 }

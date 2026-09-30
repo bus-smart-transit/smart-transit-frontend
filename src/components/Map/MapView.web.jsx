@@ -2,11 +2,24 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { Bus, Clock3, LocateFixed, MapPin, Route, Ruler, X } from 'lucide-react';
 import "maplibre-gl/dist/maplibre-gl.css";
 import { loadMapLib } from './mapDependencies';
-import { fetchRouteStopsForMap, fetchFleetLocationsForMap, fetchNearestFleetForMap } from '../../api/hooks/Passenger/useMapView';
+import { fetchFleetLocationsForMap, fetchNearestFleetForMap } from '../../api/hooks/Passenger/useMapView';
 import { haversineM, lerp, lerpAngle } from '../../utils/geo';
 import { Navigation } from 'lucide-react';
+import { fetchRouteMapData } from '../../services/routeMapService';
+import { fitToPoints, renderRouteLayers } from './routeLayers';
 import { fetchTrafficStatus } from '../../services/trafficService';
 import { fetchDrivingRouteWithMetrics, geocodeLandmark } from '../../services/routingService';
+import { MAP_CONFIG } from '../../config/mapConfig';
+import { boundsFromPoints } from '../../utils/routeGeometry';
+import { getRegion, regionMapBounds } from '../../services/regionService';
+
+const IDLE_ETA = {
+  level: 'idle',
+  label: 'No active bus selected',
+  etaMinutes: null,
+  delayMinutes: 0,
+  suggestion: 'Pin your location and find the nearest active bus to view ETA.',
+};
 
 export default function MapView({ role = "passenger", trackedFleetId = null }) {
   const mapContainer = useRef(null);
@@ -27,8 +40,8 @@ export default function MapView({ role = "passenger", trackedFleetId = null }) {
   // Latest row data per fleet (read inside stable click handlers)
   const fleetDataRef = useRef({});
   const nearestFleetMarkerRef = useRef(null);
-  const routeStopMarkersRef = useRef([]);
-  const routePolylineAddedRef = useRef(false);
+  // Bounds of the drawn fleet route; scopes landmark search to that route.
+  const routeBoundsRef = useRef(null);
 
   const [currentCoords, setCurrentCoords] = useState(null);
   const [destinationInput, setDestinationInput] = useState("");
@@ -36,20 +49,10 @@ export default function MapView({ role = "passenger", trackedFleetId = null }) {
   const [isCalculating, setIsCalculating] = useState(false);
   const [fleetLocations, setFleetLocations] = useState([]);
   const [nearestFleet, setNearestFleet] = useState(null);
-  const [nearestFleetEta, setNearestFleetEta] = useState({
-    level: 'idle',
-    label: 'No active bus selected',
-    etaMinutes: null,
-    delayMinutes: 0,
-    suggestion: 'Pin your location and find the nearest active bus to view ETA.',
-  });
+  const [nearestFleetEta, setNearestFleetEta] = useState(IDLE_ETA);
   const [selectedFleetId, setSelectedFleetId] = useState(null);
   const [showSidebar, setShowSidebar] = useState(false);
   const [isTracking, setIsTracking] = useState(false);
-
-  const [lng] = useState(125.6047);
-  const [lat] = useState(7.0707);
-  const [zoom] = useState(12);
 
   const clearFleetMarkers = useCallback(() => {
     cancelAnimationFrame(rafIdRef.current);
@@ -60,95 +63,32 @@ export default function MapView({ role = "passenger", trackedFleetId = null }) {
     fleetDataRef.current = {};
   }, []);
 
-  const clearRouteStopMarkers = useCallback(() => {
-    routeStopMarkersRef.current.forEach((marker) => marker.remove());
-    routeStopMarkersRef.current = [];
-  }, []);
-
-  // Draw or refresh the fleet's route polyline (Feature 1)
-  const drawFleetRoute = useCallback(async (routeId) => {
+  // Draw or refresh the fleet's route: canonical geometry + numbered stops via
+  // the shared route layer (same code as RouteMap). Never draws a line joined
+  // through the stops; without generated geometry only the stops show.
+  const drawFleetRoute = useCallback(async (routeId, direction = 'outbound') => {
     const mapObj = map.current;
     const maplibregl = mapLibRef.current;
     if (!mapObj || !maplibregl || !routeId) return;
 
     try {
-      const res = await fetchRouteStopsForMap(routeId);
-      const stops = res?.data ?? [];
-      const valid = stops.filter(
-        (s) => Number.isFinite(Number(s?.longitude)) && Number.isFinite(Number(s?.latitude))
-      );
-      if (valid.length < 2) return;
+      const routeData = await fetchRouteMapData(routeId, direction);
 
-      const coords = valid.map((s) => [Number(s.longitude), Number(s.latitude)]);
-
-      const addRoute = () => {
-        // Remove existing route layer before drawing new one
-        if (mapObj.getLayer('fleet-route-line')) mapObj.removeLayer('fleet-route-line');
-        if (mapObj.getSource('fleet-route-path')) mapObj.removeSource('fleet-route-path');
-        routePolylineAddedRef.current = false;
-        clearRouteStopMarkers();
-
-        mapObj.addSource('fleet-route-path', {
-          type: 'geojson',
-          data: {
-            type: 'Feature',
-            properties: {},
-            geometry: { type: 'LineString', coordinates: coords },
-          },
-        });
-        mapObj.addLayer({
-          id: 'fleet-route-line',
-          type: 'line',
-          source: 'fleet-route-path',
-          layout: { 'line-join': 'round', 'line-cap': 'round' },
-          paint: { 'line-color': '#f59e0b', 'line-width': 4, 'line-opacity': 0.75 },
-        });
-        routePolylineAddedRef.current = true;
-
-        // Add stop pins along the selected fleet route for better context.
-        routeStopMarkersRef.current = valid.map((stop, idx) => {
-          const markerEl = document.createElement('div');
-          markerEl.style.width = '16px';
-          markerEl.style.height = '16px';
-          markerEl.style.borderRadius = '999px';
-          markerEl.style.background = '#f59e0b';
-          markerEl.style.border = '2px solid #ffffff';
-          markerEl.style.boxShadow = '0 0 0 1px rgba(15, 23, 42, 0.35)';
-
-          const label = stop?.stop_name || stop?.name || stop?.stop?.stop_name || `Stop ${idx + 1}`;
-          const orderRaw = stop?.stop_order ?? stop?.sequence_number ?? idx + 1;
-          const order = Number.isFinite(Number(orderRaw)) ? Number(orderRaw) : idx + 1;
-
-          return new maplibregl.Marker({ element: markerEl })
-            .setLngLat([Number(stop.longitude), Number(stop.latitude)])
-            .setPopup(
-              new maplibregl.Popup({ offset: 14 }).setHTML(
-                `<div style="color:#0f172a;font-family:sans-serif;padding:6px;min-width:120px;">
-                  <p style="margin:0;font-weight:700;font-size:12px;">Stop ${order}</p>
-                  <p style="margin:4px 0 0;font-size:12px;color:#334155;">${label}</p>
-                </div>`
-              )
-            )
-            .addTo(mapObj);
-        });
-
-        // Fit map to route bounds
-        const bounds = coords.reduce(
-          (acc, c) => acc.extend(c),
-          new maplibregl.LngLatBounds(coords[0], coords[0])
-        );
-        mapObj.fitBounds(bounds, { padding: 80, maxZoom: 14 });
+      const render = () => {
+        const points = renderRouteLayers(mapObj, maplibregl, routeData);
+        routeBoundsRef.current = boundsFromPoints(points, MAP_CONFIG.routeSearchPaddingDeg);
+        fitToPoints(mapObj, maplibregl, points, { padding: 80, maxZoom: 14 });
       };
 
       if (mapObj.isStyleLoaded()) {
-        addRoute();
+        render();
       } else {
-        mapObj.once('load', addRoute);
+        mapObj.once('load', render);
       }
     } catch {
       // Ignore — map still works without route overlay
     }
-  }, [clearRouteStopMarkers]);
+  }, []);
 
   useEffect(() => {
     if (map.current) return;
@@ -156,15 +96,17 @@ export default function MapView({ role = "passenger", trackedFleetId = null }) {
     let disposed = false;
 
     const initMap = async () => {
-      const { default: maplibregl } = await loadMapLib();
-      if (disposed || map.current) return;
+      // Default view = the configured region; a selected fleet's route later
+      // fits the map to that route's bounds (drawFleetRoute).
+      const [{ default: maplibregl }, region] = await Promise.all([loadMapLib(), getRegion().catch(() => null)]);
+      if (disposed || map.current || !region) return;
 
       mapLibRef.current = maplibregl;
       map.current = new maplibregl.Map({
         container: mapContainer.current,
         style: "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json",
-        center: [lng, lat],
-        zoom,
+        bounds: regionMapBounds(region),
+        fitBoundsOptions: { padding: 16 },
       });
     };
 
@@ -173,7 +115,7 @@ export default function MapView({ role = "passenger", trackedFleetId = null }) {
     return () => {
       disposed = true;
     };
-  }, [lat, lng, zoom]);
+  }, []);
 
   const refreshFleetLocations = useCallback(async () => {
     const maplibregl = mapLibRef.current;
@@ -208,9 +150,12 @@ export default function MapView({ role = "passenger", trackedFleetId = null }) {
       // ── Step 2: set new targets + update fleet data ref ───────────────────
       const newNext = {};
       for (const row of locations) {
+        // Server-projected position keeps a bus on the route line; a bus that
+        // is really off route is shown where it is.
+        const projected = row?.route_position?.on_route ? row.route_position : null;
         newNext[row.fleet_id] = {
-          lat:     Number(row.latitude),
-          lng:     Number(row.longitude),
+          lat:     Number(projected ? projected.snapped_latitude : row.latitude),
+          lng:     Number(projected ? projected.snapped_longitude : row.longitude),
           heading: Number.isFinite(Number(row.heading)) ? Number(row.heading) : null,
         };
         // Seed prev on first appearance so lerp starts from correct spot
@@ -270,7 +215,7 @@ export default function MapView({ role = "passenger", trackedFleetId = null }) {
             setSelectedFleetId(fleetId);
             setShowSidebar(true);
             const routeId = currentRow?.route_id ?? currentRow?.fleet_route?.route_id ?? null;
-            if (routeId) void drawFleetRoute(routeId);
+            if (routeId) void drawFleetRoute(routeId, currentRow?.leg_direction);
           });
 
           const startPos = fleetPrevRef.current[fleetId] ?? newNext[fleetId];
@@ -326,7 +271,7 @@ export default function MapView({ role = "passenger", trackedFleetId = null }) {
     } catch {
       // Ignore polling failures to avoid breaking map interactions.
     }
-  }, [clearFleetMarkers, drawFleetRoute, role]);
+  }, [drawFleetRoute, role]);
 
   useEffect(() => {
     if (role !== 'passenger') return;
@@ -347,13 +292,12 @@ export default function MapView({ role = "passenger", trackedFleetId = null }) {
       cancelled = true;
       clearInterval(id);
       clearFleetMarkers();
-      clearRouteStopMarkers();
       if (nearestFleetMarkerRef.current) {
         nearestFleetMarkerRef.current.remove();
         nearestFleetMarkerRef.current = null;
       }
     };
-  }, [clearFleetMarkers, clearRouteStopMarkers, refreshFleetLocations, role]);
+  }, [clearFleetMarkers, refreshFleetLocations, role]);
 
   // ── Track My Bus: center + highlight when trackedFleetId changes ───────────
   useEffect(() => {
@@ -385,7 +329,7 @@ export default function MapView({ role = "passenger", trackedFleetId = null }) {
       // the same way the marker click handler does.
       const currentRow = fleetDataRef.current[trackedFleetId];
       const routeId = currentRow?.route_id ?? currentRow?.fleet_route?.route_id ?? null;
-      if (routeId) void drawFleetRoute(routeId);
+      if (routeId) void drawFleetRoute(routeId, currentRow?.leg_direction);
     };
 
     // Attempt immediately, retry after next poll cycle if marker not yet rendered
@@ -433,17 +377,12 @@ export default function MapView({ role = "passenger", trackedFleetId = null }) {
     );
   };
 
+  // Idle when there is nothing to estimate: derived, not stored, so no effect
+  // has to reset state.
+  const etaView = currentCoords && nearestFleet ? nearestFleetEta : IDLE_ETA;
+
   useEffect(() => {
-    if (!currentCoords || !nearestFleet) {
-      setNearestFleetEta({
-        level: 'idle',
-        label: 'No active bus selected',
-        etaMinutes: null,
-        delayMinutes: 0,
-        suggestion: 'Pin your location and find the nearest active bus to view ETA.',
-      });
-      return;
-    }
+    if (!currentCoords || !nearestFleet) return undefined;
 
     let cancelled = false;
     void (async () => {
@@ -541,10 +480,10 @@ export default function MapView({ role = "passenger", trackedFleetId = null }) {
     setIsCalculating(true);
 
     try {
-      const destinationCoords = await geocodeLandmark(destinationInput);
+      const destinationCoords = await geocodeLandmark(destinationInput, routeBoundsRef.current || undefined);
 
       if (!destinationCoords) {
-        alert("Location not found along the Davao-Tagum route. Please try a prominent landmark.");
+        alert("Location not found near the selected route. Please try a prominent landmark.");
         setIsCalculating(false);
         return;
       }
@@ -708,10 +647,10 @@ export default function MapView({ role = "passenger", trackedFleetId = null }) {
               Nearest: <strong className="text-slate-200">{nearestFleet?.plate_number || nearestFleet?.fleet_id || 'Not selected'}</strong>
               {nearestFleet?.distance_meters ? ` (${Number(nearestFleet.distance_meters).toFixed(0)} m)` : ''}
             </p>
-            <div className={`rounded-lg border px-2.5 py-2 ${nearestFleetEta.level === 'heavy' ? 'border-amber-500/50 bg-amber-500/10 text-amber-200' : nearestFleetEta.level === 'moderate' ? 'border-sky-500/50 bg-sky-500/10 text-sky-200' : nearestFleetEta.level === 'idle' ? 'border-slate-500/50 bg-slate-500/10 text-slate-200' : 'border-emerald-500/50 bg-emerald-500/10 text-emerald-200'}`}>
+            <div className={`rounded-lg border px-2.5 py-2 ${etaView.level === 'heavy' ? 'border-amber-500/50 bg-amber-500/10 text-amber-200' : etaView.level === 'moderate' ? 'border-sky-500/50 bg-sky-500/10 text-sky-200' : ['idle', 'unknown'].includes(etaView.level) ? 'border-slate-500/50 bg-slate-500/10 text-slate-200' : 'border-emerald-500/50 bg-emerald-500/10 text-emerald-200'}`}>
               <p className="text-[10px] uppercase tracking-[0.16em] text-current/80">ETA to nearest bus</p>
-              <p className="mt-1 text-sm font-semibold text-white">{nearestFleetEta.etaMinutes == null ? 'Unavailable' : `${nearestFleetEta.etaMinutes} min`} • {nearestFleetEta.label}</p>
-              <p className="mt-1 text-[11px] text-current/90">{nearestFleetEta.suggestion}</p>
+              <p className="mt-1 text-sm font-semibold text-white">{etaView.etaMinutes == null ? 'Unavailable' : `${etaView.etaMinutes} min`} • {etaView.label}</p>
+              <p className="mt-1 text-[11px] text-current/90">{etaView.suggestion}</p>
             </div>
           </div>
         )}
@@ -770,7 +709,7 @@ export default function MapView({ role = "passenger", trackedFleetId = null }) {
                       }
                       // Draw route polyline
                       const routeId = row?.route_id ?? row?.fleet_route?.route_id ?? null;
-                      if (routeId) void drawFleetRoute(routeId);
+                      if (routeId) void drawFleetRoute(routeId, row?.leg_direction);
                     }}
                   >
                     <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${isActive ? 'bg-sky-500' : 'bg-slate-700'}`}>

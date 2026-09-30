@@ -1,32 +1,31 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Bus, Clock3, LocateFixed, MapPin, Navigation } from 'lucide-react';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { loadMapLib } from '../../Map/mapDependencies';
+import RouteMap from '../../Map/RouteMap';
 import PassengerService from '../../../api/PassengerService/PassengerService';
 import { haversineM } from '../../../utils/geo';
 import { fetchTrafficStatus } from '../../../services/trafficService';
-import { fetchRoadPathFromOsrm } from '../../../services/routingService';
 
 const POLL_MS = 12000;
-const ROUTE_SOURCE_ID = 'public-track-route';
-const ROUTE_LAYER_ID = 'public-track-route-line';
-const ROUTE_GLOW_LAYER_ID = 'public-track-route-glow';
 
-const toFiniteCoord = (lat, lng) => {
-  const parsedLat = Number(lat);
-  const parsedLng = Number(lng);
-  if (!Number.isFinite(parsedLat) || !Number.isFinite(parsedLng)) return null;
-  return [parsedLng, parsedLat];
+// Popup content is built with DOM nodes (never HTML strings) so plate numbers
+// and other operator-entered text cannot inject markup.
+const buildFleetPopup = (title, status, fleetType) => {
+  const root = document.createElement('div');
+  root.style.cssText = 'font-family:sans-serif;color:#0f172a;min-width:145px;padding:6px;';
+  const rows = [
+    [title, 'margin:0;font-weight:700;font-size:12px;'],
+    [status, 'margin:2px 0 0;font-size:11px;color:#475569;text-transform:capitalize;'],
+    ['Type: ' + fleetType, 'margin:2px 0 0;font-size:11px;color:#0f766e;'],
+  ];
+  rows.forEach(([text, css]) => {
+    const p = document.createElement('p');
+    p.style.cssText = css;
+    p.textContent = text;
+    root.appendChild(p);
+  });
+  return root;
 };
-
-const extractStopCoords = (stops = []) => stops
-  .map((row) => toFiniteCoord(row?.latitude, row?.longitude))
-  .filter(Boolean);
-
-const toLineGeometry = (coordinates = []) => ({
-  type: 'LineString',
-  coordinates,
-});
 
 const deriveStopProgress = (stops = [], fleetLat, fleetLng, lastAcknowledgedStopId, tripStatus) => {
   const normalizedStops = (Array.isArray(stops) ? stops : [])
@@ -104,14 +103,13 @@ function formatDistance(meters) {
   return `${(meters / 1000).toFixed(1)} km`;
 }
 
-export default function PublicTrackingSection({ showHeader = true, compact = false }) {
+export default function PublicTrackingSection({ showHeader = true, compact = false, activeTicket = null }) {
   const mapRef = useRef(null);
-  const mapContainerRef = useRef(null);
   const mapLibRef = useRef(null);
   const markersRef = useRef(new Map());
   const userMarkerRef = useRef(null);
-  const routeGeometryCacheRef = useRef(new Map());
 
+  const [mapReady, setMapReady] = useState(false);
   const [fleets, setFleets] = useState([]);
   const [selectedFleetId, setSelectedFleetId] = useState(null);
   const [userCoords, setUserCoords] = useState(null);
@@ -120,67 +118,22 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
   const [etaState, setEtaState] = useState({ label: 'Waiting for selected bus', etaMinutes: null });
   const [pollingEnabled, setPollingEnabled] = useState(true);
   const [selectedRouteStops, setSelectedRouteStops] = useState([]);
-  const [routeProgress, setRouteProgress] = useState(null);
 
   const selectedFleet = fleets.find((row) => Number(row?.fleet_id) === Number(selectedFleetId)) || fleets[0] || null;
 
-  const clearRoutePath = useCallback(() => {
-    const map = mapRef.current;
-    if (!map) return;
+  const selectedRouteId = Number(selectedFleet?.route_id) > 0 ? Number(selectedFleet.route_id) : null;
 
-    if (map.getLayer(ROUTE_LAYER_ID)) map.removeLayer(ROUTE_LAYER_ID);
-    if (map.getLayer(ROUTE_GLOW_LAYER_ID)) map.removeLayer(ROUTE_GLOW_LAYER_ID);
-    if (map.getSource(ROUTE_SOURCE_ID)) map.removeSource(ROUTE_SOURCE_ID);
-  }, []);
-
-  const drawRoutePath = useCallback((geometry) => {
-    const map = mapRef.current;
-    if (!map || !geometry || !Array.isArray(geometry.coordinates) || geometry.coordinates.length < 2) return;
-
-    const featureCollection = {
-      type: 'FeatureCollection',
-      features: [{
-        type: 'Feature',
-        properties: {},
-        geometry,
-      }],
-    };
-
-    const existingSource = map.getSource(ROUTE_SOURCE_ID);
-    if (existingSource) {
-      existingSource.setData(featureCollection);
-      return;
-    }
-
-    map.addSource(ROUTE_SOURCE_ID, {
-      type: 'geojson',
-      data: featureCollection,
-    });
-
-    map.addLayer({
-      id: ROUTE_GLOW_LAYER_ID,
-      type: 'line',
-      source: ROUTE_SOURCE_ID,
-      layout: { 'line-cap': 'round', 'line-join': 'round' },
-      paint: {
-        'line-color': '#22d3ee',
-        'line-width': 10,
-        'line-opacity': 0.25,
-      },
-    });
-
-    map.addLayer({
-      id: ROUTE_LAYER_ID,
-      type: 'line',
-      source: ROUTE_SOURCE_ID,
-      layout: { 'line-cap': 'round', 'line-join': 'round' },
-      paint: {
-        'line-color': '#0ea5e9',
-        'line-width': 5,
-        'line-opacity': 0.85,
-      },
-    });
-  }, []);
+  // Dim everything outside the passenger's boarding-to-alighting journey, only
+  // when the ticket belongs to the route currently shown.
+  const ticketHighlight = useMemo(() => {
+    const ticketRoute = activeTicket?.trip?.fleet_route?.route?.route_id
+      ?? activeTicket?.trip?.fleetRoute?.route?.route_id
+      ?? activeTicket?.trip?.fleet_route?.route_id
+      ?? activeTicket?.trip?.fleetRoute?.route_id;
+    if (!activeTicket || !selectedRouteId || Number(ticketRoute) !== selectedRouteId) return null;
+    if (!activeTicket.origin_stop_id || !activeTicket.destination_stop_id) return null;
+    return { fromStopId: activeTicket.origin_stop_id, toStopId: activeTicket.destination_stop_id };
+  }, [activeTicket, selectedRouteId]);
 
   const flyToFleet = useCallback((row) => {
     const map = mapRef.current;
@@ -191,43 +144,40 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
     map.flyTo({ center: [lng, lat], zoom: 14, speed: 1.1 });
   }, []);
 
+  // The shared RouteMap owns the map instance; this component only adds its
+  // own overlays (live bus markers, the passenger's pinned location) on top.
+  const handleMapReady = useCallback((map, maplibregl) => {
+    mapRef.current = map;
+    mapLibRef.current = maplibregl;
+    setMapReady(true);
+  }, []);
+
+  const handleRouteData = useCallback((data) => {
+    setSelectedRouteStops((data?.stops || []).map((stop) => ({
+      stop_id: stop.stopId,
+      stop_name: stop.name,
+      stop_order: stop.sequence,
+      latitude: stop.latitude,
+      longitude: stop.longitude,
+    })));
+  }, []);
+
   useEffect(() => {
-    let cancelled = false;
-
-    const init = async () => {
-      const { default: maplibregl } = await loadMapLib();
-      if (cancelled || mapRef.current || !mapContainerRef.current) return;
-      mapLibRef.current = maplibregl;
-      mapRef.current = new maplibregl.Map({
-        container: mapContainerRef.current,
-        style: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json',
-        center: [125.6047, 7.0707],
-        zoom: 12,
-      });
-    };
-
-    void init();
-
+    const markers = markersRef.current;
     return () => {
-      cancelled = true;
-      markersRef.current.forEach((marker) => marker.remove());
-      markersRef.current.clear();
+      markers.forEach((marker) => marker.remove());
+      markers.clear();
       if (userMarkerRef.current) {
         userMarkerRef.current.remove();
         userMarkerRef.current = null;
       }
-      if (mapRef.current) {
-        clearRoutePath();
-        mapRef.current.remove();
-        mapRef.current = null;
-      }
     };
-  }, [clearRoutePath]);
+  }, []);
 
-  const refreshFleets = useCallback(async (manual = false) => {
+  const refreshFleets = useCallback(async () => {
     const map = mapRef.current;
     const maplibregl = mapLibRef.current;
-    if (!map || !maplibregl) return;
+    if (!mapReady || !map || !maplibregl) return;
 
     try {
       const res = await PassengerService.getFleetLocations();
@@ -246,14 +196,17 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
 
       rows.forEach((row) => {
         const fleetId = Number(row.fleet_id);
-        const lat = Number(row.latitude);
-        const lng = Number(row.longitude);
+        // Server-projected position keeps the bus on the route line; a bus that
+        // is genuinely off route is shown where it really is.
+        const projected = row?.route_position?.on_route ? row.route_position : null;
+        const lat = Number(projected ? projected.snapped_latitude : row.latitude);
+        const lng = Number(projected ? projected.snapped_longitude : row.longitude);
         const title = row?.plate_number || `Fleet ${fleetId}`;
 
         if (!markersRef.current.has(fleetId)) {
           const el = document.createElement('div');
           el.className = 'public-fleet-marker';
-          el.innerHTML = '🚌';
+          el.textContent = '🚌';
           el.addEventListener('click', () => {
             setSelectedFleetId(fleetId);
             flyToFleet(row);
@@ -262,12 +215,8 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
           const marker = new maplibregl.Marker({ element: el })
             .setLngLat([lng, lat])
             .setPopup(
-              new maplibregl.Popup({ offset: 18 }).setHTML(
-                `<div style="font-family:sans-serif;color:#0f172a;min-width:145px;padding:6px;">
-                  <p style="margin:0;font-weight:700;font-size:12px;">${title}</p>
-                  <p style="margin:2px 0 0;font-size:11px;color:#475569;text-transform:capitalize;">${row?.trip_status || 'active'}</p>
-                  <p style="margin:2px 0 0;font-size:11px;color:#0f766e;">Type: ${row?.fleet_type || 'unknown'}</p>
-                </div>`,
+              new maplibregl.Popup({ offset: 18 }).setDOMContent(
+                buildFleetPopup(title, row?.trip_status || 'active', row?.fleet_type || 'unknown'),
               ),
             )
             .addTo(map);
@@ -293,7 +242,7 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
     } catch {
       // Keep the section resilient to transient polling failures.
     }
-  }, [flyToFleet, selectedFleetId]);
+  }, [flyToFleet, selectedFleetId, mapReady]);
 
   useEffect(() => {
     if (!pollingEnabled) return undefined;
@@ -317,13 +266,12 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
 
   const handleRetryFleetFetch = () => {
     setPollingEnabled(true);
-    void refreshFleets(true);
+    void refreshFleets();
   };
 
   useEffect(() => {
     if (!userCoords || !selectedFleet) {
-      setEtaState({ label: 'Pin your location to compute ETA', etaMinutes: null });
-      return;
+      return undefined;
     }
 
     let cancelled = false;
@@ -352,80 +300,22 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
     };
   }, [selectedFleet, userCoords]);
 
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map) return;
-
-    const routeId = Number(selectedFleet?.route_id);
-    if (!Number.isFinite(routeId) || routeId <= 0) {
-      clearRoutePath();
-      setSelectedRouteStops([]);
-      return;
+  const effectiveEtaState = useMemo(() => {
+    if (!userCoords || !selectedFleet) {
+      return { label: 'Pin your location to compute ETA', etaMinutes: null };
     }
+    return etaState;
+  }, [etaState, selectedFleet, userCoords]);
 
-    let cancelled = false;
-
-    const drawAssignedRoute = async () => {
-      const cached = routeGeometryCacheRef.current.get(routeId);
-      if (cached) {
-        setSelectedRouteStops(cached.stops || []);
-        drawRoutePath(cached.geometry);
-        return;
-      }
-
-      try {
-        const stopsRes = await PassengerService.getRouteStops(routeId);
-        const stops = Array.isArray(stopsRes?.data) ? stopsRes.data : [];
-        const stopCoords = extractStopCoords(stops);
-        if (stopCoords.length < 2) {
-          clearRoutePath();
-          return;
-        }
-
-        let geometry = toLineGeometry(stopCoords);
-        try {
-          const roadCoords = await fetchRoadPathFromOsrm(stopCoords);
-          if (roadCoords && roadCoords.length >= 2) {
-            geometry = toLineGeometry(roadCoords);
-          }
-        } catch {
-          // Stop-to-stop geometry remains as fallback when road routing fails.
-        }
-
-        routeGeometryCacheRef.current.set(routeId, { geometry, stops });
-        if (!cancelled) {
-          setSelectedRouteStops(stops);
-          drawRoutePath(geometry);
-        }
-      } catch {
-        if (!cancelled) {
-          clearRoutePath();
-          setSelectedRouteStops([]);
-        }
-      }
-    };
-
-    void drawAssignedRoute();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [clearRoutePath, drawRoutePath, selectedFleet?.route_id]);
-
-  useEffect(() => {
-    if (!selectedFleet || selectedRouteStops.length < 2) {
-      setRouteProgress(null);
-      return;
-    }
-
-    const progress = deriveStopProgress(
+  const routeProgress = useMemo(() => {
+    if (!selectedFleet || selectedRouteStops.length < 2) return null;
+    return deriveStopProgress(
       selectedRouteStops,
       selectedFleet.latitude,
       selectedFleet.longitude,
       selectedFleet.last_acknowledged_stop_id,
       selectedFleet.trip_status,
     );
-    setRouteProgress(progress);
   }, [selectedFleet, selectedRouteStops]);
 
   const handlePinLocation = () => {
@@ -462,8 +352,8 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
         userMarkerRef.current = new maplibregl.Marker({ element: markerEl })
           .setLngLat([lng, lat])
           .setPopup(
-            new maplibregl.Popup({ offset: 14 }).setHTML(
-              '<div style="font-family:sans-serif;color:#0f172a;padding:6px;">Your current location</div>',
+            new maplibregl.Popup({ offset: 14 }).setDOMContent(
+              Object.assign(document.createElement('div'), { textContent: 'Your current location' }),
             ),
           )
           .addTo(map);
@@ -530,14 +420,22 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
             </div>
 
             <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-              <div ref={mapContainerRef} className="h-90 w-full" />
+              <RouteMap
+                routeId={selectedRouteId}
+                direction={selectedFleet?.leg_direction || 'outbound'}
+                highlight={ticketHighlight}
+                showStatus={false}
+                onMapReady={handleMapReady}
+                onRouteData={handleRouteData}
+                className="relative h-90 w-full"
+              />
             </div>
 
             <div className="mt-3 grid gap-2 sm:grid-cols-3">
               <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
                 <p className="text-[11px] uppercase tracking-widest text-slate-500">ETA</p>
-                <p className="mt-1 inline-flex items-center gap-1 text-sm font-semibold text-slate-900"><Clock3 className="h-3.5 w-3.5 text-teal-600" />{etaState.etaMinutes == null ? 'N/A' : `${etaState.etaMinutes} min`}</p>
-                <p className="text-[11px] text-slate-500">{etaState.label}</p>
+                <p className="mt-1 inline-flex items-center gap-1 text-sm font-semibold text-slate-900"><Clock3 className="h-3.5 w-3.5 text-teal-600" />{effectiveEtaState.etaMinutes == null ? 'N/A' : `${effectiveEtaState.etaMinutes} min`}</p>
+                <p className="text-[11px] text-slate-500">{effectiveEtaState.label}</p>
               </div>
               <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
                 <p className="text-[11px] uppercase tracking-widest text-slate-500">Location</p>

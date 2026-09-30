@@ -95,6 +95,11 @@ export class StaffBaseService extends BaseService {
     return await this.request(`/${role}/profile`, 'GET');
   }
 
+  // Batch 24 (C8): one role-scoped endpoint shared by Driver, Chauffeur and Operator.
+  async getCalendarSummary() {
+    return await this.request('/staff/calendar-summary', 'GET');
+  }
+
   // ── Driver/Conductor Pairing (shared, parameterized by role) ──
   async getPairingToken(role) {
     return await this.request(`/${role}/pairing-token`, 'GET');
@@ -144,11 +149,6 @@ export class StaffBaseService extends BaseService {
       }
       throw err;
     }
-  }
-
-  // ── Public: Route Stops (for navigation map) ──
-  async getRouteStops(routeId) {
-    return await this.request(`/routes/${routeId}/stops`, 'GET');
   }
 }
 
