@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import QrScanner from 'qr-scanner';
 import StaffService from '../../api/StaffService/StaffBaseService';
+import QrImage from '../Passenger/Ticket/QrImage';
 
 const isLikelyPin = (value) => /^\d{6}$/.test(String(value || '').trim());
 
@@ -243,11 +244,7 @@ export default function PairingScreen({ role, onPaired, onLogout, paired = false
                 className="rounded-xl border border-slate-200 bg-white p-2 transition hover:scale-[1.01]"
                 title="Tap to show or hide PIN"
               >
-                <img
-                  src={myToken.qr_url}
-                  alt="Your pairing QR"
-                  className="h-48 w-48"
-                />
+                <QrImage content={myToken.token} alt="Your pairing QR" size={384} className="h-48 w-48" />
               </button>
 
               <button
