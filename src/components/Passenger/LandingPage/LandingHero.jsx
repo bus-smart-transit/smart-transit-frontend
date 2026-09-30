@@ -3,10 +3,15 @@ import { useNavigate } from 'react-router-dom';
 import { Search } from 'lucide-react';
 import Button from '../../ui/Button';
 import JourneyFields from '../BuyTicket/JourneyFields';
-import { useBookingStops } from '../../../api/hooks/Passenger/useBookingSearch';
+import { useBookingStops, useTripSearch } from '../../../api/hooks/Passenger/useBookingSearch';
+import TripResults from '../Trips/TripResults';
+import { formatManilaDate } from '../../../utils/dates';
 import { useRegion } from '../../../api/hooks/useRegion';
 import { addDaysToDate, buildBookingQuery, findStopCode } from '../../../utils/bookingQuery';
 import heroBg from '../../../assets/hero.png';
+
+// The short list under the search; the rest is on the all-trips page.
+const RESULT_LIMIT = 5;
 
 export default function LandingHero() {
   const navigate = useNavigate();
@@ -16,9 +21,12 @@ export default function LandingHero() {
     destination_stop_id: '',
     booking_date: '',
   });
+  // The journey that was actually searched; the results below belong to it, not to later edits.
+  const [search, setSearch] = useState(null);
   const stops = useBookingStops(journey.origin_stop_id);
   // The date defaults to today in Manila (from the server) until the passenger picks another.
   const date = journey.booking_date || stops.today;
+  const results = useTripSearch(search, RESULT_LIMIT);
 
   const handleChange = (field, value) => {
     setJourney((prev) => ({
@@ -33,19 +41,30 @@ export default function LandingHero() {
   const dateOk = Boolean(date) && date >= stops.today && (!maxDate || date <= maxDate);
   const canSearch = Boolean(journey.origin_stop_id && journey.destination_stop_id && dateOk);
 
+  const stopName = (groups, stopId) => groups.flatMap((group) => group.stops).find((stop) => String(stop.stop_id) === String(stopId))?.name || '';
+
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!canSearch) return;
-    // The link carries readable stop codes and the date, never internal ids or the mode.
-    const query = buildBookingQuery({
+    setSearch({
+      originStopId: journey.origin_stop_id,
+      destinationStopId: journey.destination_stop_id,
+      date,
+      seatType: 'seated',
+      // Readable codes for the links; ids never reach the address bar.
       from: findStopCode(stops.originGroups, journey.origin_stop_id),
       to: findStopCode(stops.destinationGroups, journey.destination_stop_id),
-      date,
+      fromName: stopName(stops.originGroups, journey.origin_stop_id),
+      toName: stopName(stops.destinationGroups, journey.destination_stop_id),
     });
-    navigate(`/passenger/book?${query}`);
   };
+
+  const bookTrip = (trip) => {
+    navigate(`/passenger/book?${buildBookingQuery({ from: search.from, to: search.to, date: trip.trip_date, time: trip.boarding_time })}`);
+  };
+  const showAll = () => navigate(`/passenger/trips?${buildBookingQuery({ from: search.from, to: search.to, date: search.date })}`);
   return (
-    <section className="relative overflow-hidden">
+    <section className="relative">
       <div
         className="absolute inset-0 bg-cover bg-center"
         style={{ backgroundImage: `url(${heroBg})` }}
@@ -101,11 +120,37 @@ export default function LandingHero() {
                 maxAdvanceDays={stops.maxAdvanceDays}
                 onChange={handleChange}
                 idPrefix="hero"
+                action={(
+                  <Button type="submit" variant="primary" size="lg" icon={Search} disabled={!canSearch} className="w-full lg:w-auto">
+                    Search
+                  </Button>
+                )}
               />
-              <Button type="submit" variant="primary" size="md" icon={Search} disabled={!canSearch}>
-                Search
-              </Button>
             </form>
+
+            {search && (
+              <div className="mt-6 border-t border-slate-100 pt-5" aria-live="polite">
+                <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+                  <h3 className="font-display text-lg font-bold text-navy-950">Available trips</h3>
+                  <p className="text-sm text-slate-500">{search.fromName} &rarr; {search.toName} &middot; from {formatManilaDate(search.date)}</p>
+                </div>
+                <TripResults
+                  state={results}
+                  fromName={search.fromName}
+                  toName={search.toName}
+                  seatType={search.seatType}
+                  searchedDate={search.date}
+                  onBook={bookTrip}
+                  footer={(
+                    <div className="pt-1 text-center">
+                      <Button type="button" variant="outline" size="md" onClick={showAll}>
+                        Show all available trips{results.total > results.trips.length ? ` (${results.total})` : ''}
+                      </Button>
+                    </div>
+                  )}
+                />
+              </div>
+            )}
           </div>
         </div>
       </div>

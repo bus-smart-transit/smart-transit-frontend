@@ -165,11 +165,7 @@ export default function useBuyTicket({ onTicketPurchased }) {
   // Book Now means "the next bus today"; any other date can only be Book Later. The mode is page
   // state, never part of the URL.
   const bookingMode = isToday ? form.booking_option : 'later';
-  useEffect(() => {
-    if (!journeyTouchedRef.current) return;
-    const next = withBookingParams(searchParams, { from: originCode, to: destinationCode, date: travelDate });
-    if (next.toString() !== searchParams.toString()) setSearchParams(next, { replace: true });
-  }, [originCode, destinationCode, travelDate, searchParams, setSearchParams]);
+
 
   // Book Now: the server picks the next departure today. Book Later: the passenger picks one of the
   // date's departures (a compact time selector); the first is selected until they choose another.
@@ -188,6 +184,7 @@ export default function useBuyTicket({ onTicketPurchased }) {
     seatType: form.seat_type,
   });
   const selectedDeparture = departuresState.departures.find((item) => String(item.trip_id) === String(selectedDepartureId))
+    || (form.booking_time ? departuresState.departures.find((item) => item.boarding_time === form.booking_time) : null)
     || departuresState.departures[0]
     || null;
   const resolution = bookingMode === 'now'
@@ -201,6 +198,13 @@ export default function useBuyTicket({ onTicketPurchased }) {
     };
   const trip = resolution.trip;
 
+  // The link mirrors the choice: stops, date and (for Book Later) the departure time.
+  const linkTime = bookingMode === 'later' && trip ? trip.boarding_time : '';
+  useEffect(() => {
+    if (!journeyTouchedRef.current) return;
+    const next = withBookingParams(searchParams, { from: originCode, to: destinationCode, date: travelDate, time: linkTime });
+    if (next.toString() !== searchParams.toString()) setSearchParams(next, { replace: true });
+  }, [originCode, destinationCode, travelDate, linkTime, searchParams, setSearchParams]);
   const effectiveAlightingStopId = dropoff ? null : (alightingStopId ?? (form.destination_stop_id || null));
   const timelineState = useTripTimeline({
     tripId: trip?.trip_id ?? null,
@@ -265,6 +269,8 @@ export default function useBuyTicket({ onTicketPurchased }) {
   const handleJourneyChange = useCallback((field, value) => {
     journeyTouchedRef.current = true;
     handleChange(field, value);
+    // A departure picked from the results only applies to the journey it came from.
+    if (field !== 'booking_option') handleChange('booking_time', '');
     if (field === 'origin_stop_id') {
       handleChange('destination_stop_id', '');
     }
@@ -277,6 +283,7 @@ export default function useBuyTicket({ onTicketPurchased }) {
     setDropoff(null);
     setDropoffDraft(null);
     setDropoffModalOpen(false);
+    journeyTouchedRef.current = true;
     setSelectedDepartureId(String(tripId));
   }, []);
 

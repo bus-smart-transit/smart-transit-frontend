@@ -10,6 +10,7 @@ const ForgotPasswordPage = lazy(() => import('../../components/Passenger/Auth/Fo
 const ResetPasswordPage = lazy(() => import('../../components/Passenger/Auth/ResetPasswordPage'));
 const PassengerDashboard = lazy(() => import('../../components/Passenger/Dashboard/Dashboard'));
 const BuyTicketPage = lazy(() => import('../../components/Passenger/BuyTicket/BuyTicketPage'));
+const AvailableTripsPage = lazy(() => import('../../components/Passenger/Trips/AvailableTripsPage'));
 
 function PassengerRouteFallback() {
     return (
@@ -34,6 +35,7 @@ export default function PassengerBaseRouter() {
                     <Route path="/" element={<LandingPage />} />
                     <Route path="search" element={<LandingPage />} />
                     <Route path="book" element={<BuyTicketPage />} />
+                    <Route path="trips" element={<AvailableTripsPage />} />
                     <Route path="dashboard" element={<PassengerDashboard />} />
 
                     <Route element={<GuestRoute role="passenger" authenticatedRedirectTo="/" />}>

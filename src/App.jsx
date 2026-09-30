@@ -9,11 +9,20 @@ const PassengerBaseRouter = lazy(() => import('./pages/passenger'));
 const EmployeeBaseRouter = lazy(() => import('./pages/employee'));
 const LandingPage = lazy(() => import('./components/Passenger/LandingPage/LandingPage'));
 const CheckoutReturn = lazy(() => import('./components/Passenger/CheckoutReturn/CheckoutReturn'));
+const AboutPage = lazy(() => import('./components/Passenger/About/AboutPage'));
 
 function LandingWithAuth() {
   return (
     <AuthProvider role="passenger">
       <LandingPage />
+    </AuthProvider>
+  );
+}
+
+function AboutWithAuth() {
+  return (
+    <AuthProvider role="passenger">
+      <AboutPage />
     </AuthProvider>
   );
 }
@@ -34,6 +43,7 @@ export default function App() {
           <Routes>
             {/* LandingPage is self-contained — no layout wrapper needed */}
             <Route path="/" element={<LandingWithAuth />} />
+            <Route path="/about" element={<AboutWithAuth />} />
 
             <Route path="/passenger/*" element={<PassengerBaseRouter />} />
             <Route path="/checkout/success" element={<CheckoutReturn />} />

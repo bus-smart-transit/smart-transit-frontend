@@ -32,11 +32,14 @@ export default function useBookingLink(searchParams) {
         setState({
           status: 'ok',
           message: '',
+          link,
           journey: {
             origin_stop_id: String(link.from.stop_id),
             destination_stop_id: String(link.to.stop_id),
             booking_option: 'now',
             booking_date: link.date,
+            // A trip chosen from the results (?time=HH:MM) opens Book Later with that departure.
+            ...(parsed.time ? { booking_option: 'later', booking_time: parsed.time } : {}),
           },
         })
       })
