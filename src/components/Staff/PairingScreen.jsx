@@ -193,41 +193,41 @@ export default function PairingScreen({ role, onPaired, onLogout, paired = false
   const revealedPin = myToken?.token_pin || myToken?.pin_code || '';
 
   return (
-    <section className="rounded-2xl border border-slate-800 bg-slate-900 p-4 sm:p-6">
+    <section className="staff-card staff-card-roomy">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <div className="inline-flex items-center gap-2 rounded-full border border-sky-800 bg-sky-950/40 px-2.5 py-1 text-xs text-sky-300">
+          <div className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-xs text-sky-700">
             <Shield className="h-3.5 w-3.5" />
             Pairing Required
           </div>
-          <h3 className="mt-2 text-base font-semibold text-slate-100">Pair with your {partnerRole}</h3>
-          <p className="mt-1 text-xs text-slate-400">{unlockMessage}</p>
+          <h3 className="mt-2 text-base font-semibold text-slate-900">Pair with your {partnerRole}</h3>
+          <p className="mt-1 text-xs text-slate-500">{unlockMessage}</p>
           {paired && (
-            <div className="mt-2 inline-flex items-center gap-2 rounded-full border border-emerald-800 bg-emerald-950/40 px-2.5 py-1 text-xs text-emerald-300">
+            <div className="mt-2 inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs text-emerald-700">
               <CheckCircle2 className="h-3.5 w-3.5" />
               Paired with your {partnerRole}
             </div>
           )}
         </div>
         {myToken?.fleet_plate && (
-          <div className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-300">
+          <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
             <div>Fleet: <strong>{myToken.fleet_plate}</strong></div>
-            {myToken.route_name && <div className="mt-0.5 text-slate-400">{myToken.route_name}</div>}
+            {myToken.route_name && <div className="mt-0.5 text-slate-500">{myToken.route_name}</div>}
           </div>
         )}
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <article className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
-          <h4 className="mb-3 text-sm font-semibold text-slate-200">Your pairing QR (primary)</h4>
+      <div className="staff-grid md:grid-cols-2">
+        <article className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <h4 className="mb-3 text-sm font-semibold text-slate-900">Your pairing QR (primary)</h4>
 
           {loadingToken ? (
             <div className="flex flex-col items-center gap-3 py-8">
-              <Loader className="h-7 w-7 animate-spin text-sky-400" />
-              <p className="text-xs text-slate-400">Generating token...</p>
+              <Loader className="h-7 w-7 animate-spin text-sky-500" />
+              <p className="text-xs text-slate-500">Generating token...</p>
             </div>
           ) : tokenError ? (
-            <div className="rounded-xl border border-red-900 bg-red-950/40 p-3 text-xs text-red-300">
+            <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">
               {tokenError}
             </div>
           ) : myToken ? (
@@ -240,7 +240,7 @@ export default function PairingScreen({ role, onPaired, onLogout, paired = false
                     void loadMyToken({ background: true });
                   }
                 }}
-                className="rounded-xl border border-slate-700 bg-white p-2 transition hover:scale-[1.01]"
+                className="rounded-xl border border-slate-200 bg-white p-2 transition hover:scale-[1.01]"
                 title="Tap to show or hide PIN"
               >
                 <img
@@ -253,25 +253,25 @@ export default function PairingScreen({ role, onPaired, onLogout, paired = false
               <button
                 type="button"
                 onClick={() => setShowPin((prev) => !prev)}
-                className="text-xs font-semibold text-sky-400 transition hover:text-sky-300"
+                className="text-xs font-semibold text-sky-600 transition hover:text-sky-700"
               >
                 {showPin ? 'Hide PIN' : 'Show PIN'}
               </button>
 
               {showPin && (
-                <div className="font-data rounded-xl border border-slate-700 bg-slate-900 px-4 py-2 text-center text-xl font-bold tracking-[0.2em] text-slate-100">
+                <div className="font-data rounded-xl border border-slate-200 bg-white px-4 py-2 text-center text-xl font-bold tracking-[0.2em] text-slate-900">
                   {revealedPin || '------'}
                 </div>
               )}
 
               {showPin && !revealedPin && (
-                <p className="text-xs text-amber-300">PIN is not available yet. Tap refresh and try again.</p>
+                <p className="text-xs text-amber-600">PIN is not available yet. Tap refresh and try again.</p>
               )}
 
               <button
                 type="button"
                 onClick={() => void loadMyToken()}
-                className="inline-flex items-center gap-1.5 text-xs text-slate-400 transition hover:text-slate-200"
+                className="inline-flex items-center gap-1.5 text-xs text-slate-500 transition hover:text-slate-700"
               >
                 <RefreshCw className="h-3 w-3" />
                 Refresh QR/PIN
@@ -280,11 +280,11 @@ export default function PairingScreen({ role, onPaired, onLogout, paired = false
           ) : null}
         </article>
 
-        <article className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
-          <h4 className="mb-3 text-sm font-semibold text-slate-200">Pair now</h4>
+        <article className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <h4 className="mb-3 text-sm font-semibold text-slate-900">Pair now</h4>
 
           {paired && (
-            <div className="mb-3 rounded-xl border border-emerald-800 bg-emerald-950/40 px-3 py-2 text-xs text-emerald-300">
+            <div className="mb-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
               Session pairing is complete. Live dashboard features are unlocked.
             </div>
           )}
@@ -294,7 +294,7 @@ export default function PairingScreen({ role, onPaired, onLogout, paired = false
               <button
                 type="button"
                 onClick={() => void startScanner()}
-                className="inline-flex items-center gap-2 rounded-xl border border-emerald-700 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-300 transition hover:bg-emerald-500/20"
+                className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100"
               >
                 <Camera className="h-4 w-4" />
                 Start Camera
@@ -303,7 +303,7 @@ export default function PairingScreen({ role, onPaired, onLogout, paired = false
               <button
                 type="button"
                 onClick={stopScanner}
-                className="inline-flex items-center gap-2 rounded-xl border border-amber-700 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-300 transition hover:bg-amber-500/20"
+                className="inline-flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 transition hover:bg-amber-100"
               >
                 <Camera className="h-4 w-4" />
                 Stop Camera
@@ -311,24 +311,30 @@ export default function PairingScreen({ role, onPaired, onLogout, paired = false
             )}
           </div>}
 
-          {!paired && <div className="relative overflow-hidden rounded-xl border border-slate-800 bg-slate-900">
+          {/* Batch 23 fix: this container was previously `aspect-video w-full`,
+              which meant its rendered size was never an intentional value —
+              it was width (whatever the narrow 2-column grid cell resolved
+              to, e.g. 219px) recalculated to a 16:9 height (e.g. 123.19px).
+              A fixed, explicit 300x200 box removes that computed-size drift
+              entirely. */}
+          {!paired && <div className="relative mx-auto h-[200px] w-[300px] max-w-full overflow-hidden rounded-xl border border-slate-200 bg-slate-900">
             <video
               ref={videoRef}
-              className="aspect-video w-full bg-slate-900 object-cover"
+              className="h-full w-full bg-slate-900 object-cover"
               muted
               playsInline
               autoPlay
             />
             {scannerBusy && (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-slate-950/80 backdrop-blur-sm">
-                <div className="h-8 w-8 animate-spin rounded-full border-4 border-slate-700 border-t-sky-400" />
+                <div className="h-8 w-8 animate-spin rounded-full border-4 border-slate-300 border-t-sky-500" />
                 <p className="text-xs font-semibold text-sky-300">Verifying...</p>
               </div>
             )}
           </div>}
 
-          {!paired && scannerStatus && <p className="mt-2 text-xs text-slate-400">{scannerStatus}</p>}
-          {!paired && scannerError && <p className="mt-2 text-xs text-red-400">{scannerError}</p>}
+          {!paired && scannerStatus && <p className="mt-2 text-xs text-slate-500">{scannerStatus}</p>}
+          {!paired && scannerError && <p className="mt-2 text-xs text-red-600">{scannerError}</p>}
 
           {!paired && <div className="mt-4">
             <p className="mb-2 text-xs text-slate-500">Enter partner PIN or full token:</p>
@@ -341,13 +347,13 @@ export default function PairingScreen({ role, onPaired, onLogout, paired = false
                   setManualToken(e.target.value);
                   setResult(null);
                 }}
-                className="h-10 w-full rounded-xl border border-slate-800 bg-slate-900 px-3 text-xs text-slate-100 outline-none placeholder:text-slate-600 focus:border-sky-400"
+                className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-900 outline-none placeholder:text-slate-400 focus:border-sky-400"
               />
               <button
                 type="button"
                 onClick={() => void submitPairing(manualToken)}
                 disabled={!manualToken.trim() || scannerBusy}
-                className="rounded-xl bg-sky-500 px-3 py-2 text-xs font-semibold text-slate-950 transition hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-xl bg-sky-500 px-3 py-2 text-xs font-semibold text-white transition hover:bg-sky-600 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <QrCode className="h-4 w-4" />
               </button>
@@ -357,8 +363,8 @@ export default function PairingScreen({ role, onPaired, onLogout, paired = false
           {!paired && result && (
             <div className={`mt-4 rounded-xl border px-4 py-3 text-sm ${
               result.success
-                ? 'border-emerald-900 bg-emerald-950/40 text-emerald-300'
-                : 'border-red-900 bg-red-950/40 text-red-300'
+                ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                : 'border-red-200 bg-red-50 text-red-700'
             }`}>
               <div className="flex items-start gap-2">
                 {result.success
@@ -375,7 +381,7 @@ export default function PairingScreen({ role, onPaired, onLogout, paired = false
         <div className="mt-4 text-right">
           <button
             onClick={onLogout}
-            className="text-xs text-slate-500 underline transition hover:text-slate-300"
+            className="text-xs text-slate-500 underline transition hover:text-slate-700"
           >
             Sign out
           </button>

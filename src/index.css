@@ -7,6 +7,14 @@
   html { 
     scroll-behavior: smooth;
   }
+  :root {
+    --staff-grid-gap-mobile: 0.75rem;
+    --staff-grid-gap-desktop: 1.25rem;
+    --staff-card-padding-mobile: 1.25rem;
+    --staff-card-padding-desktop: 1.5rem;
+    --staff-card-padding-compact: 0.75rem;
+    --staff-card-padding-roomy: 2rem;
+  }
   body {
     background-color: #f1f5f9;
     color: #0f172a;
@@ -43,6 +51,120 @@
     .container-page {
       padding-left: 2rem;
       padding-right: 2rem;
+    }
+  }
+
+  .staff-grid {
+    display: grid;
+    gap: var(--staff-grid-gap-mobile);
+  }
+
+  @media (min-width: 1024px) {
+    .staff-grid {
+      gap: var(--staff-grid-gap-desktop);
+    }
+  }
+
+  /* Batch 23: structural fix — sibling tab sections (e.g. "My Shift
+     Blocks" followed by "Trip Status" followed by "Route Navigation") were
+     rendering with zero gap between them because <main> had no spacing
+     wrapper; each page would have needed its own manual margin, which is
+     exactly the per-page drift Batch 22 was meant to prevent. This applies
+     the same gap tokens as staff-grid, but as a vertical stack, once, in
+     the shared layout. */
+  .staff-stack {
+    display: flex;
+    flex-direction: column;
+    gap: var(--staff-grid-gap-mobile);
+  }
+
+  @media (min-width: 1024px) {
+    .staff-stack {
+      gap: var(--staff-grid-gap-desktop);
+    }
+  }
+
+  .staff-card {
+    border-radius: 0.75rem;
+    border: 1px solid rgb(226 232 240);
+    background: #ffffff;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+    padding: var(--staff-card-padding-mobile);
+  }
+
+  .staff-card-roomy {
+    padding: var(--staff-card-padding-roomy);
+  }
+
+  .staff-card-compact {
+    padding: var(--staff-card-padding-compact);
+  }
+
+  .staff-card-flush {
+    padding: 0;
+  }
+
+  /* Advisor-branch inspired mobile shell primitives for driver/conductor
+     portals: compact, chip-heavy top bars and a strong info strip. */
+  .crew-header {
+    border: 1px solid rgb(226 232 240);
+    border-radius: 0.9rem;
+    background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+    padding: 0.9rem;
+  }
+
+  .crew-chip {
+    display: inline-flex;
+    max-width: 100%;
+    align-items: center;
+    gap: 0.375rem;
+    border-radius: 9999px;
+    border: 1px solid rgb(226 232 240);
+    background: #ffffff;
+    padding: 0.3rem 0.65rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: rgb(51 65 85);
+  }
+
+  .crew-chip-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    border-radius: 9999px;
+    border: 1px solid rgb(203 213 225);
+    background: #ffffff;
+    padding: 0.45rem 0.85rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: rgb(51 65 85);
+    transition: background-color 150ms ease;
+  }
+
+  .crew-chip-button:hover {
+    background: rgb(248 250 252);
+  }
+
+  .crew-load-strip {
+    border-radius: 0.9rem;
+    border: 1px solid rgb(226 232 240);
+    background: #ffffff;
+    padding: 0.75rem;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  }
+
+  @media (min-width: 640px) {
+    .staff-card {
+      padding: var(--staff-card-padding-desktop);
+    }
+
+    .crew-header {
+      padding: 1rem;
+    }
+
+    .crew-load-strip {
+      padding: 0.9rem;
     }
   }
 }

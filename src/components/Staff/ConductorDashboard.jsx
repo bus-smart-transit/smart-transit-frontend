@@ -55,7 +55,7 @@ const formatDateTime = (value) => {
 };
 
 const STATUS_COLOR = {
-  scheduled: '#64748b',
+  scheduled: '#153a6b',
   delayed: '#e11d48',
   boarding: '#3b82f6',
   departed: '#f59e0b',
@@ -106,35 +106,35 @@ export default function ConductorDashboard() {
 
 function TripCardGroup({ title, trips, onDeclineTrip, onAcceptTrip, emptyMessage = 'No trips in this section.' }) {
   return (
-    <div className="md:col-span-2 rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
-      <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-400">{title}</h3>
+    <div className="md:col-span-2 staff-card">
+      <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">{title}</h3>
       {trips.length === 0 ? (
-        <article className="rounded-2xl border border-dashed border-slate-800 bg-slate-900 p-6">
+        <article className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-6">
           <p className="text-sm text-slate-500">{emptyMessage}</p>
         </article>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="staff-grid md:grid-cols-2">
           {trips.map((item) => {
             // Batch 14: decline must be reachable from this list — today OR
             // upcoming — regardless of pairing status.
             const canDecline = ['scheduled', 'delayed', 'boarding'].includes(String(item?.status || '').toLowerCase());
             return (
-              <article key={item.trip_id} className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
+              <article key={item.trip_id} className="staff-card">
                 <div className="mb-4 flex items-center justify-between">
-                  <h3 className="text-lg font-semibold text-slate-100">Trip #{item.trip_id}</h3>
-                  <span className="rounded-full border border-sky-500/40 bg-sky-500/10 px-3 py-1 text-xs text-sky-300">{item.status}</span>
+                  <h3 className="text-lg font-semibold text-slate-900">Trip #{item.trip_id}</h3>
+                  <span className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs text-sky-700">{item.status}</span>
                 </div>
                 <div className="space-y-3 text-sm">
-                  <div className="flex items-center justify-between"><span className="text-slate-500">Schedule</span><strong className="font-data text-slate-100">{formatTripSchedule(item)}</strong></div>
-                  <div className="flex items-center justify-between"><span className="text-slate-500">Fleet</span><strong className="text-slate-100">{item.fleet_route?.fleet?.plate_number || `Fleet ${item.fleet_route?.fleet_id || '-'}`}</strong></div>
-                  <div className="flex items-center justify-between"><span className="text-slate-500">Route</span><strong className="text-slate-100">{item.fleet_route?.route?.route_name || `Route ${item.fleet_route?.route_id || '-'}`}</strong></div>
+                  <div className="flex items-center justify-between"><span className="text-slate-500">Schedule</span><strong className="font-data text-slate-900">{formatTripSchedule(item)}</strong></div>
+                  <div className="flex items-center justify-between"><span className="text-slate-500">Fleet</span><strong className="text-slate-900">{item.fleet_route?.fleet?.plate_number || `Fleet ${item.fleet_route?.fleet_id || '-'}`}</strong></div>
+                  <div className="flex items-center justify-between"><span className="text-slate-500">Route</span><strong className="text-slate-900">{item.fleet_route?.route?.route_name || `Route ${item.fleet_route?.route_id || '-'}`}</strong></div>
                 </div>
                 {canDecline && (
                   <div className="mt-4 flex gap-2">
                     {!item?.conductor_accepted_at && (
                       <button
                         type="button"
-                        className="flex-1 rounded-lg border border-emerald-900/60 bg-emerald-950/20 px-3 py-2 text-xs font-semibold text-emerald-300 transition hover:bg-emerald-950/40"
+                        className="flex-1 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100"
                         onClick={() => onAcceptTrip?.(item)}
                       >
                         Accept
@@ -143,7 +143,7 @@ function TripCardGroup({ title, trips, onDeclineTrip, onAcceptTrip, emptyMessage
                     {!item?.conductor_accepted_at && (
                       <button
                         type="button"
-                        className="flex-1 rounded-lg border border-red-900/60 bg-red-950/20 px-3 py-2 text-xs font-semibold text-red-300 transition hover:bg-red-950/40"
+                        className="flex-1 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 transition hover:bg-red-100"
                         onClick={() => onDeclineTrip?.(item)}
                       >
                         Decline
@@ -326,7 +326,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
               End Shift
             </button>
             <button
-              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
+              className="crew-chip-button"
               onClick={loadData}
             >
               <RefreshCw className="h-3.5 w-3.5" />
@@ -345,7 +345,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
         )}
 
         {showNoCurrentTripState && (
-          <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+          <section className="staff-card staff-card-roomy">
             <h3 className="text-lg font-bold text-slate-900">No Current Trip Available</h3>
             <p className="mt-2 text-sm text-slate-500">
               You currently do not have an active or same-day trip assignment.
@@ -399,9 +399,9 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
             </div>
 
             {/* Assignment cards */}
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="staff-grid sm:grid-cols-2">
               {/* Fleet card */}
-              <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="staff-card">
                 <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">Assigned Vehicle / Fleet Number</p>
                 <div className="flex items-center gap-3">
                   <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-teal-50">
@@ -415,7 +415,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
               </div>
 
               {/* Trip info card */}
-              <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="staff-card">
                 <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">Current Trip Info</p>
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
@@ -497,7 +497,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
             "Assigned Routes" nav item). Accept/decline never depended on
             pairing, so no gating needed here. */}
         {!loading && activeTab === 'dashboard' && (
-          <section className="mt-4 grid gap-4 md:grid-cols-2">
+          <section className="mt-4 staff-grid md:grid-cols-2">
             <div className="md:col-span-2 flex items-center justify-end gap-2">
               <label htmlFor="conductor-assigned-filter" className="text-xs font-semibold uppercase tracking-wide text-slate-500">Filter</label>
               <select
@@ -512,8 +512,8 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
               </select>
             </div>
             {filteredAssignedTrips.length === 0 ? (
-              <article className="rounded-2xl border border-dashed border-slate-800 bg-slate-900 p-6">
-                <h3 className="text-lg font-semibold text-slate-100">No Assigned Trips</h3>
+              <article className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-6">
+                <h3 className="text-lg font-semibold text-slate-900">No Assigned Trips</h3>
                 <p className="mt-2 text-sm text-slate-500">No trips match this filter.</p>
               </article>
             ) : (
@@ -529,7 +529,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
             date with a schedule opens a modal scoped to just that date,
             rather than navigating away. */}
         {!loading && activeTab === 'schedule' && (
-          <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm">
+          <section className="staff-card">
             <div className="mb-4 flex items-center justify-between">
               <h4 className="text-base font-bold text-slate-900">
                 {calendarMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
@@ -584,14 +584,14 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                   {cell.trips.slice(0, 2).map((t) => (
                     <span
                       key={t.trip_id}
-                      className="w-full truncate rounded px-1 py-0.5 text-[10px] font-semibold"
-                      style={{ background: `${STATUS_COLOR[t.status] || '#64748b'}20`, color: STATUS_COLOR[t.status] || '#64748b' }}
+                      className="w-full truncate rounded px-1 py-0.5 text-xs font-semibold"
+                      style={{ background: `${STATUS_COLOR[t.status] || '#153a6b'}20`, color: STATUS_COLOR[t.status] || '#153a6b' }}
                     >
                       {t.fleet_route?.route?.route_name || `Trip #${t.trip_id}`}
                     </span>
                   ))}
                   {cell.trips.length > 2 && (
-                    <span className="text-[10px] text-slate-400">+{cell.trips.length - 2} more</span>
+                    <span className="text-xs text-slate-400">+{cell.trips.length - 2} more</span>
                   )}
                 </button>
               ))}
@@ -604,7 +604,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
             pairing — eligibility/hand-off is checked per-block against the
             block's own final-leg + GPS state. */}
         {!loading && activeTab === 'activeShift' && (
-          <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm">
+          <section className="staff-card">
             <h3 className="mb-4 text-base font-bold text-slate-900">My Shift Blocks</h3>
             {shiftBlocks.length === 0 ? (
               <p className="text-sm text-slate-500">No shift blocks assigned.</p>
@@ -620,7 +620,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                           <p className="text-xs text-slate-500">{block.fleet?.plate_number || 'Fleet -'} · {block.legs?.length ?? 0} legs</p>
                         </div>
                         <div className="flex items-center gap-2">
-                          <span className="rounded-full px-2 py-0.5 text-xs font-semibold uppercase" style={{ background: `${STATUS_COLOR[block.status === 'in_progress' ? 'in-progress' : block.status] || '#64748b'}20`, color: STATUS_COLOR[block.status === 'in_progress' ? 'in-progress' : block.status] || '#64748b' }}>
+                          <span className="rounded-full px-2 py-0.5 text-xs font-semibold uppercase" style={{ background: `${STATUS_COLOR[block.status === 'in_progress' ? 'in-progress' : block.status] || '#153a6b'}20`, color: STATUS_COLOR[block.status === 'in_progress' ? 'in-progress' : block.status] || '#153a6b' }}>
                             {block.status.replace('_', ' ')}
                           </span>
                           {block.status === 'in_progress' && (
@@ -664,9 +664,9 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
           <section className="max-w-5xl">
             {/* Bus + Passenger Load Header */}
             {occupancy && (
-              <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3">
+              <div className="crew-load-strip mb-4 flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <p className="text-2xl font-bold text-slate-900">
+                  <p className="text-lg font-bold text-slate-900 sm:text-2xl">
                     {trip?.fleet_route?.fleet?.plate_number ?? 'Bus 001'} - {trip?.fleet_route?.route?.route_name || `${trip?.fleet_route?.route?.origin || 'Route'} - ${trip?.fleet_route?.route?.destination || 'Pending'}`}
                   </p>
                 </div>
@@ -689,15 +689,15 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                 tabs still exist for full detail (breakdown table, per-
                 passenger list). */}
             <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
-              <button type="button" onClick={() => setActiveTab('activeShift')} className="rounded-xl border border-slate-200 bg-white p-3 text-left transition hover:bg-slate-50">
+              <button type="button" onClick={() => setActiveTab('activeShift')} className="staff-card staff-card-compact text-left transition hover:bg-slate-50">
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Earnings So Far</p>
                 <p className="font-data mt-1 text-lg font-bold text-slate-900">₱{earnings ? Number(earnings.total_fare).toFixed(2) : '0.00'}</p>
               </button>
-              <button type="button" onClick={() => setActiveTab('activeShift')} className="rounded-xl border border-slate-200 bg-white p-3 text-left transition hover:bg-slate-50">
+              <button type="button" onClick={() => setActiveTab('activeShift')} className="staff-card staff-card-compact text-left transition hover:bg-slate-50">
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Passengers Onboard</p>
                 <p className="font-data mt-1 text-lg font-bold text-slate-900">{passengers?.length ?? earnings?.passenger_count ?? 0}</p>
               </button>
-              <button type="button" onClick={() => setActiveTab('pin')} className="rounded-xl border border-slate-200 bg-white p-3 text-left transition hover:bg-slate-50">
+              <button type="button" onClick={() => setActiveTab('pin')} className="staff-card staff-card-compact text-left transition hover:bg-slate-50">
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Daily PIN</p>
                 <p className="mt-1 text-sm font-semibold text-teal-600">View / Verify →</p>
               </button>
@@ -707,8 +707,8 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                 <h3 className="text-lg font-bold text-slate-900">No Occupancy Data</h3>
               </article>
             ) : (
-              <div className="grid gap-4 lg:grid-cols-[1.1fr_1fr]">
-                <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="staff-grid lg:grid-cols-[1.1fr_1fr]">
+                <article className="staff-card">
                   <h3 className="mb-3 text-2xl font-bold text-slate-900">SEAT LAYOUT</h3>
                   <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                     <div className="mb-3 inline-flex items-center gap-2 rounded-lg bg-slate-700 px-3 py-2 text-sm font-semibold text-white">
@@ -740,7 +740,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                         ))}
                       </div>
 
-                      <div className="mt-4 rounded-xl border border-slate-200 bg-white p-3">
+                      <div className="staff-card staff-card-compact mt-4">
                         <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Standing Capacity</p>
                         <div className="mt-2 grid grid-cols-8 gap-1.5">
                           {Array.from({ length: Math.min(standingCapacity, 24) }).map((_, index) => {
@@ -763,7 +763,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                   </div>
                 </article>
 
-                <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <article className="staff-card">
                   <h3 className="mb-4 text-2xl font-bold text-slate-900">Manual Cash Ticket</h3>
 
                   <div className="space-y-3">
@@ -878,7 +878,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
 
             {showScannerModal && (
               <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setShowScannerModal(false)}>
-                <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                <div className="max-h-[92vh] w-full max-w-6xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
                   <div className="mb-4 flex items-center justify-between">
                     <div>
                       <h3 className="text-base font-bold text-slate-900">Scan Ticket</h3>
@@ -928,7 +928,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                     <div className="relative overflow-hidden rounded-lg border border-slate-800 bg-slate-950">
                       <video
                         ref={videoRef}
-                        className="aspect-video w-full bg-slate-950 object-cover"
+                        className="h-70 w-full bg-slate-950 object-cover sm:h-90 lg:h-110"
                         muted
                         playsInline
                         autoPlay
@@ -943,7 +943,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
 
                     {scannerStatus && <p className="mt-2 text-xs text-slate-500">{scannerStatus}</p>}
                     {scannerError && <p className="mt-2 text-xs text-red-600">{scannerError}</p>}
-                    <div className="mt-2 inline-flex rounded-full border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-600">
+                    <div className="mt-2 inline-flex rounded-full border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-600">
                       {scannerPhase === 'idle' && 'Scanner idle'}
                       {scannerPhase === 'captured' && 'QR captured'}
                       {scannerPhase === 'validating' && 'Validating'}
@@ -965,7 +965,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                       className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-teal-500"
                     />
                     <button
-                      className="inline-flex items-center gap-2 rounded-xl bg-sky-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-50"
+                      className="inline-flex items-center gap-2 rounded-xl bg-sky-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-50"
                       onClick={handleScan}
                       disabled={scannerBusy || !hasOpenShift}
                     >
@@ -1014,21 +1014,21 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
         {/* Batch 19 Part B: Live Passengers data always shows — only the
             Record Alight action is pairing-gated. */}
         {!loading && activeTab === 'activeShift' && !showNoCurrentTripState && (
-          <section className="rounded-2xl border border-slate-800 bg-slate-900 p-4 sm:p-6">
+          <section className="staff-card">
             {groupedPassengers.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-slate-800 bg-slate-950 p-6">
-                <h3 className="text-lg font-semibold text-slate-100">No Passengers</h3>
+              <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-6">
+                <h3 className="text-lg font-semibold text-slate-900">No Passengers</h3>
                 <p className="mt-2 text-sm text-slate-500">No passengers currently on this trip.</p>
               </div>
             ) : (
               <div className="space-y-4">
                 {groupedPassengers.map((group) => (
-                  <div key={`passenger-group-${group.key}`} className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+                  <div key={`passenger-group-${group.key}`} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                     <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                      <h3 className="text-sm font-semibold text-slate-100">
+                      <h3 className="text-sm font-semibold text-slate-900">
                         Trip #{group.tripId}
                       </h3>
-                      <div className="text-xs text-slate-400">
+                      <div className="text-xs text-slate-500">
                         {group.routeName ? `${group.routeName} • ` : ''}
                         {group.passengers.length} passenger(s)
                       </div>
@@ -1037,7 +1037,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                     <div className="overflow-x-auto">
                       <table className="w-full min-w-180 text-left text-sm">
                         <thead>
-                          <tr className="border-b border-slate-800 text-xs uppercase tracking-[0.16em] text-slate-500">
+                          <tr className="border-b border-slate-200 text-xs uppercase tracking-[0.16em] text-slate-500">
                             <th className="py-3">#</th>
                             <th className="py-3">Name</th>
                             <th className="py-3">Seat Type</th>
@@ -1050,16 +1050,16 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                           {group.passengers.map((p, i) => {
                             const status = p.status ?? 'boarded';
                             return (
-                              <tr key={p.ticket_id ?? `${group.key}-${i}`} className="border-b border-slate-800/70">
-                                <td className="py-3 font-data text-slate-400">{p.row_number}</td>
-                                <td className="py-3 text-slate-100">{p.passenger_name ?? p.passenger?.name ?? 'Guest'}</td>
-                                <td className="py-3"><span className="rounded-full border border-slate-700 px-2 py-1 text-xs capitalize text-slate-300">{p.seat_type}</span></td>
-                                <td className="py-3 text-slate-300">{p.destination_display}</td>
-                                <td className="py-3"><span className="rounded-full border border-emerald-900 bg-emerald-950/30 px-2 py-1 text-xs capitalize text-emerald-300">{status}</span></td>
+                              <tr key={p.ticket_id ?? `${group.key}-${i}`} className="border-b border-slate-100">
+                                <td className="py-3 font-data text-slate-500">{p.row_number}</td>
+                                <td className="py-3 text-slate-900">{p.passenger_name ?? p.passenger?.name ?? 'Guest'}</td>
+                                <td className="py-3"><span className="rounded-full border border-slate-200 px-2 py-1 text-xs capitalize text-slate-600">{p.seat_type}</span></td>
+                                <td className="py-3 text-slate-600">{p.destination_display}</td>
+                                <td className="py-3"><span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs capitalize text-emerald-700">{status}</span></td>
                                 <td className="py-3">
                                   {!p.alighted_at && (
                                     <button
-                                      className="inline-flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-950 px-2.5 py-1.5 text-xs font-semibold text-slate-300 transition hover:border-slate-500 disabled:cursor-not-allowed disabled:opacity-60"
+                                      className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
                                       onClick={() => handleAlight(p.ticket_id)}
                                       disabled={!isPaired}
                                       title={!isPaired ? 'Pairing is required to record alighting.' : undefined}
@@ -1114,26 +1114,26 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
 
             {/* Stats row */}
             <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4">
-              <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="staff-card">
                 <p className="text-xs text-slate-400">Total Revenue</p>
                 <p className="font-data mt-1 text-xl font-bold text-slate-900">₱{earnings ? Number(earnings.total_fare).toFixed(2) : '0.00'}</p>
               </div>
-              <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="staff-card">
                 <p className="text-xs text-slate-400">Fare Collected</p>
                 <p className="font-data mt-1 text-xl font-bold text-slate-900">₱{earnings ? Number(earnings.onsite_amount).toFixed(2) : '0.00'}</p>
               </div>
-              <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="staff-card">
                 <p className="text-xs text-slate-400">Digital Payments</p>
                 <p className="font-data mt-1 text-xl font-bold text-slate-900">₱{earnings ? Number(earnings.online_amount).toFixed(2) : '0.00'}</p>
               </div>
-              <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="staff-card">
                 <p className="text-xs text-slate-400">Passengers</p>
                 <p className="font-data mt-1 text-xl font-bold text-slate-900">{earnings?.passenger_count ?? 0}</p>
               </div>
             </div>
 
             {/* Trip breakdown */}
-            <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
+            <div className="staff-card staff-card-flush overflow-hidden">
               <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
                 <p className="text-sm font-bold text-slate-900">Trip Breakdown</p>
                 <button className="text-xs text-teal-600 hover:text-teal-700" onClick={loadEarnings}>Refresh</button>
@@ -1185,7 +1185,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
             />
 
             {isPaired && !showNoCurrentTripState && (
-              <article className="max-w-xl rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+              <article className="max-w-xl staff-card staff-card-roomy">
                 <h3 className="text-lg font-bold text-slate-900">Verify Daily PIN</h3>
                 <p className="mt-1 text-xs text-slate-500">Manual PIN verification uses the same assignment checks and trip context.</p>
                 <div className="mt-4 flex gap-2">
@@ -1201,7 +1201,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                     className="font-data h-11 w-full rounded-xl border border-slate-800 bg-slate-950 px-3 text-sm text-slate-100 outline-none placeholder:text-slate-500 focus:border-sky-400"
                   />
                   <button
-                    className="inline-flex items-center gap-2 rounded-xl bg-sky-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-sky-400"
+                    className="inline-flex items-center gap-2 rounded-xl bg-sky-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sky-400"
                     onClick={handleVerifyPin}
                   >
                     Verify
@@ -1218,30 +1218,30 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
         )}
 
         {!loading && activeTab === 'account' && (
-          <section className="grid gap-4 lg:grid-cols-2">
-            <article className="rounded-2xl border border-slate-800 bg-slate-900 p-4 sm:p-6">
-              <h4 className="mb-3 text-base font-semibold text-slate-100">Profile Information</h4>
-              <div className="mb-4 flex flex-col items-center rounded-xl border border-slate-800 bg-slate-950 p-4 text-center">
+          <section className="staff-grid lg:grid-cols-2">
+            <article className="staff-card">
+              <h4 className="mb-3 text-base font-semibold text-slate-900">Profile Information</h4>
+              <div className="mb-4 flex flex-col items-center rounded-xl border border-slate-200 bg-slate-50 p-4 text-center">
                 <div className="inline-flex h-16 w-16 items-center justify-center rounded-full bg-linear-to-br from-emerald-600 to-teal-600 text-2xl font-bold text-white">
                   {(profile?.name || 'C')[0].toUpperCase()}
                 </div>
-                <h3 className="mt-2 text-lg font-semibold text-slate-100">{profile?.name || 'Conductor'}</h3>
+                <h3 className="mt-2 text-lg font-semibold text-slate-900">{profile?.name || 'Conductor'}</h3>
                 <p className="text-xs text-slate-500">Verified Conductor</p>
               </div>
               <div className="space-y-3 text-sm">
-                <div className="flex items-center justify-between"><span className="text-slate-500">Email</span><strong className="text-slate-100">{profile?.user?.email || profile?.email || '-'}</strong></div>
-                <div className="flex items-center justify-between"><span className="text-slate-500">Conductor ID</span><strong className="font-data text-slate-100">{profile?.company_user_id || '-'}</strong></div>
-                <div className="flex items-center justify-between"><span className="text-slate-500">Status</span><strong className="text-emerald-300">Active</strong></div>
-                <div className="flex items-center justify-between"><span className="text-slate-500">Shift Started</span><strong className="font-data text-slate-100">{formatDateTime(shiftState?.latestShift?.started_at)}</strong></div>
-                <div className="flex items-center justify-between"><span className="text-slate-500">Shift Ended</span><strong className="font-data text-slate-100">{formatDateTime(shiftState?.latestShift?.ended_at)}</strong></div>
+                <div className="flex items-center justify-between"><span className="text-slate-500">Email</span><strong className="text-slate-900">{profile?.user?.email || profile?.email || '-'}</strong></div>
+                <div className="flex items-center justify-between"><span className="text-slate-500">Conductor ID</span><strong className="font-data text-slate-900">{profile?.company_user_id || '-'}</strong></div>
+                <div className="flex items-center justify-between"><span className="text-slate-500">Status</span><strong className="text-emerald-600">Active</strong></div>
+                <div className="flex items-center justify-between"><span className="text-slate-500">Shift Started</span><strong className="font-data text-slate-900">{formatDateTime(shiftState?.latestShift?.started_at)}</strong></div>
+                <div className="flex items-center justify-between"><span className="text-slate-500">Shift Ended</span><strong className="font-data text-slate-900">{formatDateTime(shiftState?.latestShift?.ended_at)}</strong></div>
               </div>
             </article>
 
-            <article className="rounded-2xl border border-slate-800 bg-slate-900 p-4 sm:p-6">
-              <h4 className="mb-3 text-base font-semibold text-slate-100">Security & 2FA</h4>
+            <article className="staff-card">
+              <h4 className="mb-3 text-base font-semibold text-slate-900">Security & 2FA</h4>
               <div className="space-y-3">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-slate-400">Two-Factor Authentication</span>
+                  <span className="text-slate-600">Two-Factor Authentication</span>
                   <label className="relative inline-flex cursor-pointer items-center">
                     <input
                       type="checkbox"
@@ -1250,11 +1250,11 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                       onChange={handleTwoFactorToggle}
                       disabled={saving2fa}
                     />
-                    <div className="h-6 w-11 rounded-full bg-slate-600 transition-colors peer-checked:bg-emerald-500 after:absolute after:left-0.5 after:top-0.5 after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-transform peer-checked:after:translate-x-5" />
+                    <div className="h-6 w-11 rounded-full bg-slate-200 transition-colors peer-checked:bg-emerald-500 after:absolute after:left-0.5 after:top-0.5 after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-transform peer-checked:after:translate-x-5" />
                   </label>
                 </div>
                 {actionMsg && (
-                  <p className={`text-xs ${actionMsg.includes('enabled') ? 'text-emerald-400' : 'text-sky-400'}`}>
+                  <p className={`text-xs ${actionMsg.includes('enabled') ? 'text-emerald-600' : 'text-sky-600'}`}>
                     {actionMsg}
                   </p>
                 )}
@@ -1353,8 +1353,8 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                         <p className="text-xs text-slate-500">{formatTripSchedule(t)}</p>
                       </div>
                       <span
-                        className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase"
-                        style={{ background: `${STATUS_COLOR[t.status] || '#64748b'}20`, color: STATUS_COLOR[t.status] || '#64748b' }}
+                        className="shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold uppercase"
+                        style={{ background: `${STATUS_COLOR[t.status] || '#153a6b'}20`, color: STATUS_COLOR[t.status] || '#153a6b' }}
                       >
                         {t.status}
                       </span>

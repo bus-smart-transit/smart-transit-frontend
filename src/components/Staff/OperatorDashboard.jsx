@@ -98,7 +98,7 @@ function NotificationBell() {
       >
         <Bell className="h-4.5 w-4.5" />
         {unreadCount > 0 && (
-          <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[11px] font-bold text-white">
+          <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-xs font-bold text-white">
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}
@@ -121,7 +121,7 @@ function NotificationBell() {
               notifications.map((n) => (
                 <div
                   key={n.id}
-                  className={`rounded-lg border px-3 py-2.5 text-sm ${n.read_at ? 'border-slate-100 bg-slate-50 text-slate-500' : 'border-amber-200 bg-amber-50 text-slate-800'}`}
+                  className={`rounded-lg border px-3 py-2.5 text-sm ${n.read_at ? 'border-slate-100 bg-slate-50 text-slate-500' : 'border-amber-200 bg-amber-50 text-amber-900'}`}
                 >
                   <div className="flex items-start justify-between gap-2">
                     <p className="font-semibold">{n.title}</p>
@@ -306,7 +306,7 @@ function DashboardTab({ trips, drivers, conductors, fleets }) {
           { label: 'Completed',     value: completed,   color: 'text-emerald-600' },
           { label: 'Revenue (all)', value: fmt(revenue),color: 'text-teal-600' },
         ].map(({ label, value, color }) => (
-          <div key={label} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div key={label} className="staff-card">
             <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</p>
             <p className={`mt-1 text-2xl font-bold ${color}`}>{value}</p>
           </div>
@@ -314,7 +314,7 @@ function DashboardTab({ trips, drivers, conductors, fleets }) {
       </div>
       <div className="grid grid-cols-3 gap-4">
         {[['Drivers', drivers.length],['Conductors', conductors.length],['Fleets', fleets.length]].map(([label, value]) => (
-          <div key={label} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div key={label} className="staff-card">
             <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</p>
             <p className="mt-1 text-2xl font-bold text-slate-900">{value}</p>
           </div>
@@ -323,15 +323,15 @@ function DashboardTab({ trips, drivers, conductors, fleets }) {
       <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
         <div className="mb-4 flex items-center justify-between gap-3">
           <h2 className="text-base font-semibold text-slate-900">Route Health Summary</h2>
-          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-600">Live Ops</span>
+          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-slate-600">Live Ops</span>
         </div>
         <div className="grid gap-3 md:grid-cols-4">
           {routeHealth.map(item => (
             <div key={item.label} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">{item.label}</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">{item.label}</p>
               <div className="mt-3 flex items-center justify-between gap-3">
                 <span className="text-2xl font-bold text-slate-900">{item.value}</span>
-                <span className={`rounded-full px-2 py-1 text-[10px] font-semibold ${item.tone}`}>{item.value > 0 ? 'Monitor' : 'Stable'}</span>
+                <span className={`rounded-full px-2 py-1 text-xs font-semibold ${item.tone}`}>{item.value > 0 ? 'Monitor' : 'Stable'}</span>
               </div>
             </div>
           ))}
@@ -340,24 +340,24 @@ function DashboardTab({ trips, drivers, conductors, fleets }) {
       <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
         <div className="mb-4 flex items-center justify-between gap-3">
           <h2 className="text-base font-semibold text-slate-900">Dispatch Decision Board</h2>
-          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-600">Live</span>
+          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-slate-600">Live</span>
         </div>
         <div className="grid gap-3 md:grid-cols-3">
           <div className="rounded-xl bg-slate-50 p-4">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">Reroute alerts</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Reroute alerts</p>
             <p className="mt-2 text-2xl font-bold text-slate-900">{predictiveReroutes.length}</p>
           </div>
           <div className="rounded-xl bg-slate-50 p-4">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">Decision count</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Decision count</p>
             <p className="mt-2 text-2xl font-bold text-slate-900">{dispatchDecisionCount}</p>
           </div>
           <div className="rounded-xl bg-slate-50 p-4">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">Status</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Status</p>
             <p className="mt-2 text-lg font-bold text-slate-900">{dispatchDecisionCount > 0 ? 'Reviewing' : 'Awaiting route action'}</p>
           </div>
         </div>
       </div>
-      <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+      <div className="staff-card staff-card-roomy">
         <div className="mb-4 flex items-center justify-between gap-3">
           <h2 className="text-base font-semibold text-slate-900">Historical Forecast</h2>
           <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-600">Trend</span>
@@ -390,10 +390,10 @@ function DashboardTab({ trips, drivers, conductors, fleets }) {
           ))}
         </div>
       </div>
-      <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+      <div className="staff-card staff-card-roomy">
         <div className="mb-4 flex items-center justify-between gap-3">
           <h2 className="text-base font-semibold text-slate-900">Route Delay Overview</h2>
-          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-600">By Route</span>
+          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-slate-600">By Route</span>
         </div>
         {routeDelaySummary.length === 0 ? (
           <p className="text-sm text-slate-500">No active routes to review.</p>
@@ -420,7 +420,7 @@ function DashboardTab({ trips, drivers, conductors, fleets }) {
                       <td className="px-3 py-2 text-slate-600">{row.crewReady}</td>
                       <td className="px-3 py-2 text-slate-600">{row.atRisk}</td>
                       <td className="px-3 py-2">
-                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] ${badge}`}>{status}</span>
+                        <span className={`rounded-full px-2 py-0.5 text-xs font-semibold uppercase tracking-[0.12em] ${badge}`}>{status}</span>
                       </td>
                     </tr>
                   )
@@ -430,10 +430,10 @@ function DashboardTab({ trips, drivers, conductors, fleets }) {
           </div>
         )}
       </div>
-      <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+      <div className="staff-card staff-card-roomy">
         <div className="mb-4 flex items-center justify-between gap-3">
           <h2 className="text-base font-semibold text-slate-900">Recommended Actions</h2>
-          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-600">Suggested</span>
+          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-slate-600">Suggested</span>
         </div>
         {routeRecommendations.length === 0 ? (
           <p className="text-sm text-slate-500">No route recommendations available.</p>
@@ -445,7 +445,7 @@ function DashboardTab({ trips, drivers, conductors, fleets }) {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <p className="text-sm font-semibold text-slate-900">{rec.title}</p>
-                    <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-600">{rec.route}</span>
+                    <span className="rounded-full bg-white px-2 py-0.5 text-xs font-semibold uppercase tracking-[0.12em] text-slate-600">{rec.route}</span>
                   </div>
                   <p className="mt-1 text-sm text-slate-600">{rec.text}</p>
                 </div>
@@ -454,7 +454,7 @@ function DashboardTab({ trips, drivers, conductors, fleets }) {
           </div>
         )}
       </div>
-      <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+      <div className="staff-card staff-card-roomy">
         <div className="mb-4 flex items-center justify-between gap-3">
           <h2 className="text-base font-semibold text-slate-900">Predictive Reroute Plan</h2>
           <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-600">Forecast</span>
@@ -508,7 +508,7 @@ function DashboardTab({ trips, drivers, conductors, fleets }) {
           </div>
         )}
       </div>
-      <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+      <div className="staff-card staff-card-roomy">
         <div className="mb-4 flex items-center justify-between gap-3">
           <h2 className="text-base font-semibold text-slate-900">Assigned Route vs. Alternative</h2>
           <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-600">Comparison</span>
@@ -561,7 +561,7 @@ function DashboardTab({ trips, drivers, conductors, fleets }) {
       <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
         <div className="mb-4 flex items-center justify-between gap-3">
           <h2 className="text-base font-semibold text-slate-900">Fleet Response View</h2>
-          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-600">Dispatch</span>
+          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-slate-600">Dispatch</span>
         </div>
         {fleetResponseView.length === 0 ? (
           <p className="text-sm text-slate-500">No active fleet dispatch view available.</p>
@@ -574,7 +574,7 @@ function DashboardTab({ trips, drivers, conductors, fleets }) {
                     <p className="text-sm font-semibold text-slate-900">{row.route}</p>
                     <p className="text-xs text-slate-500">Fleet: {row.fleet}</p>
                   </div>
-                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] ${row.priority === 'high' ? 'bg-red-100 text-red-700' : row.priority === 'medium' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                  <span className={`rounded-full px-2 py-0.5 text-xs font-semibold uppercase tracking-[0.12em] ${row.priority === 'high' ? 'bg-red-100 text-red-700' : row.priority === 'medium' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
                     {row.priority}
                   </span>
                 </div>
@@ -591,7 +591,7 @@ function DashboardTab({ trips, drivers, conductors, fleets }) {
       <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
         <div className="mb-4 flex items-center justify-between gap-3">
           <h2 className="text-base font-semibold text-slate-900">Operational Alerts</h2>
-          <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-amber-700">{alerts.length} Active</span>
+          <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-amber-700">{alerts.length} Active</span>
         </div>
         {alerts.length === 0 ? (
           <p className="text-sm text-slate-500">No active route alerts. All current trips are running within normal operational status.</p>
@@ -603,7 +603,7 @@ function DashboardTab({ trips, drivers, conductors, fleets }) {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <p className="text-sm font-semibold text-slate-900">{alert.title}</p>
-                    <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-600">{alert.type}</span>
+                    <span className="rounded-full bg-white px-2 py-0.5 text-xs font-semibold uppercase tracking-[0.12em] text-slate-600">{alert.type}</span>
                   </div>
                   <p className="mt-1 text-sm text-slate-600">{alert.detail}</p>
                   <p className="mt-2 text-xs text-slate-500">{alert.action}</p>
@@ -713,7 +713,7 @@ function StaffDirectoryTab({ drivers, conductors, onRefresh, onCreateAccount }) 
 
       {msg && <p className="rounded-lg bg-teal-50 border border-teal-200 px-4 py-2 text-sm text-teal-800">{msg}</p>}
 
-      <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+      <div className="staff-card staff-card-flush overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-slate-50">
             <tr className="border-b border-slate-200">
@@ -1068,7 +1068,7 @@ function FleetsTab({ fleets, routes, trips, onRefresh }) {
         </div>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-2">
+      <div className="staff-grid xl:grid-cols-2">
         <form onSubmit={handleCreateFleet} className="rounded-2xl border border-slate-700 bg-[#101a30] p-4">
           <h3 className="text-sm font-semibold uppercase tracking-[0.14em] text-slate-300">Add Fleet</h3>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -1323,8 +1323,8 @@ function RoutesTab({ routes, stops, trips, onRefresh }) {
         </button>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-3">
-        <form onSubmit={handleCreateStop} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="staff-grid xl:grid-cols-3">
+        <form onSubmit={handleCreateStop} className="staff-card">
           <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-600">{editingStopId ? 'Edit Stop' : 'Add Stop'}</h3>
           <div className="mt-3 grid gap-2">
             <input value={stopForm.stop_name} onChange={(event) => setStopForm((prev) => ({ ...prev, stop_name: event.target.value }))} required placeholder="Stop name" className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
@@ -1352,7 +1352,7 @@ function RoutesTab({ routes, stops, trips, onRefresh }) {
           </div>
         </form>
 
-        <form onSubmit={handleCreateRoute} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <form onSubmit={handleCreateRoute} className="staff-card">
           <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-600">Add Route</h3>
           <div className="mt-3 grid gap-2">
             <input value={routeForm.route_name} onChange={(event) => setRouteForm((prev) => ({ ...prev, route_name: event.target.value }))} required placeholder="Route name" className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
@@ -1362,7 +1362,7 @@ function RoutesTab({ routes, stops, trips, onRefresh }) {
           <button type="submit" disabled={manageSaving} className="mt-3 rounded-lg bg-cyan-600 px-3 py-2 text-sm font-semibold text-white hover:bg-cyan-700 disabled:opacity-60">Create Route</button>
         </form>
 
-        <form onSubmit={handleAddStopToRoute} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <form onSubmit={handleAddStopToRoute} className="staff-card">
           <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-600">Assign Stop to Route</h3>
           <div className="mt-3 grid gap-2">
             <select value={routeStopForm.route_id} onChange={(event) => setRouteStopForm((prev) => ({ ...prev, route_id: event.target.value }))} required className="rounded-lg border border-slate-200 px-3 py-2 text-sm">
@@ -1388,7 +1388,7 @@ function RoutesTab({ routes, stops, trips, onRefresh }) {
         </p>
       )}
 
-      <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+      <div className="staff-card staff-card-flush overflow-hidden">
         <div className="border-b border-slate-100 px-5 py-3">
           <h3 className="text-sm font-semibold text-slate-900">Stops Directory</h3>
           <p className="text-xs text-slate-500">Edit or remove stops used in route planning.</p>
@@ -1443,7 +1443,7 @@ function RoutesTab({ routes, stops, trips, onRefresh }) {
         </div>
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+      <div className="staff-card staff-card-flush overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-slate-50">
             <tr className="border-b border-slate-200">
@@ -1500,7 +1500,7 @@ function RoutesTab({ routes, stops, trips, onRefresh }) {
         </table>
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+      <div className="staff-card staff-card-flush overflow-hidden">
         <div className="border-b border-slate-100 px-5 py-3">
           <h3 className="text-sm font-semibold text-slate-900">Route Analytics</h3>
           <p className="text-xs text-slate-500">Includes total trips, average daily passengers, route adherence, and peak departure window.</p>
@@ -1622,7 +1622,7 @@ function TripsTab({ trips, drivers, conductors, onRefresh }) {
         { key: 'today', title: "Today's Trips", list: todaysTrips },
         { key: 'upcoming', title: 'Upcoming Trips', list: upcomingTrips },
       ].map(({ key, title, list }) => (
-        <div key={key} className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+        <div key={key} className="staff-card staff-card-flush overflow-hidden">
           <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
             <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
             <span className="text-xs font-medium text-slate-500">{list.length} trip{list.length === 1 ? '' : 's'}</span>
@@ -1652,8 +1652,8 @@ function TripsTab({ trips, drivers, conductors, onRefresh }) {
                         <td className="px-4 py-3 text-slate-700 max-w-30 truncate">
                           {t.fleet_route?.route?.route_name || '-'}
                           {t.shift_block_id
-                            ? <span className="ml-1.5 rounded-full bg-indigo-100 px-1.5 py-0.5 text-[0.65rem] font-semibold text-indigo-700" title="Auto-generated from a Shift Block">Block</span>
-                            : <span className="ml-1.5 rounded-full bg-slate-100 px-1.5 py-0.5 text-[0.65rem] font-semibold text-slate-500" title="Manually created ad hoc/charter trip">Ad hoc</span>}
+                            ? <span className="ml-1.5 rounded-full bg-indigo-100 px-1.5 py-0.5 text-xs font-semibold text-indigo-700" title="Auto-generated from a Shift Block">Block</span>
+                            : <span className="ml-1.5 rounded-full bg-slate-100 px-1.5 py-0.5 text-xs font-semibold text-slate-500" title="Manually created ad hoc/charter trip">Ad hoc</span>}
                         </td>
                         <td className="px-4 py-3 text-slate-700">{t.fleet_route?.fleet?.plate_number || '-'}</td>
                         <td className="px-4 py-3">
@@ -1935,7 +1935,7 @@ function ShiftBlocksTab({ drivers, conductors }) {
 
       {msg && <p className="rounded-lg bg-teal-50 border border-teal-200 px-4 py-2 text-sm text-teal-800">{msg}</p>}
 
-      <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+      <div className="staff-card staff-card-flush overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-slate-50">
             <tr className="border-b border-slate-200">
@@ -2281,7 +2281,7 @@ function ReportsTab({ fleets }) {
       </div>
       {msg && <p className="rounded-lg bg-red-50 border border-red-200 px-4 py-2 text-sm text-red-700">{msg}</p>}
       {report && (
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="staff-card">
           {reportColumns.length > 0 ? (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -2319,7 +2319,7 @@ function AccountTab({ profile }) {
   return (
     <div className="max-w-xl space-y-5">
       <h2 className="text-xl font-bold text-slate-900">Account</h2>
-      <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm space-y-4">
+      <div className="staff-card staff-card-roomy space-y-4">
         <div className="flex items-center gap-4">
           <div className="flex h-14 w-14 items-center justify-center rounded-full bg-teal-600 text-xl font-bold text-white">
             {String(displayName)[0].toUpperCase()}
@@ -2338,7 +2338,7 @@ function AccountTab({ profile }) {
           ))}
         </dl>
       </div>
-      <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+      <div className="staff-card staff-card-roomy">
         <div className="flex items-start gap-3">
           <Shield className="mt-0.5 h-5 w-5 shrink-0 text-teal-600" />
           <div className="flex-1">

@@ -21,7 +21,7 @@ import { getBusinessTodayLabel } from '../../utils/dates';
 import DriverService from '../../api/StaffService/DriverService';
 
 const STATUS_COLOR = {
-  scheduled: '#64748b',
+  scheduled: '#153a6b',
   delayed: '#e11d48',
   boarding: '#3b82f6',
   departed: '#f59e0b',
@@ -310,13 +310,13 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
         )}
 
         {showNoCurrentTripState && (
-          <section className="rounded-2xl border border-dashed border-slate-800 bg-slate-900 p-6">
-            <h3 className="text-lg font-semibold text-slate-100">No Current Trip Available</h3>
-            <p className="mt-2 text-sm text-slate-400">
+          <section className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-6">
+            <h3 className="text-lg font-semibold text-slate-900">No Current Trip Available</h3>
+            <p className="mt-2 text-sm text-slate-500">
               You currently do not have an active or same-day trip to operate.
             </p>
             {upcomingTrip ? (
-              <p className="mt-3 text-sm text-sky-300">
+              <p className="mt-3 text-sm text-sky-600">
                 Upcoming trip: {upcomingTrip?.fleet_route?.route?.origin || '-'} to {upcomingTrip?.fleet_route?.route?.destination || '-'} on {formatTripSchedule(upcomingTrip)}.
               </p>
             ) : (
@@ -325,7 +325,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
               </p>
             )}
             <button
-              className="mt-4 rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-xs font-semibold text-slate-300 transition hover:border-slate-500"
+              className="mt-4 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
               onClick={() => setActiveTab('dashboard')}
             >
               View Assigned Trips
@@ -345,12 +345,12 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
         )}
 
         {!loading && activeTab === 'dashboard' && !showNoCurrentTripState && (
-          <section className="grid gap-4 xl:grid-cols-4 md:grid-cols-2">
+          <section className="staff-grid xl:grid-cols-4 md:grid-cols-2">
             {/* S1: consolidated current-trip card — was 4 separate cards
                 (Today's Trip / Next Stop / Trip Progress / Journey Status)
                 describing facets of the same trip; merged into one primary
                 card. No data/logic changes — same bindings and nav actions. */}
-            <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm md:col-span-2 xl:col-span-4">
+            <article className="staff-card md:col-span-2 xl:col-span-4">
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Today's Trip</p>
@@ -406,7 +406,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
               </div>
             </article>
 
-            <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm md:col-span-2 xl:col-span-2">
+            <article className="staff-card md:col-span-2 xl:col-span-2">
               <h4 className="mb-3 text-base font-bold text-slate-900">Quick Actions</h4>
               <div className="flex flex-col gap-2 sm:flex-row">
                 <button className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50" onClick={() => handleTripAction('boarding')} disabled={actionInFlight || !isPaired || !hasOpenShift || !['scheduled', 'delayed'].includes(String(trip?.status || '').toLowerCase())}>
@@ -467,7 +467,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                 </p>
               )}
 
-              <div className="grid gap-3 md:grid-cols-3">
+              <div className="grid gap-3 md:grid-cols-4">
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                   <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-500">ETA</p>
                   <p className="mt-2 font-data text-2xl font-bold text-slate-900">{trafficStatus.etaMinutes} min</p>
@@ -479,13 +479,13 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                   <p className="mt-1 text-xs text-slate-500">route impact</p>
                 </div>
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-500">Advice</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">Advice</p>
                   <p className="mt-2 text-sm font-semibold text-slate-800 leading-5">{trafficStatus.suggestion}</p>
                 </div>
               </div>
             </article>
 
-            <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm md:col-span-2 xl:col-span-2">
+            <article className="staff-card md:col-span-2 xl:col-span-2">
               <div className="mb-3 flex items-center justify-between">
                 <h4 className="text-base font-bold text-slate-900">Quick Notifications</h4>
                 <button className="text-xs font-medium text-teal-600 hover:text-teal-700">View All</button>
@@ -514,7 +514,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
             "Assigned Routes" nav item). Accept/decline never depended on
             pairing, so no gating needed here. */}
         {!loading && activeTab === 'dashboard' && (
-          <section className="mt-4 rounded-xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm">
+          <section className="mt-4 staff-card">
             <div className="mb-4 flex items-center justify-between">
               <h4 className="text-base font-bold text-slate-900">Assigned Routes</h4>
               <div className="flex items-center gap-2">
@@ -548,7 +548,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
             the single "Schedule" nav item (Shift Blocks moved out — that's
             live operational state, not a planning view). */}
         {!loading && activeTab === 'schedule' && (
-          <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm">
+          <section className="staff-card">
             <div className="mb-4 flex items-center justify-between">
               <h4 className="text-base font-bold text-slate-900">
                 {calendarMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
@@ -603,14 +603,14 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                   {cell.trips.slice(0, 2).map((t) => (
                     <span
                       key={t.trip_id}
-                      className="w-full truncate rounded px-1 py-0.5 text-[10px] font-semibold"
-                      style={{ background: `${STATUS_COLOR[t.status] || '#64748b'}20`, color: STATUS_COLOR[t.status] || '#64748b' }}
+                      className="w-full truncate rounded px-1 py-0.5 text-xs font-semibold"
+                      style={{ background: `${STATUS_COLOR[t.status] || '#153a6b'}20`, color: STATUS_COLOR[t.status] || '#153a6b' }}
                     >
                       {t.fleet_route?.route?.route_name || `Trip #${t.trip_id}`}
                     </span>
                   ))}
                   {cell.trips.length > 2 && (
-                    <span className="text-[10px] text-slate-400">+{cell.trips.length - 2} more</span>
+                    <span className="text-xs text-slate-400">+{cell.trips.length - 2} more</span>
                   )}
                 </button>
               ))}
@@ -622,7 +622,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
             then past), distinct from the Calendar grid above. */}
         {!loading && activeTab === 'schedule' && (
           <section className="space-y-5">
-            <div className="rounded-xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm">
+            <div className="staff-card">
               <h4 className="mb-3 text-base font-bold text-slate-900">Upcoming</h4>
               {scheduleUpcoming.length === 0 ? (
                 <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-5 text-sm text-slate-500">No upcoming trips scheduled.</div>
@@ -634,7 +634,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                         <p className="text-sm font-semibold text-slate-900">{item.fleet_route?.route?.origin || '-'} → {item.fleet_route?.route?.destination || '-'}</p>
                         <p className="font-data text-xs text-slate-500">{formatTripSchedule(item)}</p>
                       </div>
-                      <span className="rounded-full px-2.5 py-1 text-xs font-semibold" style={{ background: `${STATUS_COLOR[item.status] || '#64748b'}20`, color: STATUS_COLOR[item.status] || '#64748b' }}>
+                      <span className="rounded-full px-2.5 py-1 text-xs font-semibold" style={{ background: `${STATUS_COLOR[item.status] || '#153a6b'}20`, color: STATUS_COLOR[item.status] || '#153a6b' }}>
                         {(item.status || 'pending').toUpperCase()}
                       </span>
                     </li>
@@ -642,7 +642,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                 </ul>
               )}
             </div>
-            <div className="rounded-xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm">
+            <div className="staff-card">
               <h4 className="mb-3 text-base font-bold text-slate-900">Past</h4>
               {schedulePast.length === 0 ? (
                 <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-5 text-sm text-slate-500">No past trips yet.</div>
@@ -654,7 +654,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                         <p className="text-sm font-semibold text-slate-900">{item.fleet_route?.route?.origin || '-'} → {item.fleet_route?.route?.destination || '-'}</p>
                         <p className="font-data text-xs text-slate-500">{formatTripSchedule(item)}</p>
                       </div>
-                      <span className="rounded-full px-2.5 py-1 text-xs font-semibold" style={{ background: `${STATUS_COLOR[item.status] || '#64748b'}20`, color: STATUS_COLOR[item.status] || '#64748b' }}>
+                      <span className="rounded-full px-2.5 py-1 text-xs font-semibold" style={{ background: `${STATUS_COLOR[item.status] || '#153a6b'}20`, color: STATUS_COLOR[item.status] || '#153a6b' }}>
                         {(item.status || 'pending').toUpperCase()}
                       </span>
                     </li>
@@ -670,21 +670,21 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
             per-leg pairing is relevant. Batch 19 Part A: grouped under
             "Active Trip" (live operational state), not Schedule. */}
         {!loading && activeTab === 'activeTrip' && (
-          <section className="rounded-2xl border border-slate-800 bg-slate-900 p-4 sm:p-6">
-            <h3 className="mb-4 text-base font-bold text-slate-100">My Shift Blocks</h3>
+          <section className="staff-card">
+            <h3 className="mb-4 text-base font-bold text-slate-900">My Shift Blocks</h3>
             {shiftBlocks.length === 0 ? (
               <p className="text-sm text-slate-500">No shift blocks assigned.</p>
             ) : (
               <div className="space-y-3">
                 {shiftBlocks.map((block) => (
-                  <div key={block.shift_block_id} className="rounded-xl border border-slate-800 bg-slate-950 p-4">
+                  <div key={block.shift_block_id} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div>
-                        <p className="text-sm font-semibold text-slate-100 capitalize">{block.block_type} block — {block.scheduled_date}</p>
+                        <p className="text-sm font-semibold text-slate-900 capitalize">{block.block_type} block — {block.scheduled_date}</p>
                         <p className="text-xs text-slate-500">{block.fleet?.plate_number || 'Fleet -'} · {block.legs?.length ?? 0} legs</p>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="rounded-full px-2 py-0.5 text-xs font-semibold uppercase" style={{ background: `${STATUS_COLOR[block.status === 'in_progress' ? 'in-progress' : block.status] || '#64748b'}20`, color: STATUS_COLOR[block.status === 'in_progress' ? 'in-progress' : block.status] || '#64748b' }}>
+                        <span className="rounded-full px-2 py-0.5 text-xs font-semibold uppercase" style={{ background: `${STATUS_COLOR[block.status === 'in_progress' ? 'in-progress' : block.status] || '#153a6b'}20`, color: STATUS_COLOR[block.status === 'in_progress' ? 'in-progress' : block.status] || '#153a6b' }}>
                           {block.status.replace('_', ' ')}
                         </span>
                         {block.status === 'scheduled' && (
@@ -692,7 +692,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                             type="button"
                             onClick={() => handleConfirmShiftBlockTakeover(block.shift_block_id)}
                             disabled={shiftBlockActionInFlight}
-                            className="rounded-lg border border-emerald-700 bg-emerald-950/40 px-3 py-1.5 text-xs font-semibold text-emerald-300 hover:bg-emerald-950/60 disabled:opacity-50"
+                            className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
                           >
                             Confirm Takeover
                           </button>
@@ -772,35 +772,35 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
               <DriverNavigationMap trip={trip} stops={stops} lastGpsRef={lastGpsRef} routeGeometry={trafficStatus?.routeGeometry} />
             </article>
 
-            <article className="rounded-2xl border border-slate-800 bg-slate-900 p-4 sm:p-6">
-              <h4 className="mb-3 text-base font-semibold text-slate-100">Route Details</h4>
+            <article className="staff-card">
+              <h4 className="mb-3 text-base font-semibold text-slate-900">Route Details</h4>
               {stops.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-slate-800 bg-slate-950 p-5 text-sm text-slate-400">No route details available.</div>
+                <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-5 text-sm text-slate-500">No route details available.</div>
               ) : (
                 <div className="space-y-3">
-                  <div className="rounded-xl border border-slate-800 bg-slate-950 px-3 py-3">
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
                     <div className="mb-2 flex items-center justify-between gap-2">
-                      <p className="text-[11px] uppercase tracking-widest text-slate-500">Route Progress</p>
-                      <p className="text-xs font-semibold text-slate-300">{stopProgress.completedStops} of {stopProgress.totalStops} Stops Completed — {stopProgress.progressPercent}%</p>
+                      <p className="text-xs uppercase tracking-widest text-slate-500">Route Progress</p>
+                      <p className="text-xs font-semibold text-slate-600">{stopProgress.completedStops} of {stopProgress.totalStops} Stops Completed — {stopProgress.progressPercent}%</p>
                     </div>
-                    <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-800">
+                    <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-200">
                       <div
                         className="h-full rounded-full bg-linear-to-r from-cyan-400 to-sky-500 transition-all"
                         style={{ width: `${Math.max(0, Math.min(100, stopProgress.progressPercent))}%` }}
                       />
                     </div>
                     {stopProgress.nextStopName && (
-                      <p className="mt-2 text-xs text-slate-400">Next stop: <span className="font-semibold text-slate-200">{stopProgress.nextStopName}</span></p>
+                      <p className="mt-2 text-xs text-slate-500">Next stop: <span className="font-semibold text-slate-700">{stopProgress.nextStopName}</span></p>
                     )}
                   </div>
 
                   {stops.map((stop, idx) => {
                     const completed = Boolean(stop.is_acknowledged);
                     return (
-                      <div key={stop.stop_id ?? idx} className={`flex items-center gap-3 rounded-xl border px-3 py-2 ${completed ? 'border-emerald-900 bg-emerald-950/20' : 'border-slate-800 bg-slate-950'}`}>
-                        <span className={`inline-flex h-6 w-6 items-center justify-center rounded-full border text-xs font-semibold ${completed ? 'border-emerald-600 text-emerald-300' : 'border-slate-700 text-slate-300'}`}>{idx + 1}</span>
+                      <div key={stop.stop_id ?? idx} className={`flex items-center gap-3 rounded-xl border px-3 py-2 ${completed ? 'border-emerald-200 bg-emerald-50' : 'border-slate-200 bg-slate-50'}`}>
+                        <span className={`inline-flex h-6 w-6 items-center justify-center rounded-full border text-xs font-semibold ${completed ? 'border-emerald-400 text-emerald-700' : 'border-slate-300 text-slate-600'}`}>{idx + 1}</span>
                         <div>
-                          <p className={`text-sm font-semibold ${completed ? 'text-emerald-200' : 'text-slate-100'}`}>{stop.stop_name ?? stop.name ?? `Stop ${idx + 1}`}</p>
+                          <p className={`text-sm font-semibold ${completed ? 'text-emerald-700' : 'text-slate-900'}`}>{stop.stop_name ?? stop.name ?? `Stop ${idx + 1}`}</p>
                           <small className="font-data text-xs text-slate-500">{stop.distance_from_origin_km != null ? `${stop.distance_from_origin_km} km` : ''}</small>
                         </div>
                         <span className={`ml-auto text-xs font-semibold ${completed ? 'text-emerald-300' : 'text-slate-500'}`}>{completed ? 'Reached' : 'Upcoming'}</span>
@@ -814,36 +814,36 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
         )}
 
         {!loading && activeTab === 'earnings' && !showNoCurrentTripState && (
-          <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <section className="staff-grid md:grid-cols-2 xl:grid-cols-3">
+            <article className="staff-card">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Total Fare Collected</p>
               <h3 className="font-data mt-2 text-2xl font-bold text-slate-900">
                 ₱{earnings ? Number(earnings.total_fare).toFixed(2) : '0.00'}
               </h3>
               <p className="mt-1 text-sm text-slate-500">{earnings?.passenger_count ?? 0} passengers</p>
             </article>
-            <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <article className="staff-card">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Cash Payments</p>
               <h3 className="font-data mt-2 text-2xl font-bold text-teal-600">
                 ₱{earnings ? Number(earnings.onsite_amount).toFixed(2) : '0.00'}
               </h3>
             </article>
-            <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <article className="staff-card">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Digital Payments</p>
               <h3 className="font-data mt-2 text-2xl font-bold text-blue-600">
                 ₱{earnings ? Number(earnings.online_amount).toFixed(2) : '0.00'}
               </h3>
             </article>
-            <article className="rounded-2xl border border-slate-800 bg-slate-900 p-4 md:col-span-2 xl:col-span-3">
+            <article className="staff-card md:col-span-2 xl:col-span-3">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Average Fare</p>
-                  <p className="font-data mt-1 text-lg font-semibold text-slate-100">
+                  <p className="font-data mt-1 text-lg font-semibold text-slate-900">
                     PHP {earnings ? Number(earnings.average_fare).toFixed(2) : '—'} per passenger
                   </p>
                 </div>
                 <button
-                  className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-xs font-semibold text-slate-300 transition hover:border-slate-500"
+                  className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
                   onClick={loadEarnings}
                 >
                   <RefreshCw className="inline h-3.5 w-3.5 mr-1" />Refresh
@@ -885,13 +885,13 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
             reminder banner + keeps its data/actions individually gated,
             no longer embeds the full PairingScreen widget here. */}
         {!loading && activeTab === 'activeTrip' && !isPaired && (
-          <section className="rounded-2xl border border-amber-800 bg-amber-950/20 p-4">
-            <p className="text-sm font-semibold text-amber-300">Not paired with your conductor yet</p>
-            <p className="mt-1 text-sm text-amber-200/90">Live actions (start boarding, depart, end trip, acknowledge stops) stay disabled until pairing is complete. Trip data below stays visible.</p>
+          <section className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+            <p className="text-sm font-semibold text-amber-800">Not paired with your conductor yet</p>
+            <p className="mt-1 text-sm text-amber-700">Live actions (start boarding, depart, end trip, acknowledge stops) stay disabled until pairing is complete. Trip data below stays visible.</p>
             <button
               type="button"
               onClick={() => setActiveTab('pin')}
-              className="mt-3 rounded-lg border border-amber-700 bg-amber-950/40 px-3 py-1.5 text-xs font-semibold text-amber-200 transition hover:bg-amber-950/60"
+              className="mt-3 rounded-lg border border-amber-300 bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-800 transition hover:bg-amber-200"
             >
               Go to Daily PIN to pair →
             </button>
@@ -953,21 +953,21 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                 onPaired={() => void refreshPairingStatus()}
               />
             )}
-            <article className="rounded-2xl border border-slate-800 bg-slate-900 p-4 sm:p-6">
-              <h4 className="mb-3 text-base font-semibold text-slate-100">Daily PIN Verification</h4>
+            <article className="staff-card staff-card-roomy">
+              <h4 className="mb-3 text-base font-semibold text-slate-900">Daily PIN Verification</h4>
               {!isPaired && (
-                <p className="mb-3 rounded-lg border border-amber-800 bg-amber-950/20 px-3 py-2 text-xs text-amber-200/90">{pairingReason}</p>
+                <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">{pairingReason}</p>
               )}
               {pin && (
                 <>
-                  <div className="font-data mb-2 rounded-xl border border-dashed border-slate-700 bg-slate-950 p-3 text-center text-2xl font-bold tracking-[0.2em] text-slate-100">
+                  <div className="font-data mb-2 rounded-xl border border-dashed border-slate-200 bg-slate-50 p-3 text-center text-2xl font-bold tracking-[0.2em] text-slate-900">
                     {showTripPin ? pin.pin_code : '••••••'}
                   </div>
                   <div className="mb-3 flex justify-center">
                     <button
                       type="button"
                       onClick={() => setShowTripPin((prev) => !prev)}
-                      className="rounded-xl border border-slate-700 bg-white p-1 transition hover:scale-[1.01]"
+                      className="rounded-xl border border-slate-200 bg-white p-1 transition hover:scale-[1.01]"
                       title="Tap QR to show or hide PIN"
                     >
                       <img
@@ -982,20 +982,20 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                     {pin.fleet_plate_number && (
                       <div className="flex items-center justify-between">
                         <span className="text-slate-500">Fleet</span>
-                        <strong className="rounded-full border border-sky-800 bg-sky-950/40 px-2 py-0.5 text-sky-300">{pin.fleet_plate_number}</strong>
+                        <strong className="rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-sky-700">{pin.fleet_plate_number}</strong>
                       </div>
                     )}
                     {pin.route_name && (
                       <div className="flex items-center justify-between">
                         <span className="text-slate-500">Route</span>
-                        <strong className="text-slate-300">{pin.route_name}</strong>
+                        <strong className="text-slate-700">{pin.route_name}</strong>
                       </div>
                     )}
-                    <div className="flex items-center justify-between"><span className="text-slate-500">Driver Verified</span><strong className={pin.driver_verified_at ? 'text-emerald-400' : 'text-slate-500'}>{pin.driver_verified_at ? '✓ Yes' : 'Not yet'}</strong></div>
-                    <div className="flex items-center justify-between"><span className="text-slate-500">Conductor Verified</span><strong className={pin.conductor_verified_at ? 'text-emerald-400' : 'text-slate-500'}>{pin.conductor_verified_at ? '✓ Yes' : 'Not yet'}</strong></div>
+                    <div className="flex items-center justify-between"><span className="text-slate-500">Driver Verified</span><strong className={pin.driver_verified_at ? 'text-emerald-600' : 'text-slate-400'}>{pin.driver_verified_at ? '✓ Yes' : 'Not yet'}</strong></div>
+                    <div className="flex items-center justify-between"><span className="text-slate-500">Conductor Verified</span><strong className={pin.conductor_verified_at ? 'text-emerald-600' : 'text-slate-400'}>{pin.conductor_verified_at ? '✓ Yes' : 'Not yet'}</strong></div>
                   </div>
                   {pin.both_verified && (
-                    <div className="mb-3 rounded-xl border border-emerald-800 bg-emerald-950/40 px-3 py-2 text-center text-xs font-semibold text-emerald-300">
+                    <div className="mb-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-center text-xs font-semibold text-emerald-700">
                       ✓ Both verified — trip is cleared for departure
                     </div>
                   )}
@@ -1008,60 +1008,60 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                   placeholder="Enter 6-digit PIN"
                   value={pinInput}
                   onChange={(e) => { setPinInput(e.target.value); setPinStatus(''); }}
-                  className="font-data h-11 w-full rounded-xl border border-slate-800 bg-slate-950 px-3 text-sm text-slate-100 outline-none placeholder:text-slate-500 focus:border-sky-400"
+                  className="font-data h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-sky-400"
                 />
-                <button className="rounded-xl bg-sky-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-sky-400" onClick={handleVerifyPin}>Verify</button>
+                <button className="rounded-xl bg-sky-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sky-600" onClick={handleVerifyPin}>Verify</button>
               </div>
-              {pinStatus && <p className={`mt-3 text-sm ${pinStatus === 'PIN verified successfully.' ? 'text-emerald-400' : 'text-red-400'}`}>{pinStatus}</p>}
+              {pinStatus && <p className={`mt-3 text-sm ${pinStatus === 'PIN verified successfully.' ? 'text-emerald-600' : 'text-red-600'}`}>{pinStatus}</p>}
             </article>
           </section>
         )}
 
         {!loading && activeTab === 'account' && (
-          <section className="grid gap-4 lg:grid-cols-2">
-            <article className="rounded-2xl border border-slate-800 bg-slate-900 p-4 sm:p-6">
-              <h4 className="mb-3 text-base font-semibold text-slate-100">Profile Information</h4>
-              <div className="mb-4 flex flex-col items-center rounded-xl border border-slate-800 bg-slate-950 p-4 text-center">
+          <section className="staff-grid lg:grid-cols-2">
+            <article className="staff-card">
+              <h4 className="mb-3 text-base font-semibold text-slate-900">Profile Information</h4>
+              <div className="mb-4 flex flex-col items-center rounded-xl border border-slate-200 bg-slate-50 p-4 text-center">
                 <div className="inline-flex h-16 w-16 items-center justify-center rounded-full bg-linear-to-br from-blue-600 to-indigo-600 text-2xl font-bold text-white">
                   {(profile?.name || 'D')[0].toUpperCase()}
                 </div>
-                <h3 className="mt-2 text-lg font-semibold text-slate-100">{profile?.name || 'Driver'}</h3>
+                <h3 className="mt-2 text-lg font-semibold text-slate-900">{profile?.name || 'Driver'}</h3>
                 <p className="text-xs text-slate-500">Verified Driver</p>
               </div>
               <div className="space-y-3 text-sm">
-                <div className="flex items-center justify-between"><span className="text-slate-500">Email</span><strong className="text-slate-100">{profile?.user?.email || profile?.email || '-'}</strong></div>
-                <div className="flex items-center justify-between"><span className="text-slate-500">Driver ID</span><strong className="font-data text-slate-100">{profile?.company_user_id || '-'}</strong></div>
-                <div className="flex items-center justify-between"><span className="text-slate-500">Status</span><strong className="text-emerald-300">Active</strong></div>
+                <div className="flex items-center justify-between"><span className="text-slate-500">Email</span><strong className="text-slate-900">{profile?.user?.email || profile?.email || '-'}</strong></div>
+                <div className="flex items-center justify-between"><span className="text-slate-500">Driver ID</span><strong className="font-data text-slate-900">{profile?.company_user_id || '-'}</strong></div>
+                <div className="flex items-center justify-between"><span className="text-slate-500">Status</span><strong className="text-emerald-600">Active</strong></div>
               </div>
             </article>
 
-            <article className="rounded-2xl border border-slate-800 bg-slate-900 p-4 sm:p-6">
-              <h4 className="mb-3 text-base font-semibold text-slate-100">PIN and Trip Context</h4>
+            <article className="staff-card">
+              <h4 className="mb-3 text-base font-semibold text-slate-900">PIN and Trip Context</h4>
               <div className="space-y-3 text-sm">
-                <div className="flex items-center justify-between"><span className="text-slate-500">Trip ID</span><strong className="font-data text-slate-100">{pin?.trip_id ?? trip?.trip_id ?? '-'}</strong></div>
-                <div className="flex items-center justify-between"><span className="text-slate-500">Route</span><strong className="text-slate-100">{pin?.route_name || currentRoute?.route_name || '-'}</strong></div>
-                <div className="flex items-center justify-between"><span className="text-slate-500">Fleet</span><strong className="font-data text-slate-100">{pin?.fleet_plate_number || currentFleet?.plate_number || '-'}</strong></div>
-                <div className="flex items-center justify-between"><span className="text-slate-500">Date</span><strong className="font-data text-slate-100">{formatDateTime(pin?.pin_date || trip?.trip_date)}</strong></div>
-                <div className="flex items-center justify-between"><span className="text-slate-500">Shift Started</span><strong className="font-data text-slate-100">{formatDateTime(shiftState?.latestShift?.started_at)}</strong></div>
-                <div className="flex items-center justify-between"><span className="text-slate-500">Shift Ended</span><strong className="font-data text-slate-100">{formatDateTime(shiftState?.latestShift?.ended_at)}</strong></div>
+                <div className="flex items-center justify-between"><span className="text-slate-500">Trip ID</span><strong className="font-data text-slate-900">{pin?.trip_id ?? trip?.trip_id ?? '-'}</strong></div>
+                <div className="flex items-center justify-between"><span className="text-slate-500">Route</span><strong className="text-slate-900">{pin?.route_name || currentRoute?.route_name || '-'}</strong></div>
+                <div className="flex items-center justify-between"><span className="text-slate-500">Fleet</span><strong className="font-data text-slate-900">{pin?.fleet_plate_number || currentFleet?.plate_number || '-'}</strong></div>
+                <div className="flex items-center justify-between"><span className="text-slate-500">Date</span><strong className="font-data text-slate-900">{formatDateTime(pin?.pin_date || trip?.trip_date)}</strong></div>
+                <div className="flex items-center justify-between"><span className="text-slate-500">Shift Started</span><strong className="font-data text-slate-900">{formatDateTime(shiftState?.latestShift?.started_at)}</strong></div>
+                <div className="flex items-center justify-between"><span className="text-slate-500">Shift Ended</span><strong className="font-data text-slate-900">{formatDateTime(shiftState?.latestShift?.ended_at)}</strong></div>
               </div>
             </article>
 
-            <article className="rounded-2xl border border-slate-800 bg-slate-900 p-4 sm:p-6">
-              <h4 className="mb-3 text-base font-semibold text-slate-100">Security & 2FA</h4>
+            <article className="staff-card">
+              <h4 className="mb-3 text-base font-semibold text-slate-900">Security & 2FA</h4>
               <div className="space-y-3 text-sm">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-slate-300 font-medium">Two-Factor Authentication</p>
+                    <p className="text-slate-700 font-medium">Two-Factor Authentication</p>
                     <p className="text-xs text-slate-500 mt-0.5">Require OTP verification on every login.</p>
                   </div>
                   <label className="relative inline-flex cursor-pointer items-center">
                     <input type="checkbox" className="sr-only peer" checked={twoFactorEnabled}
                       onChange={(e) => handleToggleTwoFactor(e.target.checked)} disabled={saving2fa} />
-                    <div className="h-6 w-11 rounded-full bg-slate-700 peer-checked:bg-teal-500 peer-focus:ring-2 peer-focus:ring-teal-400 transition-colors after:absolute after:top-0.5 after:left-0.5 after:h-5 after:w-5 after:rounded-full after:bg-white after:shadow after:transition-all peer-checked:after:translate-x-full" />
+                    <div className="h-6 w-11 rounded-full bg-slate-200 peer-checked:bg-teal-500 peer-focus:ring-2 peer-focus:ring-teal-400 transition-colors after:absolute after:top-0.5 after:left-0.5 after:h-5 after:w-5 after:rounded-full after:bg-white after:shadow after:transition-all peer-checked:after:translate-x-full" />
                   </label>
                 </div>
-                {msg2fa && <p className={`text-xs rounded px-2 py-1 ${msg2fa.toLowerCase().includes('fail') ? 'bg-red-900/30 text-red-300' : 'bg-teal-900/30 text-teal-300'}`}>{msg2fa}</p>}
+                {msg2fa && <p className={`text-xs rounded px-2 py-1 ${msg2fa.toLowerCase().includes('fail') ? 'bg-red-50 text-red-700' : 'bg-teal-50 text-teal-700'}`}>{msg2fa}</p>}
               </div>
             </article>
           </section>
@@ -1162,8 +1162,8 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                         <p className="text-xs text-slate-500">{formatTripSchedule(t)}</p>
                       </div>
                       <span
-                        className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase"
-                        style={{ background: `${STATUS_COLOR[t.status] || '#64748b'}20`, color: STATUS_COLOR[t.status] || '#64748b' }}
+                        className="shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold uppercase"
+                        style={{ background: `${STATUS_COLOR[t.status] || '#153a6b'}20`, color: STATUS_COLOR[t.status] || '#153a6b' }}
                       >
                         {t.status}
                       </span>
@@ -1258,7 +1258,7 @@ function DriverTripTable({ title, trips, onSelectTrip, onDeclineTrip, onAcceptTr
                     <td className="py-3 pr-4 font-data text-slate-600">{formatTripSchedule(item)}</td>
                     <td className="py-3 pr-4 text-slate-600">{item.fleet_route?.route?.destination || '-'}</td>
                     <td className="py-3 pr-4">
-                      <span className="rounded-full px-2.5 py-1 text-xs font-semibold" style={{ background: `${STATUS_COLOR[item.status] || '#64748b'}20`, color: STATUS_COLOR[item.status] || '#64748b' }}>
+                      <span className="rounded-full px-2.5 py-1 text-xs font-semibold" style={{ background: `${STATUS_COLOR[item.status] || '#153a6b'}20`, color: STATUS_COLOR[item.status] || '#153a6b' }}>
                         {(item.status || 'pending').toUpperCase()}
                       </span>
                     </td>
