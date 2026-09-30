@@ -17,6 +17,9 @@ import StaffPortalLayout from './StaffPortalLayout';
 import DeclineTripModal from './DeclineTripModal';
 import CalendarSummaryStrip from './CalendarSummaryStrip';
 import DriverNavigationMap from './DriverNavigationMap';
+import QrImage from '../Passenger/Ticket/QrImage';
+import RequestedStopRow from './RequestedStopRow';
+import { groupRequestedStops } from '../../utils/requestedStops';
 import NotificationBellButton from './NotificationBellButton';
 import { useDriverPairing, useDriverDashboardData } from '../../api/hooks/Staff/useDriverDashboard';
 import { getBusinessTodayLabel } from '../../utils/dates';
@@ -141,7 +144,8 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     profile,
     trip,
     stops,
-    requestedStops,    pin,
+    requestedStops,
+    pin,
     showTripPin, setShowTripPin,
     pinInput, setPinInput,
     pinStatus, setPinStatus,
@@ -205,6 +209,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     handleLogout,
     handleToggleTwoFactor,
   } = useDriverDashboardData({ onLogout, pairing });
+  const requestedGroups = groupRequestedStops(requestedStops);
 
   const derivedTripStatus = deriveTripStatus(trip || todayAssignedTrip);
 
@@ -473,7 +478,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                   <h4 className="text-base font-bold text-slate-900">Traffic & ETA</h4>
                 </div>
                 <span className={`rounded-full px-2.5 py-1 text-xs font-bold uppercase tracking-[0.15em] ${
-                  trafficStatus.dataSource === 'fallback'
+                  trafficStatus.dataSource === 'fallback' || trafficStatus.level === 'unknown'
                     ? 'bg-slate-100 text-slate-700'
                     : trafficStatus.level === 'heavy'
                     ? 'bg-red-100 text-red-700'
@@ -838,9 +843,13 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                     )}
                   </div>
 
+                  {requestedGroups.before.map((requested) => (
+                    <RequestedStopRow key={`before-${requested.latitude},${requested.longitude}`} requested={requested} note="before the first stop" />
+                  ))}
+
                   {stops.map((stop, idx) => {
                     const completed = Boolean(stop.is_acknowledged);
-                    const requestedAfter = requestedStops.filter((requested) => requested.after_stop_sequence === (stop.sequence_number ?? stop.stop_order ?? idx + 1));
+                    const requestedAfter = requestedGroups.after[stop.sequence_number ?? stop.stop_order ?? idx + 1] ?? [];
                     return (
                       <div key={stop.stop_id ?? idx} className="space-y-1.5">
                       <div className={`flex items-center gap-3 rounded-xl border px-3 py-2 ${completed ? 'border-emerald-200 bg-emerald-50' : 'border-slate-200 bg-slate-50'}`}>
@@ -863,14 +872,14 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                         )}
                       </div>
                       {requestedAfter.map((requested) => (
-                        <div key={`${requested.latitude},${requested.longitude}`} className="ml-9 rounded-xl border border-dashed border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                          <span className="font-semibold">Requested stop:</span> {requested.label}
-                          <span className="ml-2 text-amber-700">{requested.passenger_count} passenger{requested.passenger_count === 1 ? '' : 's'}</span>
-                        </div>
+                        <RequestedStopRow key={`${requested.latitude},${requested.longitude}`} requested={requested} />
                       ))}
                       </div>
                     );
                   })}
+                  {requestedGroups.unknown.map((requested) => (
+                    <RequestedStopRow key={`unknown-${requested.latitude},${requested.longitude}`} requested={requested} note="position on the route unknown" />
+                  ))}
                 </div>
               )}
             </article>
@@ -969,11 +978,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                       className="rounded-xl border border-slate-200 bg-white p-1 transition hover:scale-[1.01]"
                       title="Tap QR to show or hide PIN"
                     >
-                      <img
-                        src={`https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(pin.pin_code)}`}
-                        alt="PIN QR code"
-                        className="h-36 w-36"
-                      />
+                      <QrImage content={pin.pin_code} alt="PIN QR code" size={280} className="h-36 w-36" />
                     </button>
                   </div>
                   <p className="mb-3 text-center text-xs text-slate-500">Tap QR to {showTripPin ? 'hide' : 'show'} PIN code</p>

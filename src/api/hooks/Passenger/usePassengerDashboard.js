@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../useAuth';
 import PassengerService from '../../PassengerService/PassengerService';
 import { initFcmAndGetToken } from '../../../services/fcmService';
+import { openPrintWindow } from '../../../utils/qr';
 
 const PROTECTED_TABS = new Set(['tickets', 'rewards', 'transactions', 'profile']);
 const TICKET_QR_CACHE_KEY = 'smart_transit_ticket_qr_cache_v1';
@@ -355,7 +356,7 @@ export default function usePassengerDashboard({ preloadMapView }) {
   const printSelectedTicket = useCallback(() => {
     if (!selectedTicket) return;
 
-    const qrUrl = selectedTicketQr?.qr_url || '';
+    const qrContent = selectedTicketQr?.qr_content || '';
     const ticketStatus = String(selectedTicket.status || 'valid').toLowerCase();
     const footerMessages = {
       boarded:   'Boarded — You are currently on this trip',
@@ -371,10 +372,7 @@ export default function usePassengerDashboard({ preloadMapView }) {
       cancelled: 'border:1px solid #fca5a5;background:#fef2f2;color:#7f1d1d;',
     };
     const footerStyle = footerStyles[ticketStatus] ?? 'border:1px solid #9dd7af;background:#eaf9f0;color:#166534;';
-    const popup = window.open('', '_blank', 'width=900,height=700');
-    if (!popup) return;
-
-    popup.document.write(`
+    const buildHtml = (qrSrc) => `
       <html>
         <head>
           <title>Smart Transit Ticket</title>
@@ -409,7 +407,7 @@ export default function usePassengerDashboard({ preloadMapView }) {
               </div>
             </header>
             <div class="body">
-              <div class="qr-wrap">${qrUrl ? `<img src="${qrUrl}" alt="Ticket QR" />` : '<span>QR unavailable</span>'}</div>
+              <div class="qr-wrap">${qrSrc ? `<img src="${qrSrc}" alt="Ticket QR" />` : '<span>QR unavailable</span>'}</div>
               <div class="meta">
                 <div><span class="k">Valid</span><span class="v">${formatDateTime(selectedTicket.valid_from ?? selectedTicketQr?.valid_from)}</span></div>
                 <div><span class="k">Expires</span><span class="v">${formatDateTime(selectedTicket.expires_at ?? selectedTicketQr?.expires_at)}</span></div>
@@ -423,7 +421,16 @@ export default function usePassengerDashboard({ preloadMapView }) {
           <script>window.onload = function () { window.print(); };</script>
         </body>
       </html>
-    `);
+    `;
+
+    // The QR is drawn locally (same renderer as the screen); nothing is fetched.
+    if (qrContent) {
+      openPrintWindow(qrContent, buildHtml);
+      return;
+    }
+    const popup = window.open('', '_blank', 'width=900,height=700');
+    if (!popup) return;
+    popup.document.write(buildHtml(''));
     popup.document.close();
   }, [formatDateTime, getDestinationLabel, getOriginLabel, selectedTicket, selectedTicketQr]);
 

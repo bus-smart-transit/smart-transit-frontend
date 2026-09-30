@@ -3,7 +3,9 @@ import { Bell, Bus, Map as MapIcon, Ticket, User, LogOut, Gift, History, LayoutG
 import usePassengerDashboard from '../../../api/hooks/Passenger/usePassengerDashboard';
 import PassengerService from '../../../api/PassengerService/PassengerService';
 import TicketCard from '../Ticket/TicketCard';
-import SaveQrButtons from '../BuyTicket/SaveQrButtons';
+import SaveQrButton from '../Ticket/SaveQrButton';
+import QrImage from '../Ticket/QrImage';
+import { groupQrPayload } from '../../../utils/qr';
 import PublicTrackingSection from '../LandingPage/PublicTrackingSection';
 import ProfileDropdown from '../../Layout/ProfileDropdown';
 import Card from '../../ui/Card';
@@ -221,7 +223,7 @@ export default function Dashboard() {
     return Array.from(groups.entries()).map(([ref, groupTickets]) => ({
       ref,
       tickets: groupTickets,
-      groupQrUrl: `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(`grp:${ref}`)}`,
+      groupQr: groupQrPayload(ref),
     }));
   })();
 
@@ -447,19 +449,28 @@ export default function Dashboard() {
               </Card>
             ) : ticketStatusFilter === 'group' ? (
               <div className="space-y-4">
-                {groupedTicketsByRef.map(({ ref, tickets: groupTickets, groupQrUrl }) => (
+                {groupedTicketsByRef.map(({ ref, tickets: groupTickets, groupQr }) => (
                   <Card key={ref} className="overflow-hidden p-0">
                     <div className="flex flex-wrap items-center gap-4 border-b border-slate-100 bg-teal-50/60 px-5 py-4">
-                      <img src={groupQrUrl} alt="Group boarding QR" className="h-16 w-16 rounded-lg border border-teal-200 bg-white" />
+                      <QrImage content={groupQr} alt="Group boarding QR" size={300} className="h-16 w-16 rounded-lg border border-teal-200 bg-white" />
                       <div>
                         <p className="text-sm font-semibold text-teal-800">Group Boarding QR — {groupTickets.length} tickets</p>
                         <p className="mt-0.5 text-xs text-teal-700">Transaction {ref}</p>
                       </div>
                       <div className="ml-auto">
-                        <SaveQrButtons
-                          ticket={{ group_qr_content: `grp:${ref}`, qr_url: groupQrUrl, transaction_reference: ref }}
+                        <SaveQrButton
+                          ticket={{
+                            group_qr_content: groupQr,
+                            transaction_reference: ref,
+                            origin: getOriginLabel(groupTickets[0]),
+                            destination: getDestinationLabel(groupTickets[0]),
+                            trip_date: groupTickets[0]?.trip?.trip_date ?? null,
+                            departure_time: groupTickets[0]?.trip?.departure_time ?? null,
+                            valid_from: groupTickets[0]?.valid_from ?? null,
+                          }}
                           group
                           groupSize={groupTickets.length}
+                          active={Boolean(groupQr)}
                         />
                       </div>
                     </div>
@@ -893,7 +904,7 @@ export default function Dashboard() {
                 departureLabel={formatDateTime(selectedTicket.valid_from ?? selectedTicketQr?.valid_from)}
                 seatLabel={selectedTicket.seat_type || '-'}
                 routeLabel={`${getOriginLabel(selectedTicket)} to ${getDestinationLabel(selectedTicket)}`}
-                qrUrl={selectedTicketQr?.qr_url || ''}
+                qrContent={selectedTicketQr?.qr_content || ''}
                 statusLabel={selectedTicket.status || '-'}
                 validLabel={formatDateTime(selectedTicket.valid_from ?? selectedTicketQr?.valid_from)}
                 expiresLabel={formatDateTime(selectedTicket.expires_at ?? selectedTicketQr?.expires_at)}
@@ -903,7 +914,7 @@ export default function Dashboard() {
                 <p className="mt-1 text-sm font-semibold text-navy-950">{getDestinationLabel(selectedTicket)}</p>
               </div>
               <div className="mt-5 flex flex-wrap items-center justify-between gap-2">
-                <SaveQrButtons
+                <SaveQrButton
                   ticket={{
                     ...selectedTicketQr,
                     ticket_uuid: selectedTicket.ticket_uuid,
@@ -913,7 +924,7 @@ export default function Dashboard() {
                     amount: selectedTicket.amount ?? selectedTicket.final_amount,
                     transaction_reference: selectedTicket.payment?.transaction_reference,
                   }}
-                  departureLabel={formatDateTime(selectedTicket.valid_from ?? selectedTicketQr?.valid_from)}
+                  active={Boolean(selectedTicketQr?.qr_content)}
                 />
                 <div className="flex gap-2">
                   <Button type="button" variant="outline" size="sm" onClick={printSelectedTicket}>Print PDF</Button>

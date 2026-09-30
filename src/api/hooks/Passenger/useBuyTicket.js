@@ -4,6 +4,8 @@ import PassengerService from '../../PassengerService/PassengerService';
 import { readApiError } from '../../../services/bookingService';
 import { useBookingStops, useTripResolution } from './useBookingSearch';
 import useTripTimeline from './useTripTimeline';
+import { groupQrPayload, openPrintWindow } from '../../../utils/qr';
+import { manilaDepartureLabel } from '../../../utils/ticketImage';
 const CHECKOUT_EVENT_KEY = 'smart_transit_checkout_event';
 const CHECKOUT_PENDING_KEY = 'smart_transit_checkout_pending';
 const CHECKOUT_LOOKUP_CACHE_KEY = 'smart_transit_checkout_lookup_cache_v1';
@@ -89,9 +91,11 @@ const ticketMeta = (ticket) => {
       ticket?.trip?.fleetRoute?.route?.destination ||
       'Not specified',
     transaction_reference: transactionRef,
-    group_qr_content: transactionRef ? `grp:${transactionRef}` : null,
+    group_qr_content: groupQrPayload(transactionRef),
     seat_type: ticket?.seat_type,
     amount: ticket?.amount,
+    trip_date: ticket?.trip_date ?? ticket?.trip?.trip_date ?? null,
+    departure_time: ticket?.departure_time ?? ticket?.trip?.departure_time ?? null,
     valid_from: ticket?.valid_from ?? null,
     expires_at: ticket?.expires_at ?? null,
   };
@@ -243,13 +247,12 @@ export default function useBuyTicket({ onTicketPurchased }) {
   }, []);
 
   const printQrTicket = useCallback((ticket, idx) => {
-    if (!ticket?.qr_url) return;
+    if (!ticket?.qr_content) return;
     const esc = escapeHtml;
 
-    const popup = window.open('', '_blank', 'width=900,height=700');
-    if (!popup) return;
-
-    popup.document.write(`
+    // The QR is drawn locally (same renderer as the screen); the window opens first so the
+    // browser allows it, and is filled once the image is ready.
+    openPrintWindow(ticket.qr_content, (qrSrc) => `
       <html>
         <head>
           <title>Ticket QR ${idx + 1}</title>
@@ -278,13 +281,13 @@ export default function useBuyTicket({ onTicketPurchased }) {
               <h1>${esc(ticket.origin || '')}</h1>
               <h2>${esc(ticket.destination || '')}</h2>
               <div class="strip">
-                <div><span>Departure</span><strong>${formatDateTime(ticket.valid_from)}</strong></div>
+                <div><span>Departure</span><strong>${esc(manilaDepartureLabel(ticket))}</strong></div>
                 <div><span>Seat</span><strong>${esc(ticket.seat_type || '-')}</strong></div>
                 <div><span>Ticket ID</span><strong>${esc(String(ticket.ticket_uuid || '').slice(0, 8).toUpperCase())}</strong></div>
               </div>
             </header>
             <div class="body">
-              <div class="qr-wrap"><img src="${esc(ticket.qr_url)}" alt="Ticket QR" /></div>
+              <div class="qr-wrap"><img src="${qrSrc}" alt="Ticket QR" /></div>
               <div class="meta">
                 <div><span class="k">Valid</span><span class="v">${formatDateTime(ticket.valid_from)}</span></div>
                 <div><span class="k">Expires</span><span class="v">${formatDateTime(ticket.expires_at)}</span></div>
@@ -298,37 +301,28 @@ export default function useBuyTicket({ onTicketPurchased }) {
         </body>
       </html>
     `);
-    popup.document.close();
   }, []);
 
   const toGuestQrTicket = useCallback((ticket) => {
-    const qrContent = ticket.ticket_uuid;
     const meta = ticketMeta(ticket);
 
     return {
       ticket_uuid: ticket.ticket_uuid,
-      qr_content: qrContent,
-      qr_url: `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qrContent)}`,
-      group_qr_url: meta.group_qr_content
-        ? `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(meta.group_qr_content)}`
-        : null,
+      qr_content: ticket.ticket_uuid,
       ...meta,
     };
   }, []);
 
   const toPassengerTicketCardData = useCallback((ticket) => {
     // Fallback used when a ticket's real QR isn't active yet (for example a future-dated
-    // booking) and getTicketQR() can't return the backend's payload. The QR stays inactive
-    // (qr_url null); only the group QR link is derived so the group section can still render.
+    // booking) and getTicketQR() can't return the backend's payload. The ticket QR stays
+    // inactive (no qr_content); only the group payload is derived so the group section can
+    // still render, exactly as before.
     const meta = ticketMeta(ticket);
 
     return {
       ticket_uuid: ticket.ticket_uuid,
-      qr_content: ticket.ticket_uuid,
-      qr_url: null,
-      group_qr_url: meta.group_qr_content
-        ? `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(meta.group_qr_content)}`
-        : null,
+      qr_content: null,
       ...meta,
     };
   }, []);

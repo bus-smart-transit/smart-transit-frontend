@@ -53,7 +53,10 @@ describe('trafficService', () => {
     expect(requestUrl.searchParams.get('instructions')).toBe('true');
     expect(fetchMock.mock.calls[0][1]?.headers?.Accept).toContain('application/geo+json');
 
-    expect(result.level).toBe('moderate');
+    // ORS has no traffic data, so there is no baseline: travel time only, no level, no delay.
+    expect(result.level).toBe('unknown');
+    expect(result.label).toBe('Travel time only');
+    expect(result.delayMinutes).toBeNull();
     expect(result.etaMinutes).toBe(11);
     expect(result.routeName).toBe('Route 7');
     expect(result.suggestion).toContain('Route 7');
@@ -173,5 +176,51 @@ describe('trafficService', () => {
     const unnamed = await fetchTrafficStatus({ ...base, stops: [{ stop_order: 1 }] });
     expect(unnamed.corridorName).toBeNull();
     expect(unnamed.suggestion).not.toContain('(');
+  });
+
+  describe('Mapbox: congestion is judged against the free-flow time, never a fixed ETA cut-off', () => {
+    const base = { currentLat: 7.087, currentLng: 125.615, nextStop: { latitude: 7.091, longitude: 125.62 }, route: { route_name: 'Route 7' } };
+    const stubMapbox = (liveSeconds, freeSeconds) => {
+      vi.stubEnv('VITE_TRAFFIC_PROVIDER', 'mapbox');
+      vi.stubEnv('VITE_TRAFFIC_API_BASE', 'https://api.mapbox.com');
+      vi.stubEnv('VITE_TRAFFIC_API_KEY', 'demo-key');
+      const fetchMock = vi.fn(async (url) => {
+        const isLive = String(url).includes('driving-traffic');
+        if (!isLive && freeSeconds === null) return { ok: false, status: 500, json: async () => ({}) };
+        return { ok: true, json: async () => ({ routes: [{ duration: isLive ? liveSeconds : freeSeconds, legs: [{ steps: [] }] }] }) };
+      });
+      vi.stubGlobal('fetch', fetchMock);
+      return fetchMock;
+    };
+
+    test('the same long trip is normal when free-flow is just as long (the ETA alone decides nothing)', async () => {
+      const fetchMock = stubMapbox(1800, 1750);
+      const result = await fetchTrafficStatus(base);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(result.etaMinutes).toBe(30);
+      expect(result.level).toBe('normal');
+      expect(result.delayMinutes).toBe(1);
+    });
+
+    test('moderate and heavy come from the extra time over free-flow, and the delay is that measured difference', async () => {
+      stubMapbox(900, 600); // +5 min on 10 min free-flow = 50%
+      const moderate = await fetchTrafficStatus(base);
+      expect(moderate.level).toBe('moderate');
+      expect(moderate.delayMinutes).toBe(5);
+
+      vi.unstubAllGlobals();
+      stubMapbox(1200, 600); // +10 min on 10 min = 100%
+      const heavy = await fetchTrafficStatus(base);
+      expect(heavy.level).toBe('heavy');
+      expect(heavy.delayMinutes).toBe(10);
+    });
+
+    test('without a free-flow baseline the level is unknown and no delay is shown', async () => {
+      stubMapbox(1200, null);
+      const result = await fetchTrafficStatus(base);
+      expect(result.etaMinutes).toBe(20);
+      expect(result.level).toBe('unknown');
+      expect(result.delayMinutes).toBeNull();
+    });
   });
 });

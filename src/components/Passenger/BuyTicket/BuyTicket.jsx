@@ -2,10 +2,11 @@ import { useState } from 'react';
 import { CreditCard, AlertCircle, CheckCircle, Loader, Wallet, Smartphone } from 'lucide-react';
 import useBuyTicket from '../../../api/hooks/Passenger/useBuyTicket';
 import TicketCard from '../Ticket/TicketCard';
+import QrImage from '../Ticket/QrImage';
 import TripTimeline from '../Timeline/TripTimeline';
 import CustomDropoffModal from '../Timeline/CustomDropoffModal';
 import JourneyFields from './JourneyFields';
-import SaveQrButtons from './SaveQrButtons';
+import SaveQrButton from '../Ticket/SaveQrButton';
 import Card from '../../ui/Card';
 import Button from '../../ui/Button';
 import Toggle from '../../ui/Toggle';
@@ -141,17 +142,17 @@ export default function BuyTicket({ onTicketPurchased }) {
           <p className="text-sm text-slate-500">Payment succeeded. Ticket QR will appear on your scheduled trip date.</p>
         ) : qrTickets.length > 1 ? (
           <div className="space-y-3">
-            {qrTickets[0]?.group_qr_url ? (
+            {qrTickets[0]?.group_qr_content ? (
               <div className="rounded-xl bg-teal-50 p-3 ring-1 ring-inset ring-teal-200">
                 <p className="text-sm font-semibold text-teal-800">
                   Group Boarding QR: scan once to board all {qrTickets.length} tickets
                 </p>
-                <img src={qrTickets[0].group_qr_url} alt="Group boarding QR" className="mt-2 h-40 w-40 rounded-lg" />
+                <QrImage content={qrTickets[0].group_qr_content} alt="Group boarding QR" size={400} className="mt-2 h-40 w-40 rounded-lg" />
                 <p className="mt-2 text-xs text-teal-700">
                   The conductor scans this QR to board all passengers in your order at once.
                 </p>
                 <div className="mt-3">
-                  <SaveQrButtons ticket={qrTickets[0]} group groupSize={qrTickets.length} />
+                  <SaveQrButton ticket={qrTickets[0]} group groupSize={qrTickets.length} active={Boolean(qrTickets[0]?.group_qr_content)} />
                 </div>
               </div>
             ) : (
@@ -183,7 +184,7 @@ export default function BuyTicket({ onTicketPurchased }) {
             departureLabel={formatDateTime(qrTickets[0]?.valid_from)}
             seatLabel={qrTickets[0]?.seat_type || '-'}
             routeLabel={`${qrTickets[0]?.origin || '-'} to ${qrTickets[0]?.destination || '-'}`}
-            qrUrl={qrTickets[0]?.qr_url}
+            qrContent={qrTickets[0]?.qr_content}
             statusLabel="Valid"
             validLabel={formatDateTime(qrTickets[0]?.valid_from)}
             expiresLabel={formatDateTime(qrTickets[0]?.expires_at)}
@@ -193,11 +194,11 @@ export default function BuyTicket({ onTicketPurchased }) {
         {qrTickets.length > 0 && (
           <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
             {qrTickets.length === 1 ? (
-              <SaveQrButtons ticket={qrTickets[0]} departureLabel={formatDateTime(qrTickets[0]?.valid_from)} />
+              <SaveQrButton ticket={qrTickets[0]} active={Boolean(qrTickets[0]?.qr_content)} />
             ) : <span />}
             <div className="flex gap-2">
               {qrTickets.length === 1 && (
-                <Button type="button" variant="outline" size="sm" onClick={() => printQrTicket(qrTickets[0], 0)} disabled={!qrTickets[0]?.qr_url}>
+                <Button type="button" variant="outline" size="sm" onClick={() => printQrTicket(qrTickets[0], 0)} disabled={!qrTickets[0]?.qr_content}>
                   Print PDF
                 </Button>
               )}
@@ -418,11 +419,11 @@ export default function BuyTicket({ onTicketPurchased }) {
         {ticketPreview?.ticket && (
           <>
             <div className="mb-3 flex flex-wrap justify-end gap-2">
-              <SaveQrButtons ticket={ticketPreview.ticket} departureLabel={formatDateTime(ticketPreview.ticket.valid_from)} />
+              <SaveQrButton ticket={ticketPreview.ticket} active={Boolean(ticketPreview.ticket.qr_content)} />
               <button
                 type="button"
                 onClick={() => printQrTicket(ticketPreview.ticket, ticketPreview.idx)}
-                disabled={!ticketPreview.ticket.qr_url}
+                disabled={!ticketPreview.ticket.qr_content}
                 className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300 disabled:hover:bg-transparent"
               >
                 Print PDF
@@ -435,7 +436,7 @@ export default function BuyTicket({ onTicketPurchased }) {
               departureLabel={formatDateTime(ticketPreview.ticket.valid_from)}
               seatLabel={ticketPreview.ticket.seat_type || '-'}
               routeLabel={`${ticketPreview.ticket.origin || '-'} to ${ticketPreview.ticket.destination || '-'}`}
-              qrUrl={ticketPreview.ticket.qr_url}
+              qrContent={ticketPreview.ticket.qr_content}
               statusLabel="Valid"
               amountLabel={`PHP ${Number(ticketPreview.ticket.amount || 0).toFixed(2)}`}
               validLabel={formatDateTime(ticketPreview.ticket.valid_from)}

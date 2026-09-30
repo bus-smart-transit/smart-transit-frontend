@@ -1,4 +1,4 @@
-import { parseAppDate } from '../../../utils/dates';
+import QrImage from './QrImage';
 
 const STATUS_FOOTER = {
   valid:     { text: 'Valid Ticket — Present QR code to board', mod: 'border-emerald-300 bg-emerald-50 text-emerald-800' },
@@ -15,7 +15,7 @@ export default function TicketCard({
   departureLabel,
   seatLabel,
   routeLabel,
-  qrUrl,
+  qrContent,
   statusLabel,
   validLabel,
   expiresLabel,
@@ -46,8 +46,8 @@ export default function TicketCard({
 
       <div className="grid grid-cols-1 gap-3.5 border-t-2 border-dashed border-slate-200 p-3.5 sm:grid-cols-[140px_1fr]">
         <div className="grid h-35 w-full place-items-center rounded-xl border border-slate-200 bg-slate-50 sm:w-35">
-          {qrUrl ? (
-            <img src={qrUrl} alt="Ticket QR" className="h-31 w-31 object-contain" />
+          {qrContent ? (
+            <QrImage content={qrContent} alt="Ticket QR" className="h-31 w-31 object-contain" />
           ) : (
             <div className="text-xs text-slate-500">QR unavailable</div>
           )}

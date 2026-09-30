@@ -1,4 +1,5 @@
 import { deriveCorridorName } from '../utils/corridor';
+import { TRAFFIC_CONFIG } from '../config/trafficConfig';
 
 const getEnv = (name) => {
   if (typeof import.meta !== 'undefined' && import.meta.env) {
@@ -85,7 +86,8 @@ const buildOrsAlerts = (routeData = {}, routeName = '') => {
     if (durationMinutes < 2) continue;
 
     const road = normalizeRoadName(step?.name || step?.instruction, routeName || 'Route segment');
-    const severity = durationMinutes >= 8 ? 'danger' : durationMinutes >= 4 ? 'warn' : 'info';
+    // ORS reports free-flow times only: a long segment is not evidence of congestion.
+    const severity = 'info';
 
     alerts.push({
       road,
@@ -130,6 +132,25 @@ export function buildFallbackTrafficStatus({
     }],
     dataSource,
   };
+}
+
+/**
+ * The provider's free-flow (no traffic) travel time for the same trip: the baseline that
+ * congestion is judged against. Null when it cannot be had, which keeps the level unknown.
+ */
+async function fetchMapboxFreeFlowSeconds(liveUrl) {
+  try {
+    const free = new URL(liveUrl.toString());
+    free.pathname = '/directions/v5/mapbox/driving';
+    free.searchParams.delete('annotations');
+    free.searchParams.set('steps', 'false');
+    const response = await fetchWithRetry(free.toString(), { method: 'GET', headers: { Accept: 'application/json' } }, { attempts: 2 });
+    if (!response.ok) return null;
+    const seconds = Number((await response.json())?.routes?.[0]?.duration);
+    return Number.isFinite(seconds) && seconds > 0 ? seconds : null;
+  } catch {
+    return null;
+  }
 }
 
 export async function fetchTrafficStatus({
@@ -217,16 +238,30 @@ export async function fetchTrafficStatus({
     const etaMinutes = Math.max(2, Math.round(durationSeconds / 60));
     const alerts = provider === 'mapbox' ? buildMapboxAlerts(routeData, routeName) : buildOrsAlerts(routeData, routeName);
 
-    const level = etaMinutes >= 12 ? 'heavy' : etaMinutes >= 7 ? 'moderate' : 'normal';
-    const label = level === 'heavy' ? 'Heavy traffic' : level === 'moderate' ? 'Moderate traffic' : 'Normal flow';
+    // Congestion is only claimed against a real baseline: the provider's own free-flow time
+    // for this same trip. Without one (ORS has no traffic data, or the baseline request
+    // failed) the level is unknown and no delay figure is shown.
+    const freeFlowSeconds = provider === 'mapbox' ? await fetchMapboxFreeFlowSeconds(url) : null;
+    let level = 'unknown';
+    let delayMinutes = null;
+    if (freeFlowSeconds) {
+      delayMinutes = Math.max(0, Math.round((durationSeconds - freeFlowSeconds) / 60));
+      const ratio = (durationSeconds - freeFlowSeconds) / freeFlowSeconds;
+      const { moderate, heavy } = TRAFFIC_CONFIG.delayRatio;
+      const significant = delayMinutes >= TRAFFIC_CONFIG.minDelayMinutes;
+      level = significant && ratio >= heavy ? 'heavy' : significant && ratio >= moderate ? 'moderate' : 'normal';
+    }
+    const label = level === 'heavy' ? 'Heavy traffic' : level === 'moderate' ? 'Moderate traffic' : level === 'normal' ? 'Normal flow' : 'Travel time only';
     const where = routeName ? `Assigned route ${routeName}${corridorName ? ` (${corridorName})` : ''}` : null;
 
     return {
       level,
       label,
       etaMinutes,
-      delayMinutes: level === 'heavy' ? Math.max(3, etaMinutes - 6) : level === 'moderate' ? Math.max(1, etaMinutes - 5) : 0,
-      suggestion: level === 'heavy'
+      delayMinutes,
+      suggestion: level === 'unknown'
+        ? `${where ? `${where}: ` : ''}travel time to the next stop from the routing provider. Live congestion data is not available; follow dispatcher guidance and on-road conditions.`
+        : level === 'heavy'
         ? where
           ? `${where} is heavily congested. Follow dispatcher guidance and watch the next stop closely.`
           : 'Traffic is heavy. Follow dispatcher guidance and adjust departure timing if instructed.'
