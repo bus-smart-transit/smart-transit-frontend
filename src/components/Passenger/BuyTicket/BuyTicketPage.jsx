@@ -1,25 +1,32 @@
 import { Link } from 'react-router-dom';
+import { ArrowLeft } from 'lucide-react';
 import BuyTicket from './BuyTicket';
+import { useAuth } from '../../../api/hooks/useAuth';
 
+/**
+ * The one booking page. Guests and signed-in passengers land here from every "book" entry point
+ * (home search, dashboard, checkout return); only the top-right link differs.
+ */
 export default function BuyTicketPage() {
-  return (
-    <div className="min-h-screen bg-slate-950 px-4 py-6 sm:px-6 lg:px-10">
-      <div className="mx-auto mb-4 flex w-full max-w-7xl items-center justify-between">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-teal-300">Passenger Booking</p>
-          <h1 className="text-2xl font-bold text-white">Trip Details and Payment</h1>
-        </div>
-        <Link
-          to="/passenger"
-          className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-semibold text-slate-200 transition hover:border-slate-500"
-        >
-          Back to Landing
-        </Link>
-      </div>
+  const { isAuthenticated } = useAuth();
 
-      <div className="mx-auto w-full max-w-7xl">
-        <BuyTicket />
-      </div>
+  return (
+    <div className="min-h-screen bg-slate-50">
+      <header className="border-b border-slate-200 bg-white">
+        <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
+          <Link to="/passenger#search-trips" className="inline-flex items-center gap-1.5 text-sm font-semibold text-navy-800 transition hover:text-navy-950">
+            <ArrowLeft size={16} aria-hidden="true" /> Back to Search
+          </Link>
+          <h1 className="font-display text-base font-bold text-navy-950 sm:text-lg">Trip Details and Payment</h1>
+          {isAuthenticated ? (
+            <Link to="/passenger/dashboard" className="text-sm font-semibold text-navy-800 transition hover:text-navy-950">My Dashboard</Link>
+          ) : (
+            <Link to="/passenger/login" className="text-sm font-semibold text-navy-800 transition hover:text-navy-950">Sign in</Link>
+          )}
+        </div>
+      </header>
+
+      <BuyTicket />
     </div>
   );
 }

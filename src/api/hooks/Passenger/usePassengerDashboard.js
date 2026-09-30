@@ -456,7 +456,13 @@ export default function usePassengerDashboard({ preloadMapView }) {
     const tabParam = String(searchParams.get('tab') || '').trim().toLowerCase();
     if (!tabParam) return;
 
-    const allowed = new Set(['dashboard', 'buy', 'map', 'tickets', 'transactions', 'rewards', 'profile']);
+    // There is one booking page; an old ?tab=buy link goes there.
+    if (tabParam === 'buy') {
+      navigate('/passenger/book', { replace: true });
+      return;
+    }
+
+    const allowed = new Set(['dashboard', 'map', 'tickets', 'transactions', 'rewards', 'profile']);
     if (!allowed.has(tabParam)) return;
 
     if (PROTECTED_TABS.has(tabParam) && !isAuthenticated) {
@@ -465,7 +471,7 @@ export default function usePassengerDashboard({ preloadMapView }) {
     }
 
     setActiveTab(tabParam);
-  }, [isAuthenticated, searchParams]);
+  }, [isAuthenticated, navigate, searchParams]);
 
   const points = Number(profile?.reward_points ?? user?.reward_points ?? 0).toFixed(2);
   const visibleTab = !isAuthenticated && PROTECTED_TABS.has(activeTab) ? 'dashboard' : activeTab;

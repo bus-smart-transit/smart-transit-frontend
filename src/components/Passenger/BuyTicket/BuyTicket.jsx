@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { CalendarDays, CreditCard, AlertCircle, CheckCircle, Loader, Pencil, Wallet, Smartphone } from 'lucide-react';
+import { AlertCircle, Bus, CalendarDays, CheckCircle, Clock3, CreditCard, Loader, MapPin, Pencil, Smartphone, Wallet } from 'lucide-react';
 import useBuyTicket from '../../../api/hooks/Passenger/useBuyTicket';
 import TicketCard from '../Ticket/TicketCard';
 import QrImage from '../Ticket/QrImage';
@@ -14,6 +14,7 @@ import Toggle from '../../ui/Toggle';
 import Modal from '../../ui/Modal';
 import RouteMap from '../../Map/RouteMap';
 import { formatManilaDate } from '../../../utils/dates';
+import { formatDuration } from '../../../utils/tripTimeline';
 
 // Matches OnlineCheckoutRequest: the passenger picks GCash or Maya (C4). The payment
 // page itself collects whatever else the provider needs.
@@ -22,17 +23,33 @@ const PAYMENT_CHANNELS = [
   { value: 'maya', label: 'Maya', icon: Wallet },
 ];
 
-const inputClass = 'min-h-9 w-full rounded-lg border border-slate-300 bg-white px-2.5 py-2 text-sm text-ink focus:border-navy-700 focus:outline-none focus:ring-2 focus:ring-navy-700/30';
 
-function SummaryRow({ label, children, last = false }) {
+const LABEL = 'text-sm font-semibold text-navy-950';
+const FIELD = 'mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-medium text-navy-950 focus:border-navy-700 focus:outline-none focus:ring-2 focus:ring-navy-700/20';
+
+function SummaryRow({ label, children }) {
   return (
-    <div className={`flex justify-between gap-2 ${last ? '' : 'border-b border-slate-100 pb-1.5'}`}>
-      <span className="text-xs text-slate-500">{label}</span>
-      <strong className="text-right text-sm text-navy-950">{children}</strong>
+    <div className="flex justify-between gap-4 py-2.5">
+      <dt className="shrink-0 text-slate-400">{label}</dt>
+      <dd className="text-right font-semibold text-navy-950">{children}</dd>
     </div>
   );
 }
 
+function RadioPill({ name, checked, onChange, label, disabled = false }) {
+  return (
+    <label
+      className={`flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-medium transition ${
+        disabled ? 'cursor-not-allowed border-slate-200 bg-slate-50 text-slate-400'
+          : checked ? 'cursor-pointer border-navy-700 bg-navy-50 text-navy-900'
+            : 'cursor-pointer border-slate-300 text-slate-600 hover:border-slate-400'
+      }`}
+    >
+      <input type="radio" name={name} checked={checked} disabled={disabled} onChange={onChange} className="h-4 w-4 accent-navy-800" />
+      {label}
+    </label>
+  );
+}
 export default function BuyTicket({ onTicketPurchased }) {
   const [ticketPreview, setTicketPreview] = useState(null);
   const [qrModalDismissedFor, setQrModalDismissedFor] = useState(null);
@@ -123,7 +140,7 @@ export default function BuyTicket({ onTicketPurchased }) {
   const canSubmit = !isSubmitting && canProceedToOnlinePayment && !isRewardRequestInsufficient && Boolean(form.ticket_quantity);
 
   return (
-    <div className="mx-auto max-w-5xl space-y-4 p-4 sm:p-6">
+    <div className="mx-auto max-w-6xl space-y-6 p-4 sm:p-6">
       {bookingLink.status === 'checking' && (
         <div className="flex items-center gap-2 rounded-xl bg-slate-50 px-3.5 py-2.5 text-sm text-slate-600 ring-1 ring-inset ring-slate-200">
           <Loader size={16} className="animate-spin" /> Checking your booking link...
@@ -239,13 +256,31 @@ export default function BuyTicket({ onTicketPurchased }) {
         )}
       </Modal>
 
-      <form onSubmit={handleSubmit} className="space-y-4">
-        {/* 1. Summary header: From, To, Date (Manila), with an inline way to change them. */}
-        <Card className="p-4 sm:p-5">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="min-w-0">
-              <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">Your trip</span>
-              <h2 className="mt-1 font-display text-xl font-bold text-navy-950 sm:text-2xl">
+      <form onSubmit={handleSubmit}>
+        <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
+          <div className="min-w-0 space-y-6">
+            {/* Route: where, when, which bus. Everything here comes from the server. */}
+            <Card className="p-5 sm:p-6">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">Route</span>
+                <div className="flex items-center gap-2">
+                  {trip && (
+                    <span className="rounded-full bg-teal-50 px-3 py-1 text-xs font-semibold text-teal-700">
+                      {trip.seats_left} {form.seat_type} seat{trip.seats_left === 1 ? '' : 's'} available
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setEditingJourney((open) => !open)}
+                    aria-expanded={editingJourney}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-navy-900 transition hover:bg-slate-50"
+                  >
+                    <Pencil size={13} aria-hidden="true" /> {editingJourney ? 'Done' : 'Edit trip'}
+                  </button>
+                </div>
+              </div>
+
+              <h2 className="mt-2 font-display text-lg font-bold text-navy-950">
                 {summaryFrom || 'Where are you going?'}
                 {summaryTo ? <span className="mx-2 text-slate-400" aria-hidden="true">&rarr;</span> : null}
                 {summaryTo}
@@ -256,312 +291,302 @@ export default function BuyTicket({ onTicketPurchased }) {
                   {isToday ? <span className="rounded-full bg-teal-50 px-2 py-0.5 text-xs font-semibold text-teal-700">Today</span> : null}
                 </p>
               )}
-            </div>
-            <button
-              type="button"
-              onClick={() => setEditingJourney((open) => !open)}
-              aria-expanded={editingJourney}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-navy-900 transition hover:bg-slate-50"
-            >
-              <Pencil size={13} aria-hidden="true" /> {editingJourney ? 'Done' : 'Edit trip'}
-            </button>
-          </div>
 
-          {(editingJourney || !form.origin_stop_id || !form.destination_stop_id) && (
-            <div className="mt-4 border-t border-slate-100 pt-4">
-              {stopsData.error && <p className="mb-2 text-xs text-red-600">{stopsData.error}</p>}
-              {stopsData.loadingOrigins ? (
-                <div className="flex items-center gap-2 text-sm text-slate-500"><Loader size={16} className="animate-spin" /> Loading stops...</div>
-              ) : stopsData.originGroups.length === 0 ? (
-                <p className="text-sm text-slate-500">No routes are open for booking right now.</p>
-              ) : (
-                <JourneyFields
-                  value={{ ...form, booking_date: travelDate }}
-                  originGroups={stopsData.originGroups}
-                  destinationGroups={stopsData.destinationGroups}
-                  loadingDestinations={stopsData.loadingDestinations}
-                  today={stopsData.today}
-                  maxAdvanceDays={stopsData.maxAdvanceDays}
-                  onChange={handleJourneyChange}
-                  idPrefix="book"
-                />
-              )}
-            </div>
-          )}
-        </Card>
-
-        {form.origin_stop_id && form.destination_stop_id && (
-          <>
-            {/* 2-3. Book Now / Book Later, and the trip they resolve to (no separate results page). */}
-            <Card className="p-4 sm:p-5">
-              <fieldset>
-                <legend className="text-sm font-semibold text-navy-950">When do you want to travel?</legend>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {[['now', 'Book Now'], ['later', 'Book Later']].map(([option, label]) => {
-                    const disabled = option === 'now' && !isToday;
-                    const checked = bookingMode === option;
-                    return (
-                      <label
-                        key={option}
-                        className={`flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium transition ${
-                          disabled ? 'cursor-not-allowed border-slate-200 bg-slate-50 text-slate-400'
-                            : checked ? 'cursor-pointer border-navy-700 bg-navy-50 text-navy-900'
-                              : 'cursor-pointer border-slate-300 text-slate-600 hover:border-slate-400'
-                        }`}
-                      >
-                        <input
-                          type="radio"
-                          name="booking_option"
-                          value={option}
-                          checked={checked}
-                          disabled={disabled}
-                          onChange={() => handleJourneyChange('booking_option', option)}
-                          className="h-4 w-4 accent-navy-800"
-                        />
-                        {label}
-                      </label>
-                    );
-                  })}
+              {(editingJourney || !form.origin_stop_id || !form.destination_stop_id) && (
+                <div className="mt-4 border-t border-slate-100 pt-4">
+                  {stopsData.error && <p className="mb-2 text-xs text-red-600">{stopsData.error}</p>}
+                  {stopsData.loadingOrigins ? (
+                    <div className="flex items-center gap-2 text-sm text-slate-500"><Loader size={16} className="animate-spin" /> Loading stops...</div>
+                  ) : stopsData.originGroups.length === 0 ? (
+                    <p className="text-sm text-slate-500">No routes are open for booking right now.</p>
+                  ) : (
+                    <JourneyFields
+                      value={{ ...form, booking_date: travelDate }}
+                      originGroups={stopsData.originGroups}
+                      destinationGroups={stopsData.destinationGroups}
+                      loadingDestinations={stopsData.loadingDestinations}
+                      today={stopsData.today}
+                      maxAdvanceDays={stopsData.maxAdvanceDays}
+                      onChange={handleJourneyChange}
+                      idPrefix="book"
+                    />
+                  )}
                 </div>
-                <p className="mt-2 text-xs text-slate-500">
-                  {!isToday
-                    ? `Book Now is for today's buses. For ${formatManilaDate(travelDate)} choose a departure below.`
-                    : bookingMode === 'now'
-                      ? 'We book the next bus that leaves today.'
-                      : 'Choose one of the later departures today.'}
-                </p>
-              </fieldset>
+              )}
 
-              <div className="mt-4" aria-live="polite">
-                {resolution.loading && (
-                  <div className="flex items-center gap-2 text-sm text-slate-500"><Loader size={16} className="animate-spin" /> Finding your bus...</div>
+              {form.origin_stop_id && form.destination_stop_id && (
+                <div className="mt-5 border-t border-slate-100 pt-5">
+                  <fieldset>
+                    <legend className={LABEL}>Booking Option</legend>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {[['now', 'Book Now'], ['later', 'Book Later']].map(([option, label]) => (
+                        <RadioPill
+                          key={option}
+                          name="booking_option"
+                          checked={bookingMode === option}
+                          disabled={option === 'now' && !isToday}
+                          onChange={() => handleJourneyChange('booking_option', option)}
+                          label={label}
+                        />
+                      ))}
+                    </div>
+                    <p className="mt-2 text-sm text-amber-600">
+                      {!isToday
+                        ? `Book Now is for today's buses. For ${formatManilaDate(travelDate)} choose a departure below.`
+                        : bookingMode === 'now'
+                          ? `You're booking the next bus today, ${formatManilaDate(travelDate)}.`
+                          : 'Choose one of the later departures today.'}
+                    </p>
+                  </fieldset>
+
+                  <div className="mt-4" aria-live="polite">
+                    {resolution.loading && (
+                      <div className="flex items-center gap-2 text-sm text-slate-500"><Loader size={16} className="animate-spin" /> Finding your bus...</div>
+                    )}
+                    {resolution.error && <p className="text-sm text-red-600">{resolution.error}</p>}
+
+                    {bookingMode === 'later' && !resolution.loading && departuresState.departures.length > 0 && (
+                      <div>
+                        <p className={LABEL}>Departure time (Manila) at {boardingLabel}</p>
+                        <div role="radiogroup" aria-label="Departure time" className="mt-2 flex flex-wrap gap-2">
+                          {departuresState.departures.map((departure) => {
+                            const selected = String(trip?.trip_id) === String(departure.trip_id);
+                            return (
+                              <button
+                                key={departure.trip_id}
+                                type="button"
+                                role="radio"
+                                aria-checked={selected}
+                                onClick={() => selectDeparture(departure.trip_id)}
+                                className={`rounded-xl border-2 px-3.5 py-2 text-left text-sm transition ${
+                                  selected ? 'border-teal-500 bg-teal-50 text-teal-800' : 'border-slate-200 bg-white text-navy-900 hover:border-slate-300'
+                                }`}
+                              >
+                                <span className="block font-bold">{departure.boarding_time}</span>
+                                <span className="block text-[0.7rem] text-slate-500">{departure.seats_left} {form.seat_type} left</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {!resolution.loading && resolution.ready && !resolution.error && !trip && (
+                      <div className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800 ring-1 ring-inset ring-amber-200">
+                        <p>{resolution.message || 'No departures match your journey.'}</p>
+                        <button type="button" onClick={() => setEditingJourney(true)} className="mt-1 font-semibold text-navy-800 underline">
+                          Change the date
+                        </button>
+                      </div>
+                    )}
+
+                    {trip && (
+                      <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
+                        {[
+                          [Clock3, 'Departure', `${trip.boarding_time} at ${boardingLabel}`],
+                          [Clock3, 'Arrival', alightingRow?.eta_time || 'ETA unavailable'],
+                          [Bus, 'Vehicle', trip.plate_number || '-'],
+                          [MapPin, 'Duration', formatDuration(timeline?.header?.duration_minutes) || '-'],
+                        ].map(([Icon, label, value]) => (
+                          <div key={label}>
+                            <p className="flex items-center gap-1.5 text-xs text-slate-400"><Icon size={14} aria-hidden="true" /> {label}</p>
+                            <p className="mt-1 text-sm font-semibold text-navy-950">{value}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {trip && !trip.boarding_time_is_scheduled_offset && (
+                      <p className="mt-2 text-xs text-slate-500">This is the trip start time; a per-stop schedule is not set for this route.</p>
+                    )}
+                    {formErrors.trip && <p className="mt-2 text-xs text-red-600">{formErrors.trip}</p>}
+                  </div>
+                </div>
+              )}
+            </Card>
+
+            {trip && (
+              <>
+                {/* Travel Advice: the timeline, the alighting choice and custom drop-off. */}
+                <TripTimeline
+                  timeline={timeline}
+                  loading={timelineState.loading}
+                  error={dropoffModalVisible ? null : timelineState.error}
+                  onSelectAlighting={selectAlightingStop}
+                  onOpenCustomDropoff={openDropoffModal}
+                  onClearCustomDropoff={clearDropoff}
+                />
+
+                {/* The shared route map, highlighting the boarding-to-alighting segment. */}
+                {timeline?.trip?.route_id && (
+                  <Card className="overflow-hidden p-0">
+                    <RouteMap
+                      routeId={timeline.trip.route_id}
+                      direction={timeline.trip.leg_direction}
+                      highlight={journeyHighlight}
+                      showStatus={false}
+                      className="relative h-72 w-full"
+                    />
+                  </Card>
                 )}
-                {resolution.error && <p className="text-sm text-red-600">{resolution.error}</p>}
 
-                {bookingMode === 'later' && !resolution.loading && departuresState.departures.length > 0 && (
+                {/* Seat and Payment */}
+                <Card className="space-y-6 p-5 sm:p-6">
+                  <h2 className="font-display text-lg font-semibold text-navy-950">Seat and Payment</h2>
+
+                  <fieldset>
+                    <legend className={LABEL}>Seat Type</legend>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {[['seated', 'Seated'], ['standing', 'Standing']].map(([type, label]) => (
+                        <RadioPill
+                          key={type}
+                          name="seat_type"
+                          checked={form.seat_type === type}
+                          onChange={() => handleChange('seat_type', type)}
+                          label={label}
+                        />
+                      ))}
+                    </div>
+                  </fieldset>
+
                   <div>
-                    <p className="text-xs font-semibold text-slate-600">Departure time (Manila) at {boardingLabel}</p>
-                    <div role="radiogroup" aria-label="Departure time" className="mt-2 flex flex-wrap gap-2">
-                      {departuresState.departures.map((departure) => {
-                        const selected = String(trip?.trip_id) === String(departure.trip_id);
+                    <label htmlFor="ticket_quantity" className={LABEL}>Ticket Quantity</label>
+                    <input
+                      id="ticket_quantity"
+                      type="number"
+                      min="1"
+                      max="20"
+                      step="1"
+                      value={form.ticket_quantity}
+                      onChange={(e) => handleChange('ticket_quantity', e.target.value)}
+                      className={FIELD}
+                    />
+                    <p className="mt-1.5 text-xs text-slate-500">Up to 20 tickets per booking.</p>
+                    {formErrors.ticket_quantity && <span className="mt-1.5 block text-xs text-red-600">{formErrors.ticket_quantity}</span>}
+                  </div>
+
+                  <fieldset>
+                    <legend className={`flex items-center gap-2 ${LABEL}`}><CreditCard size={16} aria-hidden="true" /> Payment</legend>
+                    <p className="mt-1 text-sm text-slate-500">Online booking is paid online. You finish paying on the provider&apos;s secure page.</p>
+
+                    <div role="radiogroup" aria-label="Payment method" className="mt-3 grid grid-cols-2 gap-3">
+                      {PAYMENT_CHANNELS.map((channel) => {
+                        const isSelected = form.payment_channel === channel.value;
                         return (
                           <button
-                            key={departure.trip_id}
+                            key={channel.value}
                             type="button"
                             role="radio"
-                            aria-checked={selected}
-                            onClick={() => selectDeparture(departure.trip_id)}
-                            className={`rounded-xl border-2 px-3.5 py-2 text-left text-sm transition ${
-                              selected ? 'border-teal-500 bg-teal-50 text-teal-800' : 'border-slate-200 bg-white text-navy-900 hover:border-slate-300'
+                            aria-checked={isSelected}
+                            onClick={() => handleChange('payment_channel', channel.value)}
+                            className={`flex flex-col items-center gap-1.5 rounded-xl border-2 px-3 py-4 text-sm font-semibold transition ${
+                              isSelected ? 'border-teal-500 bg-teal-50 text-teal-800' : 'border-slate-200 text-slate-600 hover:border-slate-300'
                             }`}
                           >
-                            <span className="block font-bold">{departure.boarding_time}</span>
-                            <span className="block text-[0.7rem] text-slate-500">{departure.seats_left} {form.seat_type} left</span>
+                            <channel.icon className="h-5 w-5" />
+                            {channel.label}
                           </button>
                         );
                       })}
                     </div>
-                  </div>
-                )}
 
-                {!resolution.loading && resolution.ready && !resolution.error && !trip && (
-                  <div className="rounded-lg bg-amber-50 px-3 py-2.5 text-sm text-amber-800 ring-1 ring-inset ring-amber-200">
-                    <p>{resolution.message || 'No departures match your journey.'}</p>
-                    <button type="button" onClick={() => setEditingJourney(true)} className="mt-1 font-semibold text-navy-800 underline">
-                      Change the date
-                    </button>
-                  </div>
-                )}
-
-                {trip && (
-                  <dl className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
-                    {[
-                      ['Boards at', `${boardingLabel} ${trip.boarding_time}`],
-                      ['Date', formatManilaDate(trip.trip_date)],
-                      ['Vehicle', trip.plate_number || '-'],
-                      ['Seats left', `${trip.seats_left} ${form.seat_type}`],
-                    ].map(([label, value]) => (
-                      <div key={label}>
-                        <dt className="text-xs text-slate-400">{label}</dt>
-                        <dd className="mt-0.5 text-sm font-semibold text-navy-950">{value}</dd>
-                      </div>
-                    ))}
-                  </dl>
-                )}
-                {trip && !trip.boarding_time_is_scheduled_offset && (
-                  <p className="mt-2 text-xs text-slate-500">This is the trip start time; a per-stop schedule is not set for this route.</p>
-                )}
-                {formErrors.trip && <p className="mt-2 text-xs text-red-600">{formErrors.trip}</p>}
-              </div>
-            </Card>
-
-            {trip && (
-              <section className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_360px]">
-                <div className="min-w-0 space-y-4">
-                  {/* 4-5. Travel Advice timeline, alighting selector and custom drop-off. */}
-                  <TripTimeline
-                    timeline={timeline}
-                    loading={timelineState.loading}
-                    error={dropoffModalVisible ? null : timelineState.error}
-                    onSelectAlighting={selectAlightingStop}
-                    onOpenCustomDropoff={openDropoffModal}
-                    onClearCustomDropoff={clearDropoff}
-                  />
-
-                  {/* 7. The shared route map, highlighting the boarding-to-alighting segment. */}
-                  {timeline?.trip?.route_id && (
-                    <Card className="overflow-hidden p-0">
-                      <RouteMap
-                        routeId={timeline.trip.route_id}
-                        direction={timeline.trip.leg_direction}
-                        highlight={journeyHighlight}
-                        showStatus={false}
-                        className="relative h-72 w-full"
-                      />
-                    </Card>
-                  )}
-
-                  {/* 6. Seat, quantity and payment. */}
-                  <Card className="space-y-5 p-4 sm:p-5">
-                    <h2 className="font-display text-lg font-semibold text-navy-950">Seat and Payment</h2>
-
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                      <fieldset>
-                        <legend className="mb-1.5 text-xs font-semibold text-slate-600">Seat type</legend>
-                        <div className="flex flex-wrap gap-2">
-                          {['seated', 'standing'].map((type) => (
-                            <label key={type} className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm capitalize text-navy-900">
-                              <input type="radio" name="seat_type" value={type} checked={form.seat_type === type} onChange={(e) => handleChange('seat_type', e.target.value)} />
-                              <span>{type}</span>
-                            </label>
-                          ))}
-                        </div>
-                      </fieldset>
-                      <label className="block text-xs font-semibold text-slate-600">
-                        Ticket quantity
+                    {isGuestCheckout && (
+                      <label className="mt-4 block text-sm font-semibold text-navy-950">
+                        Email to find your ticket later (optional)
                         <input
-                          type="number"
-                          min="1"
-                          max="20"
-                          step="1"
-                          value={form.ticket_quantity}
-                          onChange={(e) => handleChange('ticket_quantity', e.target.value)}
-                          className={`${inputClass} mt-1.5`}
+                          type="email"
+                          value={form.guest_email}
+                          onChange={(e) => handleChange('guest_email', e.target.value)}
+                          placeholder="you@example.com"
+                          className={FIELD}
                         />
-                        {formErrors.ticket_quantity && <span className="mt-1.5 block text-xs text-red-600">{formErrors.ticket_quantity}</span>}
                       </label>
-                    </div>
-
-                    <div>
-                      <p className="text-sm font-semibold text-navy-950">Payment</p>
-                      <p className="mt-1 text-sm text-slate-500">Choose GCash or Maya. You finish paying on the provider&apos;s secure page.</p>
-
-                      <div role="radiogroup" aria-label="Payment method" className="mt-3 grid grid-cols-2 gap-2">
-                        {PAYMENT_CHANNELS.map((channel) => {
-                          const isSelected = form.payment_channel === channel.value;
-                          return (
-                            <button
-                              key={channel.value}
-                              type="button"
-                              role="radio"
-                              aria-checked={isSelected}
-                              onClick={() => handleChange('payment_channel', channel.value)}
-                              className={`flex flex-col items-center gap-1 rounded-lg border-2 px-3 py-2.5 text-xs font-semibold transition ${
-                                isSelected ? 'border-teal-500 bg-teal-50 text-teal-700' : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'
-                              }`}
-                            >
-                              <channel.icon className="h-4 w-4" />
-                              {channel.label}
-                            </button>
-                          );
-                        })}
-                      </div>
-
-                      {isGuestCheckout && (
-                        <label className="mt-3 block text-xs font-semibold text-slate-600">
-                          Email to find your ticket later (optional)
-                          <input
-                            type="email"
-                            value={form.guest_email}
-                            onChange={(e) => handleChange('guest_email', e.target.value)}
-                            placeholder="you@example.com"
-                            className={`${inputClass} mt-1.5`}
-                          />
-                        </label>
-                      )}
-
-                      {!isGuestCheckout && (
-                        <>
-                          <div className="mt-3 text-sm text-slate-500">
-                            {loadingRewards ? 'Loading reward balance...' : `Available Rewards: ${Number(availableRewardPoints || 0).toFixed(0)} RP`}
-                          </div>
-                          <Toggle
-                            checked={Boolean(form.use_rewards)}
-                            onChange={(checked) => handleChange('use_rewards', checked)}
-                            disabled={!hasRewardPoints}
-                            label="Use reward points"
-                            description={
-                              !hasRewardPoints && !loadingRewards
-                                ? "Disabled: you don't have any reward points to redeem yet. Earn points by completing paid trips."
-                                : undefined
-                            }
-                          />
-                          {form.use_rewards && (
-                            <>
-                              <input
-                                type="number"
-                                min="0"
-                                step="1"
-                                value={form.reward_points_to_use}
-                                onChange={(e) => handleChange('reward_points_to_use', e.target.value)}
-                                placeholder="Reward points to use"
-                                className={`${inputClass} mt-2`}
-                              />
-                              <div className={`mt-1.5 text-xs ${isRewardRequestInsufficient ? 'text-red-600' : 'text-slate-500'}`}>
-                                Max usable now: {Number(maxRedeemableRewardPoints || 0).toFixed(0)} RP
-                                {isRewardRequestInsufficient ? ' (insufficient for requested amount)' : ''}
-                              </div>
-                              {formErrors.reward_points_to_use && <div className="mt-1 text-xs text-red-600">{formErrors.reward_points_to_use}</div>}
-                            </>
-                          )}
-                        </>
-                      )}
-                      {formErrors.payment && <p className="mt-2 text-xs text-red-600">{formErrors.payment}</p>}
-                      {formErrors.destination_stop_id && <p className="mt-2 text-xs text-red-600">{formErrors.destination_stop_id}</p>}
-                    </div>
-                  </Card>
-                </div>
-
-                <Card className="h-fit p-4 sm:p-5 lg:sticky lg:top-6">
-                  <h2 className="font-display text-lg font-semibold text-navy-950">Booking Summary</h2>
-                  <div className="mt-3 space-y-2">
-                    <SummaryRow label="Board at">{boardingRow?.name || '-'}</SummaryRow>
-                    <SummaryRow label="Get off at">{alightingRow ? (alightingRow.custom ? (dropoff?.label || 'Custom drop-off') : alightingRow.name) : '-'}</SummaryRow>
-                    <SummaryRow label="Departure">{trip.trip_date} {trip.boarding_time}</SummaryRow>
-                    <SummaryRow label="Seat Type">{form.seat_type}</SummaryRow>
-                    <SummaryRow label="Unit Fare">PHP {hasFareQuote ? Number(unitFare).toFixed(2) : '0.00'}</SummaryRow>
-                    <SummaryRow label="Quantity">{totalTickets}</SummaryRow>
-                    <SummaryRow label="Gross Total">PHP {Number(grossTotal || 0).toFixed(2)}</SummaryRow>
-                    <SummaryRow label="Rewards Applied">{Number(rewardPointsToApply || 0).toFixed(0)} RP</SummaryRow>
-                    <SummaryRow label="Net Total" last>PHP {Number(netTotal || 0).toFixed(2)}</SummaryRow>
-                  </div>
-                  {timeline?.fare?.error && <p className="mt-2 text-xs text-red-600">{timeline.fare.error}</p>}
-                  <button
-                    type="submit"
-                    disabled={!canSubmit}
-                    className="mt-4 flex min-h-9 w-full items-center justify-center gap-2 rounded-lg bg-navy-800 text-sm font-semibold text-white hover:bg-navy-900 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {isSubmitting ? (
-                      <><Loader size={14} className="animate-spin" /> Processing...</>
-                    ) : (
-                      <><CreditCard size={14} /> Continue to Payment</>
                     )}
-                  </button>
+
+                    {!isGuestCheckout && (
+                      <div className="mt-4 rounded-xl border border-slate-200 px-4 py-2">
+                        <p className="pt-1.5 text-sm text-slate-500">
+                          {loadingRewards ? 'Loading reward balance...' : <>Available Rewards: <strong className="text-navy-950">{Number(availableRewardPoints || 0).toFixed(0)} RP</strong></>}
+                        </p>
+                        <Toggle
+                          checked={Boolean(form.use_rewards)}
+                          onChange={(checked) => handleChange('use_rewards', checked)}
+                          disabled={!hasRewardPoints}
+                          label="Use reward points"
+                          description={
+                            !hasRewardPoints && !loadingRewards
+                              ? "Disabled: you don't have any reward points to redeem yet. Earn points by completing paid trips."
+                              : undefined
+                          }
+                        />
+                        {form.use_rewards && (
+                          <div className="pb-2">
+                            <input
+                              type="number"
+                              min="0"
+                              step="1"
+                              value={form.reward_points_to_use}
+                              onChange={(e) => handleChange('reward_points_to_use', e.target.value)}
+                              placeholder="Reward points to use"
+                              className={FIELD}
+                            />
+                            <div className={`mt-1.5 text-xs ${isRewardRequestInsufficient ? 'text-red-600' : 'text-slate-500'}`}>
+                              Max usable now: {Number(maxRedeemableRewardPoints || 0).toFixed(0)} RP
+                              {isRewardRequestInsufficient ? ' (insufficient for requested amount)' : ''}
+                            </div>
+                            {formErrors.reward_points_to_use && <div className="mt-1 text-xs text-red-600">{formErrors.reward_points_to_use}</div>}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {formErrors.payment && <p className="mt-2 text-xs text-red-600">{formErrors.payment}</p>}
+                    {formErrors.destination_stop_id && <p className="mt-2 text-xs text-red-600">{formErrors.destination_stop_id}</p>}
+                  </fieldset>
                 </Card>
-              </section>
+              </>
             )}
-          </>
-        )}
+          </div>
+
+          {/* Booking Summary: always in view, filling in as the choices are made. */}
+          <Card className="h-fit p-5 sm:p-6 lg:sticky lg:top-6">
+            <h2 className="font-display text-lg font-semibold text-navy-950">Booking Summary</h2>
+            <dl className="mt-4 divide-y divide-slate-100 text-sm">
+              <SummaryRow label="Board at">{boardingRow?.name || summaryFrom || '-'}</SummaryRow>
+              <SummaryRow label="Get off at">{alightingRow ? (alightingRow.custom ? (dropoff?.label || 'Custom drop-off') : alightingRow.name) : (summaryTo || '-')}</SummaryRow>
+              <SummaryRow label="Departure">{trip ? `${trip.trip_date} ${trip.boarding_time}` : '-'}</SummaryRow>
+              <SummaryRow label="Seat Type">{form.seat_type === 'standing' ? 'Standing' : 'Seated'}</SummaryRow>
+              <SummaryRow label="Payment">Online &middot; {form.payment_channel === 'maya' ? 'Maya' : 'GCash'}</SummaryRow>
+              <SummaryRow label="Unit Fare">PHP {hasFareQuote ? Number(unitFare).toFixed(2) : '0.00'}</SummaryRow>
+              <SummaryRow label="Quantity">{totalTickets}</SummaryRow>
+              <SummaryRow label="Gross Total">PHP {Number(grossTotal || 0).toFixed(2)}</SummaryRow>
+              <SummaryRow label="Rewards Applied">{Number(rewardPointsToApply || 0).toFixed(0)} RP</SummaryRow>
+            </dl>
+            <div className="mt-2 flex items-center justify-between border-t border-slate-200 pt-4">
+              <span className="text-sm font-semibold text-navy-950">Net Total</span>
+              <span className="font-display text-xl font-bold text-navy-950">PHP {Number(netTotal || 0).toFixed(2)}</span>
+            </div>
+            {timeline?.fare?.error && <p className="mt-2 text-xs text-red-600">{timeline.fare.error}</p>}
+            <button
+              type="submit"
+              disabled={!canSubmit}
+              className="mt-5 flex min-h-11 w-full items-center justify-center gap-2 rounded-full bg-navy-800 text-sm font-semibold text-white shadow-sm transition hover:bg-navy-900 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500 disabled:shadow-none"
+            >
+              {isSubmitting ? (
+                <><Loader size={16} className="animate-spin" /> Processing...</>
+              ) : (
+                <><CreditCard size={16} /> Continue to Payment</>
+              )}
+            </button>
+            {!canSubmit && !isSubmitting && (
+              <p className="mt-2 text-center text-xs text-slate-500">
+                {!form.origin_stop_id || !form.destination_stop_id
+                  ? 'Choose where you board and where you get off.'
+                  : !trip
+                    ? 'Choose a departure to continue.'
+                    : 'Choose where you get off to see your fare.'}
+              </p>
+            )}
+          </Card>
+        </div>
       </form>
 
       {trip && timeline && (

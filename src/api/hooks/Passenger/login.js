@@ -19,10 +19,8 @@ export function useLogin() {
   const resolvePostLoginPath = () => {
     const state = location?.state ?? {};
     if (state?.redirectToBuy) {
-      const tripId = state?.tripId;
-      return tripId
-        ? `/passenger/book?trip_id=${encodeURIComponent(String(tripId))}`
-        : '/passenger/book';
+      // One booking page for everyone; it carries no trip id (the trip is resolved there).
+      return '/passenger/book';
     }
     if (state?.redirectTo) {
       return state.redirectTo;

@@ -1,4 +1,4 @@
-import { Suspense, lazy, useState } from 'react';
+import { useState } from 'react';
 import { Bell, Bus, Map as MapIcon, Ticket, User, LogOut, Gift, History, LayoutGrid, Menu, House, X } from 'lucide-react';
 import usePassengerDashboard from '../../../api/hooks/Passenger/usePassengerDashboard';
 import PassengerService from '../../../api/PassengerService/PassengerService';
@@ -21,8 +21,6 @@ const preloadMapView = () =>
     import('../../Map/mapDependencies').then((mod) => mod.preloadMapDependencies()),
     import('../../Map/MapView.web'),
   ]).then(([, mod]) => mod);
-
-const BuyTicket = lazy(() => import('../BuyTicket/BuyTicket'));
 
 const NAV_ITEMS = [
   { key: 'dashboard', label: 'Dashboard', icon: LayoutGrid, protected: false },
@@ -66,7 +64,6 @@ export default function Dashboard() {
     isAuthenticated,
     isLoadingPrivate,
     lastSync,
-    loadPrivateData,
     loadingTicketQr,
     menuOpen,
     navigate,
@@ -87,11 +84,6 @@ export default function Dashboard() {
     printSelectedTicket,
   } = usePassengerDashboard({ preloadMapView });
 
-  const tabFallback = (
-    <Card className="p-6">
-      <p className="text-sm text-slate-500">Loading section...</p>
-    </Card>
-  );
 
   const [twoFactorOverride, setTwoFactorOverride] = useState(null);
   const [updating2fa, setUpdating2fa] = useState(false);
@@ -367,7 +359,7 @@ export default function Dashboard() {
               <Card className="p-6">
                 <h2 className="font-display text-lg font-semibold text-navy-950">Quick Actions</h2>
                 <div className="mt-4 flex flex-col gap-2.5">
-                  <Button variant="outline" size="sm" onClick={() => handleTabChange({ key: 'buy', protected: false })}>Book a New Trip</Button>
+                  <Button variant="outline" size="sm" onClick={() => navigate('/passenger/book')}>Book a New Trip</Button>
                   <Button variant="outline" size="sm" onClick={() => handleTabChange({ key: 'map', protected: false })}>Track My Bus</Button>
                   <Button variant="outline" size="sm" onClick={() => handleTabChange({ key: 'tickets', protected: true })}>View My Tickets</Button>
                 </div>
@@ -388,20 +380,6 @@ export default function Dashboard() {
             </div>
           </div>
         </div>
-      );
-    }
-
-    if (visibleTab === 'buy') {
-      return (
-        <Suspense fallback={tabFallback}>
-          <BuyTicket
-            onTicketPurchased={() => {
-              if (isAuthenticated) {
-                void loadPrivateData();
-              }
-            }}
-          />
-        </Suspense>
       );
     }
 

@@ -33,8 +33,8 @@ describe('TripTimeline', () => {
     expect(screen.getByText('PLATE-1')).toBeInTheDocument();
     expect(screen.getByText('1 h 35 min')).toBeInTheDocument();
     expect(screen.queryByText(/class/i)).not.toBeInTheDocument();
-    expect(screen.getByText('Board here')).toBeInTheDocument();
-    expect(screen.getByText('Get off here')).toBeInTheDocument();
+    expect(screen.getByText('You board here')).toBeInTheDocument();
+    expect(screen.getByText('You get off here')).toBeInTheDocument();
     expect(screen.getByText('ETA unavailable')).toBeInTheDocument();
     expect(screen.queryByText('Stop 3')).not.toBeInTheDocument();
 

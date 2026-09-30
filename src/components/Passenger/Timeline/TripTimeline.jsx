@@ -42,8 +42,9 @@ function TimelineRow({ row, canSelect, onSelect }) {
         <span className={`block truncate text-sm ${isPassThrough ? 'text-slate-500' : 'font-semibold text-navy-950'}`}>{row.name}</span>
         <span className="flex flex-wrap items-center gap-1.5 text-[0.7rem] text-slate-400">
           {row.municipality && <span>{row.municipality}</span>}
-          {row.is_boarding && <span className="rounded bg-emerald-100 px-1.5 py-0.5 font-semibold text-emerald-700">Board here</span>}
-          {row.is_alighting && <span className="rounded bg-sky-100 px-1.5 py-0.5 font-semibold text-sky-700">Get off here</span>}
+          {row.type === 'stop' && <span className="rounded-full bg-navy-50 px-2 py-0.5 font-semibold text-navy-700">Stop</span>}
+          {row.is_boarding && <span className="rounded bg-emerald-100 px-1.5 py-0.5 font-semibold text-emerald-700">You board here</span>}
+          {row.is_alighting && <span className="rounded bg-sky-100 px-1.5 py-0.5 font-semibold text-sky-700">You get off here</span>}
           {row.custom && row.distance_from_route_m != null && (
             <span>{Math.round(row.distance_from_route_m)} m from the route line</span>
           )}
