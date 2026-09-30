@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { CreditCard, AlertCircle, CheckCircle, Loader, Wallet, Smartphone } from 'lucide-react';
 import useBuyTicket from '../../../api/hooks/Passenger/useBuyTicket';
 import TicketCard from '../Ticket/TicketCard';
@@ -36,6 +37,7 @@ export default function BuyTicket({ onTicketPurchased }) {
   const [qrModalDismissedFor, setQrModalDismissedFor] = useState(null);
   const {
     availableRewardPoints,
+    bookingLink,
     canProceedToOnlinePayment,
     checkoutStatus,
     applyDropoff,
@@ -105,6 +107,19 @@ export default function BuyTicket({ onTicketPurchased }) {
           <p className="mt-2 max-w-md text-sm text-slate-200">Tell us where you are going and when. We find the bus.</p>
         </div>
       </section>
+
+      {bookingLink.status === 'checking' && (
+        <div className="flex items-center gap-2 rounded-xl bg-slate-50 px-3.5 py-2.5 text-sm text-slate-600 ring-1 ring-inset ring-slate-200">
+          <Loader size={16} className="animate-spin" /> Checking your booking link...
+        </div>
+      )}
+
+      {bookingLink.status === 'error' && (
+        <div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-amber-50 px-3.5 py-2.5 text-sm text-amber-800 ring-1 ring-inset ring-amber-200">
+          <span className="flex items-center gap-2"><AlertCircle size={16} className="shrink-0" />{bookingLink.message}</span>
+          <Link to="/passenger#search-trips" className="font-semibold text-navy-800 underline">Search for a trip</Link>
+        </div>
+      )}
 
       {error && (
         <div className="flex items-center gap-2 rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-medium text-red-700 ring-1 ring-inset ring-red-200">

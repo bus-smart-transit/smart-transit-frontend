@@ -133,6 +133,16 @@ export default function AdminPanel() {
     }
   };
 
+  const handleToggleCustomDropoff = async (routeId, allow) => {
+    try {
+      await AdminService.setRouteCustomDropoff(routeId, allow);
+      setRoutes(routes.map(r => r.route_id === routeId ? { ...r, allow_custom_dropoff: allow } : r));
+      showMessage(allow ? 'Custom drop-off enabled for this route.' : 'Custom drop-off disabled for this route.', true);
+    } catch (err) {
+      showMessage(err.message || 'Failed to update custom drop-off', false);
+    }
+  };
+
   // ──── FLEETS ────
   const loadFleets = useCallback(async () => {
     setLoading(true);
@@ -313,6 +323,18 @@ export default function AdminPanel() {
                   className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2.5 text-sm text-white outline-none transition focus:border-sky-500"
                   required
                 />
+                <div>
+                  <input
+                    type="text"
+                    placeholder="Stop code (used in booking links, optional)"
+                    value={stopForm.stop_code ?? ''}
+                    onChange={e => setStopForm({ ...stopForm, stop_code: e.target.value.toLowerCase() })}
+                    pattern="[a-z0-9]+(-[a-z0-9]+)*"
+                    title="Lowercase letters, numbers and single hyphens, for example bunawan-market"
+                    className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2.5 text-sm text-white outline-none transition focus:border-sky-500"
+                  />
+                  <p className="mt-1 text-xs text-slate-500">Leave blank to create it from the name. Changing it breaks links that use the old code.</p>
+                </div>
                 <input
                   type="text"
                   placeholder="Location"
@@ -439,6 +461,15 @@ export default function AdminPanel() {
                       <div className="flex-1">
                         <p className="font-semibold text-white">{route.route_name}</p>
                         <p className="text-sm text-slate-400">{route.origin || 'Origin N/A'} to {route.destination || 'Destination N/A'}</p>
+                        <label className="mt-1 inline-flex items-center gap-2 text-xs text-slate-300">
+                          <input
+                            type="checkbox"
+                            checked={Boolean(route.allow_custom_dropoff)}
+                            onChange={e => handleToggleCustomDropoff(route.route_id, e.target.checked)}
+                            aria-label={`Allow custom drop-off pins on ${route.route_name}`}
+                          />
+                          Allow custom drop-off pins
+                        </label>
                       </div>
                       <div className="flex gap-2">
                         <button onClick={() => { setEditingRouteId(route.route_id); setRouteForm(route); }} className="rounded-lg border border-slate-700 p-2 transition hover:bg-slate-700">

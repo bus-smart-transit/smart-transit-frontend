@@ -3,7 +3,9 @@ import { useSearchParams } from 'react-router-dom';
 import PassengerService from '../../PassengerService/PassengerService';
 import { readApiError } from '../../../services/bookingService';
 import { useBookingStops, useTripResolution } from './useBookingSearch';
+import useBookingLink from './useBookingLink';
 import useTripTimeline from './useTripTimeline';
+import { findStopCode, withBookingParams } from '../../../utils/bookingQuery';
 import { groupQrPayload, openPrintWindow } from '../../../utils/qr';
 import { manilaDepartureLabel } from '../../../utils/ticketImage';
 const CHECKOUT_EVENT_KEY = 'smart_transit_checkout_event';
@@ -102,7 +104,8 @@ const ticketMeta = (ticket) => {
 };
 
 export default function useBuyTicket({ onTicketPurchased }) {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const bookingLink = useBookingLink(searchParams);
   const [error, setError] = useState('');
   const [formErrors, setFormErrors] = useState({});
   const [success, setSuccess] = useState('');
@@ -121,14 +124,14 @@ export default function useBuyTicket({ onTicketPurchased }) {
   const lastCheckoutEventTsRef = useRef(0);
   const pendingCheckoutRef = useRef(null);
 
-  // The journey a passenger describes: where from, where to, and when. A landing
-  // page search can hand these over through the query string.
+  // The journey a passenger describes: where from, where to, and when. A shared or searched
+  // booking link (stop codes + date) fills it in once the server has checked the link.
   const [form, setForm] = useState(() => ({
-    origin_stop_id: searchParams.get('origin_stop_id') || '',
-    destination_stop_id: searchParams.get('destination_stop_id') || '',
-    booking_option: searchParams.get('mode') === 'later' ? 'later' : 'now',
-    booking_date: searchParams.get('date') || '',
-    booking_time: searchParams.get('time') || '',
+    origin_stop_id: '',
+    destination_stop_id: '',
+    booking_option: 'now',
+    booking_date: '',
+    booking_time: '',
     seat_type: 'seated',
     payment_channel: 'gcash',
     ticket_quantity: '1',
@@ -136,6 +139,12 @@ export default function useBuyTicket({ onTicketPurchased }) {
     reward_points_to_use: '',
     guest_email: '',
   }));
+  // Apply the checked link once (derived-state update during render, not an effect).
+  const [linkApplied, setLinkApplied] = useState(false);
+  if (!linkApplied && bookingLink.status === 'ok' && bookingLink.journey) {
+    setLinkApplied(true);
+    setForm((prev) => ({ ...prev, ...bookingLink.journey }));
+  }
   // null = follow the destination the passenger searched for; a stop id = picked on the timeline.
   const [alightingStopId, setAlightingStopId] = useState(null);
   const [dropoff, setDropoff] = useState(null);
@@ -143,6 +152,20 @@ export default function useBuyTicket({ onTicketPurchased }) {
   const [dropoffModalOpen, setDropoffModalOpen] = useState(false);
 
   const stopsData = useBookingStops(form.origin_stop_id);
+
+  // Once the passenger changes the journey, the address bar becomes a readable, shareable link:
+  // stop codes and a date, no internal ids and no mode. Other query params (a tab) are kept.
+  const journeyTouchedRef = useRef(false);
+  const originCode = findStopCode(stopsData.originGroups, form.origin_stop_id);
+  const destinationCode = findStopCode(stopsData.destinationGroups, form.destination_stop_id)
+    || findStopCode(stopsData.originGroups, form.destination_stop_id);
+  const linkDate = form.booking_option === 'later' ? form.booking_date : '';
+  const linkTime = form.booking_option === 'later' ? form.booking_time : '';
+  useEffect(() => {
+    if (!journeyTouchedRef.current) return;
+    const next = withBookingParams(searchParams, { from: originCode, to: destinationCode, date: linkDate, time: linkTime });
+    if (next.toString() !== searchParams.toString()) setSearchParams(next, { replace: true });
+  }, [originCode, destinationCode, linkDate, linkTime, searchParams, setSearchParams]);
   const resolution = useTripResolution({
     mode: form.booking_option,
     originStopId: form.origin_stop_id,
@@ -214,6 +237,7 @@ export default function useBuyTicket({ onTicketPurchased }) {
   }, []);
 
   const handleJourneyChange = useCallback((field, value) => {
+    journeyTouchedRef.current = true;
     handleChange(field, value);
     if (field === 'origin_stop_id') {
       handleChange('destination_stop_id', '');
@@ -771,6 +795,7 @@ export default function useBuyTicket({ onTicketPurchased }) {
 
   return {
     availableRewardPoints,
+    bookingLink,
     canProceedToOnlinePayment,
     checkoutStatus,
     closeDropoffModal,

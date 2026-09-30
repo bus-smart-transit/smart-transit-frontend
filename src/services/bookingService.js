@@ -23,6 +23,16 @@ export async function getBookingStops(originStopId = null) {
   return data(response)
 }
 
+/** Checks the untrusted parts of a booking link (stop codes, date). Resolves to { from, to, date } or rejects with a friendly 422. */
+export async function getBookingLink({ from, to, date }) {
+  const params = {}
+  if (from) params.from = from
+  if (to) params.to = to
+  if (date) params.date = date
+  const response = await api.get('/booking/link', { params })
+  return data(response)
+}
+
 /** Book Now / Book Later: the server picks the trip. params: { mode, origin_stop_id, destination_stop_id, date?, time?, seat_type? } */
 export async function resolveTrip(params) {
   const response = await api.get('/booking/resolve', { params })

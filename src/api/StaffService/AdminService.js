@@ -40,6 +40,10 @@ class AdminService extends StaffBaseService {
     return await this.request(`/admin/routes/${routeId}`, 'DELETE');
   }
 
+  async setRouteCustomDropoff(routeId, allow) {
+    return await this.request(`/admin/routes/${routeId}/custom-dropoff`, 'PATCH', { allow_custom_dropoff: Boolean(allow) });
+  }
+
   async addStopToRoute(routeId, stopData) {
     return await this.request(`/admin/routes/${routeId}/stops`, 'POST', stopData);
   }

@@ -1252,14 +1252,14 @@ function RoutesTab({ routes, stops, trips, onRefresh }) {
         <table className="w-full text-sm">
           <thead className="bg-slate-50">
             <tr className="border-b border-slate-200">
-              {['ID','Name','Origin','Destination','Stops',''].map((h,i) => (
+              {['ID','Name','Origin','Destination','Stops','Custom drop-off',''].map((h,i) => (
                 <th key={i} className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {routes.length === 0
-              ? <tr><td colSpan={6} className="px-5 py-8 text-center text-sm text-slate-400">No routes found.</td></tr>
+              ? <tr><td colSpan={7} className="px-5 py-8 text-center text-sm text-slate-400">No routes found.</td></tr>
               : routes.map(r => (
                 <>
                   <tr key={r.route_id} className="border-b border-slate-100 hover:bg-slate-50">
@@ -1269,6 +1269,18 @@ function RoutesTab({ routes, stops, trips, onRefresh }) {
                     <td className="px-5 py-3 text-slate-600">{r.destination || '-'}</td>
                     <td className="px-5 py-3 text-slate-600">{r.route_stops?.length ?? 0}</td>
                     <td className="px-5 py-3">
+                      <label className="inline-flex items-center gap-2 text-xs font-medium text-slate-700">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(r.allow_custom_dropoff)}
+                          disabled={manageSaving}
+                          onChange={(event) => { void handleToggleCustomDropoff(r.route_id, event.target.checked) }}
+                          aria-label={`Allow custom drop-off pins on ${r.route_name}`}
+                        />
+                        {r.allow_custom_dropoff ? 'On' : 'Off'}
+                      </label>
+                    </td>
+                    <td className="px-5 py-3">
                       <button type="button" onClick={() => setExpanded(expanded === r.route_id ? null : r.route_id)} className="text-teal-600 hover:text-teal-700">
                         {expanded === r.route_id ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                       </button>
@@ -1276,23 +1288,14 @@ function RoutesTab({ routes, stops, trips, onRefresh }) {
                   </tr>
                   {expanded === r.route_id && (
                     <tr key={`${r.route_id}-custom-dropoff`} className="bg-slate-50">
-                      <td colSpan={6} className="px-8 py-3">
-                        <label className="inline-flex items-center gap-2 text-sm text-slate-700">
-                          <input
-                            type="checkbox"
-                            checked={Boolean(r.allow_custom_dropoff)}
-                            disabled={manageSaving}
-                            onChange={(event) => { void handleToggleCustomDropoff(r.route_id, event.target.checked) }}
-                          />
-                          Allow passengers to pin a custom drop-off on this route
-                        </label>
-                        <p className="mt-1 text-xs text-slate-500">Off by default. The pin must be on the route line and ahead of where the passenger boards.</p>
+                      <td colSpan={7} className="px-8 py-3">
+                        <p className="text-xs text-slate-500">Custom drop-off lets passengers pin a drop-off point on this route (off by default). The pin must be on the route line and ahead of where the passenger boards.</p>
                       </td>
                     </tr>
                   )}
                   {expanded === r.route_id && r.route_stops?.length > 0 && (
                     <tr key={`${r.route_id}-stops`} className="bg-slate-50">
-                      <td colSpan={6} className="px-8 py-3">
+                      <td colSpan={7} className="px-8 py-3">
                         <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Stops</p>
                         <ol className="flex flex-wrap gap-2">
                           {r.route_stops.sort((a,b) => a.stop_order - b.stop_order).map((rs, idx) => (

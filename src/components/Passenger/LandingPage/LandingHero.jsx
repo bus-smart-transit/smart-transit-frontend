@@ -5,7 +5,7 @@ import Button from '../../ui/Button';
 import JourneyFields from '../BuyTicket/JourneyFields';
 import { useBookingStops } from '../../../api/hooks/Passenger/useBookingSearch';
 import { useRegion } from '../../../api/hooks/useRegion';
-import { buildBookingQuery } from '../../../utils/bookingQuery';
+import { buildBookingQuery, findStopCode } from '../../../utils/bookingQuery';
 import heroBg from '../../../assets/hero.png';
 
 export default function LandingHero() {
@@ -33,7 +33,16 @@ export default function LandingHero() {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (canSearch) navigate(`/passenger/book?${buildBookingQuery(journey)}`);
+    if (!canSearch) return;
+    // The link carries readable stop codes and the date, never internal ids or the mode.
+    const later = journey.booking_option === 'later';
+    const query = buildBookingQuery({
+      from: findStopCode(stops.originGroups, journey.origin_stop_id),
+      to: findStopCode(stops.destinationGroups, journey.destination_stop_id),
+      date: later ? journey.booking_date : '',
+      time: later ? journey.booking_time : '',
+    });
+    navigate(`/passenger/book?${query}`);
   };
 
   return (

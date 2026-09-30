@@ -103,6 +103,15 @@ export default function TripTimeline({
   const facts = journeyFacts(timeline)
   const hasAlighting = Boolean(journey?.alighting_stop_id || journey?.custom_dropoff)
 
+  // Flag off = the route does not offer a pin, so the control is hidden. Flag on = the
+  // control shows; when the current selection cannot use it, the server says why.
+  const offersPin = Boolean(timeline.allow_custom_dropoff)
+  const availability = timeline.custom_dropoff_availability
+  const canPin = offersPin && (availability ? availability.available : Boolean(journey?.boarding_stop_id))
+  const pinReason = offersPin && !canPin
+    ? (availability?.reason || 'Choose where you board first, then pin where you want to get off.')
+    : null
+
   return (
     <section className="rounded-xl border border-slate-200 bg-white" aria-label="Trip timeline">
       <header className="border-b border-slate-100 p-4">
@@ -161,18 +170,20 @@ export default function TripTimeline({
         })}
       </ol>
 
-      {(timeline.allow_custom_dropoff || journey?.custom_dropoff) && (
+      {(offersPin || journey?.custom_dropoff) && (
         <footer className="flex flex-wrap items-center gap-2 border-t border-slate-100 p-3">
-          {timeline.allow_custom_dropoff && (
+          {offersPin && (
             <button
               type="button"
               onClick={onOpenCustomDropoff}
-              disabled={!journey?.boarding_stop_id}
+              disabled={!canPin}
+              aria-describedby={pinReason ? 'custom-dropoff-reason' : undefined}
               className="inline-flex items-center gap-1.5 rounded-lg border border-navy-800 px-3 py-1.5 text-xs font-semibold text-navy-800 transition hover:bg-navy-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <MapPin size={14} /> Drop off somewhere else (pin on map)
             </button>
           )}
+          {pinReason && <span id="custom-dropoff-reason" className="text-xs text-slate-500">{pinReason}</span>}
           {journey?.custom_dropoff && (
             <button type="button" onClick={onClearCustomDropoff} className="text-xs font-medium text-slate-500 underline">
               Use a route stop instead
