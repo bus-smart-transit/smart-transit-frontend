@@ -1075,6 +1075,7 @@ function RoutesTab({ routes, stops, trips, onRefresh }) {
     handleCreateStop,
     handleDeleteStop,
     handleRemoveStopFromRoute,
+    handleToggleCustomDropoff,
     handleCreateRoute,
     handleAddStopToRoute,
   } = useRoutesTab({ onRefresh })
@@ -1269,6 +1270,22 @@ function RoutesTab({ routes, stops, trips, onRefresh }) {
                       </button>
                     </td>
                   </tr>
+                  {expanded === r.route_id && (
+                    <tr key={`${r.route_id}-custom-dropoff`} className="bg-slate-50">
+                      <td colSpan={6} className="px-8 py-3">
+                        <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+                          <input
+                            type="checkbox"
+                            checked={Boolean(r.allow_custom_dropoff)}
+                            disabled={manageSaving}
+                            onChange={(event) => { void handleToggleCustomDropoff(r.route_id, event.target.checked) }}
+                          />
+                          Allow passengers to pin a custom drop-off on this route
+                        </label>
+                        <p className="mt-1 text-xs text-slate-500">Off by default. The pin must be on the route line and ahead of where the passenger boards.</p>
+                      </td>
+                    </tr>
+                  )}
                   {expanded === r.route_id && r.route_stops?.length > 0 && (
                     <tr key={`${r.route_id}-stops`} className="bg-slate-50">
                       <td colSpan={6} className="px-8 py-3">

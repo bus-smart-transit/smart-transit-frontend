@@ -108,6 +108,8 @@ export default function usePassengerDashboard({ preloadMapView }) {
   }, [selectedTicket, selectedTicketQr]);
 
   const getDestinationLabel = useCallback((ticket) => {
+    // A custom drop-off carries the label the passenger chose (or the server's snapped point).
+    if (ticket?.destination_label) return ticket.destination_label;
     const stopName = pickStopName(ticket?.destination_stop) || pickStopName(ticket?.destinationStop);
     if (stopName) return stopName;
     if (ticket?.destination) return ticket.destination;

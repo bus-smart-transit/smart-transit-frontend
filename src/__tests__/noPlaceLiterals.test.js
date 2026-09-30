@@ -4,8 +4,8 @@ import { describe, expect, it } from 'vitest'
 
 // D1: no city, province or corridor names in logic or UI code. Region-level
 // values come from the server region config; route-level values from route data.
-// Scope: the map layer, staff portals, services, config, utils and the drop-off
-// picker / signup form this batch touched.
+// Scope: the map layer, staff portals, services, config, utils and the whole passenger
+// side (booking, timeline, tickets, landing, auth).
 
 const SRC = join(import.meta.dirname, '..')
 const LITERAL = /\b(Davao|Tagum|Ecoland|Toril|Panabo|Bankerohan|Mati)\b/
@@ -17,8 +17,9 @@ const SCOPE = [
   'config',
   'utils',
   'api/hooks/Staff',
-  'api/hooks/Passenger/useDropoffPicker.js',
-  'components/Passenger/SignupPage',
+  'api/hooks/Passenger',
+  'components/Passenger',
+  'pages/passenger',
 ]
 
 function* walk(path) {

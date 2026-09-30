@@ -3,6 +3,7 @@ import { Bell, Bus, Map as MapIcon, Ticket, User, LogOut, Gift, History, LayoutG
 import usePassengerDashboard from '../../../api/hooks/Passenger/usePassengerDashboard';
 import PassengerService from '../../../api/PassengerService/PassengerService';
 import TicketCard from '../Ticket/TicketCard';
+import SaveQrButtons from '../BuyTicket/SaveQrButtons';
 import PublicTrackingSection from '../LandingPage/PublicTrackingSection';
 import ProfileDropdown from '../../Layout/ProfileDropdown';
 import Card from '../../ui/Card';
@@ -160,10 +161,10 @@ export default function Dashboard() {
   };
 
   const rewardCatalog = [
-    { id: 'r1', title: 'P20 Fare Discount', desc: 'Use on any single trip within Davao Region XI.', cost: 100 },
+    { id: 'r1', title: 'P20 Fare Discount', desc: 'Use on any single trip.', cost: 100 },
     { id: 'r2', title: 'Free Seat Reservation Fee', desc: 'Waives the reservation fee on your next booking.', cost: 150 },
-    { id: 'r3', title: 'P50 Fare Discount', desc: 'Use on any single trip within Davao Region XI.', cost: 250 },
-    { id: 'r4', title: 'Free One-Way Ticket (Ecoland ⇄ Digos)', desc: 'Redeem a full one-way fare on this route.', cost: 400 },
+    { id: 'r3', title: 'P50 Fare Discount', desc: 'Use on any single trip.', cost: 250 },
+    { id: 'r4', title: 'Free One-Way Ticket', desc: 'Redeem a full one-way fare on any route.', cost: 400 },
   ];
   const numericPoints = Number(profile?.reward_points ?? user?.reward_points ?? 0);
 
@@ -453,6 +454,13 @@ export default function Dashboard() {
                       <div>
                         <p className="text-sm font-semibold text-teal-800">Group Boarding QR — {groupTickets.length} tickets</p>
                         <p className="mt-0.5 text-xs text-teal-700">Transaction {ref}</p>
+                      </div>
+                      <div className="ml-auto">
+                        <SaveQrButtons
+                          ticket={{ group_qr_content: `grp:${ref}`, qr_url: groupQrUrl, transaction_reference: ref }}
+                          group
+                          groupSize={groupTickets.length}
+                        />
                       </div>
                     </div>
                     <div className="divide-y divide-slate-100">
@@ -894,9 +902,23 @@ export default function Dashboard() {
                 <p className="text-xs text-slate-400">Drop-off Location</p>
                 <p className="mt-1 text-sm font-semibold text-navy-950">{getDestinationLabel(selectedTicket)}</p>
               </div>
-              <div className="mt-5 flex justify-end gap-2">
-                <Button type="button" variant="outline" size="sm" onClick={printSelectedTicket}>Print PDF</Button>
-                <Button type="button" variant="primary" size="sm" onClick={closeTicketModal}>Close</Button>
+              <div className="mt-5 flex flex-wrap items-center justify-between gap-2">
+                <SaveQrButtons
+                  ticket={{
+                    ...selectedTicketQr,
+                    ticket_uuid: selectedTicket.ticket_uuid,
+                    origin: getOriginLabel(selectedTicket),
+                    destination: getDestinationLabel(selectedTicket),
+                    seat_type: selectedTicket.seat_type,
+                    amount: selectedTicket.amount ?? selectedTicket.final_amount,
+                    transaction_reference: selectedTicket.payment?.transaction_reference,
+                  }}
+                  departureLabel={formatDateTime(selectedTicket.valid_from ?? selectedTicketQr?.valid_from)}
+                />
+                <div className="flex gap-2">
+                  <Button type="button" variant="outline" size="sm" onClick={printSelectedTicket}>Print PDF</Button>
+                  <Button type="button" variant="primary" size="sm" onClick={closeTicketModal}>Close</Button>
+                </div>
               </div>
             </>
           )

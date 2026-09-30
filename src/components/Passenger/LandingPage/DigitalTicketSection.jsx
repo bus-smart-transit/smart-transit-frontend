@@ -45,12 +45,12 @@ export default function DigitalTicketSection() {
             </div>
             <div className="grid grid-cols-2 gap-3 border-t border-white/10 pt-3 text-xs">
               <div>
-                <p className="text-slate-400">Origin</p>
-                <p className="font-semibold">Ecoland Terminal</p>
+                <p className="text-slate-400">From</p>
+                <p className="font-semibold">Your boarding stop</p>
               </div>
               <div>
-                <p className="text-slate-400">Destination</p>
-                <p className="font-semibold">Tagum Terminal</p>
+                <p className="text-slate-400">To</p>
+                <p className="font-semibold">Your drop-off stop</p>
               </div>
               <div>
                 <p className="text-slate-400">Date</p>

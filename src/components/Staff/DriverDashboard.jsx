@@ -141,7 +141,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     profile,
     trip,
     stops,
-    pin,
+    requestedStops,    pin,
     showTripPin, setShowTripPin,
     pinInput, setPinInput,
     pinStatus, setPinStatus,
@@ -840,8 +840,10 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
 
                   {stops.map((stop, idx) => {
                     const completed = Boolean(stop.is_acknowledged);
+                    const requestedAfter = requestedStops.filter((requested) => requested.after_stop_sequence === (stop.sequence_number ?? stop.stop_order ?? idx + 1));
                     return (
-                      <div key={stop.stop_id ?? idx} className={`flex items-center gap-3 rounded-xl border px-3 py-2 ${completed ? 'border-emerald-200 bg-emerald-50' : 'border-slate-200 bg-slate-50'}`}>
+                      <div key={stop.stop_id ?? idx} className="space-y-1.5">
+                      <div className={`flex items-center gap-3 rounded-xl border px-3 py-2 ${completed ? 'border-emerald-200 bg-emerald-50' : 'border-slate-200 bg-slate-50'}`}>
                         <span className={`inline-flex h-6 w-6 items-center justify-center rounded-full border text-xs font-semibold ${completed ? 'border-emerald-400 text-emerald-700' : 'border-slate-300 text-slate-600'}`}>{idx + 1}</span>
                         <div>
                           <p className={`text-sm font-semibold ${completed ? 'text-emerald-700' : 'text-slate-900'}`}>{stop.stop_name ?? stop.name ?? `Stop ${idx + 1}`}</p>
@@ -859,6 +861,13 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                             Acknowledge
                           </button>
                         )}
+                      </div>
+                      {requestedAfter.map((requested) => (
+                        <div key={`${requested.latitude},${requested.longitude}`} className="ml-9 rounded-xl border border-dashed border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                          <span className="font-semibold">Requested stop:</span> {requested.label}
+                          <span className="ml-2 text-amber-700">{requested.passenger_count} passenger{requested.passenger_count === 1 ? '' : 's'}</span>
+                        </div>
+                      ))}
                       </div>
                     );
                   })}

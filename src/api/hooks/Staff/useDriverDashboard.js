@@ -186,6 +186,7 @@ export function useDriverDashboardData({ onLogout, pairing }) {
   const [assignedTrips, setAssignedTrips] = useState([]);
   const [assignedTripsForView, setAssignedTripsForView] = useState([]);
   const [stops, setStops] = useState([]);
+  const [requestedStops, setRequestedStops] = useState([]);
   const [pin, setPin] = useState(null);
   const [showTripPin, setShowTripPin] = useState(false);
   const [pinInput, setPinInput] = useState('');
@@ -372,6 +373,7 @@ export function useDriverDashboardData({ onLogout, pairing }) {
   const loadStops = useCallback(async () => {
     if (!isPaired || !hasActiveTrip) {
       setStops([]);
+      setRequestedStops([]);
       stopsLoadedRef.current = false;
       return;
     }
@@ -380,8 +382,11 @@ export function useDriverDashboardData({ onLogout, pairing }) {
       const payload = res?.data ?? null;
       if (Array.isArray(payload)) {
         setStops(payload);
+        setRequestedStops([]);
       } else {
         setStops(payload?.stops ?? []);
+        // D5: custom drop-offs passengers asked for; display only, placed after the stop they follow.
+        setRequestedStops(payload?.requested_stops ?? []);
       }
       stopsLoadedRef.current = true;
     } catch (err) {
@@ -920,6 +925,7 @@ export function useDriverDashboardData({ onLogout, pairing }) {
     trip,
     assignedTrips,
     stops,
+    requestedStops,
     pin,
     showTripPin, setShowTripPin,
     pinInput, setPinInput,

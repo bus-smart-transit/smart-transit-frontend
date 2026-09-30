@@ -5,9 +5,11 @@ import { useLogin } from '../../../api/hooks/Passenger/login';
 import Button from '../../ui/Button';
 import FormInput from '../../ui/FormInput';
 import Card from '../../ui/Card';
+import { useRegion } from '../../../api/hooks/useRegion';
 
 export default function LoginPage() {
   const otpRefs = useRef([]);
+  const region = useRegion();
   const {
     form,
     errors,
@@ -87,7 +89,7 @@ export default function LoginPage() {
               Welcome back to SmartTransit
             </h1>
             <p className="text-slate-400 text-lg leading-relaxed">
-              Your transportation partner for seamless, stress-free commuting across Davao Region.
+              Your transportation partner for seamless, stress-free commuting{region?.name ? ` across ${region.name}` : ''}.
             </p>
           </div>
         </div>
@@ -104,7 +106,7 @@ export default function LoginPage() {
         </div>
 
         <p className="text-xs text-slate-500">
-          © {new Date().getFullYear()} SmartTransit. Davao Region XI.
+          © {new Date().getFullYear()} SmartTransit.{region?.name ? ` ${region.name}.` : ''}
         </p>
       </div>
 

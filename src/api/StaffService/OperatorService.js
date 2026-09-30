@@ -64,6 +64,11 @@ class OperatorService extends StaffBaseService {
     return await this.request(`/operator/routes/${routeId}/stops/${routeStopId}`, 'DELETE');
   }
 
+  // D5: per-route switch for passenger custom drop-offs (off by default).
+  async setOperatorRouteCustomDropoff(routeId, allow) {
+    return await this.request(`/operator/routes/${routeId}/custom-dropoff`, 'PATCH', { allow_custom_dropoff: Boolean(allow) });
+  }
+
   async getOperatorFleetRoutes() {
     return await this.request('/operator/fleet-routes', 'GET');
   }

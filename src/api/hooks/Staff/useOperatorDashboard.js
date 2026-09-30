@@ -568,6 +568,20 @@ export function useRoutesTab({ onRefresh }) {
     }
   };
 
+  const handleToggleCustomDropoff = async (routeId, allow) => {
+    setManageSaving(true);
+    setManageMsg('');
+    try {
+      await OperatorService.setOperatorRouteCustomDropoff(Number(routeId), allow);
+      setManageMsg(allow ? 'Custom drop-off enabled for this route.' : 'Custom drop-off disabled for this route.');
+      onRefresh();
+    } catch (err) {
+      setManageMsg(err?.message || 'Failed to update custom drop-off setting.');
+    } finally {
+      setManageSaving(false);
+    }
+  };
+
   const handleCreateRoute = async (event) => {
     event.preventDefault();
     setManageSaving(true);
@@ -660,6 +674,7 @@ export function useRoutesTab({ onRefresh }) {
     handleCreateStop,
     handleDeleteStop,
     handleRemoveStopFromRoute,
+    handleToggleCustomDropoff,
     handleCreateRoute,
     handleAddStopToRoute,
   };
