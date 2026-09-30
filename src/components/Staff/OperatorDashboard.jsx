@@ -3,6 +3,7 @@ import StaffPortalLayout from './StaffPortalLayout'
 import { buildOperatorForecast } from './routeForecast'
 import RouteMap from '../Map/RouteMap'
 import CalendarSummaryStrip from './CalendarSummaryStrip'
+import DashboardCalendar from './DashboardCalendar'
 import StepUpModal from './StepUpModal'
 import HistoricalForecastPanel from './HistoricalForecastPanel'
 import { openPrintReport } from '../../utils/printReport'
@@ -313,6 +314,7 @@ function DashboardTab({ trips, drivers, conductors, fleets, onRequestDecided }) 
     <div className="space-y-6">
       <TripRequestsPanel onDecided={onRequestDecided} />
       <CalendarSummaryStrip service={OperatorService} refreshKey={trips} />
+      <DashboardCalendar trips={trips} />
       <div className="rounded-2xl border border-teal-100 bg-linear-to-r from-teal-600 via-teal-500 to-cyan-500 p-5 text-white shadow-sm">
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>

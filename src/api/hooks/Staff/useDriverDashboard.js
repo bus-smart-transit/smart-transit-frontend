@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import DriverService from '../../StaffService/DriverService';
 import { haversineM } from '../../../utils/geo';
 import { isSameBusinessDay, getBusinessToday, getBusinessNowMs, toBusinessScheduleMs, debugLogBusinessTime } from '../../../utils/dates';
-import { buildCalendarGrid } from '../../../utils/calendarGrid';
 import { fetchTrafficStatus } from '../../../services/trafficService';
 import { initFcmAndGetToken } from '../../../services/fcmService';
 import { MAP_CONFIG } from '../../../config/mapConfig';
@@ -197,10 +196,6 @@ export function useDriverDashboardData({ onLogout, pairing }) {
   const [shiftBlocks, setShiftBlocks] = useState([]);
   const [shiftBlockActionInFlight, setShiftBlockActionInFlight] = useState(false);
   const [tripDetailsModal, setTripDetailsModal] = useState(null); // suggestion: trip info modal
-  // S4 (Batch 17): calendar date-click modal — holds the clicked
-  // 'YYYY-MM-DD' key (or null when closed), scoped to just that date's
-  // schedule rather than navigating away or dumping every trip at once.
-  const [dayScheduleModalDate, setDayScheduleModalDate] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [actionMsg, setActionMsg] = useState('');
@@ -221,11 +216,6 @@ export function useDriverDashboardData({ onLogout, pairing }) {
   // state; can be toggled on even while off-shift.
   const [isAvailable, setIsAvailable] = useState(false);
   const [availabilitySaving, setAvailabilitySaving] = useState(false);
-  // Batch 15, Item 5: month currently shown in the Calendar view.
-  const [calendarMonth, setCalendarMonth] = useState(() => {
-    const today = new Date();
-    return new Date(today.getFullYear(), today.getMonth(), 1);
-  });
   const [gpsActive, setGpsActive] = useState(false);
   const [lastGps, setLastGps] = useState(null);
   const [trafficStatus, setTrafficStatus] = useState({
@@ -286,20 +276,6 @@ export function useDriverDashboardData({ onLogout, pairing }) {
     const tripDateStr = String(item?.trip_date || '').match(/^(\d{4}-\d{2}-\d{2})/)?.[1];
     return !!tripDateStr && tripDateStr > todayStart;
   });
-
-  // Batch 15, Items 5/6: Calendar and Schedule views both derive from the
-  // full `assignedTrips` list (today + upcoming + past), independent of
-  // the "Assigned Routes" tab's own scheduled/completed filter above.
-  const tripsByDate = assignedTrips.reduce((acc, item) => {
-    const dateKey = String(item?.trip_date || '').match(/^(\d{4}-\d{2}-\d{2})/)?.[1];
-    if (!dateKey) return acc;
-    (acc[dateKey] ??= []).push(item);
-    return acc;
-  }, {});
-  const calendarDays = buildCalendarGrid(calendarMonth, tripsByDate);
-  const scheduleTripsSorted = [...assignedTrips].sort((a, b) => String(a?.trip_date || '').localeCompare(String(b?.trip_date || '')));
-  const scheduleUpcoming = scheduleTripsSorted.filter((item) => String(item?.trip_date || '') >= todayStart);
-  const schedulePast = scheduleTripsSorted.filter((item) => String(item?.trip_date || '') < todayStart).reverse();
 
   const handleAssignedTripFilterChange = useCallback(async (value) => {
     setAssignedTripFilter(value);
@@ -933,8 +909,6 @@ export function useDriverDashboardData({ onLogout, pairing }) {
     earnings,
     shiftState,
     tripDetailsModal, setTripDetailsModal,
-    dayScheduleModalDate, setDayScheduleModalDate,
-    tripsByDate,
     loading,
     error,
     actionMsg, setActionMsg,
@@ -948,7 +922,6 @@ export function useDriverDashboardData({ onLogout, pairing }) {
     msg2fa,
     isAvailable,
     availabilitySaving,
-    calendarMonth, setCalendarMonth,
     gpsActive,
     trafficStatus,
     proximityAlert, setProximityAlert,
@@ -966,9 +939,6 @@ export function useDriverDashboardData({ onLogout, pairing }) {
     filteredAssignedTrips,
     todayAssignedTrips,
     upcomingAssignedTrips,
-    calendarDays,
-    scheduleUpcoming,
-    schedulePast,
     stopProgress,
     tripProgress,
     notifications,

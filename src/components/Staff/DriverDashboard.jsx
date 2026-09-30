@@ -3,8 +3,6 @@ import {
   Bus,
   CalendarDays,
   CheckCircle2,
-  ChevronLeft,
-  ChevronRight,
   Clock3,
   Gauge,
   KeyRound,
@@ -16,6 +14,8 @@ import PairingScreen from './PairingScreen';
 import StaffPortalLayout from './StaffPortalLayout';
 import DeclineTripModal from './DeclineTripModal';
 import CalendarSummaryStrip from './CalendarSummaryStrip';
+import DashboardCalendar from './DashboardCalendar';
+import StaffScheduleView from './StaffScheduleView';
 import DriverNavigationMap from './DriverNavigationMap';
 import QrImage from '../Passenger/Ticket/QrImage';
 import RequestedStopRow from './RequestedStopRow';
@@ -152,8 +152,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     earnings,
     shiftState,
     tripDetailsModal, setTripDetailsModal,
-    dayScheduleModalDate, setDayScheduleModalDate,
-    tripsByDate,
+    assignedTrips,
     loading,
     error,
     actionMsg, setActionMsg,
@@ -166,7 +165,6 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     saving2fa,
     msg2fa,
     isAvailable,
-    calendarMonth, setCalendarMonth,
     gpsActive,
     trafficStatus,
     proximityAlert, setProximityAlert,
@@ -184,9 +182,6 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     filteredAssignedTrips,
     todayAssignedTrips,
     upcomingAssignedTrips,
-    calendarDays,
-    scheduleUpcoming,
-    schedulePast,
     stopProgress,
     tripProgress,
     notifications,
@@ -438,36 +433,6 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                 <button className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50" onClick={() => handleTripAction('complete')} disabled={actionInFlight || !isPaired || !['departed', 'in-progress'].includes(trip?.status)}>
                   ■ End Trip
                 </button>
-                {canRespondToAssignment(todayAssignedTrip, 'driver') && (
-                  <button
-                    type="button"
-                    className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100 disabled:opacity-50"
-                    onClick={() => handleAcceptTrip(todayAssignedTrip)}
-                    disabled={actionInFlight}
-                  >
-                    ✓ Accept Trip
-                  </button>
-                )}
-                {canRespondToAssignment(todayAssignedTrip, 'driver') && (
-                  <button
-                    type="button"
-                    className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-red-200 bg-white px-4 py-2.5 text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:opacity-50"
-                    onClick={() => setConfirmDecline(todayAssignedTrip)}
-                    disabled={actionInFlight}
-                  >
-                    ✕ Decline Trip
-                  </button>
-                )}
-                {getAssignmentRequestStatus(todayAssignedTrip, 'driver') === 'for_approval' && (
-                  <span className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-700">
-                    {FOR_APPROVAL_LABEL}
-                  </span>
-                )}
-                {getAssignmentRequestStatus(todayAssignedTrip, 'driver') === 'rejected' && (
-                  <span className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-semibold text-slate-600">
-                    Request rejected: please proceed
-                  </span>
-                )}
               </div>
             </article>
 
@@ -596,127 +561,18 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
           </section>
         )}
 
-        {/* Batch 15, Item 5: Calendar view — month grid, distinct from the
-            list-based Schedule view below. Batch 19 Part A: merged under
-            the single "Schedule" nav item (Shift Blocks moved out — that's
-            live operational state, not a planning view). */}
+        {/* C-2: the Schedule page and the dashboard calendar modal share one
+            view (StaffScheduleView) fed by the same assigned-trips list. */}
         {!loading && activeTab === 'schedule' && <CalendarSummaryStrip service={DriverService} className="mb-4" />}
         {!loading && activeTab === 'schedule' && (
-          <section className="staff-card">
-            <div className="mb-4 flex items-center justify-between">
-              <h4 className="text-base font-bold text-slate-900">
-                {calendarMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-              </h4>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  className="rounded-lg border border-slate-200 bg-white p-1.5 text-slate-600 transition hover:bg-slate-50"
-                  onClick={() => setCalendarMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))}
-                  aria-label="Previous month"
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </button>
-                <button
-                  type="button"
-                  className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-600 transition hover:bg-slate-50"
-                  onClick={() => setCalendarMonth(() => { const t = new Date(); return new Date(t.getFullYear(), t.getMonth(), 1); })}
-                >
-                  Today
-                </button>
-                <button
-                  type="button"
-                  className="rounded-lg border border-slate-200 bg-white p-1.5 text-slate-600 transition hover:bg-slate-50"
-                  onClick={() => setCalendarMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))}
-                  aria-label="Next month"
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
-            <div className="grid grid-cols-7 gap-1 text-center text-xs font-semibold uppercase tracking-wide text-slate-400">
-              {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
-                <div key={d} className="py-1.5">{d}</div>
-              ))}
-            </div>
-            <div className="mt-1 grid grid-cols-7 gap-1">
-              {calendarDays.map((cell) => (
-                <button
-                  key={cell.dateKey}
-                  type="button"
-                  disabled={cell.trips.length === 0}
-                  onClick={() => cell.trips.length > 0 && setDayScheduleModalDate(cell.dateKey)}
-                  className={`flex min-h-20 flex-col items-start gap-1 rounded-lg border p-1.5 text-left transition ${
-                    cell.isCurrentMonth ? 'bg-white' : 'bg-slate-50 text-slate-300'
-                  } ${cell.isToday ? 'border-teal-400 ring-1 ring-teal-200' : 'border-slate-100'} ${
-                    cell.trips.length > 0 ? 'hover:bg-teal-50 cursor-pointer' : 'cursor-default'
-                  }`}
-                >
-                  <span className={`text-xs font-semibold ${cell.isToday ? 'text-teal-600' : cell.isCurrentMonth ? 'text-slate-700' : 'text-slate-300'}`}>
-                    {cell.date.getDate()}
-                  </span>
-                  {cell.trips.slice(0, 2).map((t) => (
-                    <span
-                      key={t.trip_id}
-                      className="w-full truncate rounded px-1 py-0.5 text-xs font-semibold"
-                      style={{ background: `${STATUS_COLOR[t.status] || '#153a6b'}20`, color: STATUS_COLOR[t.status] || '#153a6b' }}
-                    >
-                      {t.fleet_route?.route?.route_name || `Trip #${t.trip_id}`}
-                    </span>
-                  ))}
-                  {cell.trips.length > 2 && (
-                    <span className="text-xs text-slate-400">+{cell.trips.length - 2} more</span>
-                  )}
-                </button>
-              ))}
-            </div>
-          </section>
+          <StaffScheduleView trips={assignedTrips} onSelectTrip={setTripDetailsModal} />
         )}
 
-        {/* Batch 15, Item 6: Schedule view — chronological list (upcoming
-            then past), distinct from the Calendar grid above. */}
-        {!loading && activeTab === 'schedule' && (
-          <section className="space-y-5">
-            <div className="staff-card">
-              <h4 className="mb-3 text-base font-bold text-slate-900">Upcoming</h4>
-              {scheduleUpcoming.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-5 text-sm text-slate-500">No upcoming trips scheduled.</div>
-              ) : (
-                <ul className="divide-y divide-slate-100">
-                  {scheduleUpcoming.map((item) => (
-                    <li key={item.trip_id} className="flex cursor-pointer items-center justify-between gap-3 py-3 hover:bg-slate-50" onClick={() => setTripDetailsModal(item)}>
-                      <div>
-                        <p className="text-sm font-semibold text-slate-900">{item.fleet_route?.route?.origin || '-'} → {item.fleet_route?.route?.destination || '-'}</p>
-                        <p className="font-data text-xs text-slate-500">{formatTripSchedule(item)}</p>
-                      </div>
-                      <span className="rounded-full px-2.5 py-1 text-xs font-semibold" style={{ background: `${STATUS_COLOR[item.status] || '#153a6b'}20`, color: STATUS_COLOR[item.status] || '#153a6b' }}>
-                        {(item.status || 'pending').toUpperCase()}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-            <div className="staff-card">
-              <h4 className="mb-3 text-base font-bold text-slate-900">Past</h4>
-              {schedulePast.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-5 text-sm text-slate-500">No past trips yet.</div>
-              ) : (
-                <ul className="divide-y divide-slate-100">
-                  {schedulePast.map((item) => (
-                    <li key={item.trip_id} className="flex cursor-pointer items-center justify-between gap-3 py-3 hover:bg-slate-50" onClick={() => setTripDetailsModal(item)}>
-                      <div>
-                        <p className="text-sm font-semibold text-slate-900">{item.fleet_route?.route?.origin || '-'} → {item.fleet_route?.route?.destination || '-'}</p>
-                        <p className="font-data text-xs text-slate-500">{formatTripSchedule(item)}</p>
-                      </div>
-                      <span className="rounded-full px-2.5 py-1 text-xs font-semibold" style={{ background: `${STATUS_COLOR[item.status] || '#153a6b'}20`, color: STATUS_COLOR[item.status] || '#153a6b' }}>
-                        {(item.status || 'pending').toUpperCase()}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          </section>
+        {!loading && activeTab === 'dashboard' && (
+          <div className="mt-4 space-y-4">
+            <CalendarSummaryStrip service={DriverService} />
+            <DashboardCalendar trips={assignedTrips} onSelectTrip={setTripDetailsModal} />
+          </div>
         )}
 
         {/* Batch 18: Shift Block Hand-off System. Independent of pairing —
@@ -1104,62 +960,6 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
       )}
 
       {/* ── Suggestion: Trip details modal ───────────────────────────────── */}
-      {/* S4 (Batch 17): calendar date-click modal — scoped to just the
-          clicked date's schedule, regardless of how many trips fall on it. */}
-      {dayScheduleModalDate && (() => {
-        const dayTrips = tripsByDate[dayScheduleModalDate] || [];
-        const dayLabel = new Date(`${dayScheduleModalDate}T00:00`).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-        return (
-          <div
-            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4"
-            role="presentation"
-            onClick={() => setDayScheduleModalDate(null)}
-          >
-            <section
-              role="dialog"
-              aria-modal="true"
-              aria-label="Day schedule"
-              onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900 p-6 text-slate-200"
-            >
-              <div className="mb-4 flex items-start justify-between">
-                <div>
-                  <h3 className="text-base font-bold text-slate-100">{dayLabel}</h3>
-                  <p className="text-xs text-slate-500">{dayTrips.length} trip{dayTrips.length === 1 ? '' : 's'} scheduled</p>
-                </div>
-                <button type="button" onClick={() => setDayScheduleModalDate(null)} className="text-slate-500 hover:text-slate-300 text-lg leading-none">✕</button>
-              </div>
-
-              {dayTrips.length === 0 ? (
-                <p className="py-4 text-center text-sm text-slate-500">No trips scheduled this day.</p>
-              ) : (
-                <div className="space-y-2">
-                  {dayTrips.map((t) => (
-                    <button
-                      key={t.trip_id}
-                      type="button"
-                      className="flex w-full items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950 px-3 py-2.5 text-left transition hover:border-slate-600"
-                      onClick={() => { setDayScheduleModalDate(null); setTripDetailsModal(t); }}
-                    >
-                      <div>
-                        <p className="text-sm font-semibold text-slate-100">{t.fleet_route?.route?.route_name || `Trip #${t.trip_id}`}</p>
-                        <p className="text-xs text-slate-500">{formatTripSchedule(t)}</p>
-                      </div>
-                      <span
-                        className="shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold uppercase"
-                        style={{ background: `${STATUS_COLOR[t.status] || '#153a6b'}20`, color: STATUS_COLOR[t.status] || '#153a6b' }}
-                      >
-                        {t.status}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </section>
-          </div>
-        );
-      })()}
-
       {tripDetailsModal && (() => {
         const td = tripDetailsModal;
         const route = td.fleet_route?.route || {};
@@ -1268,6 +1068,9 @@ function DriverTripTable({ title, trips, onSelectTrip, onDeclineTrip, onAcceptTr
                         )}
                         {getAssignmentRequestStatus(item, 'driver') === 'for_approval' && (
                           <span className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs font-semibold text-amber-700">{FOR_APPROVAL_LABEL}</span>
+                        )}
+                        {getAssignmentRequestStatus(item, 'driver') === 'rejected' && (
+                          <span className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs font-semibold text-slate-600">Request rejected: please proceed</span>
                         )}
                       </div>
                     </td>

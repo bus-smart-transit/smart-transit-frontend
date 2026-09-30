@@ -5,8 +5,6 @@ import {
   Camera,
   CalendarDays,
   CheckCircle2,
-  ChevronLeft,
-  ChevronRight,
   Download,
   Gauge,
   KeyRound,
@@ -21,6 +19,8 @@ import PairingScreen from './PairingScreen';
 import StaffPortalLayout from './StaffPortalLayout';
 import DeclineTripModal from './DeclineTripModal';
 import CalendarSummaryStrip from './CalendarSummaryStrip';
+import DashboardCalendar from './DashboardCalendar';
+import StaffScheduleView from './StaffScheduleView';
 import NotificationBellButton from './NotificationBellButton';
 import { useConductorPairing, useConductorDashboardData } from '../../api/hooks/Staff/useConductorDashboard';
 import { getBusinessTodayLabel } from '../../utils/dates';
@@ -179,6 +179,9 @@ function TripCardGroup({ title, trips, onDeclineTrip, onAcceptTrip, emptyMessage
                     {getAssignmentRequestStatus(item, 'conductor') === 'for_approval' && (
                       <span className="flex-1 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-center text-xs font-semibold text-amber-700">{FOR_APPROVAL_LABEL}</span>
                     )}
+                    {getAssignmentRequestStatus(item, 'conductor') === 'rejected' && (
+                      <span className="flex-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-center text-xs font-semibold text-slate-600">Request rejected: please proceed</span>
+                    )}
                   </div>
                 )}
               </article>
@@ -240,11 +243,8 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     filteredAssignedTrips,
     todayAssignedTrips,
     upcomingAssignedTrips,
-    tripsByDate,
-    calendarDays,
-    calendarMonth, setCalendarMonth,
+    assignedTrips,
     tripDetailsModal, setTripDetailsModal,
-    dayScheduleModalDate, setDayScheduleModalDate,
     shiftBlocks,
     shiftBlockEligibility,
     shiftBlockActionInFlight,
@@ -456,37 +456,8 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
             </div>
 
             {/* Start Shift lives only in the header toggle (single entry point);
-                it opens a confirm dialog after the assignment review above. */}
-            <div className="mt-6 text-center">
-              <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
-                {canRespondToAssignment(todayAssignedTrip, 'conductor') && (
-                  <button
-                    type="button"
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100 disabled:opacity-50"
-                    onClick={() => handleAcceptTrip(todayAssignedTrip)}
-                    disabled={actionInFlight}
-                  >
-                    ✓ Accept This Trip
-                  </button>
-                )}
-                {canRespondToAssignment(todayAssignedTrip, 'conductor') && (
-                  <button
-                    type="button"
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-white px-4 py-2 text-xs font-semibold text-red-600 transition hover:bg-red-50 disabled:opacity-50"
-                    onClick={() => setConfirmDecline(todayAssignedTrip)}
-                    disabled={actionInFlight}
-                  >
-                    ✕ Decline This Trip
-                  </button>
-                )}
-                {getAssignmentRequestStatus(todayAssignedTrip, 'conductor') === 'for_approval' && (
-                  <span className="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-xs font-semibold text-amber-700">{FOR_APPROVAL_LABEL}</span>
-                )}
-                {getAssignmentRequestStatus(todayAssignedTrip, 'conductor') === 'rejected' && (
-                  <span className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-semibold text-slate-600">Request rejected: please proceed</span>
-                )}
-              </div>
-            </div>
+                it opens a confirm dialog after the assignment review above.
+                Accept/Decline belong to the assigned-trip items only. */}
           </section>
         )}
 
@@ -543,79 +514,18 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
           </section>
         )}
 
-        {/* Batch 19 Part A: Calendar renamed to Schedule. Clicking any
-            date with a schedule opens a modal scoped to just that date,
-            rather than navigating away. */}
+        {/* C-2: the Schedule page and the dashboard calendar modal share one
+            view (StaffScheduleView) fed by the same assigned-trips list. */}
         {!loading && activeTab === 'schedule' && <CalendarSummaryStrip service={ConductorService} className="mb-4" />}
         {!loading && activeTab === 'schedule' && (
-          <section className="staff-card">
-            <div className="mb-4 flex items-center justify-between">
-              <h4 className="text-base font-bold text-slate-900">
-                {calendarMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-              </h4>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  className="rounded-lg border border-slate-200 bg-white p-1.5 text-slate-600 transition hover:bg-slate-50"
-                  onClick={() => setCalendarMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))}
-                  aria-label="Previous month"
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </button>
-                <button
-                  type="button"
-                  className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-600 transition hover:bg-slate-50"
-                  onClick={() => setCalendarMonth(() => { const t = new Date(); return new Date(t.getFullYear(), t.getMonth(), 1); })}
-                >
-                  Today
-                </button>
-                <button
-                  type="button"
-                  className="rounded-lg border border-slate-200 bg-white p-1.5 text-slate-600 transition hover:bg-slate-50"
-                  onClick={() => setCalendarMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))}
-                  aria-label="Next month"
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
-            <div className="grid grid-cols-7 gap-1 text-center text-xs font-semibold uppercase tracking-wide text-slate-400">
-              {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
-                <div key={d} className="py-1.5">{d}</div>
-              ))}
-            </div>
-            <div className="mt-1 grid grid-cols-7 gap-1">
-              {calendarDays.map((cell) => (
-                <button
-                  key={cell.dateKey}
-                  type="button"
-                  disabled={cell.trips.length === 0}
-                  onClick={() => cell.trips.length > 0 && setDayScheduleModalDate(cell.dateKey)}
-                  className={`flex min-h-20 flex-col items-start gap-1 rounded-lg border p-1.5 text-left transition ${
-                    cell.isCurrentMonth ? 'bg-white' : 'bg-slate-50 text-slate-300'
-                  } ${cell.isToday ? 'border-teal-400 ring-1 ring-teal-200' : 'border-slate-100'} ${
-                    cell.trips.length > 0 ? 'hover:bg-teal-50 cursor-pointer' : 'cursor-default'
-                  }`}
-                >
-                  <span className={`text-xs font-semibold ${cell.isToday ? 'text-teal-600' : cell.isCurrentMonth ? 'text-slate-700' : 'text-slate-300'}`}>
-                    {cell.date.getDate()}
-                  </span>
-                  {cell.trips.slice(0, 2).map((t) => (
-                    <span
-                      key={t.trip_id}
-                      className="w-full truncate rounded px-1 py-0.5 text-xs font-semibold"
-                      style={{ background: `${STATUS_COLOR[t.status] || '#153a6b'}20`, color: STATUS_COLOR[t.status] || '#153a6b' }}
-                    >
-                      {t.fleet_route?.route?.route_name || `Trip #${t.trip_id}`}
-                    </span>
-                  ))}
-                  {cell.trips.length > 2 && (
-                    <span className="text-xs text-slate-400">+{cell.trips.length - 2} more</span>
-                  )}
-                </button>
-              ))}
-            </div>
-          </section>
+          <StaffScheduleView trips={assignedTrips} onSelectTrip={setTripDetailsModal} />
+        )}
+
+        {!loading && activeTab === 'dashboard' && (
+          <div className="mt-4 space-y-4">
+            <CalendarSummaryStrip service={ConductorService} />
+            <DashboardCalendar trips={assignedTrips} onSelectTrip={setTripDetailsModal} />
+          </div>
         )}
 
         {/* Batch 19 Part A: Shift Blocks folds into Active Shift (live
@@ -1332,58 +1242,6 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
           onSubmit={handleConfirmedDecline}
         />
       )}
-
-      {/* S4 (Batch 17): calendar date-click modal — scoped to just the
-          clicked date's schedule, regardless of how many trips fall on it. */}
-      {dayScheduleModalDate && (() => {
-        const dayTrips = tripsByDate[dayScheduleModalDate] || [];
-        const dayLabel = new Date(`${dayScheduleModalDate}T00:00`).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-        return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" role="presentation" onClick={() => setDayScheduleModalDate(null)}>
-            <section
-              role="dialog"
-              aria-modal="true"
-              aria-label="Day schedule"
-              onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900 p-6 text-slate-200"
-            >
-              <div className="mb-4 flex items-start justify-between">
-                <div>
-                  <h3 className="text-base font-bold text-slate-100">{dayLabel}</h3>
-                  <p className="text-xs text-slate-500">{dayTrips.length} trip{dayTrips.length === 1 ? '' : 's'} scheduled</p>
-                </div>
-                <button type="button" onClick={() => setDayScheduleModalDate(null)} className="text-slate-500 hover:text-slate-300 text-lg leading-none">✕</button>
-              </div>
-
-              {dayTrips.length === 0 ? (
-                <p className="py-4 text-center text-sm text-slate-500">No trips scheduled this day.</p>
-              ) : (
-                <div className="space-y-2">
-                  {dayTrips.map((t) => (
-                    <button
-                      key={t.trip_id}
-                      type="button"
-                      className="flex w-full items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950 px-3 py-2.5 text-left transition hover:border-slate-600"
-                      onClick={() => { setDayScheduleModalDate(null); setTripDetailsModal(t); }}
-                    >
-                      <div>
-                        <p className="text-sm font-semibold text-slate-100">{t.fleet_route?.route?.route_name || `Trip #${t.trip_id}`}</p>
-                        <p className="text-xs text-slate-500">{formatTripSchedule(t)}</p>
-                      </div>
-                      <span
-                        className="shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold uppercase"
-                        style={{ background: `${STATUS_COLOR[t.status] || '#153a6b'}20`, color: STATUS_COLOR[t.status] || '#153a6b' }}
-                      >
-                        {t.status}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </section>
-          </div>
-        );
-      })()}
 
       {tripDetailsModal && (() => {
         const td = tripDetailsModal;

@@ -5,7 +5,6 @@ import ConductorService from '../../StaffService/ConductorService';
 import usePassengersByTrip from './usePassengersByTrip';
 import useOnsiteReceiptPrinter from './useOnsiteReceiptPrinter';
 import { isSameBusinessDay, getBusinessToday, getBusinessNowMs, toBusinessScheduleMs, debugLogBusinessTime } from '../../../utils/dates';
-import { buildCalendarGrid } from '../../../utils/calendarGrid';
 import { extractFieldErrors } from '../../../utils/assignmentRequest';
 
 // Architecture audit follow-up (CONF-03): ConductorDashboard.jsx previously
@@ -195,16 +194,8 @@ export function useConductorDashboardData({ onLogout, pairing }) {
   const [shiftBlocks, setShiftBlocks] = useState([]);
   const [shiftBlockEligibility, setShiftBlockEligibility] = useState({});
   const [shiftBlockActionInFlight, setShiftBlockActionInFlight] = useState(false);
-  // S4 (Batch 17): Calendar view, extended from Driver's Batch 15 Item 5 to
-  // the Conductor portal. `tripDetailsModal` mirrors DriverDashboard.jsx's
-  // single-trip drill-down; `dayScheduleModalDate` holds the clicked
-  // 'YYYY-MM-DD' key (or null) for the date-scoped schedule modal.
-  const [calendarMonth, setCalendarMonth] = useState(() => {
-    const today = new Date();
-    return new Date(today.getFullYear(), today.getMonth(), 1);
-  });
+  // `tripDetailsModal` mirrors DriverDashboard.jsx's single-trip drill-down.
   const [tripDetailsModal, setTripDetailsModal] = useState(null);
-  const [dayScheduleModalDate, setDayScheduleModalDate] = useState(null);
   const isPaired = pairing?.paired === true;
   const pairingReason = pairing?.reason || 'Waiting for pairing with your Driver before live trip features unlock.';
   const hasActiveTrip = isCurrentOrSameDayTrip(trip);
@@ -246,16 +237,6 @@ export function useConductorDashboardData({ onLogout, pairing }) {
     const tripDateStr = String(item?.trip_date || '').match(/^(\d{4}-\d{2}-\d{2})/)?.[1];
     return !!tripDateStr && tripDateStr > todayStart;
   });
-  // S4 (Batch 17): Calendar derives from the full assigned-trips list
-  // (today + upcoming + past), independent of the Assigned Trips tab's own
-  // scheduled/completed filter above — same approach as DriverDashboard.jsx.
-  const tripsByDate = assignedTrips.reduce((acc, item) => {
-    const dateKey = String(item?.trip_date || '').match(/^(\d{4}-\d{2}-\d{2})/)?.[1];
-    if (!dateKey) return acc;
-    (acc[dateKey] ??= []).push(item);
-    return acc;
-  }, {});
-  const calendarDays = buildCalendarGrid(calendarMonth, tripsByDate);
   const { printOnsiteReceipt } = useOnsiteReceiptPrinter();
 
   const handleAssignedTripFilterChange = useCallback(async (value) => {
@@ -1137,11 +1118,8 @@ export function useConductorDashboardData({ onLogout, pairing }) {
     filteredAssignedTrips,
     todayAssignedTrips,
     upcomingAssignedTrips,
-    tripsByDate,
-    calendarDays,
-    calendarMonth, setCalendarMonth,
+    assignedTrips,
     tripDetailsModal, setTripDetailsModal,
-    dayScheduleModalDate, setDayScheduleModalDate,
     shiftBlocks,
     shiftBlockEligibility,
     shiftBlockActionInFlight,
