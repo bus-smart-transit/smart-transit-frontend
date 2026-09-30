@@ -39,6 +39,12 @@ export async function resolveTrip(params) {
   return data(response)
 }
 
+/** Book Later: every eligible departure of one Manila date for the journey. params: { origin_stop_id, destination_stop_id, date, seat_type? } */
+export async function getDepartures(params) {
+  const response = await api.get('/booking/departures', { params })
+  return data(response)
+}
+
 /** Timeline for a trip, recomputed for the chosen boarding/alighting stop or custom drop-off pin. */
 export async function getTripTimeline(tripId, selection = {}) {
   const params = {}

@@ -87,4 +87,20 @@ describe('watchMapHealth', () => {
     vi.advanceTimersByTime(MAP_CONFIG.styleLoadTimeoutMs * 2)
     expect(onFail).not.toHaveBeenCalled()
   })
-})
+
+  test('a hidden tab does not start the clock, so a background tab is not reported as failed', () => {
+    let visibility = 'hidden'
+    const spy = vi.spyOn(document, 'visibilityState', 'get').mockImplementation(() => visibility)
+    const map = fakeMap()
+    const onFail = vi.fn()
+    watchMapHealth(map, { onFail })
+
+    vi.advanceTimersByTime(MAP_CONFIG.styleLoadTimeoutMs * 3)
+    expect(onFail).not.toHaveBeenCalled()
+
+    visibility = 'visible'
+    document.dispatchEvent(new Event('visibilitychange'))
+    vi.advanceTimersByTime(MAP_CONFIG.styleLoadTimeoutMs + 1)
+    expect(onFail).toHaveBeenCalledWith('timeout')
+    spy.mockRestore()
+  })})

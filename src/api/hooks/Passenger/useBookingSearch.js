@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { getBookingStops, readApiError, resolveTrip } from '../../../services/bookingService'
+import { getBookingStops, getDepartures, readApiError, resolveTrip } from '../../../services/bookingService'
 
 /**
  * Where a passenger can board and get off, computed on the server from data (C3).
@@ -7,15 +7,15 @@ import { getBookingStops, readApiError, resolveTrip } from '../../../services/bo
  * origin is chosen, destinations narrow to the routes that serve it.
  */
 export function useBookingStops(originStopId) {
-  const [origins, setOrigins] = useState({ ready: false, groups: [], error: '' })
+  const [origins, setOrigins] = useState({ ready: false, groups: [], meta: null, error: '' })
   const [destinations, setDestinations] = useState({ key: null, groups: [], error: '' })
   const destinationKey = originStopId ? String(originStopId) : null
 
   useEffect(() => {
     let cancelled = false
     getBookingStops()
-      .then((data) => { if (!cancelled) setOrigins({ ready: true, groups: data?.groups ?? [], error: '' }) })
-      .catch((err) => { if (!cancelled) setOrigins({ ready: true, groups: [], error: readApiError(err, 'Stops could not be loaded.').message }) })
+      .then((data) => { if (!cancelled) setOrigins({ ready: true, groups: data?.groups ?? [], meta: data?.meta ?? null, error: '' }) })
+      .catch((err) => { if (!cancelled) setOrigins({ ready: true, groups: [], meta: null, error: readApiError(err, 'Stops could not be loaded.').message }) })
     return () => { cancelled = true }
   }, [])
 
@@ -31,6 +31,9 @@ export function useBookingStops(originStopId) {
   const destinationsReady = destinationKey !== null && destinations.key === destinationKey
   return {
     originGroups: origins.groups,
+    // Today in Manila and the booking window, from the server, for the date picker.
+    today: origins.meta?.today ?? '',
+    maxAdvanceDays: origins.meta?.max_advance_days ?? null,
     destinationGroups: destinationsReady ? destinations.groups : [],
     loadingOrigins: !origins.ready,
     loadingDestinations: destinationKey !== null && !destinationsReady,
@@ -67,6 +70,36 @@ export function useTripResolution({ mode, originStopId, destinationStopId, date,
   const current = result.key === key
   return {
     trip: current ? result.trip : null,
+    message: current ? result.message : '',
+    error: current ? result.error : '',
+    loading: key !== null && !current,
+    ready,
+  }
+}
+
+/**
+ * Book Later: the departures of one Manila date that fit the journey, for the passenger to
+ * choose from. Returns { departures, message, loading, error }; idle (no request) when disabled.
+ */
+export function useDepartures({ enabled, originStopId, destinationStopId, date, seatType }) {
+  const ready = Boolean(enabled && originStopId && destinationStopId && date)
+  const key = ready ? [originStopId, destinationStopId, date, seatType].join('|') : null
+  const [result, setResult] = useState({ key: null, departures: [], message: '', error: '' })
+
+  useEffect(() => {
+    if (!key) return undefined
+    let cancelled = false
+    getDepartures({ origin_stop_id: originStopId, destination_stop_id: destinationStopId, date, seat_type: seatType })
+      .then((data) => { if (!cancelled) setResult({ key, departures: data?.departures ?? [], message: data?.message ?? '', error: '' }) })
+      .catch((err) => { if (!cancelled) setResult({ key, departures: [], message: '', error: readApiError(err, 'We could not look up departures right now.').message }) })
+    return () => { cancelled = true }
+    // key encodes every input used above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key])
+
+  const current = result.key === key
+  return {
+    departures: current ? result.departures : [],
     message: current ? result.message : '',
     error: current ? result.error : '',
     loading: key !== null && !current,

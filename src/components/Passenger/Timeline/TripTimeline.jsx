@@ -115,6 +115,7 @@ export default function TripTimeline({
   return (
     <section className="rounded-xl border border-slate-200 bg-white" aria-label="Trip timeline">
       <header className="border-b border-slate-100 p-4">
+        <h2 className="mb-2 font-display text-lg font-semibold text-navy-950">Travel Advice</h2>
         <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Bound for</p>
         <h3 className="font-display text-lg font-bold text-navy-950">{header.bound_for}</h3>
         {header.via?.length > 0 && <p className="mt-0.5 text-xs text-slate-500">via {header.via.join(', ')}</p>}

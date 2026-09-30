@@ -7,7 +7,7 @@ export default function BuyTicketPage() {
       <div className="mx-auto mb-4 flex w-full max-w-7xl items-center justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-teal-300">Passenger Booking</p>
-          <h1 className="text-2xl font-bold text-white">Search Trips and Continue to Payment</h1>
+          <h1 className="text-2xl font-bold text-white">Trip Details and Payment</h1>
         </div>
         <Link
           to="/passenger"

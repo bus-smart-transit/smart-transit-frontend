@@ -57,3 +57,11 @@ export function withBookingParams(current, journey) {
   new URLSearchParams(buildBookingQuery(journey)).forEach((value, key) => next.set(key, value));
   return next;
 }
+
+/** A calendar date (YYYY-MM-DD) plus whole days; pure date arithmetic, so no timezone can shift it. */
+export function addDaysToDate(isoDate, days) {
+  if (!DATE.test(isoDate || '')) return '';
+  const [year, month, day] = isoDate.split('-').map(Number);
+  const moved = new Date(Date.UTC(year, month - 1, day + days));
+  return moved.toISOString().slice(0, 10);
+}

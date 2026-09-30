@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import PassengerService from '../../PassengerService/PassengerService';
 import { readApiError } from '../../../services/bookingService';
-import { useBookingStops, useTripResolution } from './useBookingSearch';
+import { useBookingStops, useDepartures, useTripResolution } from './useBookingSearch';
 import useBookingLink from './useBookingLink';
 import useTripTimeline from './useTripTimeline';
 import { findStopCode, withBookingParams } from '../../../utils/bookingQuery';
@@ -159,21 +159,46 @@ export default function useBuyTicket({ onTicketPurchased }) {
   const originCode = findStopCode(stopsData.originGroups, form.origin_stop_id);
   const destinationCode = findStopCode(stopsData.destinationGroups, form.destination_stop_id)
     || findStopCode(stopsData.originGroups, form.destination_stop_id);
-  const linkDate = form.booking_option === 'later' ? form.booking_date : '';
-  const linkTime = form.booking_option === 'later' ? form.booking_time : '';
+  // The travel date is a Manila calendar date; until one is chosen it is today (from the server).
+  const travelDate = form.booking_date || stopsData.today;
+  const isToday = Boolean(travelDate) && travelDate === stopsData.today;
+  // Book Now means "the next bus today"; any other date can only be Book Later. The mode is page
+  // state, never part of the URL.
+  const bookingMode = isToday ? form.booking_option : 'later';
   useEffect(() => {
     if (!journeyTouchedRef.current) return;
-    const next = withBookingParams(searchParams, { from: originCode, to: destinationCode, date: linkDate, time: linkTime });
+    const next = withBookingParams(searchParams, { from: originCode, to: destinationCode, date: travelDate });
     if (next.toString() !== searchParams.toString()) setSearchParams(next, { replace: true });
-  }, [originCode, destinationCode, linkDate, linkTime, searchParams, setSearchParams]);
-  const resolution = useTripResolution({
-    mode: form.booking_option,
-    originStopId: form.origin_stop_id,
+  }, [originCode, destinationCode, travelDate, searchParams, setSearchParams]);
+
+  // Book Now: the server picks the next departure today. Book Later: the passenger picks one of the
+  // date's departures (a compact time selector); the first is selected until they choose another.
+  const [selectedDepartureId, setSelectedDepartureId] = useState('');
+  const nowResolution = useTripResolution({
+    mode: 'now',
+    originStopId: bookingMode === 'now' ? form.origin_stop_id : '',
     destinationStopId: form.destination_stop_id,
-    date: form.booking_date,
-    time: form.booking_time,
     seatType: form.seat_type,
   });
+  const departuresState = useDepartures({
+    enabled: bookingMode === 'later',
+    originStopId: form.origin_stop_id,
+    destinationStopId: form.destination_stop_id,
+    date: travelDate,
+    seatType: form.seat_type,
+  });
+  const selectedDeparture = departuresState.departures.find((item) => String(item.trip_id) === String(selectedDepartureId))
+    || departuresState.departures[0]
+    || null;
+  const resolution = bookingMode === 'now'
+    ? nowResolution
+    : {
+      trip: selectedDeparture,
+      message: departuresState.message,
+      error: departuresState.error,
+      loading: departuresState.loading,
+      ready: departuresState.ready,
+    };
   const trip = resolution.trip;
 
   const effectiveAlightingStopId = dropoff ? null : (alightingStopId ?? (form.destination_stop_id || null));
@@ -230,6 +255,7 @@ export default function useBuyTicket({ onTicketPurchased }) {
 
   // Changing where/when starts a fresh journey: the previous alighting choice and pin no longer apply.
   const resetJourneyChoices = useCallback(() => {
+    setSelectedDepartureId('');
     setAlightingStopId(null);
     setDropoff(null);
     setDropoffDraft(null);
@@ -244,6 +270,15 @@ export default function useBuyTicket({ onTicketPurchased }) {
     }
     resetJourneyChoices();
   }, [handleChange, resetJourneyChoices]);
+
+  // Choosing another departure starts the trip-specific choices over (its direction may differ).
+  const selectDeparture = useCallback((tripId) => {
+    setAlightingStopId(null);
+    setDropoff(null);
+    setDropoffDraft(null);
+    setDropoffModalOpen(false);
+    setSelectedDepartureId(String(tripId));
+  }, []);
 
   const selectAlightingStop = useCallback((stopId) => {
     setDropoff(null);
@@ -796,7 +831,10 @@ export default function useBuyTicket({ onTicketPurchased }) {
   return {
     availableRewardPoints,
     bookingLink,
+    bookingMode,
     canProceedToOnlinePayment,
+    departuresState,
+    isToday,
     checkoutStatus,
     closeDropoffModal,
     clearDropoff,
@@ -828,6 +866,8 @@ export default function useBuyTicket({ onTicketPurchased }) {
     resolution,
     rewardPointsToApply,
     selectAlightingStop,
+    selectDeparture,
+    travelDate,
     setDropoffDraft,
     stopsData,
     success,

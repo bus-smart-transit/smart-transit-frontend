@@ -4,6 +4,7 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 
 vi.mock('../../../services/bookingService', () => ({
   getBookingStops: vi.fn(async (origin) => ({
+    meta: { today: '2026-10-01', max_advance_days: 30 },
     groups: [{ municipality: 'Alpha Town', provinces: ['North'], stops: origin
       ? [{ stop_id: 2, stop_code: 'beta-stop', name: 'Beta Stop', route_ids: [1] }]
       : [{ stop_id: 1, stop_code: 'alpha-stop', name: 'Alpha Stop', route_ids: [1] }, { stop_id: 2, stop_code: 'beta-stop', name: 'Beta Stop', route_ids: [1] }] }],
@@ -31,7 +32,7 @@ describe('LandingHero (C1: no Available Trips list; search hands the journey to 
     await waitFor(() => expect(screen.getByRole('option', { name: 'Alpha Stop' })).toBeInTheDocument());
     await waitFor(() => expect(screen.getByText(/across Test Region/)).toBeInTheDocument());
     expect(screen.queryByText(/Available Trips/i)).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /find my bus/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /^search$/i })).toBeDisabled();
   });
 });
 
@@ -43,7 +44,17 @@ function Where() {
 }
 
 describe('LandingHero search link (Batch 25, Issue 3)', () => {
-  test('goes to the booking page with readable stop codes, and no ids or mode', async () => {
+  test('the search card is only From, To, Date and Search (no Book Now / Book Later)', async () => {
+    render(<MemoryRouter><LandingHero /></MemoryRouter>);
+    await waitFor(() => expect(screen.getByRole('option', { name: 'Alpha Stop' })).toBeInTheDocument());
+    expect(screen.getByLabelText('From')).toBeInTheDocument();
+    expect(screen.getByLabelText('To')).toBeInTheDocument();
+    expect(screen.getByLabelText('Date')).toBeInTheDocument();
+    expect(screen.queryByText(/book now|book later/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/time/i)).not.toBeInTheDocument();
+  });
+
+  test('goes to the booking page with readable stop codes and the date, and no ids or mode', async () => {
     render(
       <MemoryRouter initialEntries={['/']}>
         <Routes>
@@ -58,10 +69,10 @@ describe('LandingHero search link (Batch 25, Issue 3)', () => {
     await waitFor(() => expect(screen.getByLabelText('To')).not.toBeDisabled());
     await waitFor(() => expect(screen.getAllByRole('option', { name: 'Beta Stop' }).length).toBeGreaterThan(0));
     fireEvent.change(screen.getByLabelText('To'), { target: { value: '2' } });
-    fireEvent.click(screen.getByRole('button', { name: /find my bus/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^search$/i }));
 
     const where = await screen.findByTestId('where');
-    expect(where.textContent).toBe('/passenger/book?from=alpha-stop&to=beta-stop');
+    expect(where.textContent).toBe('/passenger/book?from=alpha-stop&to=beta-stop&date=2026-10-01');
     expect(where.textContent).not.toMatch(/_id|mode=/);
   });
 });

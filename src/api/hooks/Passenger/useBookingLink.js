@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { getBookingLink, readApiError } from '../../../services/bookingService'
 import { parseBookingQuery } from '../../../utils/bookingQuery'
-import { getBusinessToday } from '../../../utils/dates'
 
 const LEGACY_MESSAGE = 'This booking link is out of date. Search for your trip again to get a new one.'
 
@@ -28,17 +27,16 @@ export default function useBookingLink(searchParams) {
     getBookingLink({ from: parsed.from, to: parsed.to, date: parsed.date })
       .then((link) => {
         if (cancelled) return
-        // Today (Manila) can be booked now; a later date is Book Later. The mode lives in the page.
-        const later = link.date !== getBusinessToday() || Boolean(parsed.time)
+        // The link carries only the stops and the day. Book Now / Book Later is page state: today
+        // starts as Book Now, any other day can only be Book Later (the page decides).
         setState({
           status: 'ok',
           message: '',
           journey: {
             origin_stop_id: String(link.from.stop_id),
             destination_stop_id: String(link.to.stop_id),
-            booking_option: later ? 'later' : 'now',
-            booking_date: later ? link.date : '',
-            booking_time: later ? parsed.time : '',
+            booking_option: 'now',
+            booking_date: link.date,
           },
         })
       })

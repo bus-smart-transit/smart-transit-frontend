@@ -5,7 +5,6 @@ vi.mock('../../../../services/bookingService', () => ({
   getBookingLink: vi.fn(),
   readApiError: (error, fallback) => ({ message: error?.response?.data?.errors?.from?.[0] || error?.message || fallback, fieldErrors: {} }),
 }));
-vi.mock('../../../../utils/dates', () => ({ getBusinessToday: () => '2026-10-01' }));
 
 import { getBookingLink } from '../../../../services/bookingService';
 import useBookingLink from '../useBookingLink';
@@ -25,21 +24,21 @@ describe('useBookingLink', () => {
     expect(getBookingLink).not.toHaveBeenCalled();
   });
 
-  test('today is Book Now; the mode is page state, never read from the URL', async () => {
+  test('the link sets the stops and the day; the mode is page state, never read from the URL', async () => {
     getBookingLink.mockResolvedValue(link('2026-10-01'));
     const { result } = renderHook(() => useBookingLink(new URLSearchParams('from=daliao&to=toril&date=2026-10-01&mode=later')));
 
     await waitFor(() => expect(result.current.status).toBe('ok'));
     expect(getBookingLink).toHaveBeenCalledWith({ from: 'daliao', to: 'toril', date: '2026-10-01' });
-    expect(result.current.journey).toMatchObject({ origin_stop_id: '4', destination_stop_id: '5', booking_option: 'now', booking_date: '' });
+    expect(result.current.journey).toMatchObject({ origin_stop_id: '4', destination_stop_id: '5', booking_option: 'now', booking_date: '2026-10-01' });
   });
 
-  test('a future date is Book Later with that date, and a time from the link is kept', async () => {
+  test('a future date is kept as the booking date (the page then offers Book Later only)', async () => {
     getBookingLink.mockResolvedValue(link('2026-10-05'));
-    const { result } = renderHook(() => useBookingLink(new URLSearchParams('from=daliao&to=toril&date=2026-10-05&time=08:30')));
+    const { result } = renderHook(() => useBookingLink(new URLSearchParams('from=daliao&to=toril&date=2026-10-05')));
 
     await waitFor(() => expect(result.current.status).toBe('ok'));
-    expect(result.current.journey).toMatchObject({ booking_option: 'later', booking_date: '2026-10-05', booking_time: '08:30' });
+    expect(result.current.journey).toMatchObject({ booking_option: 'now', booking_date: '2026-10-05' });
   });
 
   test('a rejected link becomes a friendly message, not a crash', async () => {

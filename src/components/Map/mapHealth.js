@@ -19,11 +19,31 @@ export function watchMapHealth(map, { onFail, onTrouble, onRecover } = {}) {
   let troubled = false
   let tileErrors = 0
 
-  const timer = setTimeout(() => {
-    if (loaded || failed) return
-    failed = true
-    onFail?.('timeout')
-  }, MAP_CONFIG.styleLoadTimeoutMs)
+  let timer = null
+  let waitingForVisible = false
+
+  // A hidden tab pauses rendering and the style load, so the clock only runs while the page is
+  // visible; otherwise a background tab would report "Map unavailable" for a healthy map.
+  const arm = () => {
+    clearTimeout(timer)
+    timer = setTimeout(() => {
+      if (loaded || failed) return
+      failed = true
+      onFail?.('timeout')
+    }, MAP_CONFIG.styleLoadTimeoutMs)
+  }
+  const handleVisibility = () => {
+    if (waitingForVisible && document.visibilityState === 'visible') {
+      waitingForVisible = false
+      if (!loaded && !failed) arm()
+    }
+  }
+  if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+    waitingForVisible = true
+    document.addEventListener('visibilitychange', handleVisibility)
+  } else {
+    arm()
+  }
 
   const handleLoad = () => {
     loaded = true
@@ -69,6 +89,7 @@ export function watchMapHealth(map, { onFail, onTrouble, onRecover } = {}) {
 
   return () => {
     clearTimeout(timer)
+    if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', handleVisibility)
     map.off('load', handleLoad)
     map.off('error', handleError)
     map.off('sourcedata', handleSourceData)

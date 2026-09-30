@@ -202,3 +202,10 @@ export function toDateInputValue(value = new Date()) {
   const dd = String(date.getDate()).padStart(2, '0');
   return `${yyyy}-${mm}-${dd}`;
 }
+/** A calendar date (YYYY-MM-DD) as a label such as "Thu, Oct 1, 2026". Date-only: no timezone can shift it. */
+export function formatManilaDate(isoDate) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(isoDate || '')) return '';
+  return new Date(`${isoDate}T12:00:00Z`).toLocaleDateString('en-PH', {
+    weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC',
+  });
+}
