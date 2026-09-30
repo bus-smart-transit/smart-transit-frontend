@@ -829,7 +829,7 @@ function FleetsTab({ fleets, routes, trips, onRefresh }) {
       <form onSubmit={handleApplyFareRule} className="rounded-2xl border border-slate-700 bg-[#101a30] p-4">
         <h3 className="text-sm font-semibold uppercase tracking-[0.14em] text-slate-300">Apply Fare Rule</h3>
         <p className="mt-1 text-xs text-slate-400">Set pricing per fleet and seat type used during ticket booking.</p>
-        <div className="mt-3 grid gap-3 md:grid-cols-5">
+        <div className="mt-3 grid gap-3 md:grid-cols-4">
           <select value={fareForm.fleet_id} onChange={(event) => setFareForm((prev) => ({ ...prev, fleet_id: event.target.value }))} required className="rounded-lg border border-slate-600 bg-[#0B1324] px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-teal-500">
             <option value="">Fleet</option>
             {fleets.map((fleet) => <option key={`fare-fleet-${fleet.fleet_id}`} value={fleet.fleet_id}>{fleet.plate_number}</option>)}
@@ -840,7 +840,6 @@ function FleetsTab({ fleets, routes, trips, onRefresh }) {
           </select>
           <input type="number" min="0" step="0.01" value={fareForm.base_fare} onChange={(event) => setFareForm((prev) => ({ ...prev, base_fare: event.target.value }))} required placeholder="Base Fare" className="rounded-lg border border-slate-600 bg-[#0B1324] px-3 py-2 text-sm text-white outline-none placeholder:text-slate-400 focus:ring-2 focus:ring-teal-500" />
           <input type="number" min="0" step="0.01" value={fareForm.fare_per_km} onChange={(event) => setFareForm((prev) => ({ ...prev, fare_per_km: event.target.value }))} required placeholder="Fare / km" className="rounded-lg border border-slate-600 bg-[#0B1324] px-3 py-2 text-sm text-white outline-none placeholder:text-slate-400 focus:ring-2 focus:ring-teal-500" />
-          <input type="text" value={fareForm.step_up_token} onChange={(event) => setFareForm((prev) => ({ ...prev, step_up_token: event.target.value }))} placeholder="Step-up token" className="rounded-lg border border-slate-600 bg-[#0B1324] px-3 py-2 text-sm text-white outline-none placeholder:text-slate-400 focus:ring-2 focus:ring-teal-500" />
         </div>
         <button type="submit" disabled={fareSaving} className="mt-3 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-60">{fareSaving ? 'Applying...' : 'Apply Fare Rule'}</button>
         {fareMsg && (

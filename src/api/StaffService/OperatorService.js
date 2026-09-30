@@ -186,6 +186,8 @@ class OperatorService extends StaffBaseService {
   }
 
   // ── Fare Rules ──
+  // The backend requires step-up for this call. The optional token is kept for the future
+  // step-up flow (see StepUpModal); the portal does not send one yet.
   async createFareRule(fareData, stepUpToken = null) {
     const extraHeaders = stepUpToken ? { 'X-Step-Up-Token': stepUpToken } : {};
     return await this.request(`/operator/fare-rules`, 'POST', fareData, extraHeaders);

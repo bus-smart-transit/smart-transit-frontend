@@ -321,7 +321,7 @@ export function useFleetsTab({ onRefresh }) {
   const [manageSaving, setManageSaving] = useState(false);
   const [fleetForm, setFleetForm] = useState({ plate_number: '', seated_capacity: '', standing_capacity: '', fleet_type: 'public', route_id: '', start_time: '06:00', end_time: '22:00' });
   const [assignForm, setAssignForm] = useState({ fleet_id: '', route_id: '', start_time: '06:00', end_time: '22:00' });
-  const [fareForm, setFareForm] = useState({ fleet_id: '', seat_type: 'seated', base_fare: '', fare_per_km: '', step_up_token: '' });
+  const [fareForm, setFareForm] = useState({ fleet_id: '', seat_type: 'seated', base_fare: '', fare_per_km: '' });
   const [fareSaving, setFareSaving] = useState(false);
   const [fareMsg, setFareMsg] = useState('');
 
@@ -445,17 +445,23 @@ export function useFleetsTab({ onRefresh }) {
     setFareSaving(true);
 
     try {
+      // Deferred: the backend still requires step-up for fare rules (POST /operator/fare-rules).
+      // The portal no longer asks for a token; when the step-up flow is built, open StepUpModal here
+      // and pass the verified token as the second argument of createFareRule().
       await OperatorService.createFareRule({
         fleet_id: Number(fareForm.fleet_id),
         seat_type: fareForm.seat_type,
         base_fare: Number(fareForm.base_fare),
         fare_per_km: Number(fareForm.fare_per_km),
-      }, fareForm.step_up_token || null);
+      });
 
-      setFareForm((prev) => ({ ...prev, base_fare: '', fare_per_km: '', step_up_token: '' }));
+      setFareForm((prev) => ({ ...prev, base_fare: '', fare_per_km: '' }));
       setFareMsg('Fare rule applied successfully.');
     } catch (err) {
-      setFareMsg(err?.message || 'Failed to apply fare rule. Ensure your step-up token is valid.');
+      const message = err?.message || '';
+      setFareMsg(/step-up/i.test(message)
+        ? 'Failed: fare changes need step-up verification, which this portal does not offer yet. Ask an administrator to enable it for this environment.'
+        : (message || 'Failed to apply fare rule.'));
     } finally {
       setFareSaving(false);
     }
