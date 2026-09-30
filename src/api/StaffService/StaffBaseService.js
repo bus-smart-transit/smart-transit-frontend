@@ -66,6 +66,10 @@ export class StaffBaseService extends BaseService {
     return await this.request('/step-up/verify', 'POST', { otp });
   }
 
+  async stepUpVerifyPassword(password) {
+    return await this.request('/step-up/verify-password', 'POST', { password });
+  }
+
   async logout(role = null) {
     const normalizedRole = typeof role === 'string' ? role.trim().toLowerCase() : '';
     const roleScoped = ['driver', 'conductor', 'operator', 'admin'].includes(normalizedRole);

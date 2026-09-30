@@ -324,6 +324,8 @@ export function useFleetsTab({ onRefresh }) {
   const [fareForm, setFareForm] = useState({ fleet_id: '', seat_type: 'seated', base_fare: '', fare_per_km: '' });
   const [fareSaving, setFareSaving] = useState(false);
   const [fareMsg, setFareMsg] = useState('');
+  const [stepUpOpen, setStepUpOpen] = useState(false);
+  const stepUpRef = useRef(null); // { token, expiresAt } kept in memory only, never persisted
 
   const refreshFleetLocations = useCallback(async () => {
     try {
@@ -439,33 +441,62 @@ export function useFleetsTab({ onRefresh }) {
     }
   };
 
-  const handleApplyFareRule = async (event) => {
-    event.preventDefault();
+  const validStepUpToken = () => {
+    const held = stepUpRef.current;
+    if (held && held.expiresAt > Date.now()) return held.token;
+    stepUpRef.current = null;
+    return null;
+  };
+
+  const submitFareRule = async (stepUpToken) => {
     setFareMsg('');
     setFareSaving(true);
 
     try {
-      // Deferred: the backend still requires step-up for fare rules (POST /operator/fare-rules).
-      // The portal no longer asks for a token; when the step-up flow is built, open StepUpModal here
-      // and pass the verified token as the second argument of createFareRule().
       await OperatorService.createFareRule({
         fleet_id: Number(fareForm.fleet_id),
         seat_type: fareForm.seat_type,
         base_fare: Number(fareForm.base_fare),
         fare_per_km: Number(fareForm.fare_per_km),
-      });
+      }, stepUpToken);
 
       setFareForm((prev) => ({ ...prev, base_fare: '', fare_per_km: '' }));
       setFareMsg('Fare rule applied successfully.');
     } catch (err) {
-      const message = err?.message || '';
-      setFareMsg(/step-up/i.test(message)
-        ? 'Failed: fare changes need step-up verification, which this portal does not offer yet. Ask an administrator to enable it for this environment.'
-        : (message || 'Failed to apply fare rule.'));
+      if (err?.cause?.response?.data?.step_up === true) {
+        // Token expired or rejected: ask for the password again.
+        stepUpRef.current = null;
+        setStepUpOpen(true);
+        setFareMsg('Failed: your verification expired. Confirm your password to continue.');
+      } else {
+        setFareMsg(err?.message || 'Failed to apply fare rule.');
+      }
     } finally {
       setFareSaving(false);
     }
   };
+
+  // Fare changes need a recent password confirmation (step-up). A verified
+  // token is reused until it expires (15 minutes).
+  const handleApplyFareRule = (event) => {
+    event.preventDefault();
+    const token = validStepUpToken();
+    if (!token) {
+      setFareMsg('');
+      setStepUpOpen(true);
+      return undefined;
+    }
+    return submitFareRule(token);
+  };
+
+  const handleStepUpVerified = ({ token, expiresIn }) => {
+    // Drop the token 30s early so it does not expire mid-request.
+    stepUpRef.current = { token, expiresAt: Date.now() + Math.max(0, expiresIn - 30) * 1000 };
+    setStepUpOpen(false);
+    void submitFareRule(token);
+  };
+
+  const closeStepUp = () => setStepUpOpen(false);
 
   const openFleetMap = (fleetId) => {
     const location = getLocationByFleet(fleetId);
@@ -493,6 +524,9 @@ export function useFleetsTab({ onRefresh }) {
     handleCreateFleet,
     handleAssignRoute,
     handleApplyFareRule,
+    stepUpOpen,
+    handleStepUpVerified,
+    closeStepUp,
     openFleetMap,
   };
 }

@@ -3,6 +3,7 @@ import StaffPortalLayout from './StaffPortalLayout'
 import { buildOperatorForecast } from './routeForecast'
 import RouteMap from '../Map/RouteMap'
 import CalendarSummaryStrip from './CalendarSummaryStrip'
+import StepUpModal from './StepUpModal'
 import HistoricalForecastPanel from './HistoricalForecastPanel'
 import { openPrintReport } from '../../utils/printReport'
 import OperatorService from '../../api/StaffService/OperatorService'
@@ -721,6 +722,9 @@ function FleetsTab({ fleets, routes, trips, onRefresh }) {
     handleCreateFleet,
     handleAssignRoute,
     handleApplyFareRule,
+    stepUpOpen,
+    handleStepUpVerified,
+    closeStepUp,
     openFleetMap,
   } = useFleetsTab({ onRefresh })
 
@@ -848,6 +852,7 @@ function FleetsTab({ fleets, routes, trips, onRefresh }) {
           </p>
         )}
       </form>
+      <StepUpModal open={stepUpOpen} onClose={closeStepUp} onVerified={handleStepUpVerified} />
 
       {manageMsg && (
         <p className={`rounded-xl border px-3 py-2 text-sm ${manageMsg.toLowerCase().includes('failed') ? 'border-red-400/50 bg-red-500/10 text-red-200' : 'border-emerald-400/50 bg-emerald-500/10 text-emerald-200'}`}>
