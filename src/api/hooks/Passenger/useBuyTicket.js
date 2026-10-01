@@ -100,6 +100,8 @@ const ticketMeta = (ticket) => {
     departure_time: ticket?.departure_time ?? ticket?.trip?.departure_time ?? null,
     valid_from: ticket?.valid_from ?? null,
     expires_at: ticket?.expires_at ?? null,
+    // The link that follows this ticket's bus (the owner's own; set by the server).
+    tracking_token: ticket?.tracking_token ?? null,
   };
 };
 

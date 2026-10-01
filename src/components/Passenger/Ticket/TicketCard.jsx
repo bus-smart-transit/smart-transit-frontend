@@ -1,3 +1,6 @@
+import { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { Navigation } from 'lucide-react';
 import QrImage from './QrImage';
 
 const STATUS_FOOTER = {
@@ -19,8 +22,22 @@ export default function TicketCard({
   statusLabel,
   validLabel,
   expiresLabel,
+  trackingToken = '',
 }) {
   const footer = STATUS_FOOTER[String(statusLabel).toLowerCase()] ?? STATUS_FOOTER.issued;
+  const [copied, setCopied] = useState(false);
+  // The link that follows this ticket's bus; only while the ticket is still usable.
+  const canTrack = Boolean(trackingToken) && ['valid', 'issued', 'boarded'].includes(String(statusLabel).toLowerCase());
+
+  const copyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(`${window.location.origin}/track/${trackingToken}`);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopied(false);
+    }
+  };
 
   return (
     <article className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-card">
@@ -59,6 +76,24 @@ export default function TicketCard({
           <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-1.5"><dt className="text-xs text-slate-500">Status</dt><dd className="text-right text-sm font-bold text-navy-950">{statusLabel || '-'}</dd></div>
         </dl>
       </div>
+
+      {canTrack && (
+        <div className="mx-3.5 mb-3 flex flex-wrap items-center gap-2">
+          <Link
+            to={`/track/${trackingToken}`}
+            className="inline-flex items-center gap-1.5 rounded-full bg-navy-800 px-4 py-2 text-sm font-semibold text-white transition hover:bg-navy-900"
+          >
+            <Navigation size={15} aria-hidden="true" /> Track this bus
+          </Link>
+          <button
+            type="button"
+            onClick={copyLink}
+            className="rounded-full border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+          >
+            {copied ? 'Link copied' : 'Copy tracking link'}
+          </button>
+        </div>
+      )}
 
       <footer className={`mx-3.5 mb-3.5 rounded-xl border px-2.5 py-2.5 text-center text-sm font-bold ${footer.mod}`}>{footer.text}</footer>
     </article>

@@ -886,6 +886,7 @@ export default function Dashboard() {
                 statusLabel={selectedTicket.status || '-'}
                 validLabel={formatDateTime(selectedTicket.valid_from ?? selectedTicketQr?.valid_from)}
                 expiresLabel={formatDateTime(selectedTicket.expires_at ?? selectedTicketQr?.expires_at)}
+                trackingToken={selectedTicket.tracking_token || ''}
               />
               <div className="mt-4 rounded-xl bg-slate-50 p-4">
                 <p className="text-xs text-slate-400">Drop-off Location</p>

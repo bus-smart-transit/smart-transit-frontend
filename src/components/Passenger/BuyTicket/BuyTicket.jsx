@@ -236,6 +236,7 @@ export default function BuyTicket({ onTicketPurchased }) {
             statusLabel="Valid"
             validLabel={formatDateTime(qrTickets[0]?.valid_from)}
             expiresLabel={formatDateTime(qrTickets[0]?.expires_at)}
+            trackingToken={qrTickets[0]?.tracking_token || ''}
           />
         )}
 
@@ -630,6 +631,7 @@ export default function BuyTicket({ onTicketPurchased }) {
               amountLabel={`PHP ${Number(ticketPreview.ticket.amount || 0).toFixed(2)}`}
               validLabel={formatDateTime(ticketPreview.ticket.valid_from)}
               expiresLabel={formatDateTime(ticketPreview.ticket.expires_at)}
+              trackingToken={ticketPreview.ticket.tracking_token || ''}
             />
           </>
         )}
