@@ -1118,7 +1118,6 @@ export function useConductorDashboardData({ onLogout, pairing }) {
     filteredAssignedTrips,
     todayAssignedTrips,
     upcomingAssignedTrips,
-    assignedTrips,
     tripDetailsModal, setTripDetailsModal,
     shiftBlocks,
     shiftBlockEligibility,

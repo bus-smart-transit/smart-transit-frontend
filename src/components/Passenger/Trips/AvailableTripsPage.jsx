@@ -1,36 +1,59 @@
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { ArrowLeft } from 'lucide-react'
-import useBookingLink from '../../../api/hooks/Passenger/useBookingLink'
-import { useTripSearch } from '../../../api/hooks/Passenger/useBookingSearch'
+import { ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react'
+import JourneyFields from '../BuyTicket/JourneyFields'
 import TripResults from './TripResults'
-import { buildBookingQuery } from '../../../utils/bookingQuery'
+import Button from '../../ui/Button'
+import { useAvailableTrips, useBookingStops } from '../../../api/hooks/Passenger/useBookingSearch'
+import { findStopCode, findStopId, tripBookingPath } from '../../../utils/bookingQuery'
 import { formatManilaDate } from '../../../utils/dates'
 
+const read = (params, key) => String(params.get(key) || '').trim()
+
 /**
- * Every available trip for a journey from a chosen date on, earliest first, grouped by day. The link
- * (?from=<code>&to=<code>&date=...) is checked by the server first, so a bad or out-of-date link shows
- * a message with a way back to search.
+ * All Available Trips: the departures of one Manila date (today unless the address says otherwise),
+ * paginated by the server, for a journey given as readable stop codes. From, To and Date can be
+ * edited here; the address is the single source of truth, so a refresh or a shared link shows the
+ * same list. Unknown stops, the same stop twice or a bad date come back from the server as a message.
  */
 export default function AvailableTripsPage() {
   const navigate = useNavigate()
-  const [searchParams] = useSearchParams()
-  const bookingLink = useBookingLink(searchParams)
-  const link = bookingLink.link
+  const [params, setParams] = useSearchParams()
+  const from = read(params, 'from').toLowerCase()
+  const to = read(params, 'to').toLowerCase()
+  const date = read(params, 'date')
+  const page = Math.max(1, parseInt(read(params, 'page'), 10) || 1)
 
-  const results = useTripSearch(
-    link
-      ? { originStopId: String(link.from.stop_id), destinationStopId: String(link.to.stop_id), date: link.date, seatType: 'seated' }
-      : null,
-  )
+  const stops = useBookingStops('', from)
+  const originId = findStopId(stops.originGroups, from)
+  const destinationId = findStopId(stops.destinationGroups, to)
 
-  const bookTrip = (trip) => {
-    navigate(`/passenger/book?${buildBookingQuery({ from: link.from.stop_code, to: link.to.stop_code, date: trip.trip_date, time: trip.boarding_time })}`)
+  // The list is requested once the server's settings (page size, today) are known.
+  const ready = Boolean(stops.today) || Boolean(stops.error)
+  const results = useAvailableTrips({
+    enabled: ready,
+    from,
+    to,
+    date,
+    page,
+    perPage: stops.tripsPerPage,
+  })
+
+  const update = (changes, { keepPage = false } = {}) => {
+    const next = new URLSearchParams(params)
+    Object.entries(changes).forEach(([key, value]) => (value ? next.set(key, value) : next.delete(key)))
+    if (!keepPage) next.delete('page')
+    setParams(next, { replace: true })
   }
 
-  const byDay = results.trips.reduce((days, trip) => {
-    (days[trip.trip_date] ||= []).push(trip)
-    return days
-  }, {})
+  const handleChange = (field, value) => {
+    if (field === 'origin_stop_id') update({ from: findStopCode(stops.originGroups, value), to: '' })
+    else if (field === 'destination_stop_id') update({ to: findStopCode(stops.destinationGroups, value) })
+    else if (field === 'booking_date') update({ date: value })
+  }
+
+  const shownDate = results.date || date || stops.today
+  const loading = results.loading || !ready
+  const noTrips = !loading && !results.error && results.trips.length === 0
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -45,45 +68,73 @@ export default function AvailableTripsPage() {
       </header>
 
       <main className="mx-auto w-full max-w-6xl space-y-6 p-4 sm:p-6">
-        {bookingLink.status === 'checking' && <p className="text-sm text-slate-500" role="status">Checking your search...</p>}
+        <section aria-label="Edit your search" className="rounded-2xl bg-white p-5 shadow-card ring-1 ring-slate-200">
+          <JourneyFields
+            value={{ origin_stop_id: originId, destination_stop_id: destinationId, booking_date: date || stops.today }}
+            originGroups={stops.originGroups}
+            destinationGroups={stops.destinationGroups}
+            loadingDestinations={stops.loadingDestinations}
+            today={stops.today}
+            maxAdvanceDays={stops.maxAdvanceDays}
+            onChange={handleChange}
+            idPrefix="trips"
+          />
+        </section>
 
-        {(bookingLink.status === 'error' || bookingLink.status === 'none') && (
+        {results.error && (
           <div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800 ring-1 ring-inset ring-amber-200">
-            <span>{bookingLink.status === 'none' ? 'Choose where you board, where you get off and the day to see trips.' : bookingLink.message}</span>
-            <Link to="/passenger#search-trips" className="font-semibold text-navy-800 underline">Search for a trip</Link>
+            <span>{results.error}</span>
+            <Link to="/passenger/trips" className="font-semibold text-navy-800 underline">Clear search</Link>
           </div>
         )}
 
-        {link && (
-          <>
-            <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <div>
-                <h2 className="font-display text-xl font-bold text-navy-950">{link.from.name} &rarr; {link.to.name}</h2>
-                <p className="text-sm text-slate-500">From {formatManilaDate(link.date)} (Manila time)</p>
-              </div>
-              {!results.loading && !results.error && (
-                <p className="text-sm font-medium text-slate-500">{results.total} trip{results.total === 1 ? '' : 's'} found</p>
-              )}
+        {!results.error && (
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <div>
+              <h2 className="font-display text-xl font-bold text-navy-950">
+                {results.from?.name || results.to?.name
+                  ? `${results.from?.name || 'Any stop'} \u2192 ${results.to?.name || 'Any stop'}`
+                  : 'All routes'}
+              </h2>
+              {shownDate && <p className="text-sm text-slate-500">{formatManilaDate(shownDate)} (Manila time)</p>}
             </div>
-
-            {Object.keys(byDay).length > 0 ? (
-              Object.entries(byDay).map(([day, trips]) => (
-                <section key={day} aria-label={formatManilaDate(day)}>
-                  <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-teal-700">{formatManilaDate(day)}</h3>
-                  <TripResults
-                    state={{ trips, loading: false, error: '', message: '' }}
-                    fromName={link.from.name}
-                    toName={link.to.name}
-                    seatType="seated"
-                    searchedDate={day}
-                    onBook={bookTrip}
-                  />
-                </section>
-              ))
-            ) : (
-              <TripResults state={results} fromName={link.from.name} toName={link.to.name} seatType="seated" searchedDate={link.date} onBook={bookTrip} />
+            {!loading && (
+              <p className="text-sm font-medium text-slate-500">{results.total} trip{results.total === 1 ? '' : 's'} found</p>
             )}
-          </>
+          </div>
+        )}
+
+        {!results.error && !noTrips && (
+          <TripResults
+            state={{ ...results, loading, message: '' }}
+            seatType="seated"
+            searchedDate={shownDate}
+            onBook={(trip) => navigate(tripBookingPath(trip))}
+            footer={results.lastPage > 1 && (
+              <nav aria-label="Trip pages" className="flex items-center justify-center gap-3 pt-2">
+                <Button variant="outline" size="sm" icon={ChevronLeft} disabled={results.page <= 1} onClick={() => update({ page: String(results.page - 1) }, { keepPage: true })}>
+                  Previous
+                </Button>
+                <span className="text-sm font-medium text-slate-600" aria-live="polite">Page {results.page} of {results.lastPage}</span>
+                <Button variant="outline" size="sm" icon={ChevronRight} iconPosition="right" disabled={results.page >= results.lastPage} onClick={() => update({ page: String(results.page + 1) }, { keepPage: true })}>
+                  Next
+                </Button>
+              </nav>
+            )}
+          />
+        )}
+
+        {noTrips && (
+          <div className="rounded-xl bg-white px-4 py-4 text-sm text-slate-600 ring-1 ring-slate-200">
+            {results.nextAvailableDate ? (
+              <p className="flex flex-wrap items-center gap-3">
+                <span>No trips on this date. Next available: <strong className="text-navy-950">{formatManilaDate(results.nextAvailableDate)}</strong></span>
+                <Button variant="primary" size="sm" onClick={() => update({ date: results.nextAvailableDate })}>Show that day</Button>
+              </p>
+            ) : (
+              <p>No trips on this date, and none further ahead for this journey.</p>
+            )}
+          </div>
         )}
       </main>
     </div>

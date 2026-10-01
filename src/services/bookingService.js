@@ -40,8 +40,9 @@ export async function resolveTrip(params) {
 }
 
 /**
- * The search results: the next departures for a journey from a Manila date on, each with times, seats
- * left and fare. params: { origin_stop_id, destination_stop_id, date, seat_type?, limit? }. No limit = all.
+ * Available trips of one Manila date (default today), paginated, optionally for a journey given as
+ * stop codes. params: { from?, to?, date?, seat_type?, page?, per_page? }. The answer carries
+ * `next_available_date` when the day is empty and the resolved `from` / `to` stops.
  */
 export async function getTrips(params) {
   const response = await api.get('/booking/trips', { params })

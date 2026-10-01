@@ -1,27 +1,29 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import DashboardCalendar from '../DashboardCalendar';
-import StaffScheduleView from '../StaffScheduleView';
-import { formatTripSchedule, splitSchedule } from '../../../utils/staffSchedule';
+import StaffCalendar from '../StaffCalendar';
 
-const trip = (id, date, time, status = 'scheduled') => ({
-  trip_id: id,
-  trip_date: date,
-  departure_time: time,
-  status,
-  fleet_route: { route: { origin: 'Ecoland', destination: 'Tagum', route_name: `Route ${id}` }, fleet: { plate_number: `PL-${id}` } },
+const item = (id, time, over = {}) => ({
+  type: 'trip', trip_id: id, shift_block_id: null, departure_time: `${time}:00`, status: 'scheduled', route_name: 'Route A',
+  origin: 'Alpha', destination: 'Beta', leg_direction: 'outbound', plate_number: `PL-${id}`, role: 'driver', ...over,
 });
 
-const TRIPS = [
-  trip(1, '2026-10-01', '06:00:00', 'completed'),
-  trip(2, '2026-10-05', '08:30:00'),
-  trip(3, '2026-10-05', '14:00:00'),
-  trip(4, '2026-10-20', '09:15:00'),
-];
+function makeService() {
+  return {
+    getCalendarDays: vi.fn(async () => ({ data: { days: [{ date: '2026-10-05', trips: 3, shifts: 1 }] } })),
+    getCalendarDay: vi.fn(async ({ date, page = 1 }) => ({
+      data: {
+        date,
+        items: page === 1 ? [item(1, '06:00'), item(2, '09:30', { origin: 'Beta', destination: 'Alpha', leg_direction: 'reverse', type: 'shift' })] : [item(3, '14:00', { role: 'conductor' })],
+        page, per_page: 2, total: 3, last_page: 2,
+      },
+    })),
+  };
+}
 
-describe('staff schedule', () => {
+describe('calendar widget and full calendar', () => {
   beforeEach(() => {
-    // 2026-10-02 12:00 in Manila (04:00 UTC)
+    // 2026-10-02 12:00 in Manila
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-10-02T04:00:00Z'));
   });
@@ -30,74 +32,86 @@ describe('staff schedule', () => {
     cleanup();
   });
 
-  it('formats trips by their own date and time, and splits upcoming from past by Manila day', () => {
-    expect(formatTripSchedule(TRIPS[1])).toBe('2026/10/05 - 08:30');
-    const { upcoming, past } = splitSchedule(TRIPS, '2026-10-02');
-    expect(upcoming.map((t) => t.trip_id)).toEqual([2, 3, 4]);
-    expect(past.map((t) => t.trip_id)).toEqual([1]);
+  it('widget: asks the server for the 6-week grid of the month on screen, marks days with items and pages months', async () => {
+    const service = makeService();
+    render(<DashboardCalendar service={service} onOpenFull={vi.fn()} />);
+
+    // October 2026 starts on a Thursday: the grid runs 2026-09-27 to 2026-11-07.
+    await waitFor(() => expect(service.getCalendarDays).toHaveBeenCalledWith({ from: '2026-09-27', to: '2026-11-07' }));
+    expect(await screen.findByRole('button', { name: /October 5, 2026, 3 trips, 1 shift/ })).toBeInTheDocument();
+    expect(screen.getByText('October 2026')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { pressed: false }).length).toBe(42);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next month' }));
+    expect(screen.getByText('November 2026')).toBeInTheDocument();
+    await waitFor(() => expect(service.getCalendarDays).toHaveBeenLastCalledWith({ from: '2026-11-01', to: '2026-12-12' }));
   });
 
-  it('StaffScheduleView lists upcoming and past, and focuses the requested day', () => {
-    render(<StaffScheduleView trips={TRIPS} focusDate="2026-10-05" />);
-    expect(screen.getByRole('heading', { name: /Monday, October 5, 2026/ })).toBeTruthy();
-    const dayList = screen.getByRole('heading', { name: /Monday, October 5, 2026/ }).closest('.staff-card');
-    expect(within(dayList).getAllByRole('listitem')).toHaveLength(2);
-    expect(screen.getByRole('heading', { name: 'Upcoming' })).toBeTruthy();
-    expect(screen.getByRole('heading', { name: 'Past' })).toBeTruthy();
-  });
+  it('widget: a day opens a modal with only that day, paginated, with the leg direction and role; Esc closes', async () => {
+    const service = makeService();
+    render(<DashboardCalendar service={service} onOpenFull={vi.fn()} />);
+    fireEvent.click(await screen.findByRole('button', { name: /October 5, 2026/ }));
 
-  it('StaffScheduleView reports the chosen trip', () => {
-    const onSelectTrip = vi.fn();
-    render(<StaffScheduleView trips={TRIPS} focusDate="2026-10-05" onSelectTrip={onSelectTrip} />);
-    const dayList = screen.getByRole('heading', { name: /Monday, October 5, 2026/ }).closest('.staff-card');
-    fireEvent.click(within(dayList).getAllByRole('button')[1]);
-    expect(onSelectTrip).toHaveBeenCalledWith(TRIPS[2]);
-  });
-
-  it('dashboard calendar marks trip days and opens the schedule on the pressed day', () => {
-    render(<DashboardCalendar trips={TRIPS} />);
-    expect(screen.getByRole('button', { name: '2026-10-05, 2 trips' })).toBeTruthy();
-    expect(screen.queryByRole('dialog')).toBeNull();
-
-    fireEvent.click(screen.getByRole('button', { name: '2026-10-05, 2 trips' }));
-    const dialog = screen.getByRole('dialog', { name: 'Schedule' });
-    expect(within(dialog).getByRole('heading', { name: /Monday, October 5, 2026/ })).toBeTruthy();
+    const dialog = await screen.findByRole('dialog', { name: 'Schedule for the day' });
+    await waitFor(() => expect(service.getCalendarDay).toHaveBeenCalledWith({ date: '2026-10-05', page: 1 }));
+    expect(await within(dialog).findByRole('heading', { name: /Monday, October 5, 2026/ })).toBeInTheDocument();
+    expect(within(dialog).getByText('3 items')).toBeInTheDocument();
+    expect(within(dialog).getByText(/Alpha → Beta/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/Beta → Alpha/)).toBeInTheDocument(); // the return leg reads in its own direction
+    expect(within(dialog).getByText(/Shift leg/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/PL-1 · Driver/)).toBeInTheDocument();
     expect(document.body.style.overflow).toBe('hidden');
+
+    fireEvent.click(within(dialog).getByRole('button', { name: /next/i }));
+    await waitFor(() => expect(service.getCalendarDay).toHaveBeenLastCalledWith({ date: '2026-10-05', page: 2 }));
+    expect(await within(dialog).findByText(/PL-3 · Chauffeur/)).toBeInTheDocument();
+    expect(within(dialog).getByText('Page 2 of 2')).toBeInTheDocument();
 
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(document.body.style.overflow).not.toBe('hidden');
   });
 
-  it('pressing the card opens the schedule focused on today (Manila)', () => {
-    render(<DashboardCalendar trips={TRIPS} />);
-    fireEvent.click(screen.getByRole('button', { name: /Open schedule/ }));
-    const dialog = screen.getByRole('dialog', { name: 'Schedule' });
-    expect(within(dialog).getByRole('heading', { name: /Friday, October 2, 2026/ })).toBeTruthy();
-    expect(within(dialog).getByText('No trips scheduled this day.')).toBeTruthy();
-  });
+  it('widget: an empty day says so, and "Open full schedule" hands that date to the calendar page', async () => {
+    const service = makeService();
+    service.getCalendarDay.mockResolvedValue({ data: { date: '2026-10-09', items: [], page: 1, per_page: 6, total: 0, last_page: 1 } });
+    const onOpenFull = vi.fn();
+    render(<DashboardCalendar service={service} onOpenFull={onOpenFull} />);
+    fireEvent.click(await screen.findByRole('button', { name: /October 9, 2026/ }));
 
-  it('picking a trip inside the modal closes it and hands the trip to the dashboard', () => {
-    const onSelectTrip = vi.fn();
-    render(<DashboardCalendar trips={TRIPS} onSelectTrip={onSelectTrip} />);
-    fireEvent.click(screen.getByRole('button', { name: '2026-10-05, 2 trips' }));
-    const dialog = screen.getByRole('dialog');
-    const dayList = within(dialog).getByRole('heading', { name: /Monday, October 5, 2026/ }).closest('.staff-card');
-    fireEvent.click(within(dayList).getAllByRole('button')[0]);
-    expect(onSelectTrip).toHaveBeenCalledWith(TRIPS[1]);
+    const dialog = await screen.findByRole('dialog');
+    expect(await within(dialog).findByText('Nothing scheduled this day.')).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole('button', { name: /open full schedule/i }));
+
+    expect(onOpenFull).toHaveBeenCalledWith('2026-10-09');
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 
-  it('traps Tab focus inside the modal', () => {
-    render(<DashboardCalendar trips={TRIPS} />);
-    fireEvent.click(screen.getByRole('button', { name: /Open schedule/ }));
-    const dialog = screen.getByRole('dialog');
-    const focusables = [...dialog.querySelectorAll('button:not([disabled])')];
-    const last = focusables[focusables.length - 1];
-    last.focus();
-    fireEvent.keyDown(document, { key: 'Tab' });
-    expect(document.activeElement).toBe(focusables[0]);
-    fireEvent.keyDown(document, { key: 'Tab', shiftKey: true });
-    expect(document.activeElement).toBe(last);
+  it('widget: "Full calendar" opens the calendar page on today (no date)', async () => {
+    const onOpenFull = vi.fn();
+    render(<DashboardCalendar service={makeService()} onOpenFull={onOpenFull} />);
+    fireEvent.click(screen.getByRole('button', { name: /full calendar/i }));
+    expect(onOpenFull).toHaveBeenCalledWith(null);
+  });
+
+  it('calendar page: opens on the requested day (or today in Manila) and shows the same day list', async () => {
+    const service = makeService();
+    const { unmount } = render(<StaffCalendar service={service} initialDate="2026-10-05" />);
+    expect(await screen.findByRole('heading', { name: /Monday, October 5, 2026/ })).toBeInTheDocument();
+    expect(await screen.findByText(/PL-1 · Driver/)).toBeInTheDocument();
+    unmount();
+
+    service.getCalendarDay.mockClear();
+    render(<StaffCalendar service={service} />);
+    await waitFor(() => expect(service.getCalendarDay).toHaveBeenCalledWith({ date: '2026-10-02', page: 1 })); // Friday in Manila
+  });
+
+  it('shows the server\'s message when the calendar cannot load', async () => {
+    const service = makeService();
+    service.getCalendarDays.mockRejectedValue(new Error('The calendar could not be loaded.'));
+    render(<DashboardCalendar service={service} onOpenFull={vi.fn()} />);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('The calendar could not be loaded.');
+    expect(screen.getAllByRole('button', { pressed: false }).length).toBe(42); // still a full grid, same size
   });
 });

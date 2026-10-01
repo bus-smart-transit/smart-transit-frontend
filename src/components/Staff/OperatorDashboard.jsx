@@ -4,6 +4,8 @@ import { buildOperatorForecast } from './routeForecast'
 import RouteMap from '../Map/RouteMap'
 import CalendarSummaryStrip from './CalendarSummaryStrip'
 import DashboardCalendar from './DashboardCalendar'
+import StaffCalendar from './StaffCalendar'
+import { ModalShell } from '../ui/Modal'
 import StepUpModal from './StepUpModal'
 import HistoricalForecastPanel from './HistoricalForecastPanel'
 import { openPrintReport } from '../../utils/printReport'
@@ -13,7 +15,7 @@ import { useOperatorDashboardData, useNotificationBell, useTripRequests, useDisp
 import {
   LayoutDashboard, Bus, MapPin, Clock, PieChart, Users, Settings,
   Plus, Eye, RefreshCw, Shield, Download,
-  X, ChevronDown, ChevronUp, Loader2, AlertTriangle, Bell, ArrowLeftRight,
+  X, ChevronDown, ChevronUp, Loader2, AlertTriangle, Bell, ArrowLeftRight, CalendarDays,
 } from 'lucide-react'
 
 const fmt = (v) => {
@@ -43,6 +45,7 @@ const NAV = [
   { key: 'fleets',     label: 'Fleets',     icon: Bus },
   { key: 'routes',     label: 'Routes',     icon: MapPin },
   { key: 'trips',      label: 'Trips',      icon: Clock },
+{ key: 'calendar',   label: 'Calendar',   icon: CalendarDays },
   { key: 'shiftBlocks', label: 'Shift Blocks', icon: ArrowLeftRight },
   { key: 'reports',    label: 'Reports',    icon: PieChart },
   { key: 'account',    label: 'Account',    icon: Settings },
@@ -57,15 +60,15 @@ const getStaffCompanyUserId = (row) => row?.company_user_id || row?.user_id || r
 
 function Modal({ title, onClose, children }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
-      <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
+    <ModalShell label={title} onClose={onClose}>
+      <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
         <div className="mb-4 flex items-center justify-between">
           <h3 className="text-lg font-semibold text-slate-900">{title}</h3>
           <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600"><X className="h-5 w-5" /></button>
         </div>
         {children}
       </div>
-    </div>
+    </ModalShell>
   )
 }
 
@@ -182,7 +185,7 @@ function TripRequestsPanel({ onDecided }) {
   )
 }
 
-function DashboardTab({ trips, drivers, conductors, fleets, onRequestDecided }) {
+function DashboardTab({ trips, drivers, conductors, fleets, onRequestDecided, onOpenCalendar }) {
   const { selectedDispatch } = useDispatchDecisions(trips)
 
   const total     = trips.length
@@ -314,7 +317,7 @@ function DashboardTab({ trips, drivers, conductors, fleets, onRequestDecided }) 
     <div className="space-y-6">
       <TripRequestsPanel onDecided={onRequestDecided} />
       <CalendarSummaryStrip service={OperatorService} refreshKey={trips} />
-      <DashboardCalendar trips={trips} />
+      <DashboardCalendar service={OperatorService} onOpenFull={onOpenCalendar} />
       <div className="rounded-2xl border border-teal-100 bg-linear-to-r from-teal-600 via-teal-500 to-cyan-500 p-5 text-white shadow-sm">
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
@@ -2092,6 +2095,8 @@ function AccountTab({ profile }) {
 }
 
 export default function OperatorDashboard() {
+  // The day the Calendar page opens on when reached from the dashboard widget (null = today).
+  const [calendarFocus, setCalendarFocus] = useState(null)
   const {
     activeTab, setActiveTab,
     loading,
@@ -2130,7 +2135,17 @@ export default function OperatorDashboard() {
         <div className="mb-4 flex justify-end">
           <NotificationBell />
         </div>
-        {activeTab === 'dashboard'  && <DashboardTab trips={trips} drivers={drivers} conductors={conductors} fleets={fleets} onRequestDecided={loadFull} />}
+        {activeTab === 'dashboard'  && (
+          <DashboardTab
+            trips={trips}
+            drivers={drivers}
+            conductors={conductors}
+            fleets={fleets}
+            onRequestDecided={loadFull}
+            onOpenCalendar={(date) => { setCalendarFocus(date); setActiveTab('calendar') }}
+          />
+        )}
+        {activeTab === 'calendar'   && <StaffCalendar key={calendarFocus || 'today'} service={OperatorService} initialDate={calendarFocus} />}
         {activeTab === 'staffs'     && (
           <StaffDirectoryTab drivers={drivers} conductors={conductors} onRefresh={loadFull} onCreateAccount={handleCreateAccount} />
         )}

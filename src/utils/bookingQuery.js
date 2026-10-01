@@ -21,6 +21,11 @@ export function buildBookingQuery({ from, to, date, time } = {}) {
   return params.toString();
 }
 
+/** The booking page for a trip from the available-trips list: its own stops (codes), date and departure time. */
+export function tripBookingPath(trip) {
+  return `/passenger/book?${buildBookingQuery({ from: trip.origin?.stop_code, to: trip.destination?.stop_code, date: trip.trip_date, time: trip.boarding_time })}`;
+}
+
 /** What a page URL asks for. Shapes are pre-checked so odd input never reaches state; the server still has the last word. */
 export function parseBookingQuery(searchParams) {
   const read = (key) => String(searchParams.get(key) || '').trim();
@@ -38,6 +43,16 @@ export function parseBookingQuery(searchParams) {
     legacy,
     present: Boolean(from || to || date || legacy),
   };
+}
+
+/** The id (string) of the stop with a public code in the server's grouped stop list, or '' when it is not there. */
+export function findStopId(groups, stopCode) {
+  if (!stopCode) return '';
+  for (const group of groups || []) {
+    const stop = group.stops?.find((candidate) => candidate.stop_code === stopCode);
+    if (stop) return String(stop.stop_id);
+  }
+  return '';
 }
 
 /** The public code of a stop in the server's grouped stop list, or '' when it is not there. */

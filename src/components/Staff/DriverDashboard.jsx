@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import {
   AlertTriangle,
   Bus,
@@ -15,7 +16,8 @@ import StaffPortalLayout from './StaffPortalLayout';
 import DeclineTripModal from './DeclineTripModal';
 import CalendarSummaryStrip from './CalendarSummaryStrip';
 import DashboardCalendar from './DashboardCalendar';
-import StaffScheduleView from './StaffScheduleView';
+import { ModalShell } from '../ui/Modal';
+import StaffCalendar from './StaffCalendar';
 import DriverNavigationMap from './DriverNavigationMap';
 import QrImage from '../Passenger/Ticket/QrImage';
 import RequestedStopRow from './RequestedStopRow';
@@ -138,6 +140,8 @@ export default function DriverDashboard() {
 }
 
 function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
+  // The day the full calendar opens on when reached from the dashboard widget (null = today).
+  const [calendarFocus, setCalendarFocus] = useState(null);
   const {
     activeTab, setActiveTab,
     assignedTripFilter,
@@ -152,7 +156,6 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     earnings,
     shiftState,
     tripDetailsModal, setTripDetailsModal,
-    assignedTrips,
     loading,
     error,
     actionMsg, setActionMsg,
@@ -204,6 +207,10 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     handleLogout,
     handleToggleTwoFactor,
   } = useDriverDashboardData({ onLogout, pairing });
+  const openFullCalendar = (date) => {
+    setCalendarFocus(date);
+    setActiveTab('schedule');
+  };
   const requestedGroups = groupRequestedStops(requestedStops);
 
   const derivedTripStatus = deriveTripStatus(trip || todayAssignedTrip);
@@ -561,17 +568,17 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
           </section>
         )}
 
-        {/* C-2: the Schedule page and the dashboard calendar modal share one
-            view (StaffScheduleView) fed by the same assigned-trips list. */}
+        {/* C-2: the dashboard widget opens a day in a modal; the Schedule page is the full calendar. Both read the
+            server's calendar endpoints, scoped to the signed-in Driver. */}
         {!loading && activeTab === 'schedule' && <CalendarSummaryStrip service={DriverService} className="mb-4" />}
         {!loading && activeTab === 'schedule' && (
-          <StaffScheduleView trips={assignedTrips} onSelectTrip={setTripDetailsModal} />
+          <StaffCalendar key={calendarFocus || 'today'} service={DriverService} initialDate={calendarFocus} />
         )}
 
         {!loading && activeTab === 'dashboard' && (
           <div className="mt-4 space-y-4">
             <CalendarSummaryStrip service={DriverService} />
-            <DashboardCalendar trips={assignedTrips} onSelectTrip={setTripDetailsModal} />
+            <DashboardCalendar service={DriverService} onOpenFull={openFullCalendar} />
           </div>
         )}
 
@@ -930,7 +937,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
 
       {/* ── End Trip Confirmation Modal ───────────────────────────────── */}
       {confirmComplete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+        <ModalShell label="End trip" onClose={() => setConfirmComplete(false)} closeOnOverlay={false} overlayClassName="bg-black/60">
           <div className="w-full max-w-sm rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl">
             <h3 className="mb-2 text-base font-bold text-slate-100">End Trip?</h3>
             <p className="mb-4 text-sm text-slate-400">This will finalize the trip and all stop/occupancy data. <strong className="text-amber-300">This cannot be undone.</strong></p>
@@ -943,7 +950,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
               <button type="button" onClick={handleConfirmedComplete} className="flex-1 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700">Yes, End Trip</button>
             </div>
           </div>
-        </div>
+        </ModalShell>
       )}
 
       {/* C6: decline request dialog, shared by Driver and Chauffeur */}
@@ -965,16 +972,8 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
         const route = td.fleet_route?.route || {};
         const fleet = td.fleet_route?.fleet || {};
         return (
-          <div
-            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4"
-            role="presentation"
-            onClick={() => setTripDetailsModal(null)}
-          >
+          <ModalShell label="Trip details" onClose={() => setTripDetailsModal(null)} zClass="z-[100]" overlayClassName="bg-black/70">
             <section
-              role="dialog"
-              aria-modal="true"
-              aria-label="Trip details"
-              onClick={(e) => e.stopPropagation()}
               className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900 p-6 text-slate-200"
             >
               <div className="mb-4 flex items-start justify-between">
@@ -1004,7 +1003,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                 ))}
               </div>
             </section>
-          </div>
+          </ModalShell>
         );
       })()}
     </>

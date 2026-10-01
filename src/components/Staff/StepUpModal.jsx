@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ShieldCheck, X } from 'lucide-react';
 import StaffService from '../../api/StaffService/StaffBaseService';
+import { ModalShell } from '../ui/Modal';
 
 /**
  * Step-up re-authentication modal: the signed-in staff member re-enters their
@@ -52,12 +53,7 @@ export default function StepUpModal({ open, onClose, onVerified }) {
   if (!open) return null;
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="step-up-title"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
-    >
+    <ModalShell label="Confirm your password" onClose={onClose} overlayClassName="bg-black/60 backdrop-blur-sm">
       <form
         onSubmit={submit}
         className="relative w-full max-w-sm rounded-2xl border border-white/10 bg-[#0a0e1a] p-6 shadow-2xl"
@@ -112,6 +108,6 @@ export default function StepUpModal({ open, onClose, onVerified }) {
           Cancel
         </button>
       </form>
-    </div>
+    </ModalShell>
   );
 }

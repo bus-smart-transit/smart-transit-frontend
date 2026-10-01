@@ -20,7 +20,8 @@ import StaffPortalLayout from './StaffPortalLayout';
 import DeclineTripModal from './DeclineTripModal';
 import CalendarSummaryStrip from './CalendarSummaryStrip';
 import DashboardCalendar from './DashboardCalendar';
-import StaffScheduleView from './StaffScheduleView';
+import { ModalShell } from '../ui/Modal';
+import StaffCalendar from './StaffCalendar';
 import NotificationBellButton from './NotificationBellButton';
 import { useConductorPairing, useConductorDashboardData } from '../../api/hooks/Staff/useConductorDashboard';
 import { getBusinessTodayLabel } from '../../utils/dates';
@@ -195,6 +196,8 @@ function TripCardGroup({ title, trips, onDeclineTrip, onAcceptTrip, emptyMessage
 
 function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   const [confirmStart, setConfirmStart] = useState(false);
+  // The day the full calendar opens on when reached from the dashboard widget (null = today).
+  const [calendarFocus, setCalendarFocus] = useState(null);
   const {
     activeTab, setActiveTab,
     assignedTripFilter,
@@ -243,7 +246,6 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     filteredAssignedTrips,
     todayAssignedTrips,
     upcomingAssignedTrips,
-    assignedTrips,
     tripDetailsModal, setTripDetailsModal,
     shiftBlocks,
     shiftBlockEligibility,
@@ -279,6 +281,10 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     handleConfirmedOnsiteCheckout,
     handleLogout,
   } = useConductorDashboardData({ onLogout, pairing });
+  const openFullCalendar = (date) => {
+    setCalendarFocus(date);
+    setActiveTab('schedule');
+  };
 
   const headerBadge = resolveConductorHeaderBadge({
     pairingLoading: pairing.loading,
@@ -514,17 +520,17 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
           </section>
         )}
 
-        {/* C-2: the Schedule page and the dashboard calendar modal share one
-            view (StaffScheduleView) fed by the same assigned-trips list. */}
+        {/* C-2: the dashboard widget opens a day in a modal; the Schedule page is the full calendar. Both read the
+            server's calendar endpoints, scoped to the signed-in Chauffeur. */}
         {!loading && activeTab === 'schedule' && <CalendarSummaryStrip service={ConductorService} className="mb-4" />}
         {!loading && activeTab === 'schedule' && (
-          <StaffScheduleView trips={assignedTrips} onSelectTrip={setTripDetailsModal} />
+          <StaffCalendar key={calendarFocus || 'today'} service={ConductorService} initialDate={calendarFocus} />
         )}
 
         {!loading && activeTab === 'dashboard' && (
           <div className="mt-4 space-y-4">
             <CalendarSummaryStrip service={ConductorService} />
-            <DashboardCalendar trips={assignedTrips} onSelectTrip={setTripDetailsModal} />
+            <DashboardCalendar service={ConductorService} onOpenFull={openFullCalendar} />
           </div>
         )}
 
@@ -806,8 +812,8 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
             )}
 
             {showScannerModal && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setShowScannerModal(false)}>
-                <div className="max-h-[92vh] w-full max-w-6xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+              <ModalShell label="Scan ticket" onClose={() => { stopScanner(); setShowScannerModal(false); }}>
+                <div className="w-full max-w-6xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
                   <div className="mb-4 flex items-center justify-between">
                     <div>
                       <h3 className="text-base font-bold text-slate-900">Scan Ticket</h3>
@@ -935,7 +941,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                     </div>
                   )}
                 </div>
-              </div>
+              </ModalShell>
             )}
           </section>
         )}
@@ -1195,7 +1201,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
 
       {/* Start Shift confirmation (header toggle is the only entry point) */}
       {confirmStart && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+        <ModalShell label="Start shift" onClose={() => setConfirmStart(false)} closeOnOverlay={false} overlayClassName="bg-black/60">
           <div className="w-full max-w-sm rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl">
             <h3 className="mb-2 text-base font-bold text-slate-100">Start Shift?</h3>
             <p className="mb-4 text-sm text-slate-400">Confirm your assignment. You will be taken to the Ticketing screen.</p>
@@ -1209,12 +1215,12 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
               <button type="button" onClick={() => { setConfirmStart(false); handleStartShift(); }} className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-teal-500 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-600">Start Shift <Play className="h-4 w-4" /></button>
             </div>
           </div>
-        </div>
+        </ModalShell>
       )}
 
       {/* ── Onsite Checkout Confirmation Modal ─────────────────────── */}
       {confirmCheckout && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+        <ModalShell label="Record cash payment" onClose={() => setConfirmCheckout(false)} closeOnOverlay={false} overlayClassName="bg-black/60">
           <div className="w-full max-w-sm rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl">
             <h3 className="mb-2 text-base font-bold text-slate-100">Record Cash Payment?</h3>
             <p className="mb-4 text-sm text-slate-400">This will create a payment record. <strong className="text-amber-300">This cannot be undone.</strong></p>
@@ -1227,7 +1233,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
               <button type="button" onClick={handleConfirmedOnsiteCheckout} className="flex-1 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700">Confirm Payment</button>
             </div>
           </div>
-        </div>
+        </ModalShell>
       )}
 
       {/* C6: decline request dialog, shared by Driver and Chauffeur */}
@@ -1248,12 +1254,8 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
         const route = td.fleet_route?.route || {};
         const fleet = td.fleet_route?.fleet || {};
         return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" role="presentation" onClick={() => setTripDetailsModal(null)}>
+          <ModalShell label="Trip details" onClose={() => setTripDetailsModal(null)}>
             <section
-              role="dialog"
-              aria-modal="true"
-              aria-label="Trip details"
-              onClick={(e) => e.stopPropagation()}
               className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900 p-6 text-slate-200"
             >
               <div className="mb-4 flex items-start justify-between">
@@ -1283,7 +1285,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                 ))}
               </div>
             </section>
-          </div>
+          </ModalShell>
         );
       })()}
     </>

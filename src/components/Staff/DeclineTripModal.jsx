@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { ModalShell } from '../ui/Modal';
 
 const REASONS = [
   { value: 'sick', label: 'Sick' },
@@ -34,7 +35,7 @@ export default function DeclineTripModal({ trip, scheduleLabel, submitting, erro
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+    <ModalShell label="Request to decline this trip" onClose={onCancel} closeOnOverlay={false} overlayClassName="bg-black/60">
       <div className="w-full max-w-sm rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl">
         <h3 className="mb-2 text-base font-bold text-slate-100">Request to Decline This Trip?</h3>
         <p className="mb-3 text-sm text-slate-300">
@@ -83,6 +84,6 @@ export default function DeclineTripModal({ trip, scheduleLabel, submitting, erro
           <button type="button" onClick={handleSubmit} className="flex-1 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60" disabled={submitting}>{submitting ? 'Sending...' : 'Send Request'}</button>
         </div>
       </div>
-    </div>
+    </ModalShell>
   );
 }

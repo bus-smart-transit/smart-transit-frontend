@@ -104,6 +104,17 @@ export class StaffBaseService extends BaseService {
     return await this.request('/staff/calendar-summary', 'GET');
   }
 
+  // Batch 26: the same role scoping for the calendar widget's markers and for one day's list.
+  async getCalendarDays({ from, to }) {
+    return await this.request('/staff/calendar/days', 'GET', { from, to });
+  }
+
+  async getCalendarDay({ date, page = 1, perPage }) {
+    const params = { date, page };
+    if (perPage) params.per_page = perPage;
+    return await this.request('/staff/calendar/day', 'GET', params);
+  }
+
   // ── Driver/Conductor Pairing (shared, parameterized by role) ──
   async getPairingToken(role) {
     return await this.request(`/${role}/pairing-token`, 'GET');

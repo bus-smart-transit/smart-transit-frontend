@@ -11,15 +11,18 @@ import { formatDuration } from '../../../utils/tripTimeline'
  */
 export function TripCard({ trip, fromName, toName, seatType = 'seated', showDate = false, onBook }) {
   const duration = formatDuration(trip.duration_minutes)
+  // The stops of this trip's own journey come from the server; the props are only a fallback.
+  const origin = trip.origin?.name || fromName
+  const destination = trip.destination?.name || toName
   return (
     <Card className="p-5 sm:p-6">
       <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0 flex-1">
           {showDate && <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-teal-700">{formatManilaDate(trip.trip_date)}</p>}
           <div className="flex flex-wrap items-center gap-2 text-sm font-semibold text-navy-950">
-            <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-navy-700" aria-hidden="true" />{fromName}</span>
+            <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-navy-700" aria-hidden="true" />{origin}</span>
             <span className="text-slate-300" aria-hidden="true">&rarr;</span>
-            <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-teal-500" aria-hidden="true" />{toName}</span>
+            <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-teal-500" aria-hidden="true" />{destination}</span>
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-slate-500">
             <span className="flex items-center gap-1.5">
