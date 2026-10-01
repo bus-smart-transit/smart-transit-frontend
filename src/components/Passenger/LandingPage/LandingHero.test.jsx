@@ -116,7 +116,7 @@ describe('LandingHero available trips preview', () => {
     expect(screen.getAllByRole('button', { name: 'Book Seat' })).toHaveLength(5);
     expect(screen.getAllByText('PHP 58.00')).toHaveLength(5);
     expect(screen.getByText(/11 seated seats available/)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /view all available trips \(7\)/i })).toHaveAttribute('href', '/passenger/trips?date=2026-10-01');
+    expect(screen.getByRole('link', { name: /see all available trips \(7\)/i })).toHaveAttribute('href', '/passenger/trips?date=2026-10-01');
   });
 
   test('narrows live as From and To are chosen, still for today', async () => {
@@ -128,7 +128,7 @@ describe('LandingHero available trips preview', () => {
     await waitFor(() => expect(screen.getByLabelText('To')).not.toBeDisabled());
     await pick('To', 'Beta Stop');
     await waitFor(() => expect(getTrips).toHaveBeenLastCalledWith({ seat_type: 'seated', page: 1, from: 'alpha-stop', to: 'beta-stop', date: '2026-10-01', per_page: 5 }));
-    expect(screen.getByRole('link', { name: /view all available trips/i })).toHaveAttribute('href', '/passenger/trips?from=alpha-stop&to=beta-stop&date=2026-10-01');
+    expect(screen.getByRole('link', { name: /see all available trips/i })).toHaveAttribute('href', '/passenger/trips?from=alpha-stop&to=beta-stop&date=2026-10-01');
   });
 
   test('a date that is not today is not listed here: a note with a link instead', async () => {
@@ -155,14 +155,37 @@ describe('LandingHero available trips preview', () => {
     expect(where.textContent).not.toMatch(/_id|mode=/);
   });
 
-  test('Search always opens the All Available Trips page with the journey and date in the address', async () => {
+  test('Search needs both From and To', async () => {
+    renderHero();
+    const search = screen.getByRole('button', { name: /^search$/i });
+    await waitFor(() => expect(screen.getByLabelText('Date')).toHaveValue('2026-10-01'));
+    expect(search).toBeDisabled();
+
+    await pick('From', 'Alpha Stop');
+    expect(search).toBeDisabled(); // From alone is not enough
+    await waitFor(() => expect(screen.getByLabelText('To')).not.toBeDisabled());
+    await pick('To', 'Beta Stop');
+    expect(search).not.toBeDisabled();
+  });
+
+  test('Search lists a few trips right here for the day searched, and See all opens the All Available Trips page', async () => {
     renderHero();
     await pick('From', 'Alpha Stop');
     await waitFor(() => expect(screen.getByLabelText('To')).not.toBeDisabled());
     await pick('To', 'Beta Stop');
     fireEvent.change(screen.getByLabelText('Date'), { target: { value: '2026-10-05' } });
+    getTrips.mockClear();
     fireEvent.click(screen.getByRole('button', { name: /^search$/i }));
 
+    // Not today, yet the searched day is listed after Search (the live preview would only link to it).
+    await waitFor(() => expect(getTrips).toHaveBeenCalledWith({ seat_type: 'seated', page: 1, from: 'alpha-stop', to: 'beta-stop', date: '2026-10-05', per_page: 5 }));
+    expect(await screen.findByText('PLATE-1')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Book Seat' })).toHaveLength(5);
+    expect(screen.getByText(/Alpha Stop → Beta Stop · Mon, Oct 5, 2026/)).toBeInTheDocument();
+
+    const seeAll = screen.getByRole('link', { name: /see all available trips \(7\)/i });
+    expect(seeAll).toHaveAttribute('href', '/passenger/trips?from=alpha-stop&to=beta-stop&date=2026-10-05');
+    fireEvent.click(seeAll);
     expect((await screen.findByTestId('where')).textContent).toBe('/passenger/trips?from=alpha-stop&to=beta-stop&date=2026-10-05');
   });
 });

@@ -528,8 +528,8 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
         )}
 
         {!loading && activeTab === 'dashboard' && (
-          <div className="mt-4 space-y-4">
-            <CalendarSummaryStrip service={ConductorService} />
+          <div className="mt-4 grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_19rem]">
+            <CalendarSummaryStrip service={ConductorService} stacked className="content-start" />
             <DashboardCalendar service={ConductorService} onOpenFull={openFullCalendar} />
           </div>
         )}

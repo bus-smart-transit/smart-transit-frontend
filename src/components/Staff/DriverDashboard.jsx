@@ -576,8 +576,8 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
         )}
 
         {!loading && activeTab === 'dashboard' && (
-          <div className="mt-4 space-y-4">
-            <CalendarSummaryStrip service={DriverService} />
+          <div className="mt-4 grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_19rem]">
+            <CalendarSummaryStrip service={DriverService} stacked className="content-start" />
             <DashboardCalendar service={DriverService} onOpenFull={openFullCalendar} />
           </div>
         )}

@@ -316,8 +316,10 @@ function DashboardTab({ trips, drivers, conductors, fleets, onRequestDecided, on
   return (
     <div className="space-y-6">
       <TripRequestsPanel onDecided={onRequestDecided} />
-      <CalendarSummaryStrip service={OperatorService} refreshKey={trips} />
-      <DashboardCalendar service={OperatorService} onOpenFull={onOpenCalendar} />
+      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_19rem]">
+        <CalendarSummaryStrip service={OperatorService} refreshKey={trips} stacked className="content-start" />
+        <DashboardCalendar service={OperatorService} onOpenFull={onOpenCalendar} />
+      </div>
       <div className="rounded-2xl border border-teal-100 bg-linear-to-r from-teal-600 via-teal-500 to-cyan-500 p-5 text-white shadow-sm">
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>

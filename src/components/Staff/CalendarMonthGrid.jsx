@@ -18,7 +18,7 @@ const countLabel = (marker) => {
  * with the data; the full calendar page uses the roomier cells. The grid is always 6 weeks tall, so
  * paging between months or loading markers never changes its height.
  */
-export default function CalendarMonthGrid({ service, month, onMonthChange, selectedDate = null, onSelectDate, compact = false, refreshKey = 0, actions = null }) {
+export default function CalendarMonthGrid({ service, month, onMonthChange, selectedDate = null, onSelectDate, compact = false, refreshKey = 0, footer = null }) {
   const { cells, loading, error } = useCalendarMonth(service, month, refreshKey);
   const weekdays = compact ? WEEKDAYS_COMPACT : WEEKDAYS_FULL;
 
@@ -33,17 +33,14 @@ export default function CalendarMonthGrid({ service, month, onMonthChange, selec
             onClick={() => onMonthChange(shiftMonth(month, -1))}>
             <ChevronLeft className="h-4 w-4" />
           </button>
-          {!compact && (
-            <button type="button" className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-50"
-              onClick={() => onMonthChange(monthStartOf(null))}>
-              Today
-            </button>
-          )}
+          <button type="button" className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+            onClick={() => onMonthChange(monthStartOf(null))}>
+            Today
+          </button>
           <button type="button" aria-label="Next month" className="rounded-lg border border-slate-200 bg-white p-1.5 text-slate-600 hover:bg-slate-50"
             onClick={() => onMonthChange(shiftMonth(month, 1))}>
             <ChevronRight className="h-4 w-4" />
           </button>
-          {actions}
         </div>
       </div>
 
@@ -61,7 +58,7 @@ export default function CalendarMonthGrid({ service, month, onMonthChange, selec
               aria-pressed={selected}
               aria-label={`${formatDayLabel(cell.dateKey)}${cell.marker ? `, ${countLabel(cell.marker)}` : ''}`}
               className={`relative flex rounded-lg border text-left transition hover:bg-teal-50 ${
-                compact ? 'h-9 items-center justify-center text-xs' : 'h-16 items-start justify-start p-1.5 text-sm sm:h-20'
+                compact ? 'h-8 items-center justify-center text-xs' : 'h-16 items-start justify-start p-1.5 text-sm sm:h-20'
               } ${cell.isCurrentMonth ? 'bg-white text-slate-700' : 'bg-slate-50 text-slate-300'} ${
                 selected ? 'border-teal-500 ring-2 ring-teal-200' : cell.isToday ? 'border-teal-400 ring-1 ring-teal-200' : 'border-slate-100'
               } font-semibold`}
@@ -79,6 +76,7 @@ export default function CalendarMonthGrid({ service, month, onMonthChange, selec
         })}
       </div>
       {error && <p className="mt-2 text-xs text-red-600" role="alert">{error}</p>}
+      {footer}
     </div>
   );
 }

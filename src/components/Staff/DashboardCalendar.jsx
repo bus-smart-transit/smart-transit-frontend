@@ -27,9 +27,9 @@ export default function DashboardCalendar({ service, onOpenFull, refreshKey = 0,
           onSelectDate={setDay}
           compact
           refreshKey={refreshKey}
-          actions={(
+          footer={(
             <button type="button" onClick={() => onOpenFull(null)}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-teal-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-teal-700">
+              className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-teal-600 px-3 py-2 text-xs font-semibold text-white hover:bg-teal-700">
               <CalendarDays className="h-3.5 w-3.5" /> Full calendar
             </button>
           )}

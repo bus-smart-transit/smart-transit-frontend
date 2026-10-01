@@ -6,7 +6,7 @@ import JourneyFields from '../BuyTicket/JourneyFields';
 import TripsPreview from '../Trips/TripsPreview';
 import { useBookingStops } from '../../../api/hooks/Passenger/useBookingSearch';
 import { useRegion } from '../../../api/hooks/useRegion';
-import { addDaysToDate, buildBookingQuery, findStopCode, tripBookingPath } from '../../../utils/bookingQuery';
+import { addDaysToDate, findStopCode, tripBookingPath } from '../../../utils/bookingQuery';
 import heroBg from '../../../assets/hero.png';
 
 const stopName = (groups, stopId) => groups.flatMap((group) => group.stops).find((stop) => String(stop.stop_id) === String(stopId))?.name || '';
@@ -20,6 +20,8 @@ export default function LandingHero() {
     booking_date: '',
   });
   const stops = useBookingStops(journey.origin_stop_id);
+  // The journey that was actually searched; the list below belongs to it, not to later edits.
+  const [search, setSearch] = useState(null);
   // The date defaults to today in Manila (from the server) until the passenger picks another.
   const date = journey.booking_date || stops.today;
 
@@ -37,12 +39,16 @@ export default function LandingHero() {
 
   const fromCode = findStopCode(stops.originGroups, journey.origin_stop_id);
   const toCode = findStopCode(stops.destinationGroups, journey.destination_stop_id);
+  const fromName = stopName(stops.originGroups, journey.origin_stop_id);
+  const toName = stopName(stops.destinationGroups, journey.destination_stop_id);
+  const canSearch = Boolean(fromCode && toCode && dateOk);
 
-  // Search always opens the All Available Trips page, with the journey in the address as readable codes.
+  // Search needs both stops. It lists a few trips right here, for the day searched, and the
+  // "See all available trips" link opens the All Available Trips page for the same journey.
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!dateOk) return;
-    navigate(`/passenger/trips?${buildBookingQuery({ from: fromCode, to: toCode, date })}`);
+    if (!canSearch) return;
+    setSearch({ date, fromCode, toCode, fromName, toName });
   };
 
   return (
@@ -109,7 +115,7 @@ export default function LandingHero() {
                 onChange={handleChange}
                 idPrefix="hero"
                 action={(
-                  <Button type="submit" variant="primary" size="lg" icon={Search} disabled={!dateOk} className="w-full lg:w-auto">
+                  <Button type="submit" variant="primary" size="lg" icon={Search} disabled={!canSearch} className="w-full lg:w-auto">
                     Search
                   </Button>
                 )}
@@ -122,11 +128,8 @@ export default function LandingHero() {
       <TripsPreview
         today={stops.today}
         previewLimit={stops.previewLimit}
-        date={date}
-        fromCode={fromCode}
-        toCode={toCode}
-        fromName={stopName(stops.originGroups, journey.origin_stop_id)}
-        toName={stopName(stops.destinationGroups, journey.destination_stop_id)}
+        live={{ date, fromCode, toCode, fromName, toName }}
+        search={search}
         onBook={(trip) => navigate(tripBookingPath(trip))}
       />
     </section>

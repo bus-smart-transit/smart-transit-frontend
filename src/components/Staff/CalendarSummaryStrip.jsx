@@ -25,7 +25,7 @@ const Stat = ({ label, children }) => (
  * Summary strip shown above the calendar (Driver, Chauffeur) or on the
  * dashboard (Operator). All figures come from GET /staff/calendar-summary.
  */
-export default function CalendarSummaryStrip({ service, refreshKey, className = '' }) {
+export default function CalendarSummaryStrip({ service, refreshKey, className = '', stacked = false }) {
   const { summary, error } = useCalendarSummary(service, refreshKey);
 
   if (!summary) {
@@ -38,7 +38,7 @@ export default function CalendarSummaryStrip({ service, refreshKey, className = 
     : 'Nothing upcoming';
 
   return (
-    <div className={`grid grid-cols-2 gap-3 md:grid-cols-4 ${className}`}>
+    <div className={`grid grid-cols-2 gap-3 ${stacked ? '' : 'md:grid-cols-4'} ${className}`}>
       <Stat label="Today">{today.trips} trips · {today.shifts} shifts</Stat>
       <Stat label="This week">{week.trips} trips · {week.shifts} shifts</Stat>
       <Stat label={next ? `Next ${next.type}` : 'Next'}>{nextLabel}</Stat>
