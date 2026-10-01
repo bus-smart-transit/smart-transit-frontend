@@ -50,6 +50,7 @@ const renderHero = () => render(
       <Route path="/" element={<LandingHero />} />
       <Route path="/passenger/book" element={<Where />} />
       <Route path="/passenger/trips" element={<Where />} />
+      <Route path="/track" element={<Where />} />
     </Routes>
   </MemoryRouter>,
 );
@@ -80,6 +81,13 @@ describe('LandingHero search card', () => {
     expect(screen.getByRole('button', { name: /^search$/i })).toBeInTheDocument();
     expect(screen.queryByText(/book now|book later/i)).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/time/i)).not.toBeInTheDocument();
+  });
+
+  test('Track a Bus opens the dedicated tracking page, not the passenger dashboard', async () => {
+    renderHero();
+    fireEvent.click(screen.getByRole('button', { name: /track a bus/i }));
+
+    expect((await screen.findByTestId('where')).textContent).toBe('/track');
   });
 
   test('From narrows as you type, by stop name', async () => {

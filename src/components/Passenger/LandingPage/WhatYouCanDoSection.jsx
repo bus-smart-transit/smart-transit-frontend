@@ -11,7 +11,7 @@ const PROTECTED_TABS = new Set(['tickets', 'transactions', 'rewards', 'profile']
 const ITEMS = [
   { icon: Ticket, title: 'My Tickets', description: 'View your upcoming bookings, ticket information, and QR codes.', to: '/passenger/dashboard?tab=tickets' },
   { icon: History, title: 'Trip History', description: 'Review your previous trips and booking records.', to: '/passenger/dashboard?tab=transactions' },
-  { icon: MapPin, title: 'Track Bus', description: 'Check the location of your assigned bus when live tracking is available.', to: '/passenger/dashboard?tab=map' },
+  { icon: MapPin, title: 'Track Bus', description: 'Follow the bus for your ticket with your tracking code or link, as a guest or from your account.', to: '/track' },
   { icon: Gift, title: 'Rewards', description: 'View your available rewards and points.', to: '/passenger/dashboard?tab=rewards' },
   { icon: CalendarClock, title: 'Schedules', description: 'Check routes and departure times when planning your trip.', to: '/passenger/dashboard' },
 ];

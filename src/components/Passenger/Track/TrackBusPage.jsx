@@ -1,7 +1,8 @@
 import { useEffect } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { Bus, Clock3, MapPin, Navigation, ShieldCheck, TrainFront } from 'lucide-react'
+import { Bus, Clock3, MapPin, Navigation, ShieldCheck } from 'lucide-react'
 import RouteMap from '../../Map/RouteMap'
+import TrackHeader from './TrackHeader'
 import { useTicketTracking } from '../../../api/hooks/Passenger/useTicketTracking'
 import { formatManilaDate } from '../../../utils/dates'
 
@@ -66,14 +67,7 @@ export default function TrackBusPage() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
-          <Link to="/" className="inline-flex items-center gap-2 font-display text-base font-bold text-navy-950">
-            <TrainFront size={20} className="text-teal-600" aria-hidden="true" /> SmartTransit
-          </Link>
-          <h1 className="text-sm font-semibold text-slate-600 sm:text-base">Track my bus</h1>
-        </div>
-      </header>
+      <TrackHeader />
 
       <main className="mx-auto w-full max-w-5xl space-y-5 p-4 sm:p-6">
         {status === 'loading' && <p className="text-sm text-slate-500" role="status">Finding your bus...</p>}
@@ -82,7 +76,7 @@ export default function TrackBusPage() {
           <div role="alert" className="rounded-2xl bg-white p-6 text-center shadow-card ring-1 ring-slate-200">
             <h2 className="font-display text-lg font-bold text-navy-950">This tracking link is not valid</h2>
             <p className="mt-2 text-sm text-slate-600">Check that the whole link was copied, or open your ticket to get the link again.</p>
-            <Link to="/" className="mt-4 inline-block text-sm font-semibold text-navy-800 underline">Go to SmartTransit</Link>
+            <Link to="/track" className="mt-4 inline-block text-sm font-semibold text-navy-800 underline">Enter a tracking code</Link>
           </div>
         )}
 

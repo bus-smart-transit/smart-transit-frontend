@@ -11,6 +11,7 @@ const LandingPage = lazy(() => import('./components/Passenger/LandingPage/Landin
 const CheckoutReturn = lazy(() => import('./components/Passenger/CheckoutReturn/CheckoutReturn'));
 const AboutPage = lazy(() => import('./components/Passenger/About/AboutPage'));
 const TrackBusPage = lazy(() => import('./components/Passenger/Track/TrackBusPage'));
+const TrackLookupPage = lazy(() => import('./components/Passenger/Track/TrackLookupPage'));
 
 function LandingWithAuth() {
   return (
@@ -46,6 +47,7 @@ export default function App() {
             <Route path="/" element={<LandingWithAuth />} />
             <Route path="/about" element={<AboutWithAuth />} />
             {/* Public: the link itself is the credential, so no account or auth provider is involved. */}
+            <Route path="/track" element={<TrackLookupPage />} />
             <Route path="/track/:token" element={<TrackBusPage />} />
 
             <Route path="/passenger/*" element={<PassengerBaseRouter />} />

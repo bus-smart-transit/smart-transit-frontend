@@ -85,7 +85,7 @@ export default function LandingHero() {
                 type="button"
                 variant="outline"
                 size="md"
-                onClick={() => navigate('/passenger/dashboard?tab=map')}
+                onClick={() => navigate('/track')}
                 className="border-white/40 bg-white/5 text-white hover:bg-white/15 hover:text-white"
               >
                 Track a Bus
