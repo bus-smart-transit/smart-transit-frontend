@@ -321,7 +321,7 @@ export function useFleetsTab({ onRefresh }) {
   const [fleetLocations, setFleetLocations] = useState([]);
   const [manageMsg, setManageMsg] = useState('');
   const [manageSaving, setManageSaving] = useState(false);
-  const [fleetForm, setFleetForm] = useState({ plate_number: '', bus_company_name: '', body_no: '', seated_capacity: '', standing_capacity: '', fleet_type: 'public', route_id: '', start_time: '06:00', end_time: '22:00' });
+  const [fleetForm, setFleetForm] = useState({ plate_number: '', bus_company_name: '', body_no: '', seated_capacity: '', standing_capacity: '', fleet_type: 'public', vehicle_class: '', route_id: '', start_time: '06:00', end_time: '22:00' });
   const [assignForm, setAssignForm] = useState({ fleet_id: '', route_id: '', start_time: '06:00', end_time: '22:00' });
   const [fareForm, setFareForm] = useState({ fleet_id: '', seat_type: 'seated', base_fare: '', fare_per_km: '' });
   const [fareSaving, setFareSaving] = useState(false);
@@ -411,11 +411,12 @@ export function useFleetsTab({ onRefresh }) {
         seated_capacity: Number(fleetForm.seated_capacity),
         standing_capacity: Number(fleetForm.standing_capacity),
         fleet_type: fleetForm.fleet_type,
+        vehicle_class: fleetForm.vehicle_class || null,
         ...(fleetForm.route_id
           ? { routes: [{ route_id: Number(fleetForm.route_id), start_time: String(fleetForm.start_time || '').trim(), end_time: String(fleetForm.end_time || '').trim() }] }
           : {}),
       });
-      setFleetForm({ plate_number: '', bus_company_name: '', body_no: '', seated_capacity: '', standing_capacity: '', fleet_type: 'public', route_id: '', start_time: '06:00', end_time: '22:00' });
+      setFleetForm({ plate_number: '', bus_company_name: '', body_no: '', seated_capacity: '', standing_capacity: '', fleet_type: 'public', vehicle_class: '', route_id: '', start_time: '06:00', end_time: '22:00' });
       setManageMsg('Fleet created successfully.');
       onRefresh();
     } catch (err) {

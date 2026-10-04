@@ -8,6 +8,7 @@ import QrImage from '../Ticket/QrImage';
 import TripTimeline from '../Timeline/TripTimeline';
 import CustomDropoffModal from '../Timeline/CustomDropoffModal';
 import JourneyFields from './JourneyFields';
+import RoundtripSection from './RoundtripSection';
 import SaveQrButton from '../Ticket/SaveQrButton';
 import Card from '../../ui/Card';
 import Button from '../../ui/Button';
@@ -90,6 +91,7 @@ export default function BuyTicket({ onTicketPurchased }) {
     printQrTicket,
     qrTickets,
     resolution,
+    roundtrip,
     rewardPointsToApply,
     selectAlightingStop,
     selectDeparture,
@@ -138,7 +140,7 @@ export default function BuyTicket({ onTicketPurchased }) {
     : null;
   const qrModalOpen = qrModalIdentity !== null && qrModalIdentity !== qrModalDismissedFor;
 
-  const canSubmit = !isSubmitting && canProceedToOnlinePayment && !isRewardRequestInsufficient && Boolean(form.ticket_quantity);
+  const canSubmit = !isSubmitting && (roundtrip.active ? roundtrip.canPay : canProceedToOnlinePayment) && !(roundtrip.active ? false : isRewardRequestInsufficient) && Boolean(form.ticket_quantity);
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 p-4 sm:p-6">
@@ -402,6 +404,15 @@ export default function BuyTicket({ onTicketPurchased }) {
                     )}
                     {formErrors.trip && <p className="mt-2 text-xs text-red-600">{formErrors.trip}</p>}
                   </div>
+
+                  {trip && (
+                    <RoundtripSection
+                      roundtrip={roundtrip}
+                      outboundDate={trip.trip_date}
+                      today={stopsData.today}
+                      quantity={totalTickets}
+                    />
+                  )}
                 </div>
               )}
             </Card>
@@ -504,7 +515,7 @@ export default function BuyTicket({ onTicketPurchased }) {
                       </label>
                     )}
 
-                    {!isGuestCheckout && (
+                    {!isGuestCheckout && !roundtrip.active && (
                       <div className="mt-4 rounded-xl border border-slate-200 px-4 py-2">
                         <p className="pt-1.5 text-sm text-slate-500">
                           {loadingRewards ? 'Loading reward balance...' : <>Available Rewards: <strong className="text-navy-950">{Number(availableRewardPoints || 0).toFixed(0)} RP</strong></>}
@@ -554,11 +565,16 @@ export default function BuyTicket({ onTicketPurchased }) {
             <dl className="mt-4 divide-y divide-slate-100 text-sm">
               <SummaryRow label="Board at">{boardingRow?.name || summaryFrom || '-'}</SummaryRow>
               <SummaryRow label="Get off at">{alightingRow ? (alightingRow.custom ? (dropoff?.label || 'Custom drop-off') : alightingRow.name) : (summaryTo || '-')}</SummaryRow>
-              <SummaryRow label="Departure">{trip ? `${trip.trip_date} ${trip.boarding_time}` : '-'}</SummaryRow>
+              <SummaryRow label={roundtrip.active ? 'Outbound' : 'Departure'}>{trip ? `${trip.trip_date} ${trip.boarding_time}` : '-'}</SummaryRow>
+              {roundtrip.active && (
+                <SummaryRow label="Return">{roundtrip.data?.return ? `${roundtrip.data.return.trip_date} ${roundtrip.data.return.boarding_time}` : '-'}</SummaryRow>
+              )}
               <SummaryRow label="Seat Type">{form.seat_type === 'standing' ? 'Standing' : 'Seated'}</SummaryRow>
               <SummaryRow label="Payment">Online &middot; {form.payment_channel === 'maya' ? 'Maya' : 'GCash'}</SummaryRow>
-              <SummaryRow label="Unit Fare">PHP {hasFareQuote ? Number(unitFare).toFixed(2) : '0.00'}</SummaryRow>
-              <SummaryRow label="Quantity">{totalTickets}</SummaryRow>
+              <SummaryRow label={roundtrip.active ? 'Fare (both tickets)' : 'Unit Fare'}>
+                PHP {roundtrip.active ? (roundtrip.canPay ? Number(roundtrip.total).toFixed(2) : '0.00') : (hasFareQuote ? Number(unitFare).toFixed(2) : '0.00')}
+              </SummaryRow>
+              <SummaryRow label={roundtrip.active ? 'Passengers' : 'Quantity'}>{totalTickets}</SummaryRow>
               <SummaryRow label="Gross Total">PHP {Number(grossTotal || 0).toFixed(2)}</SummaryRow>
               <SummaryRow label="Rewards Applied">{Number(rewardPointsToApply || 0).toFixed(0)} RP</SummaryRow>
             </dl>
@@ -584,7 +600,9 @@ export default function BuyTicket({ onTicketPurchased }) {
                   ? 'Choose where you board and where you get off.'
                   : !trip
                     ? 'Choose a departure to continue.'
-                    : 'Choose where you get off to see your fare.'}
+                    : roundtrip.active
+                      ? (roundtrip.blockedReason || 'Choose your return date and time.')
+                      : 'Choose where you get off to see your fare.'}
               </p>
             )}
           </Card>

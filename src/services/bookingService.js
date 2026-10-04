@@ -55,6 +55,21 @@ export async function getDepartures(params) {
   return data(response)
 }
 
+/**
+ * Roundtrip (Batch 28, item 4): both legs resolved by the server, with fares and bus labels, before payment.
+ * params: { origin_stop_id, destination_stop_id, outbound_mode, outbound_date?, outbound_time?, return_date, return_time, seat_type? }
+ */
+export async function getRoundtrip(params) {
+  const response = await api.get('/booking/roundtrip', { params })
+  return data(response)
+}
+
+/** The lists the fleet and fare forms are built from (vehicle classes, service types, rounding modes). Public, no fare values. */
+export async function getFareOptions() {
+  const response = await api.get('/fare/options')
+  return data(response)
+}
+
 /** Timeline for a trip, recomputed for the chosen boarding/alighting stop or custom drop-off pin. */
 export async function getTripTimeline(tripId, selection = {}) {
   const params = {}

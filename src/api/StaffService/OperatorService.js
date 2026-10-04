@@ -198,6 +198,10 @@ class OperatorService extends StaffBaseService {
   // ── Fare Rules ──
   // The backend requires step-up for this call: pass the token from StepUpModal
   // (password confirmation), sent as the X-Step-Up-Token header.
+  async getFareRules(filters = {}) {
+    return await this.request('/operator/fare-rules', 'GET', filters);
+  }
+
   async createFareRule(fareData, stepUpToken = null) {
     const extraHeaders = stepUpToken ? { 'X-Step-Up-Token': stepUpToken } : {};
     return await this.request(`/operator/fare-rules`, 'POST', fareData, extraHeaders);

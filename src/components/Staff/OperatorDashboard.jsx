@@ -6,7 +6,8 @@ import CalendarSummaryStrip from './CalendarSummaryStrip'
 import DashboardCalendar from './DashboardCalendar'
 import StaffCalendar from './StaffCalendar'
 import { ModalShell } from '../ui/Modal'
-import StepUpModal from './StepUpModal'
+import FareRulesPanel from './FareRulesPanel'
+import useFareOptions from '../../api/hooks/Staff/useFareOptions'
 import HistoricalForecastPanel from './HistoricalForecastPanel'
 import { openPrintReport } from '../../utils/printReport'
 import OperatorService from '../../api/StaffService/OperatorService'
@@ -724,21 +725,16 @@ function FleetsTab({ fleets, routes, trips, onRefresh }) {
     manageSaving,
     fleetForm, setFleetForm,
     assignForm, setAssignForm,
-    fareForm, setFareForm,
-    fareSaving,
-    fareMsg,
     refreshFleetLocations,
     statusToProgress,
     statusLabel,
     getLocationForTrip,
     handleCreateFleet,
     handleAssignRoute,
-    handleApplyFareRule,
-    stepUpOpen,
-    handleStepUpVerified,
-    closeStepUp,
     openFleetMap,
   } = useFleetsTab({ onRefresh })
+  const fareOptions = useFareOptions()
+  const classLabel = (key) => fareOptions.vehicle_classes.find((entry) => entry.key === key)?.label
 
   const todayStart = getBusinessToday()
   const displayTrips = [...trips]
@@ -796,6 +792,10 @@ function FleetsTab({ fleets, routes, trips, onRefresh }) {
               <option value="public">Public</option>
               <option value="private">Private</option>
             </select>
+            <select aria-label="Vehicle class" value={fleetForm.vehicle_class} onChange={(event) => setFleetForm((prev) => ({ ...prev, vehicle_class: event.target.value }))} className="rounded-lg border border-slate-600 bg-[#0B1324] px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-teal-500">
+              <option value="">Vehicle class: not specified</option>
+              {fareOptions.vehicle_classes.map((entry) => <option key={entry.key} value={entry.key}>{entry.label}</option>)}
+            </select>
             <input type="number" min="0" value={fleetForm.seated_capacity} onChange={(event) => setFleetForm((prev) => ({ ...prev, seated_capacity: event.target.value }))} required placeholder="Seated capacity" className="rounded-lg border border-slate-600 bg-[#0B1324] px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-teal-500" />
             <input type="number" min="0" value={fleetForm.standing_capacity} onChange={(event) => setFleetForm((prev) => ({ ...prev, standing_capacity: event.target.value }))} required placeholder="Standing capacity" className="rounded-lg border border-slate-600 bg-[#0B1324] px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-teal-500" />
             <select value={fleetForm.route_id} onChange={(event) => setFleetForm((prev) => ({ ...prev, route_id: event.target.value }))} className="rounded-lg border border-slate-600 bg-[#0B1324] px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-teal-500 sm:col-span-2">
@@ -844,29 +844,7 @@ function FleetsTab({ fleets, routes, trips, onRefresh }) {
         </form>
       </div>
 
-      <form onSubmit={handleApplyFareRule} className="rounded-2xl border border-slate-700 bg-[#101a30] p-4">
-        <h3 className="text-sm font-semibold uppercase tracking-[0.14em] text-slate-300">Apply Fare Rule</h3>
-        <p className="mt-1 text-xs text-slate-400">Set pricing per fleet and seat type used during ticket booking.</p>
-        <div className="mt-3 grid gap-3 md:grid-cols-4">
-          <select value={fareForm.fleet_id} onChange={(event) => setFareForm((prev) => ({ ...prev, fleet_id: event.target.value }))} required className="rounded-lg border border-slate-600 bg-[#0B1324] px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-teal-500">
-            <option value="">Fleet</option>
-            {fleets.map((fleet) => <option key={`fare-fleet-${fleet.fleet_id}`} value={fleet.fleet_id}>{fleet.plate_number}</option>)}
-          </select>
-          <select value={fareForm.seat_type} onChange={(event) => setFareForm((prev) => ({ ...prev, seat_type: event.target.value }))} className="rounded-lg border border-slate-600 bg-[#0B1324] px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-teal-500">
-            <option value="seated">Seated</option>
-            <option value="standing">Standing</option>
-          </select>
-          <input type="number" min="0" step="0.01" value={fareForm.base_fare} onChange={(event) => setFareForm((prev) => ({ ...prev, base_fare: event.target.value }))} required placeholder="Base Fare" className="rounded-lg border border-slate-600 bg-[#0B1324] px-3 py-2 text-sm text-white outline-none placeholder:text-slate-400 focus:ring-2 focus:ring-teal-500" />
-          <input type="number" min="0" step="0.01" value={fareForm.fare_per_km} onChange={(event) => setFareForm((prev) => ({ ...prev, fare_per_km: event.target.value }))} required placeholder="Fare / km" className="rounded-lg border border-slate-600 bg-[#0B1324] px-3 py-2 text-sm text-white outline-none placeholder:text-slate-400 focus:ring-2 focus:ring-teal-500" />
-        </div>
-        <button type="submit" disabled={fareSaving} className="mt-3 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-60">{fareSaving ? 'Applying...' : 'Apply Fare Rule'}</button>
-        {fareMsg && (
-          <p className={`mt-3 rounded-xl border px-3 py-2 text-sm ${fareMsg.toLowerCase().includes('failed') ? 'border-red-400/50 bg-red-500/10 text-red-200' : 'border-emerald-400/50 bg-emerald-500/10 text-emerald-200'}`}>
-            {fareMsg}
-          </p>
-        )}
-      </form>
-      <StepUpModal open={stepUpOpen} onClose={closeStepUp} onVerified={handleStepUpVerified} />
+      <FareRulesPanel service={OperatorService} fleets={fleets} routes={routes} canCreateGeneral={false} />
 
       {manageMsg && (
         <p className={`rounded-xl border px-3 py-2 text-sm ${manageMsg.toLowerCase().includes('failed') ? 'border-red-400/50 bg-red-500/10 text-red-200' : 'border-emerald-400/50 bg-emerald-500/10 text-emerald-200'}`}>
@@ -1019,7 +997,7 @@ function FleetsTab({ fleets, routes, trips, onRefresh }) {
                 <article key={`fleet-unassigned-${fleet.fleet_id}`} className="rounded-2xl border border-slate-700 bg-[#18243A] p-4 shadow-[0_6px_20px_rgba(0,0,0,0.25)]">
                   <div className="rounded-xl bg-[#222F45] p-3">
                     <p className="text-xl font-bold text-white">{fleet?.plate_number || `Fleet ${fleet?.fleet_id || '-'}`}</p>
-                    <p className="text-sm text-slate-300">{fleet?.fleet_type || 'public'} fleet</p>
+                    <p className="text-sm text-slate-300">{fleet?.fleet_type || 'public'} fleet &middot; {classLabel(fleet?.vehicle_class) || 'class not specified'}</p>
                     <p className="text-sm text-slate-300">
                       {Array.isArray(fleet?.fleet_routes) && fleet.fleet_routes.length > 0
                         ? `Routes: ${fleet.fleet_routes.map((fr) => fr?.route?.route_name).filter(Boolean).join(', ') || 'assigned'}`

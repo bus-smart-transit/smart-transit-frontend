@@ -25,14 +25,15 @@ const timeline = (overrides = {}) => ({
 });
 
 describe('TripTimeline', () => {
-  test('shows the header without a bus class, badges, ETA unavailable, and folds pass-through runs', () => {
+  test('shows the header with the bus class and fleet type as not specified when unset, badges, ETA unavailable, and folds pass-through runs', () => {
     render(<TripTimeline timeline={timeline()} />);
 
     expect(screen.getByText('Last Stop')).toBeInTheDocument();
     expect(screen.getByText(/via Mid A, Mid B/)).toBeInTheDocument();
     expect(screen.getByText('BUS - 1')).toBeInTheDocument();
     expect(screen.getByText('1 h 35 min')).toBeInTheDocument();
-    expect(screen.queryByText(/class/i)).not.toBeInTheDocument();
+    expect(screen.getByTestId('timeline-bus-class')).toHaveTextContent('Class not specified');
+    expect(screen.getByTestId('timeline-bus-class')).toHaveTextContent('Fleet type not specified');
     expect(screen.getByText('You board here')).toBeInTheDocument();
     expect(screen.getByText('You get off here')).toBeInTheDocument();
     expect(screen.getByText('ETA unavailable')).toBeInTheDocument();
@@ -40,6 +41,14 @@ describe('TripTimeline', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /show 3 stops/i }));
     expect(screen.getByText('Stop 3')).toBeInTheDocument();
+  });
+
+  test('shows the class and the fleet type from the data, side by side', () => {
+    render(<TripTimeline timeline={timeline({ bus: { label: 'BUS - 1', class: 'aircon', class_label: 'Aircon', fleet_type: 'public' } })} />);
+
+    expect(screen.getByTestId('timeline-bus-class')).toHaveTextContent('Aircon');
+    expect(screen.getByTestId('timeline-bus-class')).toHaveTextContent('Public');
+    expect(screen.getByTestId('timeline-bus-class')).not.toHaveTextContent('not specified');
   });
 
   test('choosing a selectable stop asks the server to recompute via the callback', () => {

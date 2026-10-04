@@ -26,7 +26,7 @@ import { useConductorPairing, useConductorDashboardData } from '../../api/hooks/
 import { getBusinessTodayLabel } from '../../utils/dates';
 import { destinationsAhead, isOnsiteFormComplete, orderedStopsForLeg, stopLabel } from '../../utils/cashTicket';
 import CustomDropoffModal from '../Passenger/Timeline/CustomDropoffModal';
-import { FARE_UNAVAILABLE, isExpress } from '../../utils/serviceType';
+import { isExpress } from '../../utils/serviceType';
 import ServiceTypeChip from '../ui/ServiceTypeChip';
 import { deriveTripStatus } from '../../utils/tripStatus';
 import { FOR_APPROVAL_LABEL, isForApproval } from '../../utils/assignmentRequest';
@@ -629,8 +629,8 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                 <article className="staff-card">
                   <h3 className="mb-4 flex items-center gap-2 text-2xl font-bold text-slate-900">Manual Cash Ticket <ServiceTypeChip serviceType={trip?.service_type} /></h3>
                   {tripIsExpress && (
-                    <p role="status" data-testid="express-fare-unavailable" className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800">
-                      {FARE_UNAVAILABLE}: this is an express trip and it has no fare yet, so no ticket can be issued. Only the stops this express trip serves are listed.
+                    <p role="status" data-testid="express-fare-note" className="mb-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
+                      Express trip: only the stops it serves are listed. A ticket is issued only where an express fare exists for this bus class; if not, the system says &quot;Fare unavailable&quot; and nothing is sold.
                     </p>
                   )}
 
@@ -765,7 +765,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                         type="button"
                         className="rounded-lg bg-cyan-700 px-3 py-2 text-sm font-semibold text-white transition hover:bg-cyan-800 disabled:cursor-not-allowed disabled:opacity-60"
                         onClick={handleOnsiteCheckout}
-                        disabled={checkoutInFlight || !hasActiveTrip || !isPaired || !hasOpenShift || cashCapacity.isFull || tripIsExpress}
+                        disabled={checkoutInFlight || !hasActiveTrip || !isPaired || !hasOpenShift || cashCapacity.isFull}
                       >
                         {checkoutInFlight ? 'Processing...' : 'Generate Ticket'}
                       </button>

@@ -6,6 +6,7 @@ import { isSameBusinessDay, getBusinessToday, getBusinessNowMs, toBusinessSchedu
 import { fetchTrafficStatus } from '../../../services/trafficService';
 import { initFcmAndGetToken } from '../../../services/fcmService';
 import { MAP_CONFIG } from '../../../config/mapConfig';
+import { approxMeters, shouldSendPing } from '../../../utils/gpsPing';
 import { readDeepLink } from '../../../utils/notificationTarget';
 import useAssignmentCards from './useAssignmentCards';
 
@@ -463,9 +464,10 @@ export function useDriverDashboardData({ onLogout, pairing }) {
       { enableHighAccuracy: true, maximumAge: 10000 }
     );
 
-    // Push to backend every 10 seconds — only if moved > 30m since last send.
-    // Backoff: after 3 consecutive failures pause 30s before retrying.
-    const MIN_DISTANCE_M = 30;
+    // Push to backend every 10 seconds - when the bus moved at least 30 m, or on a 45 s heartbeat so a parked
+    // or queued bus does not go stale on the server (its limit is 90 s). Backoff: after 3 consecutive failures
+    // pause 30s before retrying.
+    let lastSentAt = 0;
     let consecutiveFailures = 0;
     let backoffUntil = 0;
     const sendPing = async () => {
@@ -475,12 +477,10 @@ export function useDriverDashboardData({ onLogout, pairing }) {
       const fixAccuracy = lastGpsRef.current.accuracy;
       if (Number.isFinite(fixAccuracy) && fixAccuracy > MAP_CONFIG.maxAccuracyM) return;
       const last = lastSentGpsRef.current;
-      if (last) {
-        const dLat = lastGpsRef.current.latitude - last.latitude;
-        const dLng = lastGpsRef.current.longitude - last.longitude;
-        const approxMeters = Math.sqrt(dLat * dLat + dLng * dLng) * 111320;
-        if (approxMeters < MIN_DISTANCE_M) return; // haven't moved enough — skip
-      }
+      if (!shouldSendPing({
+        movedMeters: last ? approxMeters(lastGpsRef.current, last) : null,
+        msSinceLastSend: last && lastSentAt ? Date.now() - lastSentAt : null,
+      })) return; // not moved enough and the heartbeat is not due yet
       try {
         await DriverService.updateLocation(
           lastGpsRef.current.latitude,
@@ -490,6 +490,7 @@ export function useDriverDashboardData({ onLogout, pairing }) {
           lastGpsRef.current.accuracy ?? null,
         );
         lastSentGpsRef.current = { latitude: lastGpsRef.current.latitude, longitude: lastGpsRef.current.longitude };
+        lastSentAt = Date.now();
         consecutiveFailures = 0; // reset on success
       } catch {
         consecutiveFailures++;
@@ -502,7 +503,11 @@ export function useDriverDashboardData({ onLogout, pairing }) {
 
     void sendPing();
     gpsIntervalRef.current = setInterval(() => { void sendPing(); }, 10000);
+    // A hidden tab may have its timers slowed by the browser: send as soon as it is visible again.
+    const onVisible = () => { if (!document.hidden) void sendPing(); };
+    document.addEventListener('visibilitychange', onVisible);
     return () => {
+      document.removeEventListener('visibilitychange', onVisible);
       navigator.geolocation?.clearWatch(gpsWatchRef.current);
       gpsWatchRef.current = null;
       clearInterval(gpsIntervalRef.current);

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Bell, Bus, Map as MapIcon, Ticket, User, LogOut, Gift, History, LayoutGrid, Menu, House, X } from 'lucide-react';
 import usePassengerDashboard from '../../../api/hooks/Passenger/usePassengerDashboard';
 import PassengerService from '../../../api/PassengerService/PassengerService';
@@ -16,6 +17,7 @@ import Toggle from '../../ui/Toggle';
 import Modal from '../../ui/Modal';
 import { parseAppDate, getBusinessToday } from '../../../utils/dates';
 import { busLabelText } from '../../../utils/busLabel';
+import { buildBookingQuery } from '../../../utils/bookingQuery';
 import ServiceTypeChip from '../../ui/ServiceTypeChip';
 
 const preloadMapView = () =>
@@ -890,7 +892,26 @@ export default function Dashboard() {
               <p className="mt-3 flex items-center gap-2 text-sm text-slate-600" data-testid="ticket-bus-service">
                 <span>Bus: <strong className="text-slate-900">{getFleetDisplayLabel(selectedTicket)}</strong></span>
                 <ServiceTypeChip serviceType={selectedTicket?.trip?.service_type} />
+                {selectedTicket.journey_leg && (
+                  <span data-testid="ticket-journey-leg" className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-600">
+                    {selectedTicket.journey_leg === 'return' ? 'Return ticket' : 'Outbound ticket'}
+                  </span>
+                )}
               </p>
+              {selectedTicket.return_journey?.origin_stop_code && selectedTicket.return_journey?.destination_stop_code && !selectedTicket.journey_leg && (
+                <p className="mt-2 text-sm">
+                  <Link
+                    data-testid="book-return-link"
+                    className="font-semibold text-navy-800 underline hover:text-navy-950"
+                    to={`/passenger/book?${buildBookingQuery({ from: selectedTicket.return_journey.origin_stop_code, to: selectedTicket.return_journey.destination_stop_code })}`}
+                  >
+                    Book your return trip
+                  </Link>
+                  <span className="ml-2 text-xs text-slate-500">
+                    {selectedTicket.return_journey.destination_is_nearest_preceding_stop ? 'You boarded between stops, so the return goes to the stop just before where you boarded.' : ''}
+                  </span>
+                </p>
+              )}
               <div className="mt-4 rounded-xl bg-slate-50 p-4">
                 <p className="text-xs text-slate-400">Drop-off Location</p>
                 <p className="mt-1 text-sm font-semibold text-navy-950">{getDestinationLabel(selectedTicket)}</p>

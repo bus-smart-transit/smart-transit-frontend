@@ -74,6 +74,15 @@ class AdminService extends StaffBaseService {
   }
 
   // ── Account Management ──
+  async getFareRules(filters = {}) {
+    return await this.request(`/admin/fare-rules`, 'GET', filters);
+  }
+
+  async createFareRule(fareData, stepUpToken = null) {
+    const extraHeaders = stepUpToken ? { 'X-Step-Up-Token': stepUpToken } : {};
+    return await this.request(`/admin/fare-rules`, 'POST', fareData, extraHeaders);
+  }
+
   async createAdminAccount(accountData) {
     return await this.request(`/admin/accounts`, 'POST', accountData);
   }

@@ -5,6 +5,8 @@ import { readApiError } from '../../../services/bookingService';
 import { useBookingStops, useDepartures, useTripResolution } from './useBookingSearch';
 import useBookingLink from './useBookingLink';
 import useTripTimeline from './useTripTimeline';
+import useRoundtrip from './useRoundtrip';
+import { buildRoundtripItems } from '../../../utils/roundtrip';
 import { findStopCode, withBookingParams } from '../../../utils/bookingQuery';
 import { groupQrPayload, openPrintWindow } from '../../../utils/qr';
 import { manilaDepartureLabel } from '../../../utils/ticketImage';
@@ -246,6 +248,20 @@ export default function useBuyTicket({ onTicketPurchased }) {
   const isRewardRequestInsufficient = form.use_rewards && requestedRewardPoints > maxRedeemableRewardPoints;
   const netTotal = Number(Math.max(0, grossTotal - rewardPointsToApply).toFixed(2));
   const hasRewardPoints = availableRewardPoints > 0;
+
+  // Batch 28, item 4: roundtrip. The server resolves both legs and prices each from its own trip; rewards and a
+  // custom drop-off are one-way features, so a roundtrip is payable only without them.
+  const roundtrip = useRoundtrip({
+    originStopId: form.origin_stop_id || null,
+    destinationStopId: effectiveAlightingStopId || null,
+    outbound: { mode: bookingMode, date: trip?.trip_date || travelDate, time: bookingMode === 'later' && trip ? trip.boarding_time : '' },
+    seatType: form.seat_type,
+    today: stopsData.today,
+    maxAdvanceDays: stopsData.maxAdvanceDays,
+    unavailableReason: dropoff ? 'A custom drop-off is for one-way tickets. Choose a stop to book a roundtrip.' : '',
+  });
+  const roundtripOn = roundtrip.active;
+  const roundtripTotal = roundtripOn && roundtrip.canPay ? Number((roundtrip.total * quantity).toFixed(2)) : 0;
 
   const handleChange = useCallback((field, value) => {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -744,10 +760,12 @@ export default function useBuyTicket({ onTicketPurchased }) {
       if (!dropoff && !effectiveAlightingStopId) {
         nextErrors.destination_stop_id = 'Please choose where you get off.';
       }
-      if (!canProceedToOnlinePayment) {
-        nextErrors.payment = 'Your fare is not ready yet. Check the journey above and try again.';
+      if (roundtripOn ? !roundtrip.canPay : !canProceedToOnlinePayment) {
+        nextErrors.payment = roundtripOn
+          ? (roundtrip.blockedReason || 'Choose your return date and time so both trips can be confirmed.')
+          : 'Your fare is not ready yet. Check the journey above and try again.';
       }
-      if (form.use_rewards && isRewardRequestInsufficient) {
+      if (!roundtripOn && form.use_rewards && isRewardRequestInsufficient) {
         nextErrors.reward_points_to_use = `Insufficient reward points for this booking. Max usable now: ${maxRedeemableRewardPoints} RP.`;
       }
 
@@ -776,10 +794,17 @@ export default function useBuyTicket({ onTicketPurchased }) {
         return_base_url: window.location.origin,
         payment_channel: form.payment_channel,
       };
+      if (roundtripOn) {
+        // One booking, one payment, two tickets per passenger. Each item carries its own trip, stops and date;
+        // the server re-resolves, re-validates and re-prices every one (no fare is sent).
+        payload.journey_type = 'roundtrip';
+        payload.items = buildRoundtripItems({ data: roundtrip.data, seatType: form.seat_type, quantity });
+        delete payload.booking_date;
+      }
       // Only a guest is asked for an email, and only so we can find their ticket again;
       // the payment page collects everything else.
       if (isGuestCheckout && form.guest_email) payload.guest_email = form.guest_email;
-      if (!isGuestCheckout && form.use_rewards && rewardPointsToApply > 0) {
+      if (!roundtripOn && !isGuestCheckout && form.use_rewards && rewardPointsToApply > 0) {
         payload.reward_points_to_use = rewardPointsToApply;
       }
 
@@ -834,6 +859,10 @@ export default function useBuyTicket({ onTicketPurchased }) {
     maxRedeemableRewardPoints,
     quantity,
     rewardPointsToApply,
+    roundtrip.blockedReason,
+    roundtrip.canPay,
+    roundtrip.data,
+    roundtripOn,
     trip,
   ]);
 
@@ -856,7 +885,7 @@ export default function useBuyTicket({ onTicketPurchased }) {
     form,
     formErrors,
     formatDateTime,
-    grossTotal,
+    grossTotal: roundtripOn ? roundtripTotal : grossTotal,
     handleChange,
     handleJourneyChange,
     handleSubmit,
@@ -868,8 +897,9 @@ export default function useBuyTicket({ onTicketPurchased }) {
     loadingQr,
     loadingRewards,
     maxRedeemableRewardPoints,
-    netTotal,
+    netTotal: roundtripOn ? roundtripTotal : netTotal,
     openDropoffModal,
+    roundtrip,
     printQrTicket,
     qrTickets,
     resolution,

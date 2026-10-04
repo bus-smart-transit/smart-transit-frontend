@@ -125,6 +125,11 @@ export default function TripTimeline({
         <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
           <span className="inline-flex items-center gap-1" data-testid="timeline-bus-label"><Bus size={13} /> {busLabelText(bus?.label)}</span>
           <ServiceTypeChip serviceType={timeline.trip?.service_type} />
+          <span data-testid="timeline-bus-class">
+            {bus?.class_label || 'Class not specified'}
+            {' \u00b7 '}
+            {bus?.fleet_type ? `${bus.fleet_type.charAt(0).toUpperCase()}${bus.fleet_type.slice(1)}` : 'Fleet type not specified'}
+          </span>
           {timeline.trip?.departure_time && <span>Departs {timeline.trip.departure_time}</span>}
           {facts.map((fact) => (
             <span key={fact.label}><span className="text-slate-400">{fact.label}: </span><strong className="text-navy-950">{fact.value}</strong></span>
