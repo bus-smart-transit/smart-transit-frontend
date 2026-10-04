@@ -23,6 +23,8 @@ import QrImage from '../Passenger/Ticket/QrImage';
 import RequestedStopRow from './RequestedStopRow';
 import { groupRequestedStops } from '../../utils/requestedStops';
 import NotificationBellButton from './NotificationBellButton';
+import TripFocusNotice from './TripFocusNotice';
+import { describeAssignmentFocus } from '../../utils/notificationTarget';
 import { useDriverPairing, useDriverDashboardData } from '../../api/hooks/Staff/useDriverDashboard';
 import { getBusinessTodayLabel } from '../../utils/dates';
 import { deriveTripDurationLabel, deriveTripStatus } from '../../utils/tripStatus';
@@ -144,6 +146,8 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   const [calendarFocus, setCalendarFocus] = useState(null);
   const {
     activeTab, setActiveTab,
+    focusTripId, openTripFromNotification, dismissTripFocus,
+    assignedTrips,
     assignedTripFilter,
     profile,
     trip,
@@ -212,6 +216,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     setActiveTab('schedule');
   };
   const requestedGroups = groupRequestedStops(requestedStops);
+  const focusNotice = describeAssignmentFocus(assignedTrips, focusTripId, 'driver');
 
   const derivedTripStatus = deriveTripStatus(trip || todayAssignedTrip);
 
@@ -289,7 +294,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
               <RefreshCw className="h-3.5 w-3.5" />
               Refresh
             </button>
-            <NotificationBellButton service={DriverService} role="driver" />
+            <NotificationBellButton service={DriverService} role="driver" onOpenNotification={openTripFromNotification} />
           </div>
           </div>
         </header>
@@ -557,12 +562,13 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                 <span className="text-xs text-slate-400">{new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</span>
               </div>
             </div>
+            <TripFocusNotice tripId={focusTripId} notice={focusNotice} onDismiss={dismissTripFocus} className="mb-4" />
             {filteredAssignedTrips.length === 0 ? (
               <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-5 text-sm text-slate-500">No trips match this filter.</div>
             ) : (
               <div className="space-y-5">
-                <DriverTripTable title="Today's Assigned Trips" trips={todayAssignedTrips} onSelectTrip={setTripDetailsModal} onDeclineTrip={setConfirmDecline} onAcceptTrip={handleAcceptTrip} />
-                <DriverTripTable title="Upcoming Trips" trips={upcomingAssignedTrips} onSelectTrip={setTripDetailsModal} onDeclineTrip={setConfirmDecline} onAcceptTrip={handleAcceptTrip} emptyMessage="No upcoming trips match this filter." />
+                <DriverTripTable title="Today's Assigned Trips" trips={todayAssignedTrips} focusTripId={focusTripId} onSelectTrip={setTripDetailsModal} onDeclineTrip={setConfirmDecline} onAcceptTrip={handleAcceptTrip} />
+                <DriverTripTable title="Upcoming Trips" trips={upcomingAssignedTrips} focusTripId={focusTripId} onSelectTrip={setTripDetailsModal} onDeclineTrip={setConfirmDecline} onAcceptTrip={handleAcceptTrip} emptyMessage="No upcoming trips match this filter." />
               </div>
             )}
           </section>
@@ -1010,7 +1016,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   );
 }
 
-function DriverTripTable({ title, trips, onSelectTrip, onDeclineTrip, onAcceptTrip, emptyMessage = 'No trips in this section.' }) {
+function DriverTripTable({ title, trips, focusTripId, onSelectTrip, onDeclineTrip, onAcceptTrip, emptyMessage = 'No trips in this section.' }) {
   return (
     <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
       <h5 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">{title}</h5>
@@ -1035,7 +1041,7 @@ function DriverTripTable({ title, trips, onSelectTrip, onDeclineTrip, onAcceptTr
                 // today OR upcoming \u2014 regardless of pairing status.
                 const canDecline = ['scheduled', 'delayed', 'boarding'].includes(String(item?.status || '').toLowerCase());
                 return (
-                  <tr key={item.trip_id} className="cursor-pointer hover:bg-slate-50 transition-colors" onClick={() => onSelectTrip(item)} title="Click for trip details">
+                  <tr key={item.trip_id} id={`trip-row-${item.trip_id}`} className={`cursor-pointer transition-colors hover:bg-slate-50 ${Number(focusTripId) === Number(item.trip_id) ? 'bg-teal-50 ring-2 ring-inset ring-teal-300' : ''}`} onClick={() => onSelectTrip(item)} title="Click for trip details">
                     <td className="py-3 pr-4 pl-4 font-data text-slate-500">RTE-{item.trip_id}</td>
                     <td className="py-3 pr-4 font-semibold text-slate-900">{item.fleet_route?.route?.origin || '-'} → {item.fleet_route?.route?.destination || '-'}</td>
                     <td className="py-3 pr-4 font-data text-slate-600">{formatTripSchedule(item)}</td>

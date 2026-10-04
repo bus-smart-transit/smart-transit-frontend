@@ -13,7 +13,6 @@ import {
   RefreshCw,
   Ticket,
   UserCheck,
-  Users,
 } from 'lucide-react';
 import PairingScreen from './PairingScreen';
 import StaffPortalLayout from './StaffPortalLayout';
@@ -23,8 +22,11 @@ import DashboardCalendar from './DashboardCalendar';
 import { ModalShell } from '../ui/Modal';
 import StaffCalendar from './StaffCalendar';
 import NotificationBellButton from './NotificationBellButton';
+import TripFocusNotice from './TripFocusNotice';
+import { describeAssignmentFocus } from '../../utils/notificationTarget';
 import { useConductorPairing, useConductorDashboardData } from '../../api/hooks/Staff/useConductorDashboard';
 import { getBusinessTodayLabel } from '../../utils/dates';
+import { destinationsAhead, orderedStopsForLeg, stopLabel } from '../../utils/cashTicket';
 import { deriveTripStatus } from '../../utils/tripStatus';
 import { FOR_APPROVAL_LABEL, canRespondToAssignment, getAssignmentRequestStatus, isForApproval } from '../../utils/assignmentRequest';
 import ConductorService from '../../api/StaffService/ConductorService';
@@ -132,7 +134,7 @@ export default function ConductorDashboard() {
   );
 }
 
-function TripCardGroup({ title, trips, onDeclineTrip, onAcceptTrip, emptyMessage = 'No trips in this section.' }) {
+function TripCardGroup({ title, trips, focusTripId, onDeclineTrip, onAcceptTrip, emptyMessage = 'No trips in this section.' }) {
   return (
     <div className="md:col-span-2 staff-card">
       <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">{title}</h3>
@@ -147,7 +149,7 @@ function TripCardGroup({ title, trips, onDeclineTrip, onAcceptTrip, emptyMessage
             // upcoming — regardless of pairing status.
             const canDecline = ['scheduled', 'delayed', 'boarding'].includes(String(item?.status || '').toLowerCase());
             return (
-              <article key={item.trip_id} className="staff-card">
+              <article key={item.trip_id} id={`trip-row-${item.trip_id}`} className={`staff-card ${Number(focusTripId) === Number(item.trip_id) ? 'ring-2 ring-teal-300' : ''}`}>
                 <div className="mb-4 flex items-center justify-between">
                   <h3 className="text-lg font-semibold text-slate-900">Trip #{item.trip_id}</h3>
                   <span className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs text-sky-700">{item.status}</span>
@@ -200,6 +202,8 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   const [calendarFocus, setCalendarFocus] = useState(null);
   const {
     activeTab, setActiveTab,
+    focusTripId, openTripFromNotification, dismissTripFocus,
+    assignedTrips,
     assignedTripFilter,
     profile,
     trip,
@@ -257,9 +261,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     occStandingCap,
     occTotalCap,
     occupiedTotal,
-    standingCapacity,
-    seatedRows,
-    buildRowSeats,
+    cashCapacity,
     pageTitle,
     handleAssignedTripFilterChange,
     handleTwoFactorToggle,
@@ -285,6 +287,11 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     setCalendarFocus(date);
     setActiveTab('schedule');
   };
+  // Batch 27: the cash ticket offers real stopping stops in the order this leg travels
+  // them, and only stops ahead of the boarding stop as destinations. The server
+  // computes the fare either way.
+  const legStops = orderedStopsForLeg(routeStops, trip?.leg_direction);
+  const destinationOptions = destinationsAhead(legStops, onsiteForm.origin_stop_id);
 
   const headerBadge = resolveConductorHeaderBadge({
     pairingLoading: pairing.loading,
@@ -358,7 +365,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
               <RefreshCw className="h-3.5 w-3.5" />
               Refresh
             </button>
-            <NotificationBellButton service={ConductorService} role="conductor" />
+            <NotificationBellButton service={ConductorService} role="conductor" onOpenNotification={openTripFromNotification} />
             {actionMsg && <span className="basis-full rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">{actionMsg}</span>}
           </div>
           </div>
@@ -506,6 +513,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                 <option value="completed">Completed</option>
               </select>
             </div>
+            <TripFocusNotice tripId={focusTripId} notice={describeAssignmentFocus(assignedTrips, focusTripId, 'conductor')} onDismiss={dismissTripFocus} className="md:col-span-2" />
             {filteredAssignedTrips.length === 0 ? (
               <article className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-6">
                 <h3 className="text-lg font-semibold text-slate-900">No Assigned Trips</h3>
@@ -513,8 +521,8 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
               </article>
             ) : (
               <>
-                <TripCardGroup title="Today's Assigned Trip" trips={todayAssignedTrips} onDeclineTrip={setConfirmDecline} onAcceptTrip={handleAcceptTrip} />
-                <TripCardGroup title="Upcoming Trips" trips={upcomingAssignedTrips} onDeclineTrip={setConfirmDecline} onAcceptTrip={handleAcceptTrip} emptyMessage="No upcoming trips match this filter." />
+                <TripCardGroup title="Today's Assigned Trip" trips={todayAssignedTrips} focusTripId={focusTripId} onDeclineTrip={setConfirmDecline} onAcceptTrip={handleAcceptTrip} />
+                <TripCardGroup title="Upcoming Trips" trips={upcomingAssignedTrips} focusTripId={focusTripId} onDeclineTrip={setConfirmDecline} onAcceptTrip={handleAcceptTrip} emptyMessage="No upcoming trips match this filter." />
               </>
             )}
           </section>
@@ -643,58 +651,29 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
               </article>
             ) : (
               <div className="staff-grid lg:grid-cols-[1.1fr_1fr]">
-                <article className="staff-card">
-                  <h3 className="mb-3 text-2xl font-bold text-slate-900">SEAT LAYOUT</h3>
-                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                    <div className="mb-3 inline-flex items-center gap-2 rounded-lg bg-slate-700 px-3 py-2 text-sm font-semibold text-white">
-                      <Users className="h-3.5 w-3.5" /> Driver
+                <article className="staff-card" data-testid="capacity-card">
+                  <h3 className="mb-3 text-2xl font-bold text-slate-900">Bus Capacity</h3>
+                  <p className="mb-4 text-sm text-slate-500">Passengers sit anywhere once ticketed. Tickets stop being issued when the bus is full.</p>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <p className="font-data text-4xl font-bold text-slate-900">
+                      {cashCapacity.onboard}<span className="text-xl font-semibold text-slate-400"> / {cashCapacity.capacity || '-'}</span>
+                    </p>
+                    <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Passengers onboard / bus capacity</p>
+                    <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-slate-200">
+                      <div
+                        className={`h-full rounded-full transition-all ${cashCapacity.isFull ? 'bg-red-500' : 'bg-teal-500'}`}
+                        style={{ width: `${cashCapacity.capacity > 0 ? Math.min(100, Math.round((Math.max(cashCapacity.onboard, cashCapacity.sold) / cashCapacity.capacity) * 100)) : 0}%` }}
+                      />
                     </div>
-                    <div className="max-h-115 overflow-y-auto pr-1">
-                      <div className="space-y-2">
-                        {Array.from({ length: seatedRows }).map((_, rowIndex) => (
-                          <div key={`row-${rowIndex}`} className="grid grid-cols-5 gap-2">
-                            {buildRowSeats(rowIndex).map((seatCell, cellIndex) => {
-                              if (seatCell === 'aisle') {
-                                return <div key={`aisle-${rowIndex}-${cellIndex}`} className="h-10 border-b border-dashed border-slate-300" />;
-                              }
-
-                              if (!seatCell) {
-                                return <div key={`empty-${rowIndex}-${cellIndex}`} className="h-10" />;
-                              }
-
-                              return (
-                                <div
-                                  key={seatCell.id}
-                                  className={`flex h-10 items-center justify-center rounded-lg text-xs font-semibold ${seatCell.occupied ? 'bg-slate-300 text-slate-700' : 'bg-emerald-500 text-white'}`}
-                                >
-                                  <Users className="h-3.5 w-3.5" />
-                                </div>
-                              );
-                            })}
-                          </div>
-                        ))}
-                      </div>
-
-                      <div className="staff-card staff-card-compact mt-4">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Standing Capacity</p>
-                        <div className="mt-2 grid grid-cols-8 gap-1.5">
-                          {Array.from({ length: Math.min(standingCapacity, 24) }).map((_, index) => {
-                            const standingOccupied = index < Math.min(occStanding, standingCapacity);
-                            return (
-                              <div
-                                key={`standing-${index}`}
-                                className={`h-4 rounded-full ${standingOccupied ? 'bg-slate-400' : 'bg-emerald-400'}`}
-                                title={standingOccupied ? 'Standing occupied' : 'Standing available'}
-                              />
-                            );
-                          })}
-                        </div>
-                      </div>
+                    <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
+                      <div><p className="text-xs text-slate-500">Tickets sold</p><p className="font-data font-semibold text-slate-900">{cashCapacity.sold}</p></div>
+                      <div><p className="text-xs text-slate-500">Places left</p><p className="font-data font-semibold text-slate-900">{cashCapacity.remaining ?? '-'}</p></div>
                     </div>
-                    <div className="mt-3 flex flex-wrap items-center gap-4 text-xs text-slate-600">
-                      <span className="inline-flex items-center gap-2"><span className="h-3 w-3 rounded-full bg-slate-400" />Occupied</span>
-                      <span className="inline-flex items-center gap-2"><span className="h-3 w-3 rounded-full bg-emerald-500" />Available</span>
-                    </div>
+                    {cashCapacity.isFull && (
+                      <p role="alert" data-testid="bus-full-notice" className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">
+                        The bus is full. No more tickets can be issued.
+                      </p>
+                    )}
                   </div>
                 </article>
 
@@ -703,32 +682,35 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
 
                   <div className="space-y-3">
                     <div>
-                      <label className="mb-1 block text-sm font-semibold text-slate-700">Select Origin</label>
+                      <label htmlFor="onsite-origin" className="mb-1 block text-sm font-semibold text-slate-700">Boarding stop</label>
                       <select
+                        id="onsite-origin"
                         value={onsiteForm.origin_stop_id}
-                        onChange={(e) => setOnsiteForm((prev) => ({ ...prev, origin_stop_id: e.target.value }))}
+                        onChange={(e) => setOnsiteForm((prev) => ({ ...prev, origin_stop_id: e.target.value, destination_stop_id: '' }))}
                         className="h-11 w-full rounded-lg border border-slate-300 bg-slate-800 px-3 text-sm text-white outline-none focus:border-teal-500"
                       >
-                        <option value="">Select origin stop</option>
-                        {routeStops.map((stop) => (
+                        <option value="">Select boarding stop</option>
+                        {legStops.map((stop) => (
                           <option key={`onsite-origin-${stop.stop_id}`} value={stop.stop_id}>
-                            {stop?.stop?.stop_name || stop?.stop_name || `Stop ${stop.stop_id}`}
+                            {stopLabel(stop)}
                           </option>
                         ))}
                       </select>
                     </div>
 
                     <div>
-                      <label className="mb-1 block text-sm font-semibold text-slate-700">Select Destination</label>
+                      <label htmlFor="onsite-destination" className="mb-1 block text-sm font-semibold text-slate-700">Select Destination</label>
                       <select
+                        id="onsite-destination"
                         value={onsiteForm.destination_stop_id}
                         onChange={(e) => setOnsiteForm((prev) => ({ ...prev, destination_stop_id: e.target.value }))}
-                        className="h-11 w-full rounded-lg border border-slate-300 bg-slate-800 px-3 text-sm text-white outline-none focus:border-teal-500"
+                        disabled={!onsiteForm.origin_stop_id}
+                        className="h-11 w-full rounded-lg border border-slate-300 bg-slate-800 px-3 text-sm text-white outline-none focus:border-teal-500 disabled:opacity-60"
                       >
-                        <option value="">Select destination stop</option>
-                        {routeStops.map((stop) => (
+                        <option value="">{onsiteForm.origin_stop_id ? 'Select destination stop' : 'Choose the boarding stop first'}</option>
+                        {destinationOptions.map((stop) => (
                           <option key={`onsite-destination-${stop.stop_id}`} value={stop.stop_id}>
-                            {stop?.stop?.stop_name || stop?.stop_name || `Stop ${stop.stop_id}`}
+                            {stopLabel(stop)}
                           </option>
                         ))}
                       </select>
@@ -761,7 +743,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                         type="button"
                         className="rounded-lg bg-cyan-700 px-3 py-2 text-sm font-semibold text-white transition hover:bg-cyan-800 disabled:cursor-not-allowed disabled:opacity-60"
                         onClick={handleOnsiteCheckout}
-                        disabled={checkoutInFlight || !hasActiveTrip || !isPaired || !hasOpenShift}
+                        disabled={checkoutInFlight || !hasActiveTrip || !isPaired || !hasOpenShift || cashCapacity.isFull}
                       >
                         {checkoutInFlight ? 'Processing...' : 'Generate Ticket'}
                       </button>
@@ -975,7 +957,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                           <tr className="border-b border-slate-200 text-xs uppercase tracking-[0.16em] text-slate-500">
                             <th className="py-3">#</th>
                             <th className="py-3">Name</th>
-                            <th className="py-3">Seat Type</th>
+                            <th className="py-3">Passenger Type</th>
                             <th className="py-3">Destination</th>
                             <th className="py-3">Status</th>
                             <th className="py-3">Action</th>
@@ -1225,7 +1207,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
             <h3 className="mb-2 text-base font-bold text-slate-100">Record Cash Payment?</h3>
             <p className="mb-4 text-sm text-slate-400">This will create a payment record. <strong className="text-amber-300">This cannot be undone.</strong></p>
             <dl className="mb-4 grid grid-cols-2 gap-2 rounded-lg bg-slate-800 p-3 text-sm">
-              <div><dt className="text-xs text-slate-500">Seat Type</dt><dd className="font-semibold text-slate-100 capitalize">{onsiteForm.seat_type}</dd></div>
+              <div><dt className="text-xs text-slate-500">Passenger Type</dt><dd className="font-semibold text-slate-100 capitalize">{onsiteForm.seat_type}</dd></div>
               <div><dt className="text-xs text-slate-500">Trip ID</dt><dd className="font-semibold text-slate-100">#{trip?.trip_id}</dd></div>
             </dl>
             <div className="flex gap-2">

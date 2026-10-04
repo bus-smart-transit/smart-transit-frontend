@@ -7,6 +7,7 @@ import { fetchTrafficStatus } from '../../../services/trafficService';
 import { initFcmAndGetToken } from '../../../services/fcmService';
 import { MAP_CONFIG } from '../../../config/mapConfig';
 import { extractFieldErrors } from '../../../utils/assignmentRequest';
+import { readDeepLink } from '../../../utils/notificationTarget';
 
 // Architecture audit follow-up (CONF-03): DriverDashboard.jsx previously
 // called DriverService directly from ~24 sites spread across the
@@ -178,7 +179,11 @@ export function useDriverPairing() {
  * unchanged — this hook only derives `handleLogout` from `onLogout`.
  */
 export function useDriverDashboardData({ onLogout, pairing }) {
-  const [activeTab, setActiveTab] = useState('dashboard');
+  // Batch 27, Task 1: a push tap or link may open straight onto a trip
+  // (?tab=dashboard&trip=ID). Read once, as initial state.
+  const [initialLink] = useState(() => readDeepLink(typeof window !== 'undefined' ? window.location.search : '', 'driver'));
+  const [activeTab, setActiveTab] = useState(initialLink.tab || 'dashboard');
+  const [focusTripId, setFocusTripId] = useState(initialLink.tripId);
   const [assignedTripFilter, setAssignedTripFilter] = useState('all');
   const [profile, setProfile] = useState(null);
   const [trip, setTrip] = useState(null);
@@ -894,8 +899,22 @@ export function useDriverDashboardData({ onLogout, pairing }) {
               ? 'Daily PIN'
               : 'Account';
 
+  // Batch 27, Task 1: open a trip from a notification (bell click) and clear the focus.
+  const openTripFromNotification = (target) => {
+    if (!target) return;
+    setActiveTab(target.tab);
+    setFocusTripId(target.tripId);
+  };
+  const dismissTripFocus = () => {
+    setFocusTripId(null);
+    if (typeof window !== 'undefined' && window.location.search) {
+      window.history.replaceState(null, '', window.location.pathname);
+    }
+  };
+
   return {
     activeTab, setActiveTab,
+    focusTripId, openTripFromNotification, dismissTripFocus,
     assignedTripFilter,
     profile,
     trip,

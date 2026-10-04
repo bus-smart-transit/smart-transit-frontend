@@ -1,3 +1,5 @@
+import { formatManilaDateTime } from '../../../utils/dates';
+
 const resolveStopName = (ticket, stopId, stopLookup, key) => {
   const stopObj = ticket?.[key];
   if (typeof stopObj === 'string') return stopObj;
@@ -55,11 +57,13 @@ export default function useOnsiteReceiptPrinter() {
         </head>
         <body>
           <h1>Smart Transit Onsite Checkout Receipt</h1>
-          <p class="muted">Printed: ${new Date().toLocaleString()}</p>
+          <p class="muted">Printed: ${formatManilaDateTime(new Date().toISOString())} (Manila time)</p>
           <div class="meta">
             <p><strong>Transaction Ref:</strong> ${payment.transaction_reference || '-'}</p>
             <p><strong>Payment ID:</strong> ${payment.payment_id || '-'}</p>
-            <p><strong>Recorded At:</strong> ${receipt.createdAtLabel || '-'}</p>
+            <p><strong>Payment:</strong> Cash</p>
+            <p><strong>Issued By:</strong> ${receipt.issuedBy || '-'}</p>
+            <p><strong>Recorded At:</strong> ${receipt.createdAtLabel || '-'} (Manila time)</p>
           </div>
 
           <table>
@@ -67,7 +71,7 @@ export default function useOnsiteReceiptPrinter() {
               <tr>
                 <th>#</th>
                 <th>Ticket UUID</th>
-                <th>Seat</th>
+                <th>Type</th>
                 <th>Origin</th>
                 <th>Destination</th>
                 <th>Amount</th>

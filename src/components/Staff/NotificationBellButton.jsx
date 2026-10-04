@@ -1,6 +1,7 @@
 import { Bell } from 'lucide-react';
 import Modal from '../ui/Modal/Modal';
 import { useNotificationBell } from '../../api/hooks/Staff/useNotificationBell';
+import { resolveNotificationTarget } from '../../utils/notificationTarget';
 
 /**
  * S1 (Batch 17): persistent, always-accessible bell icon for Driver/
@@ -13,8 +14,13 @@ import { useNotificationBell } from '../../api/hooks/Staff/useNotificationBell';
  *
  * Mount this once in each dashboard's persistent header/sidebar (not
  * inside a specific tab) so it's reachable from anywhere in the portal.
+ *
+ * Batch 27, Task 1: a notification that has a target (today only "New Trip
+ * Assignment") is clickable: it is marked read and `onOpenNotification`
+ * receives { path, tab, tripId } so the dashboard can open that trip. The
+ * other types stay plain text.
  */
-export default function NotificationBellButton({ service, role }) {
+export default function NotificationBellButton({ service, role, onOpenNotification }) {
   const {
     open, setOpen,
     notifications,
@@ -23,6 +29,12 @@ export default function NotificationBellButton({ service, role }) {
     handleMarkRead,
     handleMarkAllRead,
   } = useNotificationBell(service, role);
+
+  const openNotification = (n, target) => {
+    if (!n.read_at) handleMarkRead(n.notification_id);
+    setOpen(false);
+    onOpenNotification?.(target);
+  };
 
   return (
     <>
@@ -58,26 +70,44 @@ export default function NotificationBellButton({ service, role }) {
           ) : notifications.length === 0 ? (
             <p className="py-6 text-center text-sm text-slate-400">No notifications yet.</p>
           ) : (
-            notifications.map((n) => (
-              <div
-                key={n.notification_id}
-                className={`rounded-lg border px-3 py-2.5 text-sm ${n.read_at ? 'border-slate-100 bg-slate-50 text-slate-500' : 'border-amber-200 bg-amber-50 text-slate-800'}`}
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <p className="font-semibold">{n.title}</p>
-                  {!n.read_at && (
-                    <button
-                      type="button"
-                      onClick={() => handleMarkRead(n.notification_id)}
-                      className="shrink-0 text-xs font-semibold text-teal-600 hover:underline"
-                    >
-                      Mark read
-                    </button>
-                  )}
+            notifications.map((n) => {
+              const target = onOpenNotification ? resolveNotificationTarget(n, role) : null;
+              const tone = n.read_at ? 'border-slate-100 bg-slate-50 text-slate-500' : 'border-amber-200 bg-amber-50 text-slate-800';
+              const clickProps = target
+                ? {
+                  role: 'button',
+                  tabIndex: 0,
+                  onClick: () => openNotification(n, target),
+                  onKeyDown: (e) => {
+                    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openNotification(n, target); }
+                  },
+                }
+                : {};
+              return (
+                <div
+                  key={n.notification_id}
+                  data-testid="notification-item"
+                  data-clickable={target ? 'true' : 'false'}
+                  className={`rounded-lg border px-3 py-2.5 text-sm ${tone} ${target ? 'cursor-pointer transition hover:border-teal-300 hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-teal-300' : ''}`}
+                  {...clickProps}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="font-semibold">{n.title}</p>
+                    {!n.read_at && (
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); handleMarkRead(n.notification_id); }}
+                        className="shrink-0 text-xs font-semibold text-teal-600 hover:underline"
+                      >
+                        Mark read
+                      </button>
+                    )}
+                  </div>
+                  <p className="mt-1 text-xs">{n.body}</p>
+                  {target && <p className="mt-1 text-xs font-semibold text-teal-700">Open trip →</p>}
                 </div>
-                <p className="mt-1 text-xs">{n.body}</p>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </Modal>

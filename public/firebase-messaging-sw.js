@@ -31,3 +31,47 @@ messaging.onBackgroundMessage((payload) => {
     data: payload?.data || {},
   });
 });
+
+// Batch 27, Task 1: tapping a "New Trip Assignment" push opens that trip.
+// The server puts a relative `link` in the data (backend NotificationLink);
+// this mirrors src/utils/notificationTarget.js (a service worker cannot import
+// the app's modules). Only same-site /employee/ paths are ever opened.
+const CLICKABLE_TYPES = ['trip_assigned'];
+const STAFF_ROLES = ['driver', 'conductor', 'operator'];
+const DEFAULT_TAB = { driver: 'dashboard', conductor: 'dashboard', operator: 'trips' };
+
+function isSafeStaffPath(path) {
+  return (
+    typeof path === 'string' &&
+    path.startsWith('/employee/') &&
+    !path.startsWith('//') &&
+    !/[\s\\]/.test(path) &&
+    !/^[a-z][a-z0-9+.-]*:/i.test(path)
+  );
+}
+
+function targetPathFor(data) {
+  if (!data || !CLICKABLE_TYPES.includes(String(data.type || ''))) return null;
+  if (isSafeStaffPath(data.link)) return data.link;
+  const tripId = Number(data.trip_id);
+  if (!STAFF_ROLES.includes(data.role) || !Number.isInteger(tripId) || tripId <= 0) return null;
+  return `/employee/${data.role}/dashboard?tab=${DEFAULT_TAB[data.role]}&trip=${tripId}`;
+}
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const path = targetPathFor(event.notification.data);
+  if (!path) return; // other notification types keep their old behaviour (just dismiss)
+
+  const url = new URL(path, self.location.origin).href;
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windows) => {
+      const existing = windows.find((w) => new URL(w.url).origin === self.location.origin);
+      if (existing) {
+        // Reuse the open tab (full navigation so the dashboard reads the link).
+        return existing.navigate(url).then((c) => (c || existing).focus());
+      }
+      return self.clients.openWindow(url);
+    }),
+  );
+});

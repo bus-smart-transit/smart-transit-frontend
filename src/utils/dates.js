@@ -209,3 +209,20 @@ export function formatManilaDate(isoDate) {
     weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC',
   });
 }
+
+/**
+ * An instant (for example the server's ISO 8601 UTC time, "2026-10-04T09:30:00Z")
+ * as Manila wall-clock time, "2026/10/04 - 17:30". Independent of the device timezone.
+ */
+export function formatManilaDateTime(value) {
+  if (!value) return '-';
+  const date = value instanceof Date ? value : new Date(String(value));
+  if (Number.isNaN(date.getTime())) return '-';
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-GB', {
+      timeZone: BUSINESS_TIMEZONE, year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+    }).formatToParts(date).map((p) => [p.type, p.value]),
+  );
+  return `${parts.year}/${parts.month}/${parts.day} - ${parts.hour}:${parts.minute}`;
+}

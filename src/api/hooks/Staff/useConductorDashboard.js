@@ -4,8 +4,10 @@ import QrScanner from 'qr-scanner';
 import ConductorService from '../../StaffService/ConductorService';
 import usePassengersByTrip from './usePassengersByTrip';
 import useOnsiteReceiptPrinter from './useOnsiteReceiptPrinter';
-import { isSameBusinessDay, getBusinessToday, getBusinessNowMs, toBusinessScheduleMs, debugLogBusinessTime } from '../../../utils/dates';
+import { isSameBusinessDay, getBusinessToday, getBusinessNowMs, toBusinessScheduleMs, debugLogBusinessTime, formatManilaDateTime } from '../../../utils/dates';
+import { capacitySummary } from '../../../utils/cashTicket';
 import { extractFieldErrors } from '../../../utils/assignmentRequest';
+import { readDeepLink } from '../../../utils/notificationTarget';
 
 // Architecture audit follow-up (CONF-03): ConductorDashboard.jsx previously
 // called ConductorService directly from ~22 sites spread across the
@@ -60,22 +62,8 @@ const filterTripsByStatus = (trips, statusFilter) => {
 
 const UUID_PATTERN = /[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i;
 
-// Used for the onsite checkout receipt's timestamp label (also displayed
-// via useOnsiteReceiptPrinter's print template).
-const formatDateTime = (value) => {
-  if (!value) return '-';
-  const str = String(value);
-  const isDateOnly = /^\d{4}-\d{2}-\d{2}$/.test(str);
-  const date = new Date(isDateOnly ? str + 'T00:00' : str);
-  if (Number.isNaN(date.getTime())) return '-';
-  const yyyy = date.getFullYear();
-  const mm = String(date.getMonth() + 1).padStart(2, '0');
-  const dd = String(date.getDate()).padStart(2, '0');
-  if (isDateOnly) return `${yyyy}/${mm}/${dd}`;
-  const hh = String(date.getHours()).padStart(2, '0');
-  const min = String(date.getMinutes()).padStart(2, '0');
-  return `${yyyy}/${mm}/${dd} - ${hh}:${min}`;
-};
+// Batch 27: the receipt time is the server's issue time (UTC) shown in Manila time
+// (formatManilaDateTime), never the device clock.
 
 /**
  * Pairing-check bootstrap + logout, previously the top-level
@@ -144,7 +132,11 @@ export function useConductorDashboardData({ onLogout, pairing }) {
   // ("Ticketing" tab, key 'occupancy') rather than the Start Shift screen —
   // assignment accept/reject remains reachable from there via the
   // pre-shift welcome/no-trip sections rendered on this same tab.
-  const [activeTab, setActiveTab] = useState('occupancy');
+  // Batch 27, Task 1: a push tap or link may open straight onto a trip
+  // (?tab=dashboard&trip=ID). Read once, as initial state.
+  const [initialLink] = useState(() => readDeepLink(typeof window !== 'undefined' ? window.location.search : '', 'conductor'));
+  const [activeTab, setActiveTab] = useState(initialLink.tab || 'occupancy');
+  const [focusTripId, setFocusTripId] = useState(initialLink.tripId);
   const [assignedTripFilter, setAssignedTripFilter] = useState('all');
   const [profile, setProfile] = useState(null);
   const [trip, setTrip] = useState(null);
@@ -998,7 +990,8 @@ export function useConductorDashboardData({ onLogout, pairing }) {
       setOnsiteReceipt({
         payment: checkoutData?.payment || null,
         tickets: checkoutData?.tickets || [],
-        createdAtLabel: formatDateTime(new Date().toISOString()),
+        createdAtLabel: formatManilaDateTime(checkoutData?.issued_at || new Date().toISOString()),
+        issuedBy: checkoutData?.issued_by?.name || null,
       });
 
       setActionMsg('Onsite checkout recorded successfully.');
@@ -1010,6 +1003,11 @@ export function useConductorDashboardData({ onLogout, pairing }) {
       void loadPassengers();
       void loadOccupancy();
       void loadEarnings();
+      // Batch 27: refresh the trip itself so the "tickets sold" count (and the
+      // full-bus block) follow the sale without a page reload.
+      ConductorService.getConductorTrip().then((res) => {
+        if (res?.data) setTrip(res.data);
+      }).catch(() => {});
     } catch (err) {
       setOnsiteReceipt(null);
       setActionMsg(err.message || 'Failed to record onsite checkout.');
@@ -1026,35 +1024,13 @@ export function useConductorDashboardData({ onLogout, pairing }) {
   const occStandingCap = Number(occupancy?.capacity?.standing ?? occupancy?.standing_capacity ?? 0);
   const occTotalCap = Number(occupancy?.capacity?.total ?? occupancy?.total_capacity ?? 0);
   const occupiedTotal = Math.max(0, occSeated + occStanding);
-  const fleetType = String(trip?.fleet_route?.fleet?.fleet_type || '').toLowerCase();
-  const seatsPerRow = fleetType.includes('mini') ? 3 : 4;
-  const seatedCapacity = occSeatedCap > 0
-    ? occSeatedCap
-    : Math.max(Math.round((occTotalCap || occupiedTotal || 24) * 0.7), 16);
-  const standingCapacity = occStandingCap > 0
-    ? occStandingCap
-    : Math.max((occTotalCap || occupiedTotal || 24) - seatedCapacity, 4);
-  const seatedRows = Math.ceil(seatedCapacity / seatsPerRow);
-
-  const buildRowSeats = (rowIndex) => {
-    const base = rowIndex * seatsPerRow;
-    const seats = Array.from({ length: seatsPerRow }).map((_, seatOffset) => {
-      const seatNumber = base + seatOffset + 1;
-      if (seatNumber > seatedCapacity) return null;
-      const occupied = seatNumber <= Math.min(occSeated, seatedCapacity);
-      return {
-        id: `seat-${seatNumber}`,
-        label: seatNumber,
-        occupied,
-      };
-    });
-
-    if (seatsPerRow === 4) {
-      return [seats[0], seats[1], 'aisle', seats[2], seats[3]];
-    }
-
-    return [seats[0], 'aisle', seats[1], seats[2]];
-  };
+  // Batch 27: no seat layout. Capacity is a count: tickets sold (the server's own
+  // count, which is what refuses a sale), passengers onboard, and bus capacity.
+  const cashCapacity = capacitySummary({
+    capacity: occTotalCap || Number(trip?.fleet_route?.fleet?.capacity ?? 0),
+    sold: trip?.total_occupancy,
+    onboard: occupiedTotal,
+  });
 
   const pageTitle =
     activeTab === 'dashboard'
@@ -1069,8 +1045,22 @@ export function useConductorDashboardData({ onLogout, pairing }) {
                 ? 'Daily PIN'
                 : 'Account';
 
+  // Batch 27, Task 1: open a trip from a notification (bell click) and clear the focus.
+  const openTripFromNotification = (target) => {
+    if (!target) return;
+    setActiveTab(target.tab);
+    setFocusTripId(target.tripId);
+  };
+  const dismissTripFocus = () => {
+    setFocusTripId(null);
+    if (typeof window !== 'undefined' && window.location.search) {
+      window.history.replaceState(null, '', window.location.pathname);
+    }
+  };
+
   return {
     activeTab, setActiveTab,
+    focusTripId, openTripFromNotification, dismissTripFocus,
     assignedTripFilter,
     profile,
     trip,
@@ -1115,6 +1105,7 @@ export function useConductorDashboardData({ onLogout, pairing }) {
     showNoCurrentTripState,
     routeStops,
     groupedPassengers,
+    assignedTrips,
     filteredAssignedTrips,
     todayAssignedTrips,
     upcomingAssignedTrips,
@@ -1129,12 +1120,7 @@ export function useConductorDashboardData({ onLogout, pairing }) {
     occStandingCap,
     occTotalCap,
     occupiedTotal,
-    fleetType,
-    seatsPerRow,
-    seatedCapacity,
-    standingCapacity,
-    seatedRows,
-    buildRowSeats,
+    cashCapacity,
     pageTitle,
     handleAssignedTripFilterChange,
     handleTwoFactorToggle,

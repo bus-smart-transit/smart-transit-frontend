@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import OperatorService from '../../StaffService/OperatorService';
 import { initFcmAndGetToken, stopForegroundListener } from '../../../services/fcmService';
+import { readDeepLink } from '../../../utils/notificationTarget';
 
 // Architecture audit follow-up (CONF-03): OperatorDashboard.jsx's main
 // orchestrator component and its NotificationBell sub-component both called
@@ -24,7 +25,8 @@ import { initFcmAndGetToken, stopForegroundListener } from '../../../services/fc
  */
 export function useOperatorDashboardData() {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('dashboard');
+  // Batch 27, Task 1: a link may open a given tab (?tab=trips&trip=ID); read once.
+  const [activeTab, setActiveTab] = useState(() => readDeepLink(typeof window !== 'undefined' ? window.location.search : '', 'operator').tab || 'dashboard');
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState(null);
   const [trips, setTrips] = useState([]);
