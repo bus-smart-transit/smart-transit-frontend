@@ -1,13 +1,17 @@
 import { formatManilaDateTime } from '../../../utils/dates';
 
-const resolveStopName = (ticket, stopId, stopLookup, key) => {
+const resolveStopName = (ticket, stopId, stopLookup, key, emptyLabel = null) => {
   const stopObj = ticket?.[key];
   if (typeof stopObj === 'string') return stopObj;
   if (stopObj?.stop_name) return stopObj.stop_name;
+  // No stop recorded: a boarding taken between stops, or a pinned drop-off (Batch 27 Part 2, Tasks 6 and 7).
+  if (!stopId && emptyLabel) return emptyLabel;
 
   const routeStop = stopLookup.get(String(stopId));
   return routeStop?.stop?.stop_name || routeStop?.stop_name || `Stop ${stopId || '-'}`;
 };
+
+const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 export default function useOnsiteReceiptPrinter() {
   const printOnsiteReceipt = ({ receipt, routeStops }) => {
@@ -23,8 +27,10 @@ export default function useOnsiteReceiptPrinter() {
 
     const rows = receipt.tickets
       .map((ticket, index) => {
-        const originStop = resolveStopName(ticket, ticket?.origin_stop_id, stopLookup, 'origin_stop');
-        const destinationStop = resolveStopName(ticket, ticket?.destination_stop_id, stopLookup, 'destination_stop');
+        const originStop = escapeHtml(resolveStopName(ticket, ticket?.origin_stop_id, stopLookup, 'origin_stop', 'Boarded between stops'));
+        const destinationStop = escapeHtml(ticket?.destination_label && !ticket?.destination_stop_id
+          ? ticket.destination_label
+          : resolveStopName(ticket, ticket?.destination_stop_id, stopLookup, 'destination_stop', 'Custom drop-off'));
 
         return `
           <tr>

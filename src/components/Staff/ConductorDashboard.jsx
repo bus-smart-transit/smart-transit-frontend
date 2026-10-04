@@ -24,7 +24,8 @@ import StaffCalendar from './StaffCalendar';
 import NotificationBellButton from './NotificationBellButton';
 import { useConductorPairing, useConductorDashboardData } from '../../api/hooks/Staff/useConductorDashboard';
 import { getBusinessTodayLabel } from '../../utils/dates';
-import { destinationsAhead, orderedStopsForLeg, stopLabel } from '../../utils/cashTicket';
+import { destinationsAhead, isOnsiteFormComplete, orderedStopsForLeg, stopLabel } from '../../utils/cashTicket';
+import CustomDropoffModal from '../Passenger/Timeline/CustomDropoffModal';
 import { FARE_UNAVAILABLE, isExpress } from '../../utils/serviceType';
 import ServiceTypeChip from '../ui/ServiceTypeChip';
 import { deriveTripStatus } from '../../utils/tripStatus';
@@ -137,6 +138,9 @@ export default function ConductorDashboard() {
 
 
 function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
+  // Task 7: the custom drop-off pin being placed (kept apart until the Chauffeur confirms it).
+  const [showDropoffModal, setShowDropoffModal] = useState(false);
+  const [draftPin, setDraftPin] = useState(null);
   const [confirmStart, setConfirmStart] = useState(false);
   // The day the full calendar opens on when reached from the dashboard widget (null = today).
   const [calendarFocus, setCalendarFocus] = useState(null);
@@ -164,6 +168,11 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     showScannerModal, setShowScannerModal,
     onsiteReceipt,
     onsiteForm, setOnsiteForm,
+    cashForm,
+    midTripAvailable,
+    boardingPoint,
+    boardingView,
+    refreshBoardingPoint,
     loading,
     error,
     actionMsg, setActionMsg,
@@ -225,7 +234,16 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   // computes the fare either way.
   const legStops = orderedStopsForLeg(routeStops, trip?.leg_direction, trip?.service_type);
   const tripIsExpress = isExpress(trip?.service_type);
-  const destinationOptions = destinationsAhead(legStops, onsiteForm.origin_stop_id);
+  // Task 6: by bus position the server names the stops ahead of the bus; by stop, the stops after the boarding stop.
+  const byBusPosition = cashForm.boarding_mode === 'gps';
+  const destinationOptions = byBusPosition
+    ? boardingView.destinations.map((d) => ({ stop_id: d.stop_id, stop_name: `${d.stop_name} (${d.distance_km} km)` }))
+    : destinationsAhead(legStops, onsiteForm.origin_stop_id);
+  // Task 7: the pin is offered where the route allows it (by stop: the route flag; by bus position: the server's word).
+  const routeAllowsDropoff = Boolean(trip?.fleet_route?.route?.allow_custom_dropoff);
+  const dropoffAvailable = !tripIsExpress && (byBusPosition ? boardingView.customDropoffAvailable : routeAllowsDropoff);
+  const boardingReady = byBusPosition ? boardingView.good : Boolean(onsiteForm.origin_stop_id);
+  const formReady = isOnsiteFormComplete(cashForm, boardingView);
 
   const headerBadge = resolveConductorHeaderBadge({
     pairingLoading: pairing.loading,
@@ -541,7 +559,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
               <div className="crew-load-strip mb-4 flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <p className="text-lg font-bold text-slate-900 sm:text-2xl">
-                    {trip?.fleet_route?.fleet?.plate_number ?? 'Bus 001'} - {trip?.fleet_route?.route?.route_name || `${trip?.fleet_route?.route?.origin || 'Route'} - ${trip?.fleet_route?.route?.destination || 'Pending'}`}
+                    {trip?.fleet_route?.fleet?.plate_number ?? 'Bus unavailable'} - {trip?.fleet_route?.route?.route_name || `${trip?.fleet_route?.route?.origin || 'Route'} - ${trip?.fleet_route?.route?.destination || 'Pending'}`}
                   </p>
                 </div>
                 <div className="flex flex-1 items-center gap-3">
@@ -617,12 +635,62 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                   )}
 
                   <div className="space-y-3">
+                    {midTripAvailable && (
+                      <div>
+                        <p className="mb-1 text-sm font-semibold text-slate-700">Where does the passenger board?</p>
+                        <div role="group" aria-label="Boarding point" data-testid="boarding-mode" className="grid grid-cols-2 gap-2">
+                          {[['stop', 'At a stop'], ['gps', 'Bus position']].map(([mode, label]) => (
+                            <button
+                              key={mode}
+                              type="button"
+                              aria-pressed={cashForm.boarding_mode === mode}
+                              onClick={() => setOnsiteForm((prev) => ({ ...prev, boarding_mode: mode, destination_stop_id: '', dropoff: null }))}
+                              className={`rounded-lg border px-3 py-2 text-sm font-semibold transition ${cashForm.boarding_mode === mode ? 'border-teal-500 bg-teal-50 text-teal-800' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'}`}
+                            >
+                              {label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {byBusPosition && (
+                      <div data-testid="boarding-point-status" role="status" className={`rounded-lg border px-3 py-2 text-sm ${boardingView.good ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-amber-200 bg-amber-50 text-amber-800'}`}>
+                        {boardingPoint.loading && !boardingPoint.response ? (
+                          <p>Reading the bus position...</p>
+                        ) : boardingView.good ? (
+                          <p>Boarding at the bus's current position, {boardingView.distanceFromOriginKm} km from the start of the route. The server sets the fare from there.</p>
+                        ) : (
+                          <>
+                            <p className="font-semibold">The bus position can't be used right now.</p>
+                            <p className="mt-0.5 text-xs">{boardingPoint.error || boardingView.message} Pick the boarding stop instead; the fare is then counted from that stop.</p>
+                            <button
+                              type="button"
+                              className="mt-2 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100"
+                              onClick={() => setOnsiteForm((prev) => ({ ...prev, boarding_mode: 'stop', destination_stop_id: '', dropoff: null }))}
+                            >
+                              Pick the boarding stop
+                            </button>
+                          </>
+                        )}
+                        <button
+                          type="button"
+                          className="mt-2 block text-xs font-semibold underline"
+                          onClick={refreshBoardingPoint}
+                          disabled={boardingPoint.loading}
+                        >
+                          Refresh position
+                        </button>
+                      </div>
+                    )}
+
+                    {!byBusPosition && (
                     <div>
                       <label htmlFor="onsite-origin" className="mb-1 block text-sm font-semibold text-slate-700">Boarding stop</label>
                       <select
                         id="onsite-origin"
                         value={onsiteForm.origin_stop_id}
-                        onChange={(e) => setOnsiteForm((prev) => ({ ...prev, origin_stop_id: e.target.value, destination_stop_id: '' }))}
+                        onChange={(e) => setOnsiteForm((prev) => ({ ...prev, origin_stop_id: e.target.value, destination_stop_id: '', dropoff: null }))}
                         className="h-11 w-full rounded-lg border border-slate-300 bg-slate-800 px-3 text-sm text-white outline-none focus:border-teal-500"
                       >
                         <option value="">Select boarding stop</option>
@@ -633,23 +701,41 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                         ))}
                       </select>
                     </div>
+                    )}
 
                     <div>
                       <label htmlFor="onsite-destination" className="mb-1 block text-sm font-semibold text-slate-700">Select Destination</label>
-                      <select
-                        id="onsite-destination"
-                        value={onsiteForm.destination_stop_id}
-                        onChange={(e) => setOnsiteForm((prev) => ({ ...prev, destination_stop_id: e.target.value }))}
-                        disabled={!onsiteForm.origin_stop_id}
-                        className="h-11 w-full rounded-lg border border-slate-300 bg-slate-800 px-3 text-sm text-white outline-none focus:border-teal-500 disabled:opacity-60"
-                      >
-                        <option value="">{onsiteForm.origin_stop_id ? 'Select destination stop' : 'Choose the boarding stop first'}</option>
-                        {destinationOptions.map((stop) => (
-                          <option key={`onsite-destination-${stop.stop_id}`} value={stop.stop_id}>
-                            {stopLabel(stop)}
-                          </option>
-                        ))}
-                      </select>
+                      {onsiteForm.dropoff ? (
+                        <div data-testid="pinned-dropoff" className="flex items-center justify-between gap-2 rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-sm text-slate-800">
+                          <span className="truncate">Pinned: {onsiteForm.dropoff.label || `${Number(onsiteForm.dropoff.lat).toFixed(5)}, ${Number(onsiteForm.dropoff.lng).toFixed(5)}`}</span>
+                          <button type="button" className="shrink-0 text-xs font-semibold text-teal-700 underline" onClick={() => setOnsiteForm((prev) => ({ ...prev, dropoff: null }))}>Use a stop</button>
+                        </div>
+                      ) : (
+                        <select
+                          id="onsite-destination"
+                          value={onsiteForm.destination_stop_id}
+                          onChange={(e) => setOnsiteForm((prev) => ({ ...prev, destination_stop_id: e.target.value }))}
+                          disabled={!boardingReady}
+                          className="h-11 w-full rounded-lg border border-slate-300 bg-slate-800 px-3 text-sm text-white outline-none focus:border-teal-500 disabled:opacity-60"
+                        >
+                          <option value="">{boardingReady ? 'Select destination stop' : 'Choose the boarding point first'}</option>
+                          {destinationOptions.map((stop) => (
+                            <option key={`onsite-destination-${stop.stop_id}`} value={stop.stop_id}>
+                              {byBusPosition ? stop.stop_name : stopLabel(stop)}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                      {dropoffAvailable && boardingReady && !onsiteForm.dropoff && (
+                        <button
+                          type="button"
+                          data-testid="pin-dropoff"
+                          className="mt-1.5 text-xs font-semibold text-teal-700 underline"
+                          onClick={() => { setDraftPin(null); setShowDropoffModal(true); }}
+                        >
+                          Pin a drop-off between stops instead
+                        </button>
+                      )}
                     </div>
 
                     <div>
@@ -669,7 +755,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                       <input
                         type="text"
                         readOnly
-                        value={onsiteForm.origin_stop_id && onsiteForm.destination_stop_id ? 'Auto-computed on Generate Ticket' : 'Select origin and destination first'}
+                        value={formReady ? 'Auto-computed on Generate Ticket' : 'Select boarding point and destination first'}
                         className="h-11 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 text-sm text-slate-700 outline-none"
                       />
                     </div>
@@ -727,6 +813,21 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                   </div>
                 </article>
               </div>
+            )}
+
+            {showDropoffModal && (
+              <CustomDropoffModal
+                open
+                routeId={trip?.fleet_route?.route_id ?? trip?.fleet_route?.route?.route_id}
+                direction={trip?.leg_direction === 'reverse' ? 'reverse' : 'outbound'}
+                pin={draftPin}
+                onPinChange={setDraftPin}
+                onClose={() => setShowDropoffModal(false)}
+                onConfirm={() => {
+                  setOnsiteForm((prev) => ({ ...prev, dropoff: draftPin, destination_stop_id: '' }));
+                  setShowDropoffModal(false);
+                }}
+              />
             )}
 
             {showScannerModal && (

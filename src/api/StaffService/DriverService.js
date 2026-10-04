@@ -50,19 +50,8 @@ class DriverService extends StaffBaseService {
     return await this.request(`/driver/trips/${tripId}/complete`, 'PATCH');
   }
 
-  // S2 (Batch 12): decline an assigned trip — returns it to the
-  // unassigned pool for the Operator to reassign. reason_code/reason_text
-  // are both optional ("plain decline is enough").
-  async declineDriverTrip(tripId, payload = {}) {
-    return await this.request(`/driver/trips/${tripId}/decline`, 'PATCH', payload);
-  }
-
-  // Batch 15, Item 1: explicit Accept counterpart to declineDriverTrip().
-  async acceptDriverTrip(tripId) {
-    return await this.request(`/driver/trips/${tripId}/accept`, 'PATCH');
-  }
-
   // Batch 28: a shift block (or one standalone trip) is ONE card; accept or decline it once.
+  // The leg-level declineDriverTrip/acceptDriverTrip calls were removed in Batch 27 Part 2: nothing used them.
   async getAssignments() {
     return await this.request('/driver/assignments', 'GET');
   }
@@ -94,6 +83,11 @@ class DriverService extends StaffBaseService {
 
   async startDriverShift() {
     return await this.request('/driver/shift/start', 'POST');
+  }
+
+  // Batch 27 Part 2: ends a shift block's shift (every leg completed or cancelled). The server refuses otherwise.
+  async endDriverShift() {
+    return await this.request('/driver/shift/end', 'POST');
   }
 
   async updateLocation(latitude, longitude, heading = null, speedKmh = null, accuracy = null) {

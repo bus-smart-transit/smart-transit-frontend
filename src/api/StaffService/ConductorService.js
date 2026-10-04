@@ -42,6 +42,12 @@ class ConductorService extends StaffBaseService {
     return await this.request('/conductor/trips/current/occupancy', 'GET');
   }
 
+  // Batch 27 Part 2, Task 6: where the bus is, as a boarding point on this trip's route. No arguments: the server
+  // uses the bus's own latest position, never one sent by the client.
+  async getBoardingPoint() {
+    return await this.request('/conductor/trips/current/boarding-point', 'GET');
+  }
+
   async getOccupancyByStop() {
     return await this.request('/conductor/trips/current/occupancy/by-stop', 'GET');
   }
@@ -62,17 +68,8 @@ class ConductorService extends StaffBaseService {
     return await this.request(`/conductor/tickets/${ticketId}/alight`, 'POST');
   }
 
-  // S2 (Batch 12): mirrors declineDriverTrip() for the conductor role.
-  async declineConductorTrip(tripId, payload = {}) {
-    return await this.request(`/conductor/trips/${tripId}/decline`, 'PATCH', payload);
-  }
-
-  // Batch 15, Item 1/7: explicit Accept counterpart for the conductor role.
-  async acceptConductorTrip(tripId) {
-    return await this.request(`/conductor/trips/${tripId}/accept`, 'PATCH');
-  }
-
   // Batch 28: a shift block (or one standalone trip) is ONE card; accept or decline it once.
+  // The leg-level declineConductorTrip/acceptConductorTrip calls were removed in Batch 27 Part 2: nothing used them.
   async getAssignments() {
     return await this.request('/conductor/assignments', 'GET');
   }

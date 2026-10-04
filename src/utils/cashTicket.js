@@ -48,3 +48,63 @@ export function capacitySummary({ capacity, sold, onboard }) {
     remaining: cap > 0 ? Math.max(0, cap - Math.max(soldCount, onboardCount)) : null,
   };
 }
+
+/**
+ * Batch 27 Part 2, Task 5: the server's one definition of "occupied" (tickets sold) comes in the occupancy
+ * payload as `capacity_summary`. Use it as is; fall back to the local count only when it is missing.
+ */
+export function capacityFromServer(summary, fallback = {}) {
+  if (!summary || typeof summary !== 'object' || !summary.capacity) return capacitySummary(fallback);
+  const cap = Math.max(0, Number(summary.capacity?.total) || 0);
+  return {
+    capacity: cap,
+    sold: Math.max(0, Number(summary.sold?.total) || 0),
+    onboard: Math.max(0, Number(summary.onboard?.total) || 0),
+    isFull: summary.is_full === true,
+    remaining: cap > 0 ? Math.max(0, Number(summary.remaining?.total) || 0) : null,
+  };
+}
+
+/** Mid-trip boarding is offered only while the bus is under way. */
+export const isMidTripBoardingAvailable = (tripStatus) => ['departed', 'in-progress'].includes(String(tripStatus ?? '').toLowerCase());
+
+/** The three shapes the picker can be in once the server has answered. */
+export function boardingPointView(response) {
+  const state = response?.state ?? 'none';
+  const good = state === 'good';
+  return {
+    good,
+    state,
+    message: good ? '' : (response?.message || 'The bus position is not available right now.'),
+    destinations: good && Array.isArray(response?.destinations) ? response.destinations : [],
+    customDropoffAvailable: good && response?.custom_dropoff?.available === true,
+    distanceFromOriginKm: good ? Number(response?.boarding_point?.distance_from_origin_km ?? 0) : null,
+  };
+}
+
+/** Whether the cash form has everything the server needs. The fare is never part of it. */
+export function isOnsiteFormComplete(form, view) {
+  const boardingOk = form?.boarding_mode === 'gps' ? Boolean(view?.good) : Boolean(form?.origin_stop_id);
+  const destinationOk = Boolean(form?.dropoff) || Boolean(form?.destination_stop_id);
+  return boardingOk && destinationOk;
+}
+
+/**
+ * The checkout item. In bus-position mode the client names no boarding point at all (no stop, no coordinates):
+ * the server resolves it from the bus's own position. A pinned drop-off sends only the pin; the server
+ * validates, snaps and prices it.
+ */
+export function buildOnsiteItem({ tripId, form }) {
+  const item = { trip_id: Number(tripId), seat_type: form.seat_type };
+  if (form.boarding_mode === 'gps') item.boarding_mode = 'gps';
+  else item.origin_stop_id = Number(form.origin_stop_id);
+
+  if (form.dropoff) {
+    item.destination_lat = Number(form.dropoff.lat);
+    item.destination_lng = Number(form.dropoff.lng);
+    if (form.dropoff.label) item.destination_label = String(form.dropoff.label).slice(0, 255);
+  } else {
+    item.destination_stop_id = Number(form.destination_stop_id);
+  }
+  return item;
+}

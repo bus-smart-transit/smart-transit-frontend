@@ -6,7 +6,6 @@ import { isSameBusinessDay, getBusinessToday, getBusinessNowMs, toBusinessSchedu
 import { fetchTrafficStatus } from '../../../services/trafficService';
 import { initFcmAndGetToken } from '../../../services/fcmService';
 import { MAP_CONFIG } from '../../../config/mapConfig';
-import { extractFieldErrors } from '../../../utils/assignmentRequest';
 import { readDeepLink } from '../../../utils/notificationTarget';
 import useAssignmentCards from './useAssignmentCards';
 
@@ -198,7 +197,7 @@ export function useDriverDashboardData({ onLogout, pairing }) {
   const [pinInput, setPinInput] = useState('');
   const [pinStatus, setPinStatus] = useState('');
   const [earnings, setEarnings] = useState(null);
-  const [shiftState, setShiftState] = useState({ openShift: null, latestShift: null, loading: false });
+  const [shiftState, setShiftState] = useState({ openShift: null, latestShift: null, isBlockShift: false, endBlockedReason: null, loading: false });
   // Batch 18: Shift Block Hand-off System.
   const [shiftBlocks, setShiftBlocks] = useState([]);
   const [shiftBlockActionInFlight, setShiftBlockActionInFlight] = useState(false);
@@ -208,14 +207,6 @@ export function useDriverDashboardData({ onLogout, pairing }) {
   const [actionMsg, setActionMsg] = useState('');
   const [actionInFlight, setActionInFlight] = useState(false);
   const [confirmComplete, setConfirmComplete] = useState(false);
-  // S2 (Batch 12): decline assigned trip — plain decline, reason code optional.
-  // Holds the trip object being declined (not just a boolean) so decline can
-  // be triggered per-row from the Assigned Trips list — today OR upcoming —
-  // per Batch 14 request: decline must work regardless of pairing status
-  // and regardless of whether the trip is scheduled today or in the future.
-  const [confirmDecline, setConfirmDecline] = useState(null);
-  const [declineErrors, setDeclineErrors] = useState({});
-  const [declineSubmitting, setDeclineSubmitting] = useState(false);
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
   const [saving2fa, setSaving2fa] = useState(false);
   const [msg2fa, setMsg2fa] = useState('');
@@ -340,6 +331,8 @@ export function useDriverDashboardData({ onLogout, pairing }) {
         setShiftState({
           openShift: payload?.open_shift ?? null,
           latestShift: payload?.latest_shift ?? null,
+          isBlockShift: payload?.is_block_shift === true,
+          endBlockedReason: payload?.end_blocked_reason ?? null,
           loading: false,
         });
       } else {
@@ -734,43 +727,17 @@ export function useDriverDashboardData({ onLogout, pairing }) {
     }
   };
 
-  // C6: a decline is a request the Operator approves ("For Approval"), not an
-  // immediate release. On failure the dialog stays open with the typed text
-  // and the server's field errors; nothing the driver entered is lost.
-  const handleConfirmedDecline = async ({ reasonCode, reasonText }) => {
-    const tripId = confirmDecline?.trip_id;
-    if (!tripId) return;
-    setDeclineSubmitting(true);
-    setDeclineErrors({});
-    try {
-      const payload = {};
-      if (reasonCode) payload.reason_code = reasonCode;
-      if (reasonCode === 'other' && reasonText) payload.reason_text = reasonText;
-      await DriverService.declineDriverTrip(tripId, payload);
-      setActionMsg('Request sent. It is now waiting for Operator approval.');
-      setConfirmDecline(null);
-      void loadData();
-    } catch (err) {
-      const fields = extractFieldErrors(err);
-      setDeclineErrors(Object.keys(fields).length > 0 ? fields : { request: err?.message || 'Unable to send the request.' });
-    } finally {
-      setDeclineSubmitting(false);
-    }
-  };
-
-  // Batch 15, Item 1: explicit Accept counterpart to decline above. No
-  // reason/modal needed — a single confirming action records the driver's
-  // acknowledgement of the assignment.
-  const handleAcceptTrip = async (tripToAccept) => {
-    const tripId = tripToAccept?.trip_id;
-    if (!tripId) return;
+  // Batch 27 Part 2, Task 1: a shift block is one shift. End Trip closes only the leg; the driver ends the
+  // shift once every leg is completed or cancelled, and the server decides when (end_blocked_reason).
+  const handleEndShift = async () => {
     setActionInFlight(true);
     try {
-      await DriverService.acceptDriverTrip(tripId);
-      setActionMsg('Trip accepted.');
-      void loadData();
+      const res = await DriverService.endDriverShift();
+      setActionMsg(res?.message || 'Shift ended.');
+      await loadData();
     } catch (err) {
-      setActionMsg(err.message);
+      setActionMsg(err?.message || 'Unable to end your shift right now.');
+      await loadData();
     } finally {
       setActionInFlight(false);
     }
@@ -940,9 +907,6 @@ export function useDriverDashboardData({ onLogout, pairing }) {
     actionMsg, setActionMsg,
     actionInFlight,
     confirmComplete, setConfirmComplete,
-    confirmDecline, setConfirmDecline,
-    declineErrors, setDeclineErrors,
-    declineSubmitting,
     twoFactorEnabled,
     saving2fa,
     msg2fa,
@@ -980,9 +944,8 @@ export function useDriverDashboardData({ onLogout, pairing }) {
     handleAcknowledgeStop,
     handleTripAction,
     handleStartShift,
+    handleEndShift,
     handleConfirmedComplete,
-    handleConfirmedDecline,
-    handleAcceptTrip,
     handleConfirmShiftBlockTakeover,
     handleLogout,
     handleToggleAvailability,

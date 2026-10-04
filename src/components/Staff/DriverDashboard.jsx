@@ -197,6 +197,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     handleAcknowledgeStop,
     handleTripAction,
     handleStartShift,
+    handleEndShift,
     handleConfirmedComplete,
     handleConfirmShiftBlockTakeover,
     handleLogout,
@@ -224,10 +225,20 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
 
   const busRouteLabel = `${currentFleet?.plate_number || 'Fleet pending'} · ${currentRoute?.route_name || 'Route pending'}`;
 
-  // B5: a driver never ends a shift (Chauffeur only); the driver's header
-  // action is Start Shift, then End Trip once the trip is under way.
+  // Header rule (one button): Start Shift, then End Trip while a leg is under way. A shift block is one
+  // shift (Batch 27 Part 2, Task 1): between and after its legs the same button is End Shift, which the
+  // server allows only once every leg is completed or cancelled (end_blocked_reason says why not).
   const tripIsLive = ['departed', 'in-progress'].includes(String(trip?.status || '').toLowerCase());
-  const shiftAction = hasOpenShift
+  const showEndShift = hasOpenShift && shiftState?.isBlockShift === true && !tripIsLive;
+  const shiftAction = showEndShift
+    ? {
+      label: 'End Shift',
+      onClick: handleEndShift,
+      disabled: actionInFlight || Boolean(shiftState?.endBlockedReason),
+      title: shiftState?.endBlockedReason || undefined,
+      className: 'inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 transition hover:bg-rose-100 disabled:opacity-60',
+    }
+    : hasOpenShift
     ? {
       label: 'End Trip',
       onClick: () => handleTripAction('complete'),
@@ -273,7 +284,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
               className={shiftAction.className}
               onClick={shiftAction.onClick}
               disabled={shiftAction.disabled}
-              title={!isPaired && !hasOpenShift ? 'Pairing is required before starting shift.' : undefined}
+              title={shiftAction.title ?? (!isPaired && !hasOpenShift ? 'Pairing is required before starting shift.' : undefined)}
             >
               {shiftAction.label}
             </button>

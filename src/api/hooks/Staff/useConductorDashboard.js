@@ -5,8 +5,7 @@ import ConductorService from '../../StaffService/ConductorService';
 import usePassengersByTrip from './usePassengersByTrip';
 import useOnsiteReceiptPrinter from './useOnsiteReceiptPrinter';
 import { isSameBusinessDay, getBusinessToday, getBusinessNowMs, toBusinessScheduleMs, debugLogBusinessTime, formatManilaDateTime } from '../../../utils/dates';
-import { capacitySummary } from '../../../utils/cashTicket';
-import { extractFieldErrors } from '../../../utils/assignmentRequest';
+import { boardingPointView, buildOnsiteItem, capacityFromServer, isMidTripBoardingAvailable, isOnsiteFormComplete } from '../../../utils/cashTicket';
 import { readDeepLink } from '../../../utils/notificationTarget';
 import useAssignmentCards from './useAssignmentCards';
 
@@ -160,10 +159,20 @@ export function useConductorDashboardData({ onLogout, pairing }) {
   const [showScannerModal, setShowScannerModal] = useState(false);
   const [onsiteReceipt, setOnsiteReceipt] = useState(null);
   const [onsiteForm, setOnsiteForm] = useState({
+    // 'stop' = pick the boarding stop; 'gps' = the bus's own position (only while the bus is under way).
+    boarding_mode: 'stop',
     origin_stop_id: '',
     destination_stop_id: '',
+    // A pinned custom drop-off { lat, lng, label } instead of a destination stop.
+    dropoff: null,
     seat_type: 'seated',
   });
+  // Task 6: the server's answer to "where is the bus on this route?" (never computed here).
+  const [boardingPoint, setBoardingPoint] = useState({ loading: false, response: null, error: '' });
+  // Bus-position boarding exists only while the bus is moving; otherwise the form is always stop-based.
+  const midTripAvailable = isMidTripBoardingAvailable(trip?.status);
+  const cashForm = midTripAvailable ? onsiteForm : { ...onsiteForm, boarding_mode: 'stop' };
+  const boardingView = boardingPointView(boardingPoint.response);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [actionMsg, setActionMsg] = useState('');
@@ -171,13 +180,6 @@ export function useConductorDashboardData({ onLogout, pairing }) {
   const [saving2fa, setSaving2fa] = useState(false);
   const [checkoutInFlight, setCheckoutInFlight] = useState(false);
   const [confirmCheckout, setConfirmCheckout] = useState(false);
-  // S2 (Batch 12): decline assigned trip — mirrors DriverDashboard.jsx.
-  // Holds the trip object being declined (not just a boolean) so decline
-  // can be triggered per-card from the Assigned Trips list — today OR
-  // upcoming — and regardless of pairing status (Batch 14).
-  const [confirmDecline, setConfirmDecline] = useState(null);
-  const [declineErrors, setDeclineErrors] = useState({});
-  const [declineSubmitting, setDeclineSubmitting] = useState(false);
   const [actionInFlight, setActionInFlight] = useState(false);
   // Batch 15, Item 9: "Available" status — distinct from shift/pairing
   // state; can be toggled on even while off-shift.
@@ -381,6 +383,18 @@ export function useConductorDashboardData({ onLogout, pairing }) {
     }
   }, [trip?.trip_id]);
 
+  // Task 6: ask the server where the bus is. Called when the Chauffeur switches to "bus position", on
+  // demand, and every 15 s while that mode is open (the position is only trusted for ~90 s server-side).
+  const refreshBoardingPoint = useCallback(async () => {
+    setBoardingPoint((prev) => ({ ...prev, loading: true, error: '' }));
+    try {
+      const res = await ConductorService.getBoardingPoint();
+      setBoardingPoint({ loading: false, response: res?.data ?? null, error: '' });
+    } catch (err) {
+      setBoardingPoint({ loading: false, response: null, error: err?.message || 'Could not read the bus position.' });
+    }
+  }, []);
+
   const loadPassengers = useCallback(async () => {
     if (!trip?.trip_id) {
       setPassengers([]);
@@ -484,6 +498,15 @@ export function useConductorDashboardData({ onLogout, pairing }) {
     return () => clearTimeout(timer);
   }, [showScannerModal, stopScanner]);
 
+  // Task 6: while the Chauffeur is selling by bus position, keep the server's reading of it fresh.
+  const gpsBoardingOpen = cashForm.boarding_mode === 'gps' && activeTab === 'occupancy' && hasActiveTrip && isPaired;
+  useEffect(() => {
+    if (!gpsBoardingOpen) return undefined;
+    const first = setTimeout(() => { void refreshBoardingPoint(); }, 0);
+    const intervalId = setInterval(() => { if (!document.hidden) void refreshBoardingPoint(); }, 15000);
+    return () => { clearTimeout(first); clearInterval(intervalId); };
+  }, [gpsBoardingOpen, refreshBoardingPoint]);
+
   // C7: the server decides whether End Shift is allowed (unfinished legs in the
   // shift block, trip still boarding/in transit); re-read it after any change.
   const refreshEndBlockedReason = useCallback(async () => {
@@ -515,46 +538,6 @@ export function useConductorDashboardData({ onLogout, pairing }) {
       setActiveTab('occupancy');
     } catch (err) {
       setActionMsg(err?.message || 'Unable to start shift right now.');
-    }
-  };
-
-  // C6: a decline is a request the Operator approves ("For Approval"), not an
-  // immediate release. On failure the dialog stays open with the typed text
-  // and the server's field errors; nothing the Chauffeur entered is lost.
-  const handleConfirmedDecline = async ({ reasonCode, reasonText }) => {
-    const tripId = confirmDecline?.trip_id;
-    if (!tripId) return;
-    setDeclineSubmitting(true);
-    setDeclineErrors({});
-    try {
-      const payload = {};
-      if (reasonCode) payload.reason_code = reasonCode;
-      if (reasonCode === 'other' && reasonText) payload.reason_text = reasonText;
-      await ConductorService.declineConductorTrip(tripId, payload);
-      setActionMsg('Request sent. It is now waiting for Operator approval.');
-      setConfirmDecline(null);
-      void loadData();
-    } catch (err) {
-      const fields = extractFieldErrors(err);
-      setDeclineErrors(Object.keys(fields).length > 0 ? fields : { request: err?.message || 'Unable to send the request.' });
-    } finally {
-      setDeclineSubmitting(false);
-    }
-  };
-
-  // Batch 15, Items 1/7: explicit Accept counterpart to decline above.
-  const handleAcceptTrip = async (tripToAccept) => {
-    const tripId = tripToAccept?.trip_id;
-    if (!tripId) return;
-    setActionInFlight(true);
-    try {
-      await ConductorService.acceptConductorTrip(tripId);
-      setActionMsg('Trip accepted.');
-      void loadData();
-    } catch (err) {
-      setActionMsg(err.message);
-    } finally {
-      setActionInFlight(false);
     }
   };
 
@@ -599,6 +582,7 @@ export function useConductorDashboardData({ onLogout, pairing }) {
   };
 
   const handleEndShift = async () => {
+    setActionInFlight(true);
     try {
       const res = await ConductorService.endConductorShift();
       const shift = res?.data?.shift ?? null;
@@ -611,6 +595,8 @@ export function useConductorDashboardData({ onLogout, pairing }) {
     } catch (err) {
       setActionMsg(err?.message || 'Unable to end shift right now.');
       void refreshEndBlockedReason();
+    } finally {
+      setActionInFlight(false);
     }
   };
 
@@ -965,8 +951,10 @@ export function useConductorDashboardData({ onLogout, pairing }) {
       return;
     }
 
-    if (!onsiteForm.origin_stop_id || !onsiteForm.destination_stop_id) {
-      setActionMsg('Please select origin and destination stops for onsite checkout.');
+    if (!isOnsiteFormComplete(cashForm, boardingView)) {
+      setActionMsg(cashForm.boarding_mode === 'gps'
+        ? 'The bus position is not reliable right now. Pick the boarding stop instead, then choose the destination.'
+        : 'Please select origin and destination stops for onsite checkout.');
       return;
     }
 
@@ -978,14 +966,7 @@ export function useConductorDashboardData({ onLogout, pairing }) {
     setCheckoutInFlight(true);
     try {
       const res = await ConductorService.checkoutOnsite({
-        items: [
-          {
-            trip_id: Number(trip.trip_id),
-            seat_type: onsiteForm.seat_type,
-            origin_stop_id: Number(onsiteForm.origin_stop_id),
-            destination_stop_id: Number(onsiteForm.destination_stop_id),
-          },
-        ],
+        items: [buildOnsiteItem({ tripId: trip.trip_id, form: cashForm })],
       });
 
       const checkoutData = res?.data ?? res ?? {};
@@ -997,11 +978,13 @@ export function useConductorDashboardData({ onLogout, pairing }) {
       });
 
       setActionMsg('Onsite checkout recorded successfully.');
-      setOnsiteForm({
+      setOnsiteForm((prev) => ({
+        ...prev,
         origin_stop_id: '',
         destination_stop_id: '',
+        dropoff: null,
         seat_type: 'seated',
-      });
+      }));
       void loadPassengers();
       void loadOccupancy();
       void loadEarnings();
@@ -1013,6 +996,8 @@ export function useConductorDashboardData({ onLogout, pairing }) {
     } catch (err) {
       setOnsiteReceipt(null);
       setActionMsg(err.message || 'Failed to record onsite checkout.');
+      // The server may have refused the bus position; show its current verdict so the picker can fall back.
+      if (cashForm.boarding_mode === 'gps') void refreshBoardingPoint();
     } finally {
       setCheckoutInFlight(false);
     }
@@ -1026,9 +1011,9 @@ export function useConductorDashboardData({ onLogout, pairing }) {
   const occStandingCap = Number(occupancy?.capacity?.standing ?? occupancy?.standing_capacity ?? 0);
   const occTotalCap = Number(occupancy?.capacity?.total ?? occupancy?.total_capacity ?? 0);
   const occupiedTotal = Math.max(0, occSeated + occStanding);
-  // Batch 27: no seat layout. Capacity is a count: tickets sold (the server's own
-  // count, which is what refuses a sale), passengers onboard, and bus capacity.
-  const cashCapacity = capacitySummary({
+  // Task 5: capacity is the server's own count (`capacity_summary`, tickets sold) - the same number that
+  // refuses a sale. The local count is only a fallback for a payload that does not carry it.
+  const cashCapacity = capacityFromServer(occupancy?.capacity_summary, {
     capacity: occTotalCap || Number(trip?.fleet_route?.fleet?.capacity ?? 0),
     sold: trip?.total_occupancy,
     onboard: occupiedTotal,
@@ -1087,6 +1072,11 @@ export function useConductorDashboardData({ onLogout, pairing }) {
     showScannerModal, setShowScannerModal,
     onsiteReceipt,
     onsiteForm, setOnsiteForm,
+    cashForm,
+    midTripAvailable,
+    boardingPoint,
+    boardingView,
+    refreshBoardingPoint,
     loading,
     error,
     actionMsg, setActionMsg,
@@ -1094,9 +1084,6 @@ export function useConductorDashboardData({ onLogout, pairing }) {
     saving2fa,
     checkoutInFlight,
     confirmCheckout, setConfirmCheckout,
-    confirmDecline, setConfirmDecline,
-    declineErrors, setDeclineErrors,
-    declineSubmitting,
     actionInFlight,
     isAvailable,
     availabilitySaving,
@@ -1136,8 +1123,6 @@ export function useConductorDashboardData({ onLogout, pairing }) {
     loadOccupancy,
     loadEarnings,
     handleStartShift,
-    handleConfirmedDecline,
-    handleAcceptTrip,
     handleToggleAvailability,
     handleEndShift,
     checkShiftBlockEligibility,
