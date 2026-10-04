@@ -23,7 +23,7 @@ import AvailableTripsPage from './AvailableTripsPage';
 const alpha = { stop_id: 1, stop_code: 'alpha-stop', name: 'Alpha Stop' };
 const beta = { stop_id: 2, stop_code: 'beta-stop', name: 'Beta Stop' };
 const trip = (id, date, time) => ({
-  trip_id: id, trip_date: date, boarding_time: time, arrival_time: '09:00', duration_minutes: 30, plate_number: `PLATE-${id}`, seats_left: 12, fare: 58,
+  trip_id: id, trip_date: date, boarding_time: time, arrival_time: '09:00', duration_minutes: 30, bus_label: `BUS - ${id}`, seats_left: 12, fare: 58,
   origin: alpha, destination: beta,
 });
 const answer = (over = {}) => ({

@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AlertCircle, Bus, CalendarDays, CheckCircle, Clock3, CreditCard, Loader, MapPin, Pencil, Smartphone, Wallet } from 'lucide-react';
 import useBuyTicket from '../../../api/hooks/Passenger/useBuyTicket';
+import { busLabelText } from '../../../utils/busLabel';
 import TicketCard from '../Ticket/TicketCard';
 import QrImage from '../Ticket/QrImage';
 import TripTimeline from '../Timeline/TripTimeline';
@@ -386,7 +387,7 @@ export default function BuyTicket({ onTicketPurchased }) {
                         {[
                           [Clock3, 'Departure', `${trip.boarding_time} at ${boardingLabel}`],
                           [Clock3, 'Arrival', alightingRow?.eta_time || 'ETA unavailable'],
-                          [Bus, 'Vehicle', trip.plate_number || '-'],
+                          [Bus, 'Bus', busLabelText(trip.bus_label)],
                           [MapPin, 'Duration', formatDuration(timeline?.header?.duration_minutes) || '-'],
                         ].map(([Icon, label, value]) => (
                           <div key={label}>

@@ -3,6 +3,9 @@ import Button from '../../ui/Button'
 import Card from '../../ui/Card'
 import { formatManilaDate } from '../../../utils/dates'
 import { formatDuration } from '../../../utils/tripTimeline'
+import { busLabelText } from '../../../utils/busLabel'
+import { FARE_UNAVAILABLE } from '../../../utils/serviceType'
+import ServiceTypeChip from '../../ui/ServiceTypeChip'
 
 /**
  * One departure in the search results. Every value comes from the server: times are the scheduled
@@ -31,7 +34,8 @@ export function TripCard({ trip, fromName, toName, seatType = 'seated', showDate
               {' \u2192 '}
               {trip.arrival_time || 'arrival unavailable'}
             </span>
-            {trip.plate_number && <span className="flex items-center gap-1.5"><Bus size={15} aria-hidden="true" />{trip.plate_number}</span>}
+            <span className="flex items-center gap-1.5" data-testid="trip-bus-label"><Bus size={15} aria-hidden="true" />{busLabelText(trip.bus_label)}</span>
+            <ServiceTypeChip serviceType={trip.service_type} />
             {duration && <span>{duration}</span>}
           </div>
           <p className="mt-2 flex items-center gap-1.5 text-sm text-slate-500">
@@ -46,7 +50,9 @@ export function TripCard({ trip, fromName, toName, seatType = 'seated', showDate
               ? <><p className="font-display text-xl font-bold text-navy-950">PHP {Number(trip.fare).toFixed(2)}</p><p className="text-xs text-slate-500">per passenger</p></>
               : <p className="text-sm text-slate-500">Fare unavailable</p>}
           </div>
-          <Button variant="primary" size="sm" onClick={() => onBook(trip)}>Book Seat</Button>
+          <Button variant="primary" size="sm" onClick={() => onBook(trip)} disabled={trip.bookable === false}>
+            {trip.bookable === false ? FARE_UNAVAILABLE : 'Book Seat'}
+          </Button>
         </div>
       </div>
     </Card>

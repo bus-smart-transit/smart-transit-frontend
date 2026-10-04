@@ -64,6 +64,11 @@ class OperatorService extends StaffBaseService {
     return await this.request(`/operator/routes/${routeId}/stops/${routeStopId}`, 'DELETE');
   }
 
+  // Batch 28: whether express trips stop at this route stop (default: terminals only).
+  async setOperatorRouteStopExpress(routeId, routeStopId, served) {
+    return await this.request(`/operator/routes/${routeId}/stops/${routeStopId}/express`, 'PATCH', { served_by_express: Boolean(served) });
+  }
+
   // D5: per-route switch for passenger custom drop-offs (off by default).
   async setOperatorRouteCustomDropoff(routeId, allow) {
     return await this.request(`/operator/routes/${routeId}/custom-dropoff`, 'PATCH', { allow_custom_dropoff: Boolean(allow) });
@@ -168,6 +173,11 @@ class OperatorService extends StaffBaseService {
   }
 
   // ── Assignment decline requests (Batch 24, C6) ──
+  // Batch 28: one card per shift block, with the driver's and the Chauffeur's assignment state.
+  async getAssignmentBlocks() {
+    return await this.request('/operator/assignments', 'GET');
+  }
+
   async getTripRequests() {
     return await this.request('/operator/trip-requests', 'GET');
   }

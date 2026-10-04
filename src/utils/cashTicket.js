@@ -2,6 +2,7 @@
 // Pure functions so the rules can be tested without rendering the screen.
 // The server stays the authority: it computes the fare and refuses a full bus.
 // These only decide what the pickers offer and when to disable the button.
+import { isServedOnService } from './serviceType';
 
 /** Stops a bus really stops at. Pass-through points are never boarding or drop-off choices. */
 export const isStoppingType = (routeStop) => String(routeStop?.stop_type ?? 'stop') !== 'pass_through';
@@ -10,10 +11,11 @@ const stopId = (routeStop) => Number(routeStop?.stop_id ?? routeStop?.stop?.stop
 
 /**
  * Route stops in the order the bus travels them: ascending on an outbound leg,
- * descending on a reverse leg (leg_direction 'reverse'). Stopping types only.
+ * descending on a reverse leg (leg_direction 'reverse'). Stopping types only; on an
+ * express trip only the stops it serves (the server enforces the same rule).
  */
-export function orderedStopsForLeg(routeStops, legDirection) {
-  const list = Array.isArray(routeStops) ? routeStops.filter(isStoppingType) : [];
+export function orderedStopsForLeg(routeStops, legDirection, serviceType = 'regular') {
+  const list = Array.isArray(routeStops) ? routeStops.filter((s) => isServedOnService(s, serviceType)) : [];
   const sorted = [...list].sort((a, b) => Number(a?.stop_order ?? 0) - Number(b?.stop_order ?? 0));
   return String(legDirection ?? 'outbound') === 'reverse' ? sorted.reverse() : sorted;
 }

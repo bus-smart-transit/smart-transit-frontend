@@ -11,6 +11,7 @@ import { fetchTrafficStatus } from '../../services/trafficService';
 import { fetchDrivingRouteWithMetrics, geocodeLandmark } from '../../services/routingService';
 import { MAP_CONFIG } from '../../config/mapConfig';
 import { boundsFromPoints } from '../../utils/routeGeometry';
+import { busLabelText } from '../../utils/busLabel';
 import { getRegion, regionMapBounds } from '../../services/regionService';
 import { watchMapHealth } from './mapHealth';
 import MapUnavailable from './MapUnavailable';
@@ -213,7 +214,7 @@ function MapViewInner({ role = "passenger", trackedFleetId = null, onRetry }) {
 
         const makePopupHtml = (r) => `
           <div style="color:#0f172a;font-family:sans-serif;padding:6px;min-width:130px;">
-            <p style="margin:0;font-weight:700;font-size:13px;">🚌 ${r?.plate_number || 'Bus ' + r?.fleet_id || '-'}</p>
+            <p style="margin:0;font-weight:700;font-size:13px;">🚌 ${busLabelText(r?.bus_label)}</p>
             <p style="margin:4px 0 0;font-size:11px;color:#64748b;text-transform:capitalize;">Status: ${r?.trip_status || 'active'}</p>
             <p style="margin:2px 0 0;font-size:11px;color:#64748b;">${speedLabel}${headingLabel}</p>
             <p style="margin:4px 0 0;font-size:11px;color:#0ea5e9;cursor:pointer;"
@@ -463,7 +464,7 @@ function MapViewInner({ role = "passenger", trackedFleetId = null, onRetry }) {
           .setPopup(
             new maplibregl.Popup({ offset: 20 }).setHTML(
               `<div style="color:#0f172a;font-family:sans-serif;padding:4px;">
-                <p style="margin:0;font-weight:700;">Nearest Fleet ${nearest?.plate_number || nearest?.fleet_id || '-'}</p>
+                <p style="margin:0;font-weight:700;">Nearest Fleet ${busLabelText(nearest?.bus_label)}</p>
                 <p style="margin:4px 0 0;font-size:11px;color:#64748b;">~${Number(nearest?.distance_meters || 0).toFixed(0)} m away</p>
               </div>`
             )
@@ -678,7 +679,7 @@ function MapViewInner({ role = "passenger", trackedFleetId = null, onRetry }) {
               </button>
             </div>
             <p>
-              Nearest: <strong className="text-slate-200">{nearestFleet?.plate_number || nearestFleet?.fleet_id || 'Not selected'}</strong>
+              Nearest: <strong className="text-slate-200">{nearestFleet ? busLabelText(nearestFleet.bus_label) : 'Not selected'}</strong>
               {nearestFleet?.distance_meters ? ` (${Number(nearestFleet.distance_meters).toFixed(0)} m)` : ''}
             </p>
             <div className={`rounded-lg border px-2.5 py-2 ${etaView.level === 'heavy' ? 'border-amber-500/50 bg-amber-500/10 text-amber-200' : etaView.level === 'moderate' ? 'border-sky-500/50 bg-sky-500/10 text-sky-200' : ['idle', 'unknown'].includes(etaView.level) ? 'border-slate-500/50 bg-slate-500/10 text-slate-200' : 'border-emerald-500/50 bg-emerald-500/10 text-emerald-200'}`}>
@@ -732,7 +733,7 @@ function MapViewInner({ role = "passenger", trackedFleetId = null, onRetry }) {
 
                 return (
                   <button
-                    key={row.fleet_id ?? row.plate_number}
+                    key={row.fleet_id}
                     type="button"
                     className={`flex w-full items-center gap-3 border-b border-slate-800/60 px-4 py-3 text-left transition hover:bg-slate-900 ${isSelected ? 'bg-sky-950/40' : ''}`}
                     onClick={() => {
@@ -751,7 +752,7 @@ function MapViewInner({ role = "passenger", trackedFleetId = null, onRetry }) {
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-semibold text-slate-100">
-                        {row?.plate_number || `Fleet ${row?.fleet_id || '-'}`}
+                        {busLabelText(row?.bus_label)}
                       </p>
                       <p className="text-xs text-slate-400 capitalize">
                         {row?.trip_status || 'active'}

@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { Bus, MapPin, Loader } from 'lucide-react'
 import { etaLabel, formatDuration, groupTimelineRows, journeyFacts, nodeState } from '../../../utils/tripTimeline'
+import { busLabelText } from '../../../utils/busLabel'
+import ServiceTypeChip from '../../ui/ServiceTypeChip'
 
 const NODE_STYLE = {
   passed: 'border-slate-400 bg-slate-400',
@@ -121,7 +123,8 @@ export default function TripTimeline({
         <h3 className="font-display text-lg font-bold text-navy-950">{header.bound_for}</h3>
         {header.via?.length > 0 && <p className="mt-0.5 text-xs text-slate-500">via {header.via.join(', ')}</p>}
         <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
-          {bus?.plate_number && <span className="inline-flex items-center gap-1"><Bus size={13} /> {bus.plate_number}</span>}
+          <span className="inline-flex items-center gap-1" data-testid="timeline-bus-label"><Bus size={13} /> {busLabelText(bus?.label)}</span>
+          <ServiceTypeChip serviceType={timeline.trip?.service_type} />
           {timeline.trip?.departure_time && <span>Departs {timeline.trip.departure_time}</span>}
           {facts.map((fact) => (
             <span key={fact.label}><span className="text-slate-400">{fact.label}: </span><strong className="text-navy-950">{fact.value}</strong></span>

@@ -12,6 +12,8 @@ import { openPrintReport } from '../../utils/printReport'
 import OperatorService from '../../api/StaffService/OperatorService'
 import { parseAppDate, getBusinessToday, debugLogBusinessTime } from '../../utils/dates'
 import { useOperatorDashboardData, useNotificationBell, useTripRequests, useDispatchDecisions, useFleetsTab, useRoutesTab, useTripsTab, useReportsTab, useShiftBlocksTab } from '../../api/hooks/Staff/useOperatorDashboard'
+import ServiceTypeChip from '../ui/ServiceTypeChip'
+import AssignmentBlockCards from './AssignmentBlockCards'
 import {
   LayoutDashboard, Bus, MapPin, Clock, PieChart, Users, Settings,
   Plus, Eye, RefreshCw, Shield, Download,
@@ -171,6 +173,9 @@ function TripRequestsPanel({ onDecided }) {
               <div className="text-sm">
                 <p className="font-semibold text-slate-900">{staffName} <span className="font-normal text-slate-500">({r.role})</span></p>
                 <p className="text-xs text-slate-600">{route?.origin || '-'} → {route?.destination || '-'} · {r.trip?.trip_date}</p>
+                {r.shift_block_id && (
+                  <p className="text-xs font-semibold text-amber-800" data-testid="request-block-label">Shift block #{r.shift_block_id}: all {r.legs_count} legs. Approving releases {staffName} from the whole block.</p>
+                )}
                 <p className="text-xs text-slate-500">Reason: {reason}</p>
               </div>
               <div className="flex gap-2">
@@ -529,7 +534,7 @@ function DashboardTab({ trips, drivers, conductors, fleets, onRequestDecided, on
                     <td className="px-4 py-2 font-mono text-xs text-slate-700">#{t.trip_id}</td>
                     <td className="px-4 py-2 text-slate-600">{fmtDate(t.trip_date)}</td>
                     <td className="px-4 py-2 text-slate-700">{t.fleet_route?.route?.route_name || '-'}</td>
-                    <td className="px-4 py-2 text-slate-700">{t.fleet_route?.fleet?.plate_number || '-'}</td>
+                    <td className="px-4 py-2 text-slate-700">{t.fleet_route?.fleet?.plate_number || '-'} <ServiceTypeChip serviceType={t.service_type} /></td>
                     <td className="px-4 py-2">
                       <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_CHIP[t.status] ?? 'bg-slate-100 text-slate-600'}`}>{t.status}</span>
                     </td>
@@ -785,6 +790,8 @@ function FleetsTab({ fleets, routes, trips, onRefresh }) {
           <h3 className="text-sm font-semibold uppercase tracking-[0.14em] text-slate-300">Add Fleet</h3>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
             <input value={fleetForm.plate_number} onChange={(event) => setFleetForm((prev) => ({ ...prev, plate_number: event.target.value }))} required placeholder="Plate number" className="rounded-lg border border-slate-600 bg-[#0B1324] px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-teal-500" />
+            <input value={fleetForm.bus_company_name} onChange={(event) => setFleetForm((prev) => ({ ...prev, bus_company_name: event.target.value }))} maxLength={100} placeholder="Bus company name (shown to passengers)" className="rounded-lg border border-slate-600 bg-[#0B1324] px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-teal-500" />
+            <input value={fleetForm.body_no} onChange={(event) => setFleetForm((prev) => ({ ...prev, body_no: event.target.value }))} maxLength={30} placeholder="Body number (shown to passengers)" className="rounded-lg border border-slate-600 bg-[#0B1324] px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-teal-500" />
             <select value={fleetForm.fleet_type} onChange={(event) => setFleetForm((prev) => ({ ...prev, fleet_type: event.target.value }))} className="rounded-lg border border-slate-600 bg-[#0B1324] px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-teal-500">
               <option value="public">Public</option>
               <option value="private">Private</option>
@@ -1087,6 +1094,7 @@ function RoutesTab({ routes, stops, trips, onRefresh }) {
     handleDeleteStop,
     handleRemoveStopFromRoute,
     handleToggleCustomDropoff,
+    handleToggleStopExpress,
     handleCreateRoute,
     handleAddStopToRoute,
   } = useRoutesTab({ onRefresh })
@@ -1308,6 +1316,18 @@ function RoutesTab({ routes, stops, trips, onRefresh }) {
                           {r.route_stops.sort((a,b) => a.stop_order - b.stop_order).map((rs, idx) => (
                             <li key={rs.route_stop_id ?? idx} className="inline-flex items-center gap-1 rounded-full bg-white border border-slate-200 px-3 py-1 text-xs text-slate-700">
                               <span>{idx+1}. {rs.stop?.stop_name || `Stop #${rs.stop_id}`}</span>
+                              {rs.stop_type !== 'pass_through' && (rs.route_stop_id || rs.id) && (
+                                <label className="inline-flex items-center gap-1 text-[11px] text-amber-800" title="Express trips stop here">
+                                  <input
+                                    type="checkbox"
+                                    checked={Boolean(rs.served_by_express)}
+                                    disabled={manageSaving}
+                                    onChange={(event) => { void handleToggleStopExpress(r.route_id, rs.route_stop_id || rs.id, event.target.checked) }}
+                                    aria-label={`Express trips stop at ${rs.stop?.stop_name || rs.stop_id}`}
+                                  />
+                                  Express
+                                </label>
+                              )}
                               {(rs.route_stop_id || rs.id) && (
                                 <button
                                   type="button"
@@ -1499,7 +1519,7 @@ function TripsTab({ trips, drivers, conductors, onRefresh }) {
                             ? <span className="ml-1.5 rounded-full bg-indigo-100 px-1.5 py-0.5 text-xs font-semibold text-indigo-700" title="Auto-generated from a Shift Block">Block</span>
                             : <span className="ml-1.5 rounded-full bg-slate-100 px-1.5 py-0.5 text-xs font-semibold text-slate-500" title="Manually created ad hoc/charter trip">Ad hoc</span>}
                         </td>
-                        <td className="px-4 py-3 text-slate-700">{t.fleet_route?.fleet?.plate_number || '-'}</td>
+                        <td className="px-4 py-3 text-slate-700">{t.fleet_route?.fleet?.plate_number || '-'} <ServiceTypeChip serviceType={t.service_type} /></td>
                         <td className="px-4 py-3">
                           {driverName ? <span className="text-slate-700">{driverName}</span>
                             : <button type="button" onClick={() => { setAssignModal({ trip: t, type: 'driver' }); setAssignId(''); setMsg('') }} className="text-xs text-teal-600 hover:underline">Assign</button>}
@@ -1557,6 +1577,12 @@ function TripsTab({ trips, drivers, conductors, onRefresh }) {
               <select value={form.trip_type} onChange={e => setForm(p => ({ ...p, trip_type: e.target.value }))} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500">
                 <option value="one_way">One-way (Ad hoc / Charter)</option>
                 <option value="round_trip">Round trip (Shift Block)</option>
+              </select>
+            </Field>
+            <Field label="Service Type" required>
+              <select value={form.service_type || 'regular'} onChange={e => setForm(p => ({ ...p, service_type: e.target.value }))} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500" data-testid="service-type-select">
+                <option value="regular">Regular (stops at every stop)</option>
+                <option value="express">Express (limited stops, no fare yet)</option>
               </select>
             </Field>
 
@@ -1773,6 +1799,7 @@ const AUDIT_STATUS_CHIP = {
 function ShiftBlocksTab({ onOpenScheduler }) {
   const {
     blocks,
+    blockCards,
     statusFilter, setStatusFilter,
     loading,
     msg,
@@ -1801,6 +1828,13 @@ function ShiftBlocksTab({ onOpenScheduler }) {
 
       {msg && <p className="rounded-lg bg-teal-50 border border-teal-200 px-4 py-2 text-sm text-teal-800">{msg}</p>}
 
+      <AssignmentBlockCards
+        mode="operator"
+        title="Block assignments"
+        cards={blockCards.filter((c) => statusFilter === 'all' || c.status === statusFilter)}
+        emptyMessage="No shift blocks match this filter."
+      />
+
       <div className="staff-card staff-card-flush overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-slate-50">
@@ -1820,8 +1854,8 @@ function ShiftBlocksTab({ onOpenScheduler }) {
                 <td className="px-4 py-3 text-slate-700 whitespace-nowrap">{fmtDate(b.scheduled_date)}</td>
                 <td className="px-4 py-3 text-slate-700 capitalize">{b.block_type}</td>
                 <td className="px-4 py-3 text-slate-700">{b.fleet?.plate_number || '-'}</td>
-                <td className="px-4 py-3 text-slate-700">{getStaffFullName(b.driver) || `#${b.driver_id}`}</td>
-                <td className="px-4 py-3 text-slate-700">{getStaffFullName(b.conductor) || `#${b.conductor_id}`}</td>
+                <td className="px-4 py-3 text-slate-700">{getStaffFullName(b.driver) || (b.driver_id ? `#${b.driver_id}` : 'Needs a replacement')}</td>
+                <td className="px-4 py-3 text-slate-700">{getStaffFullName(b.conductor) || (b.conductor_id ? `#${b.conductor_id}` : 'Needs a replacement')}</td>
                 <td className="px-4 py-3">
                   <span className={`rounded-full px-2 py-0.5 text-xs font-semibold whitespace-nowrap ${BLOCK_STATUS_CHIP[b.status] ?? 'bg-slate-100 text-slate-600'}`}>{b.status}</span>
                 </td>

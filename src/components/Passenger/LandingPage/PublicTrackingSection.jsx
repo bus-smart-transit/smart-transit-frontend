@@ -5,6 +5,7 @@ import RouteMap from '../../Map/RouteMap';
 import PassengerService from '../../../api/PassengerService/PassengerService';
 import { haversineM } from '../../../utils/geo';
 import { fetchTrafficStatus } from '../../../services/trafficService';
+import { busLabelText } from '../../../utils/busLabel';
 
 const POLL_MS = 12000;
 
@@ -201,7 +202,7 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
         const projected = row?.route_position?.on_route ? row.route_position : null;
         const lat = Number(projected ? projected.snapped_latitude : row.latitude);
         const lng = Number(projected ? projected.snapped_longitude : row.longitude);
-        const title = row?.plate_number || `Fleet ${fleetId}`;
+        const title = busLabelText(row?.bus_label);
 
         if (!markersRef.current.has(fleetId)) {
           const el = document.createElement('div');
@@ -406,7 +407,7 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-widest text-teal-600">Track Bus</p>
-                <h3 className="text-lg font-semibold text-slate-900">{selectedFleet?.plate_number || 'No active bus detected'}</h3>
+                <h3 className="text-lg font-semibold text-slate-900">{selectedFleet ? busLabelText(selectedFleet.bus_label) : 'No active bus detected'}</h3>
               </div>
               <button
                 type="button"
@@ -503,7 +504,7 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
                     className={`w-full rounded-xl border px-3 py-3 text-left transition ${isSelected ? 'border-teal-400 bg-teal-50' : 'border-slate-200 bg-white hover:border-teal-200'}`}
                   >
                     <div className="flex items-start justify-between gap-2">
-                      <p className="font-semibold text-slate-900">{row?.plate_number || `Fleet ${row?.fleet_id}`}</p>
+                      <p className="font-semibold text-slate-900">{busLabelText(row?.bus_label)}</p>
                       <span className="inline-flex max-w-48 items-center gap-1 truncate rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-700">
                         <Bus className="h-3 w-3" />
                         {row?.destination || row?.route_name || 'Destination pending'}

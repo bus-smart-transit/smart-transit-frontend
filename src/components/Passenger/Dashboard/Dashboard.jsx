@@ -15,6 +15,8 @@ import SearchBar from '../../ui/SearchBar';
 import Toggle from '../../ui/Toggle';
 import Modal from '../../ui/Modal';
 import { parseAppDate, getBusinessToday } from '../../../utils/dates';
+import { busLabelText } from '../../../utils/busLabel';
+import ServiceTypeChip from '../../ui/ServiceTypeChip';
 
 const preloadMapView = () =>
   Promise.all([
@@ -48,10 +50,7 @@ const toTripDateStr = (ticket) => {
   return match ? match[1] : null;
 };
 
-const getFleetDisplayLabel = (ticket) => {
-  const fleet = ticket?.trip?.fleet_route?.fleet || ticket?.trip?.fleetRoute?.fleet || {};
-  return fleet?.plate_number || fleet?.name || (fleet?.fleet_id ? `Fleet ${fleet.fleet_id}` : '-');
-};
+const getFleetDisplayLabel = (ticket) => busLabelText(ticket?.bus_label);
 
 export default function Dashboard() {
   const {
@@ -301,7 +300,7 @@ export default function Dashboard() {
                         <tr key={`sched-${ticket.ticket_id ?? idx}`}>
                           <td className="py-2.5 font-medium text-navy-950">{getOriginLabel(ticket)} → {getDestinationLabel(ticket)}</td>
                           <td className="py-2.5 text-slate-500">{formatDateTime(ticket.valid_from || ticket?.trip?.trip_date || ticket.created_at)}</td>
-                          <td className="py-2.5 text-slate-500">{getFleetDisplayLabel(ticket)}</td>
+                          <td className="py-2.5 text-slate-500">{getFleetDisplayLabel(ticket)} <ServiceTypeChip serviceType={ticket?.trip?.service_type} /></td>
                         </tr>
                       ))}
                       {upcomingScheduleTickets.length === 0 && (
@@ -888,6 +887,10 @@ export default function Dashboard() {
                 expiresLabel={formatDateTime(selectedTicket.expires_at ?? selectedTicketQr?.expires_at)}
                 trackingToken={selectedTicket.tracking_token || ''}
               />
+              <p className="mt-3 flex items-center gap-2 text-sm text-slate-600" data-testid="ticket-bus-service">
+                <span>Bus: <strong className="text-slate-900">{getFleetDisplayLabel(selectedTicket)}</strong></span>
+                <ServiceTypeChip serviceType={selectedTicket?.trip?.service_type} />
+              </p>
               <div className="mt-4 rounded-xl bg-slate-50 p-4">
                 <p className="text-xs text-slate-400">Drop-off Location</p>
                 <p className="mt-1 text-sm font-semibold text-navy-950">{getDestinationLabel(selectedTicket)}</p>

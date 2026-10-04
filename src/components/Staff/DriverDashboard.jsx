@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import PairingScreen from './PairingScreen';
 import StaffPortalLayout from './StaffPortalLayout';
-import DeclineTripModal from './DeclineTripModal';
+import AssignmentSection from './AssignmentSection';
 import CalendarSummaryStrip from './CalendarSummaryStrip';
 import DashboardCalendar from './DashboardCalendar';
 import { ModalShell } from '../ui/Modal';
@@ -23,12 +23,10 @@ import QrImage from '../Passenger/Ticket/QrImage';
 import RequestedStopRow from './RequestedStopRow';
 import { groupRequestedStops } from '../../utils/requestedStops';
 import NotificationBellButton from './NotificationBellButton';
-import TripFocusNotice from './TripFocusNotice';
-import { describeAssignmentFocus } from '../../utils/notificationTarget';
 import { useDriverPairing, useDriverDashboardData } from '../../api/hooks/Staff/useDriverDashboard';
 import { getBusinessTodayLabel } from '../../utils/dates';
 import { deriveTripDurationLabel, deriveTripStatus } from '../../utils/tripStatus';
-import { FOR_APPROVAL_LABEL, canRespondToAssignment, getAssignmentRequestStatus, isForApproval } from '../../utils/assignmentRequest';
+import { FOR_APPROVAL_LABEL, isForApproval } from '../../utils/assignmentRequest';
 import DriverService from '../../api/StaffService/DriverService';
 
 const STATUS_COLOR = {
@@ -147,6 +145,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   const {
     activeTab, setActiveTab,
     focusTripId, openTripFromNotification, dismissTripFocus,
+    focusBlockId, assignments,
     assignedTrips,
     assignedTripFilter,
     profile,
@@ -165,9 +164,6 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     actionMsg, setActionMsg,
     actionInFlight,
     confirmComplete, setConfirmComplete,
-    confirmDecline, setConfirmDecline,
-    declineErrors, setDeclineErrors,
-    declineSubmitting,
     twoFactorEnabled,
     saving2fa,
     msg2fa,
@@ -186,9 +182,6 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     currentRoute,
     currentFleet,
     nextStop,
-    filteredAssignedTrips,
-    todayAssignedTrips,
-    upcomingAssignedTrips,
     stopProgress,
     tripProgress,
     notifications,
@@ -205,8 +198,6 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     handleTripAction,
     handleStartShift,
     handleConfirmedComplete,
-    handleConfirmedDecline,
-    handleAcceptTrip,
     handleConfirmShiftBlockTakeover,
     handleLogout,
     handleToggleTwoFactor,
@@ -216,7 +207,6 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     setActiveTab('schedule');
   };
   const requestedGroups = groupRequestedStops(requestedStops);
-  const focusNotice = describeAssignmentFocus(assignedTrips, focusTripId, 'driver');
 
   const derivedTripStatus = deriveTripStatus(trip || todayAssignedTrip);
 
@@ -562,15 +552,15 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                 <span className="text-xs text-slate-400">{new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</span>
               </div>
             </div>
-            <TripFocusNotice tripId={focusTripId} notice={focusNotice} onDismiss={dismissTripFocus} className="mb-4" />
-            {filteredAssignedTrips.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-5 text-sm text-slate-500">No trips match this filter.</div>
-            ) : (
-              <div className="space-y-5">
-                <DriverTripTable title="Today's Assigned Trips" trips={todayAssignedTrips} focusTripId={focusTripId} onSelectTrip={setTripDetailsModal} onDeclineTrip={setConfirmDecline} onAcceptTrip={handleAcceptTrip} />
-                <DriverTripTable title="Upcoming Trips" trips={upcomingAssignedTrips} focusTripId={focusTripId} onSelectTrip={setTripDetailsModal} onDeclineTrip={setConfirmDecline} onAcceptTrip={handleAcceptTrip} emptyMessage="No upcoming trips match this filter." />
-              </div>
-            )}
+            <AssignmentSection
+              role="driver"
+              assignments={assignments}
+              assignedTrips={assignedTrips}
+              filter={assignedTripFilter}
+              focusTripId={focusTripId}
+              focusBlockId={focusBlockId}
+              onDismissFocus={dismissTripFocus}
+            />
           </section>
         )}
 
@@ -959,19 +949,6 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
         </ModalShell>
       )}
 
-      {/* C6: decline request dialog, shared by Driver and Chauffeur */}
-      {confirmDecline && (
-        <DeclineTripModal
-          key={confirmDecline.trip_id}
-          trip={confirmDecline}
-          scheduleLabel={formatTripSchedule(confirmDecline)}
-          submitting={declineSubmitting}
-          errors={declineErrors}
-          onCancel={() => { setConfirmDecline(null); setDeclineErrors({}); }}
-          onSubmit={handleConfirmedDecline}
-        />
-      )}
-
       {/* ── Suggestion: Trip details modal ───────────────────────────────── */}
       {tripDetailsModal && (() => {
         const td = tripDetailsModal;
@@ -1015,79 +992,3 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     </>
   );
 }
-
-function DriverTripTable({ title, trips, focusTripId, onSelectTrip, onDeclineTrip, onAcceptTrip, emptyMessage = 'No trips in this section.' }) {
-  return (
-    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-      <h5 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">{title}</h5>
-      {trips.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-slate-200 bg-white p-4 text-sm text-slate-500">{emptyMessage}</div>
-      ) : (
-        <div className="overflow-x-auto rounded-lg bg-white">
-          <table className="w-full min-w-175 text-left text-sm">
-            <thead>
-              <tr className="border-b border-slate-100 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                <th className="py-3 pr-4 pl-4">Route ID</th>
-                <th className="py-3 pr-4">Route</th>
-                <th className="py-3 pr-4">Departure Time</th>
-                <th className="py-3 pr-4">Destination</th>
-                <th className="py-3 pr-4">Status</th>
-                <th className="py-3 pr-4">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {trips.map((item) => {
-                // Batch 14: decline must be reachable from this list \u2014
-                // today OR upcoming \u2014 regardless of pairing status.
-                const canDecline = ['scheduled', 'delayed', 'boarding'].includes(String(item?.status || '').toLowerCase());
-                return (
-                  <tr key={item.trip_id} id={`trip-row-${item.trip_id}`} className={`cursor-pointer transition-colors hover:bg-slate-50 ${Number(focusTripId) === Number(item.trip_id) ? 'bg-teal-50 ring-2 ring-inset ring-teal-300' : ''}`} onClick={() => onSelectTrip(item)} title="Click for trip details">
-                    <td className="py-3 pr-4 pl-4 font-data text-slate-500">RTE-{item.trip_id}</td>
-                    <td className="py-3 pr-4 font-semibold text-slate-900">{item.fleet_route?.route?.origin || '-'} → {item.fleet_route?.route?.destination || '-'}</td>
-                    <td className="py-3 pr-4 font-data text-slate-600">{formatTripSchedule(item)}</td>
-                    <td className="py-3 pr-4 text-slate-600">{item.fleet_route?.route?.destination || '-'}</td>
-                    <td className="py-3 pr-4">
-                      <span className="rounded-full px-2.5 py-1 text-xs font-semibold" style={{ background: `${STATUS_COLOR[item.status] || '#153a6b'}20`, color: STATUS_COLOR[item.status] || '#153a6b' }}>
-                        {(item.status || 'pending').toUpperCase()}
-                      </span>
-                    </td>
-                    <td className="py-3 pr-4">
-                      <div className="flex flex-wrap gap-2">
-                        {canDecline && canRespondToAssignment(item, 'driver') && (
-                          <button
-                            type="button"
-                            className="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100"
-                            onClick={(event) => { event.stopPropagation(); onAcceptTrip?.(item); }}
-                          >
-                            Accept
-                          </button>
-                        )}
-                        {canDecline && canRespondToAssignment(item, 'driver') && (
-                          <button
-                            type="button"
-                            className="rounded-lg border border-red-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-red-600 transition hover:bg-red-50"
-                            onClick={(event) => { event.stopPropagation(); onDeclineTrip?.(item); }}
-                          >
-                            Decline
-                          </button>
-                        )}
-                        {getAssignmentRequestStatus(item, 'driver') === 'for_approval' && (
-                          <span className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs font-semibold text-amber-700">{FOR_APPROVAL_LABEL}</span>
-                        )}
-                        {getAssignmentRequestStatus(item, 'driver') === 'rejected' && (
-                          <span className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs font-semibold text-slate-600">Request rejected: please proceed</span>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
-  );
-}
-
-

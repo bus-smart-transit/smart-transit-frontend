@@ -1,7 +1,9 @@
 import { describe, expect, test } from 'vitest';
 import {
+  buildBlockAssignmentPath,
   buildTripAssignmentPath,
   describeAssignmentFocus,
+  describeBlockFocus,
   isSafeStaffPath,
   readDeepLink,
   resolveNotificationTarget,
@@ -54,10 +56,21 @@ describe('resolveNotificationTarget', () => {
     expect(resolveNotificationTarget(assigned({ trip_id: 4, role: 'driver' }), 'conductor')).toBeNull();
   });
 
-  test('other notification types are not clickable in this batch', () => {
-    for (const type of ['trip_cancelled', 'trip_delayed', 'trip_accepted', 'trip_decline_requested', 'shift_block_assigned', 'payment_confirmed', 'general']) {
-      expect(resolveNotificationTarget({ type, data: { trip_id: 1 } }, 'driver')).toBeNull();
+  test('other notification types are not clickable', () => {
+    for (const type of ['trip_cancelled', 'trip_delayed', 'trip_accepted', 'trip_decline_requested', 'payment_confirmed', 'general']) {
+      expect(resolveNotificationTarget({ type, data: { trip_id: 1, shift_block_id: 1 } }, 'driver')).toBeNull();
     }
+  });
+
+  test('a shift block notification opens the block card, per role, and keeps graceful fallbacks', () => {
+    const block = (data) => ({ type: 'shift_block_assigned', data });
+    expect(resolveNotificationTarget(block({ shift_block_id: 5, role: 'driver', link: '/employee/driver/dashboard?tab=dashboard&block=5' }), 'driver'))
+      .toEqual({ path: '/employee/driver/dashboard?tab=dashboard&block=5', tab: 'dashboard', blockId: 5 });
+    // An old notification with no link is rebuilt; an external link is never followed.
+    expect(resolveNotificationTarget(block({ shift_block_id: 6 }), 'conductor').path).toBe('/employee/conductor/dashboard?tab=dashboard&block=6');
+    expect(resolveNotificationTarget(block({ shift_block_id: 6, link: 'https://evil.example/x' }), 'driver').path).toBe('/employee/driver/dashboard?tab=dashboard&block=6');
+    expect(resolveNotificationTarget(block({ shift_block_id: 6, role: 'driver' }), 'conductor')).toBeNull();
+    expect(resolveNotificationTarget(block({}), 'driver')).toBeNull();
   });
 
   test('returns null without a usable trip id or role', () => {
@@ -82,12 +95,19 @@ describe('path helpers', () => {
     expect(buildTripAssignmentPath('driver', -1)).toBeNull();
   });
 
-  test('readDeepLink reads a valid tab and trip, ignores unknown ones', () => {
-    expect(readDeepLink('?tab=dashboard&trip=42', 'driver')).toEqual({ tab: 'dashboard', tripId: 42 });
-    expect(readDeepLink('?tab=bogus&trip=x', 'driver')).toEqual({ tab: null, tripId: null });
-    expect(readDeepLink('?tab=occupancy', 'driver')).toEqual({ tab: null, tripId: null });
-    expect(readDeepLink('?tab=occupancy&trip=3', 'conductor')).toEqual({ tab: 'occupancy', tripId: 3 });
-    expect(readDeepLink('', 'driver')).toEqual({ tab: null, tripId: null });
+  test('readDeepLink reads a valid tab, trip and block, ignores unknown ones', () => {
+    expect(readDeepLink('?tab=dashboard&trip=42', 'driver')).toEqual({ tab: 'dashboard', tripId: 42, blockId: null });
+    expect(readDeepLink('?tab=dashboard&block=7', 'driver')).toEqual({ tab: 'dashboard', tripId: null, blockId: 7 });
+    expect(readDeepLink('?tab=bogus&trip=x&block=-1', 'driver')).toEqual({ tab: null, tripId: null, blockId: null });
+    expect(readDeepLink('?tab=occupancy', 'driver')).toEqual({ tab: null, tripId: null, blockId: null });
+    expect(readDeepLink('?tab=occupancy&trip=3', 'conductor')).toEqual({ tab: 'occupancy', tripId: 3, blockId: null });
+    expect(readDeepLink('', 'driver')).toEqual({ tab: null, tripId: null, blockId: null });
+  });
+
+  test('buildBlockAssignmentPath rejects a bad role or id', () => {
+    expect(buildBlockAssignmentPath('driver', 12)).toBe('/employee/driver/dashboard?tab=dashboard&block=12');
+    expect(buildBlockAssignmentPath('passenger', 12)).toBeNull();
+    expect(buildBlockAssignmentPath('driver', 0)).toBeNull();
   });
 });
 
@@ -127,5 +147,36 @@ describe('describeAssignmentFocus (the trip changed after the notification)', ()
 
   test('no trip id means no notice', () => {
     expect(describeAssignmentFocus([trip()], null, 'driver')).toBeNull();
+  });
+});
+
+describe('describeBlockFocus (the shift block changed after the notification)', () => {
+  const card = (over = {}) => ({ kind: 'block', shift_block_id: 5, status: 'scheduled', assignment_status: 'pending', can_respond: true, ...over });
+
+  test('a pending block prompts one response for the whole block', () => {
+    const notice = describeBlockFocus([card()], 5);
+    expect(notice.state).toBe('pending');
+    expect(notice.message).toMatch(/whole block/i);
+  });
+
+  test('says what became of the block', () => {
+    expect(describeBlockFocus([card({ assignment_status: 'for_approval' })], 5).state).toBe('for_approval');
+    expect(describeBlockFocus([card({ assignment_status: 'rejected' })], 5).state).toBe('rejected');
+    expect(describeBlockFocus([card({ assignment_status: 'accepted' })], 5).state).toBe('accepted');
+    expect(describeBlockFocus([card({ status: 'cancelled' })], 5).state).toBe('cancelled');
+    expect(describeBlockFocus([card({ status: 'completed' })], 5).state).toBe('completed');
+    expect(describeBlockFocus([card({ can_respond: false })], 5).state).toBe('under_way');
+  });
+
+  test('a block that is no longer on the list (declined and approved, reassigned) gives a calm message', () => {
+    const notice = describeBlockFocus([card({ shift_block_id: 9 })], 5);
+    expect(notice.state).toBe('unavailable');
+    expect(notice.tone).toBe('warning');
+    expect(describeBlockFocus([], 5).state).toBe('unavailable');
+    expect(describeBlockFocus([card({ kind: 'trip', shift_block_id: null })], 5).state).toBe('unavailable');
+  });
+
+  test('no block id means no notice', () => {
+    expect(describeBlockFocus([card()], null)).toBeNull();
   });
 });

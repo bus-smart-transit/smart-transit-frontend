@@ -62,6 +62,19 @@ class DriverService extends StaffBaseService {
     return await this.request(`/driver/trips/${tripId}/accept`, 'PATCH');
   }
 
+  // Batch 28: a shift block (or one standalone trip) is ONE card; accept or decline it once.
+  async getAssignments() {
+    return await this.request('/driver/assignments', 'GET');
+  }
+
+  async acceptAssignment(key) {
+    return await this.request(`/driver/assignments/${key}/accept`, 'PATCH');
+  }
+
+  async declineAssignment(key, payload = {}) {
+    return await this.request(`/driver/assignments/${key}/decline`, 'PATCH', payload);
+  }
+
   // Batch 15, Item 4: "Available" toggle — distinct from shift/pairing state.
   async updateDriverAvailability(available) {
     return await this.request('/driver/availability', 'PATCH', { available });

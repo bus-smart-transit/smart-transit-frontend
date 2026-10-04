@@ -36,7 +36,7 @@ messaging.onBackgroundMessage((payload) => {
 // The server puts a relative `link` in the data (backend NotificationLink);
 // this mirrors src/utils/notificationTarget.js (a service worker cannot import
 // the app's modules). Only same-site /employee/ paths are ever opened.
-const CLICKABLE_TYPES = ['trip_assigned'];
+const CLICKABLE_TYPES = ['trip_assigned', 'shift_block_assigned'];
 const STAFF_ROLES = ['driver', 'conductor', 'operator'];
 const DEFAULT_TAB = { driver: 'dashboard', conductor: 'dashboard', operator: 'trips' };
 
@@ -53,8 +53,14 @@ function isSafeStaffPath(path) {
 function targetPathFor(data) {
   if (!data || !CLICKABLE_TYPES.includes(String(data.type || ''))) return null;
   if (isSafeStaffPath(data.link)) return data.link;
+  if (!STAFF_ROLES.includes(data.role)) return null;
+  const blockId = Number(data.shift_block_id);
+  if (String(data.type) === 'shift_block_assigned') {
+    if (!Number.isInteger(blockId) || blockId <= 0) return null;
+    return `/employee/${data.role}/dashboard?tab=${DEFAULT_TAB[data.role]}&block=${blockId}`;
+  }
   const tripId = Number(data.trip_id);
-  if (!STAFF_ROLES.includes(data.role) || !Number.isInteger(tripId) || tripId <= 0) return null;
+  if (!Number.isInteger(tripId) || tripId <= 0) return null;
   return `/employee/${data.role}/dashboard?tab=${DEFAULT_TAB[data.role]}&trip=${tripId}`;
 }
 

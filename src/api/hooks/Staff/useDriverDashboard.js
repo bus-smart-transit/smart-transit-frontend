@@ -8,6 +8,7 @@ import { initFcmAndGetToken } from '../../../services/fcmService';
 import { MAP_CONFIG } from '../../../config/mapConfig';
 import { extractFieldErrors } from '../../../utils/assignmentRequest';
 import { readDeepLink } from '../../../utils/notificationTarget';
+import useAssignmentCards from './useAssignmentCards';
 
 // Architecture audit follow-up (CONF-03): DriverDashboard.jsx previously
 // called DriverService directly from ~24 sites spread across the
@@ -184,6 +185,7 @@ export function useDriverDashboardData({ onLogout, pairing }) {
   const [initialLink] = useState(() => readDeepLink(typeof window !== 'undefined' ? window.location.search : '', 'driver'));
   const [activeTab, setActiveTab] = useState(initialLink.tab || 'dashboard');
   const [focusTripId, setFocusTripId] = useState(initialLink.tripId);
+  const [focusBlockId, setFocusBlockId] = useState(initialLink.blockId);
   const [assignedTripFilter, setAssignedTripFilter] = useState('all');
   const [profile, setProfile] = useState(null);
   const [trip, setTrip] = useState(null);
@@ -900,13 +902,17 @@ export function useDriverDashboardData({ onLogout, pairing }) {
               : 'Account';
 
   // Batch 27, Task 1: open a trip from a notification (bell click) and clear the focus.
+  // Batch 28: a block notification opens that block's card instead.
+  const assignments = useAssignmentCards({ service: DriverService, onChanged: loadData });
   const openTripFromNotification = (target) => {
     if (!target) return;
     setActiveTab(target.tab);
-    setFocusTripId(target.tripId);
+    setFocusTripId(target.tripId ?? null);
+    setFocusBlockId(target.blockId ?? null);
   };
   const dismissTripFocus = () => {
     setFocusTripId(null);
+    setFocusBlockId(null);
     if (typeof window !== 'undefined' && window.location.search) {
       window.history.replaceState(null, '', window.location.pathname);
     }
@@ -915,6 +921,7 @@ export function useDriverDashboardData({ onLogout, pairing }) {
   return {
     activeTab, setActiveTab,
     focusTripId, openTripFromNotification, dismissTripFocus,
+    focusBlockId, assignments,
     assignedTripFilter,
     profile,
     trip,

@@ -16,19 +16,19 @@ import {
 } from 'lucide-react';
 import PairingScreen from './PairingScreen';
 import StaffPortalLayout from './StaffPortalLayout';
-import DeclineTripModal from './DeclineTripModal';
+import AssignmentSection from './AssignmentSection';
 import CalendarSummaryStrip from './CalendarSummaryStrip';
 import DashboardCalendar from './DashboardCalendar';
 import { ModalShell } from '../ui/Modal';
 import StaffCalendar from './StaffCalendar';
 import NotificationBellButton from './NotificationBellButton';
-import TripFocusNotice from './TripFocusNotice';
-import { describeAssignmentFocus } from '../../utils/notificationTarget';
 import { useConductorPairing, useConductorDashboardData } from '../../api/hooks/Staff/useConductorDashboard';
 import { getBusinessTodayLabel } from '../../utils/dates';
 import { destinationsAhead, orderedStopsForLeg, stopLabel } from '../../utils/cashTicket';
+import { FARE_UNAVAILABLE, isExpress } from '../../utils/serviceType';
+import ServiceTypeChip from '../ui/ServiceTypeChip';
 import { deriveTripStatus } from '../../utils/tripStatus';
-import { FOR_APPROVAL_LABEL, canRespondToAssignment, getAssignmentRequestStatus, isForApproval } from '../../utils/assignmentRequest';
+import { FOR_APPROVAL_LABEL, isForApproval } from '../../utils/assignmentRequest';
 import ConductorService from '../../api/StaffService/ConductorService';
 
 // Batch 19 Part A: consolidated sidebar. Ticketing & Fares is the
@@ -134,67 +134,7 @@ export default function ConductorDashboard() {
   );
 }
 
-function TripCardGroup({ title, trips, focusTripId, onDeclineTrip, onAcceptTrip, emptyMessage = 'No trips in this section.' }) {
-  return (
-    <div className="md:col-span-2 staff-card">
-      <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">{title}</h3>
-      {trips.length === 0 ? (
-        <article className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-6">
-          <p className="text-sm text-slate-500">{emptyMessage}</p>
-        </article>
-      ) : (
-        <div className="staff-grid md:grid-cols-2">
-          {trips.map((item) => {
-            // Batch 14: decline must be reachable from this list — today OR
-            // upcoming — regardless of pairing status.
-            const canDecline = ['scheduled', 'delayed', 'boarding'].includes(String(item?.status || '').toLowerCase());
-            return (
-              <article key={item.trip_id} id={`trip-row-${item.trip_id}`} className={`staff-card ${Number(focusTripId) === Number(item.trip_id) ? 'ring-2 ring-teal-300' : ''}`}>
-                <div className="mb-4 flex items-center justify-between">
-                  <h3 className="text-lg font-semibold text-slate-900">Trip #{item.trip_id}</h3>
-                  <span className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs text-sky-700">{item.status}</span>
-                </div>
-                <div className="space-y-3 text-sm">
-                  <div className="flex items-center justify-between"><span className="text-slate-500">Schedule</span><strong className="font-data text-slate-900">{formatTripSchedule(item)}</strong></div>
-                  <div className="flex items-center justify-between"><span className="text-slate-500">Fleet</span><strong className="text-slate-900">{item.fleet_route?.fleet?.plate_number || `Fleet ${item.fleet_route?.fleet_id || '-'}`}</strong></div>
-                  <div className="flex items-center justify-between"><span className="text-slate-500">Route</span><strong className="text-slate-900">{item.fleet_route?.route?.route_name || `Route ${item.fleet_route?.route_id || '-'}`}</strong></div>
-                </div>
-                {canDecline && (
-                  <div className="mt-4 flex gap-2">
-                    {canRespondToAssignment(item, 'conductor') && (
-                      <button
-                        type="button"
-                        className="flex-1 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100"
-                        onClick={() => onAcceptTrip?.(item)}
-                      >
-                        Accept
-                      </button>
-                    )}
-                    {canRespondToAssignment(item, 'conductor') && (
-                      <button
-                        type="button"
-                        className="flex-1 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 transition hover:bg-red-100"
-                        onClick={() => onDeclineTrip?.(item)}
-                      >
-                        Decline
-                      </button>
-                    )}
-                    {getAssignmentRequestStatus(item, 'conductor') === 'for_approval' && (
-                      <span className="flex-1 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-center text-xs font-semibold text-amber-700">{FOR_APPROVAL_LABEL}</span>
-                    )}
-                    {getAssignmentRequestStatus(item, 'conductor') === 'rejected' && (
-                      <span className="flex-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-center text-xs font-semibold text-slate-600">Request rejected: please proceed</span>
-                    )}
-                  </div>
-                )}
-              </article>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
+
 
 function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   const [confirmStart, setConfirmStart] = useState(false);
@@ -203,6 +143,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   const {
     activeTab, setActiveTab,
     focusTripId, openTripFromNotification, dismissTripFocus,
+    focusBlockId, assignments,
     assignedTrips,
     assignedTripFilter,
     profile,
@@ -230,9 +171,6 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     saving2fa,
     checkoutInFlight,
     confirmCheckout, setConfirmCheckout,
-    confirmDecline, setConfirmDecline,
-    declineErrors, setDeclineErrors,
-    declineSubmitting,
     actionInFlight,
     isAvailable,
     shiftState,
@@ -247,9 +185,6 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     showNoCurrentTripState,
     routeStops,
     groupedPassengers,
-    filteredAssignedTrips,
-    todayAssignedTrips,
-    upcomingAssignedTrips,
     tripDetailsModal, setTripDetailsModal,
     shiftBlocks,
     shiftBlockEligibility,
@@ -270,8 +205,6 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     loadOccupancy,
     loadEarnings,
     handleStartShift,
-    handleConfirmedDecline,
-    handleAcceptTrip,
     handleEndShift,
     checkShiftBlockEligibility,
     handleInitiateShiftBlockHandoff,
@@ -290,7 +223,8 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   // Batch 27: the cash ticket offers real stopping stops in the order this leg travels
   // them, and only stops ahead of the boarding stop as destinations. The server
   // computes the fare either way.
-  const legStops = orderedStopsForLeg(routeStops, trip?.leg_direction);
+  const legStops = orderedStopsForLeg(routeStops, trip?.leg_direction, trip?.service_type);
+  const tripIsExpress = isExpress(trip?.service_type);
   const destinationOptions = destinationsAhead(legStops, onsiteForm.origin_stop_id);
 
   const headerBadge = resolveConductorHeaderBadge({
@@ -513,18 +447,15 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                 <option value="completed">Completed</option>
               </select>
             </div>
-            <TripFocusNotice tripId={focusTripId} notice={describeAssignmentFocus(assignedTrips, focusTripId, 'conductor')} onDismiss={dismissTripFocus} className="md:col-span-2" />
-            {filteredAssignedTrips.length === 0 ? (
-              <article className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-6">
-                <h3 className="text-lg font-semibold text-slate-900">No Assigned Trips</h3>
-                <p className="mt-2 text-sm text-slate-500">No trips match this filter.</p>
-              </article>
-            ) : (
-              <>
-                <TripCardGroup title="Today's Assigned Trip" trips={todayAssignedTrips} focusTripId={focusTripId} onDeclineTrip={setConfirmDecline} onAcceptTrip={handleAcceptTrip} />
-                <TripCardGroup title="Upcoming Trips" trips={upcomingAssignedTrips} focusTripId={focusTripId} onDeclineTrip={setConfirmDecline} onAcceptTrip={handleAcceptTrip} emptyMessage="No upcoming trips match this filter." />
-              </>
-            )}
+            <AssignmentSection
+              role="conductor"
+              assignments={assignments}
+              assignedTrips={assignedTrips}
+              filter={assignedTripFilter}
+              focusTripId={focusTripId}
+              focusBlockId={focusBlockId}
+              onDismissFocus={dismissTripFocus}
+            />
           </section>
         )}
 
@@ -678,7 +609,12 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                 </article>
 
                 <article className="staff-card">
-                  <h3 className="mb-4 text-2xl font-bold text-slate-900">Manual Cash Ticket</h3>
+                  <h3 className="mb-4 flex items-center gap-2 text-2xl font-bold text-slate-900">Manual Cash Ticket <ServiceTypeChip serviceType={trip?.service_type} /></h3>
+                  {tripIsExpress && (
+                    <p role="status" data-testid="express-fare-unavailable" className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800">
+                      {FARE_UNAVAILABLE}: this is an express trip and it has no fare yet, so no ticket can be issued. Only the stops this express trip serves are listed.
+                    </p>
+                  )}
 
                   <div className="space-y-3">
                     <div>
@@ -743,7 +679,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                         type="button"
                         className="rounded-lg bg-cyan-700 px-3 py-2 text-sm font-semibold text-white transition hover:bg-cyan-800 disabled:cursor-not-allowed disabled:opacity-60"
                         onClick={handleOnsiteCheckout}
-                        disabled={checkoutInFlight || !hasActiveTrip || !isPaired || !hasOpenShift || cashCapacity.isFull}
+                        disabled={checkoutInFlight || !hasActiveTrip || !isPaired || !hasOpenShift || cashCapacity.isFull || tripIsExpress}
                       >
                         {checkoutInFlight ? 'Processing...' : 'Generate Ticket'}
                       </button>
@@ -1216,19 +1152,6 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
             </div>
           </div>
         </ModalShell>
-      )}
-
-      {/* C6: decline request dialog, shared by Driver and Chauffeur */}
-      {confirmDecline && (
-        <DeclineTripModal
-          key={confirmDecline.trip_id}
-          trip={confirmDecline}
-          scheduleLabel={formatTripSchedule(confirmDecline)}
-          submitting={declineSubmitting}
-          errors={declineErrors}
-          onCancel={() => { setConfirmDecline(null); setDeclineErrors({}); }}
-          onSubmit={handleConfirmedDecline}
-        />
       )}
 
       {tripDetailsModal && (() => {

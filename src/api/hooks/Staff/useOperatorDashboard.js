@@ -321,7 +321,7 @@ export function useFleetsTab({ onRefresh }) {
   const [fleetLocations, setFleetLocations] = useState([]);
   const [manageMsg, setManageMsg] = useState('');
   const [manageSaving, setManageSaving] = useState(false);
-  const [fleetForm, setFleetForm] = useState({ plate_number: '', seated_capacity: '', standing_capacity: '', fleet_type: 'public', route_id: '', start_time: '06:00', end_time: '22:00' });
+  const [fleetForm, setFleetForm] = useState({ plate_number: '', bus_company_name: '', body_no: '', seated_capacity: '', standing_capacity: '', fleet_type: 'public', route_id: '', start_time: '06:00', end_time: '22:00' });
   const [assignForm, setAssignForm] = useState({ fleet_id: '', route_id: '', start_time: '06:00', end_time: '22:00' });
   const [fareForm, setFareForm] = useState({ fleet_id: '', seat_type: 'seated', base_fare: '', fare_per_km: '' });
   const [fareSaving, setFareSaving] = useState(false);
@@ -406,6 +406,8 @@ export function useFleetsTab({ onRefresh }) {
     try {
       await OperatorService.createFleet({
         plate_number: fleetForm.plate_number,
+        bus_company_name: fleetForm.bus_company_name || '',
+        body_no: fleetForm.body_no || '',
         seated_capacity: Number(fleetForm.seated_capacity),
         standing_capacity: Number(fleetForm.standing_capacity),
         fleet_type: fleetForm.fleet_type,
@@ -413,7 +415,7 @@ export function useFleetsTab({ onRefresh }) {
           ? { routes: [{ route_id: Number(fleetForm.route_id), start_time: String(fleetForm.start_time || '').trim(), end_time: String(fleetForm.end_time || '').trim() }] }
           : {}),
       });
-      setFleetForm({ plate_number: '', seated_capacity: '', standing_capacity: '', fleet_type: 'public', route_id: '', start_time: '06:00', end_time: '22:00' });
+      setFleetForm({ plate_number: '', bus_company_name: '', body_no: '', seated_capacity: '', standing_capacity: '', fleet_type: 'public', route_id: '', start_time: '06:00', end_time: '22:00' });
       setManageMsg('Fleet created successfully.');
       onRefresh();
     } catch (err) {
@@ -624,6 +626,20 @@ export function useRoutesTab({ onRefresh }) {
     }
   };
 
+  const handleToggleStopExpress = async (routeId, routeStopId, served) => {
+    setManageSaving(true);
+    setManageMsg('');
+    try {
+      await OperatorService.setOperatorRouteStopExpress(Number(routeId), Number(routeStopId), served);
+      setManageMsg(served ? 'Express trips will stop here.' : 'Express trips will no longer stop here.');
+      onRefresh();
+    } catch (err) {
+      setManageMsg(err?.message || 'Failed to update express stop setting.');
+    } finally {
+      setManageSaving(false);
+    }
+  };
+
   const handleCreateRoute = async (event) => {
     event.preventDefault();
     setManageSaving(true);
@@ -717,6 +733,7 @@ export function useRoutesTab({ onRefresh }) {
     handleDeleteStop,
     handleRemoveStopFromRoute,
     handleToggleCustomDropoff,
+    handleToggleStopExpress,
     handleCreateRoute,
     handleAddStopToRoute,
   };
@@ -751,6 +768,7 @@ export function useTripsTab({ trips, onRefresh }) {
     conductor_id: '',
     notes: '',
     block_type: 'morning',
+    service_type: 'regular',
     leg_departure_times: ['06:00', '08:30', '11:00', '13:30'],
   });
   const [assignId, setAssignId] = useState('');
@@ -802,6 +820,7 @@ export function useTripsTab({ trips, onRefresh }) {
           conductor_id: Number(form.conductor_id),
           block_type: form.block_type,
           scheduled_date: form.trip_date,
+          service_type: form.service_type || 'regular',
           leg_departure_times: Array.isArray(form.leg_departure_times)
             ? form.leg_departure_times
             : ['06:00', '08:30', '11:00', '13:30'],
@@ -813,6 +832,7 @@ export function useTripsTab({ trips, onRefresh }) {
           trip_date: form.trip_date,
           departure_time: form.departure_time,
           trip_type: 'one_way',
+          service_type: form.service_type || 'regular',
           return_departure_time: null,
           driver_id: Number(form.driver_id),
           conductor_id: Number(form.conductor_id),
@@ -831,6 +851,7 @@ export function useTripsTab({ trips, onRefresh }) {
         conductor_id: '',
         notes: '',
         block_type: 'morning',
+        service_type: 'regular',
         leg_departure_times: ['06:00', '08:30', '11:00', '13:30'],
       });
       setShowModal(false);
@@ -980,6 +1001,7 @@ export function useReportsTab() {
  */
 export function useShiftBlocksTab() {
   const [blocks, setBlocks] = useState([]);
+  const [blockCards, setBlockCards] = useState([]);
   const [statusFilter, setStatusFilter] = useState('all');
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -992,6 +1014,13 @@ export function useShiftBlocksTab() {
     try {
       const res = await OperatorService.getShiftBlocks(statusFilter === 'all' ? null : statusFilter);
       setBlocks(Array.isArray(res?.data) ? res.data : []);
+      // Batch 28: the cards (one per block, both roles' state) are secondary to the table.
+      try {
+        const cardsRes = await OperatorService.getAssignmentBlocks();
+        setBlockCards(Array.isArray(cardsRes?.data) ? cardsRes.data : []);
+      } catch {
+        setBlockCards([]);
+      }
     } catch (err) {
       setMsg(err?.message || 'Failed to load shift blocks.');
     } finally {
@@ -1060,6 +1089,7 @@ export function useShiftBlocksTab() {
 
   return {
     blocks,
+    blockCards,
     statusFilter, setStatusFilter,
     loading,
     showCreateModal, setShowCreateModal,

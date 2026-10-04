@@ -9,7 +9,7 @@ const row = (id, extra = {}) => ({
 
 const timeline = (overrides = {}) => ({
   trip: { trip_id: 1, departure_time: '07:30', route_id: 1, leg_direction: 'outbound' },
-  bus: { plate_number: 'PLATE-1', class: null },
+  bus: { label: 'BUS - 1', class: null },
   header: { bound_for: 'Last Stop', via: ['Mid A', 'Mid B'], duration_minutes: 95, stops_between: 2, distance_km: 33 },
   journey: { boarding_stop_id: 1, alighting_stop_id: 5, custom_dropoff: false },
   allow_custom_dropoff: false,
@@ -30,7 +30,7 @@ describe('TripTimeline', () => {
 
     expect(screen.getByText('Last Stop')).toBeInTheDocument();
     expect(screen.getByText(/via Mid A, Mid B/)).toBeInTheDocument();
-    expect(screen.getByText('PLATE-1')).toBeInTheDocument();
+    expect(screen.getByText('BUS - 1')).toBeInTheDocument();
     expect(screen.getByText('1 h 35 min')).toBeInTheDocument();
     expect(screen.queryByText(/class/i)).not.toBeInTheDocument();
     expect(screen.getByText('You board here')).toBeInTheDocument();

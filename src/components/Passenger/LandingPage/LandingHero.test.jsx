@@ -24,7 +24,7 @@ vi.mock('../../../services/bookingService', () => ({
     message: null,
     trips: [1, 2, 3, 4, 5].map((n) => ({
       trip_id: n, trip_date: '2026-10-01', boarding_time: `0${n + 5}:15`, arrival_time: `0${n + 5}:45`,
-      duration_minutes: 30, plate_number: `PLATE-${n}`, seats_left: 10 + n, fare: 58, leg_direction: 'outbound',
+      duration_minutes: 30, bus_label: `BUS - ${n}`, seats_left: 10 + n, fare: 58, leg_direction: 'outbound',
       origin: { stop_id: 1, stop_code: 'alpha-stop', name: 'Alpha Stop' }, destination: { stop_id: 2, stop_code: 'beta-stop', name: 'Beta Stop' },
     })),
   })),
@@ -119,7 +119,7 @@ describe('LandingHero available trips preview', () => {
   test('lists today\'s trips (at most the server\'s preview size) before anything is chosen', async () => {
     renderHero();
 
-    expect(await screen.findByText('PLATE-1')).toBeInTheDocument();
+    expect(await screen.findByText('BUS - 1')).toBeInTheDocument();
     expect(getTrips).toHaveBeenCalledWith({ seat_type: 'seated', page: 1, date: '2026-10-01', per_page: 5 });
     expect(screen.getAllByRole('button', { name: 'Book Seat' })).toHaveLength(5);
     expect(screen.getAllByText('PHP 58.00')).toHaveLength(5);
@@ -129,7 +129,7 @@ describe('LandingHero available trips preview', () => {
 
   test('narrows live as From and To are chosen, still for today', async () => {
     renderHero();
-    await screen.findByText('PLATE-1');
+    await screen.findByText('BUS - 1');
     await pick('From', 'Alpha Stop');
     await waitFor(() => expect(getTrips).toHaveBeenLastCalledWith({ seat_type: 'seated', page: 1, from: 'alpha-stop', date: '2026-10-01', per_page: 5 }));
 
@@ -141,22 +141,22 @@ describe('LandingHero available trips preview', () => {
 
   test('a date that is not today is not listed here: a note with a link instead', async () => {
     renderHero();
-    await screen.findByText('PLATE-1');
+    await screen.findByText('BUS - 1');
     getTrips.mockClear();
 
     fireEvent.change(await screen.findByLabelText('Date'), { target: { value: '2026-10-05' } });
 
     expect(await screen.findByText(/Trips on Mon, Oct 5, 2026:/)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'View' })).toHaveAttribute('href', '/passenger/trips?date=2026-10-05');
-    expect(screen.queryByText('PLATE-1')).not.toBeInTheDocument();
+    expect(screen.queryByText('BUS - 1')).not.toBeInTheDocument();
     expect(getTrips).not.toHaveBeenCalled();
   });
 
   test('Book Seat opens the booking page for that trip: stop codes, its date and time, never ids or a mode', async () => {
     renderHero();
-    await screen.findByText('PLATE-2');
+    await screen.findByText('BUS - 2');
 
-    fireEvent.click(within(screen.getByText('PLATE-2').closest('div[class*="p-5"]')).getByRole('button', { name: 'Book Seat' }));
+    fireEvent.click(within(screen.getByText('BUS - 2').closest('div[class*="p-5"]')).getByRole('button', { name: 'Book Seat' }));
 
     const where = await screen.findByTestId('where');
     expect(where.textContent).toBe('/passenger/book?from=alpha-stop&to=beta-stop&date=2026-10-01&time=07%3A15');
@@ -187,7 +187,7 @@ describe('LandingHero available trips preview', () => {
 
     // Not today, yet the searched day is listed after Search (the live preview would only link to it).
     await waitFor(() => expect(getTrips).toHaveBeenCalledWith({ seat_type: 'seated', page: 1, from: 'alpha-stop', to: 'beta-stop', date: '2026-10-05', per_page: 5 }));
-    expect(await screen.findByText('PLATE-1')).toBeInTheDocument();
+    expect(await screen.findByText('BUS - 1')).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: 'Book Seat' })).toHaveLength(5);
     expect(screen.getByText(/Alpha Stop → Beta Stop · Mon, Oct 5, 2026/)).toBeInTheDocument();
 

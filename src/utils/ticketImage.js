@@ -1,5 +1,7 @@
 import { qrDataUrl } from './qr';
 import { isMobileDevice } from './inAppBrowser';
+import { busLabelText } from './busLabel';
+import { serviceTypeLabel } from './serviceType';
 
 // One-click "Save QR to device". The image is drawn with the same qrDataUrl() as the
 // on-screen QR, rendered ahead of the click (useTicketImage), and handed to the device
@@ -32,6 +34,8 @@ export function buildTicketImageModel(ticket, { group = false, groupSize = 1 } =
   const journey = [
     { label: 'Boarding', value: ticket?.origin || '-' },
     { label: 'Alighting', value: ticket?.destination || '-' },
+    { label: 'Bus', value: busLabelText(ticket?.bus_label) },
+    { label: 'Service', value: serviceTypeLabel(ticket?.service_type ?? ticket?.trip?.service_type) },
     { label: 'Departs', value: manilaDepartureLabel(ticket) },
   ];
   const lines = group

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import AdminService from '../../api/StaffService/AdminService';
+import { busLabelText } from '../../utils/busLabel';
 import { Plus, Edit, Trash2, AlertCircle, CheckCircle, Loader, ShieldCheck, MapPin, Route, Bus, Users, LogOut } from 'lucide-react';
 
 const TAB_ITEMS = [
@@ -27,7 +28,7 @@ export default function AdminPanel() {
 
   // Fleets
   const [fleets, setFleets] = useState([]);
-  const [fleetForm, setFleetForm] = useState({ plate_number: '', seated_capacity: '', standing_capacity: '', fleet_type: 'public' });
+  const [fleetForm, setFleetForm] = useState({ plate_number: '', bus_company_name: '', body_no: '', seated_capacity: '', standing_capacity: '', fleet_type: 'public' });
   const [editingFleetId, setEditingFleetId] = useState(null);
 
   // Accounts
@@ -163,6 +164,8 @@ export default function AdminPanel() {
       if (editingFleetId) {
         await AdminService.updateFleet(editingFleetId, {
           plate_number: fleetForm.plate_number,
+          bus_company_name: fleetForm.bus_company_name || '',
+          body_no: fleetForm.body_no || '',
           seated_capacity: parseInt(fleetForm.seated_capacity),
           standing_capacity: parseInt(fleetForm.standing_capacity),
           fleet_type: fleetForm.fleet_type,
@@ -173,6 +176,8 @@ export default function AdminPanel() {
       } else {
         const res = await AdminService.adminCreateFleet({
           plate_number: fleetForm.plate_number,
+          bus_company_name: fleetForm.bus_company_name || '',
+          body_no: fleetForm.body_no || '',
           seated_capacity: parseInt(fleetForm.seated_capacity),
           standing_capacity: parseInt(fleetForm.standing_capacity),
           fleet_type: fleetForm.fleet_type,
@@ -180,7 +185,7 @@ export default function AdminPanel() {
         setFleets([...fleets, res.data]);
         showMessage('Fleet created successfully!', true);
       }
-      setFleetForm({ plate_number: '', seated_capacity: '', standing_capacity: '', fleet_type: 'public' });
+      setFleetForm({ plate_number: '', bus_company_name: '', body_no: '', seated_capacity: '', standing_capacity: '', fleet_type: 'public' });
     } catch (err) {
       showMessage(err.message || 'Failed to save fleet', false);
     } finally {
@@ -504,6 +509,22 @@ export default function AdminPanel() {
                   required
                 />
                 <input
+                  type="text"
+                  placeholder="Bus company name (shown to passengers)"
+                  maxLength={100}
+                  value={fleetForm.bus_company_name ?? ''}
+                  onChange={e => setFleetForm({ ...fleetForm, bus_company_name: e.target.value })}
+                  className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2.5 text-sm text-white outline-none transition focus:border-sky-500"
+                />
+                <input
+                  type="text"
+                  placeholder="Body number (shown to passengers)"
+                  maxLength={30}
+                  value={fleetForm.body_no ?? ''}
+                  onChange={e => setFleetForm({ ...fleetForm, body_no: e.target.value })}
+                  className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2.5 text-sm text-white outline-none transition focus:border-sky-500"
+                />
+                <input
                   type="number"
                   placeholder="Seated Capacity"
                   value={fleetForm.seated_capacity}
@@ -533,7 +554,7 @@ export default function AdminPanel() {
                     {editingFleetId ? 'Update' : 'Add'}
                   </button>
                   {editingFleetId && (
-                    <button type="button" onClick={() => { setEditingFleetId(null); setFleetForm({ plate_number: '', seated_capacity: '', standing_capacity: '', fleet_type: 'public' }); }} className="flex-1 rounded-xl border border-slate-700 bg-slate-800 px-3 py-2.5 text-sm font-semibold text-slate-200 transition hover:bg-slate-700">
+                    <button type="button" onClick={() => { setEditingFleetId(null); setFleetForm({ plate_number: '', bus_company_name: '', body_no: '', seated_capacity: '', standing_capacity: '', fleet_type: 'public' }); }} className="flex-1 rounded-xl border border-slate-700 bg-slate-800 px-3 py-2.5 text-sm font-semibold text-slate-200 transition hover:bg-slate-700">
                       Cancel
                     </button>
                   )}
@@ -554,6 +575,7 @@ export default function AdminPanel() {
                     <div key={fleet.fleet_id} className="flex items-center justify-between rounded-xl border border-slate-700 bg-slate-900/70 p-3 transition hover:border-slate-500">
                       <div className="flex-1">
                         <p className="font-semibold text-white">{fleet.plate_number}</p>
+                        <p className="text-xs text-slate-400" data-testid="fleet-bus-label">Passenger label: {busLabelText(fleet.bus_label ?? (fleet.bus_company_name && fleet.body_no ? `${fleet.bus_company_name} - ${fleet.body_no}` : null))}</p>
                         <p className="text-sm text-slate-400">{fleet.seated_capacity} seated + {fleet.standing_capacity} standing = {fleet.capacity} total</p>
                       </div>
                       <div className="flex gap-2">
