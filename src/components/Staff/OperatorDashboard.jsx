@@ -13,7 +13,10 @@ import { openPrintReport } from '../../utils/printReport'
 import OperatorService from '../../api/StaffService/OperatorService'
 import { parseAppDate, getBusinessToday, debugLogBusinessTime } from '../../utils/dates'
 import { useOperatorDashboardData, useNotificationBell, useTripRequests, useDispatchDecisions, useFleetsTab, useRoutesTab, useTripsTab, useReportsTab, useShiftBlocksTab } from '../../api/hooks/Staff/useOperatorDashboard'
-import ServiceTypeChip from '../ui/ServiceTypeChip'
+import RunInfoChips from '../ui/RunInfoChips'
+import { CancelTripModal, TicketResolutionQueue } from './TripCancellationsPanel'
+import DurationFactorsPanel from './DurationFactorsPanel'
+import LegTimeSuggestion from './LegTimeSuggestion'
 import AssignmentBlockCards from './AssignmentBlockCards'
 import {
   LayoutDashboard, Bus, MapPin, Clock, PieChart, Users, Settings,
@@ -535,7 +538,7 @@ function DashboardTab({ trips, drivers, conductors, fleets, onRequestDecided, on
                     <td className="px-4 py-2 font-mono text-xs text-slate-700">#{t.trip_id}</td>
                     <td className="px-4 py-2 text-slate-600">{fmtDate(t.trip_date)}</td>
                     <td className="px-4 py-2 text-slate-700">{t.fleet_route?.route?.route_name || '-'}</td>
-                    <td className="px-4 py-2 text-slate-700">{t.fleet_route?.fleet?.plate_number || '-'} <ServiceTypeChip serviceType={t.service_type} /></td>
+                    <td className="px-4 py-2 text-slate-700">{t.fleet_route?.fleet?.plate_number || '-'} <RunInfoChips runPattern={t.run_info?.run_pattern} service={t.run_info?.service} serviceType={t.service_type} /></td>
                     <td className="px-4 py-2">
                       <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_CHIP[t.status] ?? 'bg-slate-100 text-slate-600'}`}>{t.status}</span>
                     </td>
@@ -1359,6 +1362,8 @@ function RoutesTab({ routes, stops, trips, onRefresh }) {
           </table>
         </div>
       </div>
+
+      <DurationFactorsPanel service={OperatorService} routes={routes} />
     </div>
   )
 }
@@ -1389,6 +1394,8 @@ function TripsTab({ trips, drivers, conductors, onRefresh }) {
     handleStatusOverride,
     loadTripGpsHistory,
   } = useTripsTab({ trips, onRefresh })
+  const [cancelTarget, setCancelTarget] = useState(null)
+  const [cancelNotice, setCancelNotice] = useState('')
 
   const driverMap = new Map(drivers.map(d => [Number(getStaffCompanyUserId(d)), d]))
   const conductorMap = new Map(conductors.map(c => [Number(getStaffCompanyUserId(c)), c]))
@@ -1497,7 +1504,7 @@ function TripsTab({ trips, drivers, conductors, onRefresh }) {
                             ? <span className="ml-1.5 rounded-full bg-indigo-100 px-1.5 py-0.5 text-xs font-semibold text-indigo-700" title="Auto-generated from a Shift Block">Block</span>
                             : <span className="ml-1.5 rounded-full bg-slate-100 px-1.5 py-0.5 text-xs font-semibold text-slate-500" title="Manually created ad hoc/charter trip">Ad hoc</span>}
                         </td>
-                        <td className="px-4 py-3 text-slate-700">{t.fleet_route?.fleet?.plate_number || '-'} <ServiceTypeChip serviceType={t.service_type} /></td>
+                        <td className="px-4 py-3 text-slate-700">{t.fleet_route?.fleet?.plate_number || '-'} <RunInfoChips runPattern={t.run_info?.run_pattern} service={t.run_info?.service} serviceType={t.service_type} /></td>
                         <td className="px-4 py-3">
                           {driverName ? <span className="text-slate-700">{driverName}</span>
                             : <button type="button" onClick={() => { setAssignModal({ trip: t, type: 'driver' }); setAssignId(''); setMsg('') }} className="text-xs text-teal-600 hover:underline">Assign</button>}
@@ -1522,6 +1529,7 @@ function TripsTab({ trips, drivers, conductors, onRefresh }) {
                             {['scheduled', 'delayed'].includes(t.status)    && <button type="button" onClick={() => handleAction(t.trip_id,'boarding')} disabled={actionInFlight === t.trip_id} className="rounded px-2 py-1 text-xs bg-blue-100 text-blue-700 hover:bg-blue-200 disabled:opacity-50">{actionInFlight === t.trip_id ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Board'}</button>}
                             {t.status === 'boarding'     && <button type="button" onClick={() => handleAction(t.trip_id,'depart')} disabled={actionInFlight === t.trip_id} className="rounded px-2 py-1 text-xs bg-amber-100 text-amber-700 hover:bg-amber-200 disabled:opacity-50">{actionInFlight === t.trip_id ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Depart'}</button>}
                             {['departed','in-progress'].includes(t.status) && <button type="button" onClick={() => handleAction(t.trip_id,'complete')} disabled={actionInFlight === t.trip_id} className="rounded px-2 py-1 text-xs bg-emerald-100 text-emerald-700 hover:bg-emerald-200 disabled:opacity-50">Complete</button>}
+                            {['scheduled', 'delayed', 'boarding', 'departed', 'in-progress'].includes(t.status) && <button type="button" onClick={() => setCancelTarget(t)} className="rounded px-2 py-1 text-xs bg-red-50 text-red-700 hover:bg-red-100">Cancel</button>}
                             {isOverdueUnclosed(t) && <button type="button" onClick={() => setSelectedTrip(t)} className="rounded px-2 py-1 text-xs bg-red-100 text-red-700 hover:bg-red-200">Update Status</button>}
                             <button type="button" onClick={() => setSelectedTrip(t)} className="rounded px-2 py-1 text-xs bg-slate-100 text-slate-600 hover:bg-slate-200"><Eye className="h-3.5 w-3.5" /></button>
                           </div>
@@ -1597,6 +1605,14 @@ function TripsTab({ trips, drivers, conductors, onRefresh }) {
                     />
                   ))}
                 </div>
+                <LegTimeSuggestion
+                  fleetRouteId={form.fleet_route_id}
+                  date={form.trip_date}
+                  firstTime={(Array.isArray(form.leg_departure_times) ? form.leg_departure_times : defaultLegTimesByBlock[form.block_type] || defaultLegTimesByBlock.morning)[0]}
+                  serviceType={form.service_type || 'regular'}
+                  expectedLegs={(Array.isArray(form.leg_departure_times) ? form.leg_departure_times : defaultLegTimesByBlock[form.block_type] || defaultLegTimesByBlock.morning).length}
+                  onApply={(times) => setForm((prev) => ({ ...prev, leg_departure_times: times }))}
+                />
               </>
             )}
             <Field label="Driver" required>
@@ -1628,6 +1644,12 @@ function TripsTab({ trips, drivers, conductors, onRefresh }) {
             </div>
           </form>
         </Modal>
+      )}
+
+      {cancelNotice && <p role="status" className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{cancelNotice}</p>}
+      <TicketResolutionQueue service={OperatorService} />
+      {cancelTarget && (
+        <CancelTripModal trip={cancelTarget} service={OperatorService} onClose={() => setCancelTarget(null)} onDone={(text) => { setCancelNotice(text); onRefresh() }} />
       )}
 
       {assignModal && (

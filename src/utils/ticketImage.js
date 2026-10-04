@@ -1,7 +1,7 @@
 import { qrDataUrl } from './qr';
 import { isMobileDevice } from './inAppBrowser';
 import { busLabelText } from './busLabel';
-import { serviceTypeLabel } from './serviceType';
+import { runPatternLabel, serviceLabel, servedStopsText } from './runInfo';
 
 // One-click "Save QR to device". The image is drawn with the same qrDataUrl() as the
 // on-screen QR, rendered ahead of the click (useTicketImage), and handed to the device
@@ -35,7 +35,10 @@ export function buildTicketImageModel(ticket, { group = false, groupSize = 1 } =
     { label: 'Boarding', value: ticket?.origin || '-' },
     { label: 'Alighting', value: ticket?.destination || '-' },
     { label: 'Bus', value: busLabelText(ticket?.bus_label) },
-    { label: 'Service', value: serviceTypeLabel(ticket?.service_type ?? ticket?.trip?.service_type) },
+    { label: 'Service', value: serviceLabel(ticket?.run_info?.service, ticket?.service_type ?? ticket?.trip?.service_type) },
+    // Batch 28 Stage 3, item 8: only what the server derived from stored data; a missing fact adds no line.
+    ...(runPatternLabel(ticket?.run_info?.run_pattern) ? [{ label: 'Run', value: runPatternLabel(ticket.run_info.run_pattern) }] : []),
+    ...(servedStopsText(ticket?.run_info?.service) ? [{ label: 'Stops', value: servedStopsText(ticket.run_info.service).replace(/^[^:]+: /, '') }] : []),
     { label: 'Departs', value: manilaDepartureLabel(ticket) },
   ];
   const lines = group

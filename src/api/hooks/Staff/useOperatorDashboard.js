@@ -323,11 +323,6 @@ export function useFleetsTab({ onRefresh }) {
   const [manageSaving, setManageSaving] = useState(false);
   const [fleetForm, setFleetForm] = useState({ plate_number: '', bus_company_name: '', body_no: '', seated_capacity: '', standing_capacity: '', fleet_type: 'public', vehicle_class: '', route_id: '', start_time: '06:00', end_time: '22:00' });
   const [assignForm, setAssignForm] = useState({ fleet_id: '', route_id: '', start_time: '06:00', end_time: '22:00' });
-  const [fareForm, setFareForm] = useState({ fleet_id: '', seat_type: 'seated', base_fare: '', fare_per_km: '' });
-  const [fareSaving, setFareSaving] = useState(false);
-  const [fareMsg, setFareMsg] = useState('');
-  const [stepUpOpen, setStepUpOpen] = useState(false);
-  const stepUpRef = useRef(null); // { token, expiresAt } kept in memory only, never persisted
 
   const refreshFleetLocations = useCallback(async () => {
     try {
@@ -446,63 +441,6 @@ export function useFleetsTab({ onRefresh }) {
     }
   };
 
-  const validStepUpToken = () => {
-    const held = stepUpRef.current;
-    if (held && held.expiresAt > Date.now()) return held.token;
-    stepUpRef.current = null;
-    return null;
-  };
-
-  const submitFareRule = async (stepUpToken) => {
-    setFareMsg('');
-    setFareSaving(true);
-
-    try {
-      await OperatorService.createFareRule({
-        fleet_id: Number(fareForm.fleet_id),
-        seat_type: fareForm.seat_type,
-        base_fare: Number(fareForm.base_fare),
-        fare_per_km: Number(fareForm.fare_per_km),
-      }, stepUpToken);
-
-      setFareForm((prev) => ({ ...prev, base_fare: '', fare_per_km: '' }));
-      setFareMsg('Fare rule applied successfully.');
-    } catch (err) {
-      if (err?.cause?.response?.data?.step_up === true) {
-        // Token expired or rejected: ask for the password again.
-        stepUpRef.current = null;
-        setStepUpOpen(true);
-        setFareMsg('Failed: your verification expired. Confirm your password to continue.');
-      } else {
-        setFareMsg(err?.message || 'Failed to apply fare rule.');
-      }
-    } finally {
-      setFareSaving(false);
-    }
-  };
-
-  // Fare changes need a recent password confirmation (step-up). A verified
-  // token is reused until it expires (15 minutes).
-  const handleApplyFareRule = (event) => {
-    event.preventDefault();
-    const token = validStepUpToken();
-    if (!token) {
-      setFareMsg('');
-      setStepUpOpen(true);
-      return undefined;
-    }
-    return submitFareRule(token);
-  };
-
-  const handleStepUpVerified = ({ token, expiresIn }) => {
-    // Drop the token 30s early so it does not expire mid-request.
-    stepUpRef.current = { token, expiresAt: Date.now() + Math.max(0, expiresIn - 30) * 1000 };
-    setStepUpOpen(false);
-    void submitFareRule(token);
-  };
-
-  const closeStepUp = () => setStepUpOpen(false);
-
   const openFleetMap = (fleetId) => {
     const location = getLocationByFleet(fleetId);
     const lat = Number(location?.latitude);
@@ -518,9 +456,6 @@ export function useFleetsTab({ onRefresh }) {
     manageSaving,
     fleetForm, setFleetForm,
     assignForm, setAssignForm,
-    fareForm, setFareForm,
-    fareSaving,
-    fareMsg,
     refreshFleetLocations,
     statusToProgress,
     statusLabel,
@@ -528,10 +463,6 @@ export function useFleetsTab({ onRefresh }) {
     getLocationByFleet,
     handleCreateFleet,
     handleAssignRoute,
-    handleApplyFareRule,
-    stepUpOpen,
-    handleStepUpVerified,
-    closeStepUp,
     openFleetMap,
   };
 }

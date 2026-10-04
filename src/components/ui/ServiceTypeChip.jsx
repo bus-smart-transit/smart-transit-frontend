@@ -1,7 +1,7 @@
 import { isExpress, serviceTypeLabel } from '../../utils/serviceType';
 
 /** Small Regular / Express chip shown on the schedule, the booking flow and the ticket. */
-export default function ServiceTypeChip({ serviceType, className = '' }) {
+export default function ServiceTypeChip({ serviceType, label, className = '' }) {
   const express = isExpress(serviceType);
   return (
     <span
@@ -11,7 +11,7 @@ export default function ServiceTypeChip({ serviceType, className = '' }) {
         express ? 'border-amber-300 bg-amber-50 text-amber-800' : 'border-slate-200 bg-slate-50 text-slate-600'
       } ${className}`}
     >
-      {serviceTypeLabel(serviceType)}
+      {label || serviceTypeLabel(serviceType)}
     </span>
   );
 }

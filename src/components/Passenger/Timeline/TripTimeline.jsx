@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Bus, MapPin, Loader } from 'lucide-react'
 import { etaLabel, formatDuration, groupTimelineRows, journeyFacts, nodeState } from '../../../utils/tripTimeline'
 import { busLabelText } from '../../../utils/busLabel'
-import ServiceTypeChip from '../../ui/ServiceTypeChip'
+import RunInfoChips from '../../ui/RunInfoChips'
 
 const NODE_STYLE = {
   passed: 'border-slate-400 bg-slate-400',
@@ -124,7 +124,7 @@ export default function TripTimeline({
         {header.via?.length > 0 && <p className="mt-0.5 text-xs text-slate-500">via {header.via.join(', ')}</p>}
         <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
           <span className="inline-flex items-center gap-1" data-testid="timeline-bus-label"><Bus size={13} /> {busLabelText(bus?.label)}</span>
-          <ServiceTypeChip serviceType={timeline.trip?.service_type} />
+          <RunInfoChips runPattern={timeline.trip?.run_pattern} service={timeline.trip?.service} serviceType={timeline.trip?.service_type} showStops />
           <span data-testid="timeline-bus-class">
             {bus?.class_label || 'Class not specified'}
             {' \u00b7 '}

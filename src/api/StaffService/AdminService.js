@@ -74,6 +74,50 @@ class AdminService extends StaffBaseService {
   }
 
   // ── Account Management ──
+  // Batch 28 Stage 3, item 6: cancel a trip and settle the tickets of a cancelled trip for the passenger (rebook, refund,
+  // cash entry, reviewed amount). The server works out every amount and records who acted.
+  async cancelTrip(tripId, reason = '') {
+    return await this.request(`/admin/trips/${tripId}/cancel`, 'PATCH', reason ? { reason } : {});
+  }
+
+  async getTicketResolutions() {
+    return await this.request('/admin/ticket-resolutions', 'GET');
+  }
+
+  async getStaffTicketResolution(ticketUuid) {
+    return await this.request(`/admin/tickets/${ticketUuid}/resolution`, 'GET');
+  }
+
+  async chooseStaffTicketResolution(ticketUuid, body) {
+    return await this.request(`/admin/tickets/${ticketUuid}/resolution`, 'POST', body);
+  }
+
+  async recordCashRefund(resolutionId, note = '') {
+    return await this.request(`/admin/ticket-resolutions/${resolutionId}/cash`, 'POST', note ? { note } : {});
+  }
+
+  async reviewRefund(resolutionId, amount, note) {
+    return await this.request(`/admin/ticket-resolutions/${resolutionId}/review`, 'POST', { amount, note });
+  }
+
+  // Batch 28 Stage 3, item 7: peak-hour duration windows ("configured", never measured), the read-only report and the leg-time suggestion.
+  async getDurationFactors(routeId = null) {
+    return await this.request('/admin/duration-factors', 'GET', routeId ? { route_id: routeId } : {});
+  }
+
+  async saveDurationFactor(payload, id = null) {
+    return id
+      ? await this.request(`/admin/duration-factors/${id}`, 'PUT', payload)
+      : await this.request('/admin/duration-factors', 'POST', payload);
+  }
+
+  async deleteDurationFactor(id) {
+    return await this.request(`/admin/duration-factors/${id}`, 'DELETE');
+  }
+
+  async getDurationReport(routeId = null) {
+    return await this.request('/admin/duration-report', 'GET', routeId ? { route_id: routeId } : {});
+  }
   async getFareRules(filters = {}) {
     return await this.request(`/admin/fare-rules`, 'GET', filters);
   }

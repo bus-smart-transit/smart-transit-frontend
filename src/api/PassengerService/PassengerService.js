@@ -37,6 +37,15 @@ class PassengerService extends RoleAuthServiceBase {
     return await this.request(`/${this.endpointBase}/tickets/${ticketUuid}/qr`, "GET");
   }
 
+  // Batch 28 Stage 3, item 6: rebook or refund a ticket of a trip the OPERATOR cancelled (the server decides every amount).
+  async getTicketResolution(ticketUuid) {
+    return await this.request(`/${this.endpointBase}/tickets/${ticketUuid}/resolution`, "GET");
+  }
+
+  async chooseTicketResolution(ticketUuid, body) {
+    return await this.request(`/${this.endpointBase}/tickets/${ticketUuid}/resolution`, "POST", body);
+  }
+
   async getRewardsHistory() {
     return await this.request(`/${this.endpointBase}/rewards/history`, "GET");
   }

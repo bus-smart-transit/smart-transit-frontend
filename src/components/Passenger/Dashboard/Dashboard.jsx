@@ -18,7 +18,9 @@ import Modal from '../../ui/Modal';
 import { parseAppDate, getBusinessToday } from '../../../utils/dates';
 import { busLabelText } from '../../../utils/busLabel';
 import { buildBookingQuery } from '../../../utils/bookingQuery';
-import ServiceTypeChip from '../../ui/ServiceTypeChip';
+import RunInfoChips from '../../ui/RunInfoChips';
+import TripCancelledChoice from '../Ticket/TripCancelledChoice';
+import { CANCELLED_TRIP_STATUSES } from '../../../utils/ticketResolution';
 
 const preloadMapView = () =>
   Promise.all([
@@ -66,6 +68,7 @@ export default function Dashboard() {
     isLoadingPrivate,
     lastSync,
     loadingTicketQr,
+    loadPrivateData,
     menuOpen,
     navigate,
     paymentNotice,
@@ -176,6 +179,7 @@ export default function Dashboard() {
     { value: 'scheduled', label: 'Scheduled' },
     { value: 'completed', label: 'Completed' },
     { value: 'expired', label: 'Expired' },
+    { value: 'cancelled', label: 'Cancelled trips' },
     { value: 'group', label: 'Group' },
   ];
 
@@ -183,6 +187,9 @@ export default function Dashboard() {
     const normalizedStatus = String(ticket?.status || '').toLowerCase();
     if (ticketStatusFilter === 'scheduled') {
       return ['valid', 'issued', 'boarded'].includes(normalizedStatus);
+    }
+    if (ticketStatusFilter === 'cancelled') {
+      return CANCELLED_TRIP_STATUSES.includes(normalizedStatus);
     }
     if (ticketStatusFilter === 'completed') {
       return normalizedStatus === 'alighted';
@@ -302,7 +309,7 @@ export default function Dashboard() {
                         <tr key={`sched-${ticket.ticket_id ?? idx}`}>
                           <td className="py-2.5 font-medium text-navy-950">{getOriginLabel(ticket)} → {getDestinationLabel(ticket)}</td>
                           <td className="py-2.5 text-slate-500">{formatDateTime(ticket.valid_from || ticket?.trip?.trip_date || ticket.created_at)}</td>
-                          <td className="py-2.5 text-slate-500">{getFleetDisplayLabel(ticket)} <ServiceTypeChip serviceType={ticket?.trip?.service_type} /></td>
+                          <td className="py-2.5 text-slate-500">{getFleetDisplayLabel(ticket)} <RunInfoChips runPattern={ticket?.run_info?.run_pattern} service={ticket?.run_info?.service} serviceType={ticket?.trip?.service_type} /></td>
                         </tr>
                       ))}
                       {upcomingScheduleTickets.length === 0 && (
@@ -418,6 +425,13 @@ export default function Dashboard() {
               </label>
             )}
           </div>
+
+          {tickets.some((ticket) => String(ticket?.status).toLowerCase() === 'trip_cancelled') && (
+            <div role="status" data-testid="cancelled-trip-banner" className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              <span>The operator cancelled a trip you paid for. Choose to rebook or get a refund.</span>
+              <Button type="button" variant="outline" size="sm" onClick={() => setTicketStatusFilter('cancelled')}>Show those tickets</Button>
+            </div>
+          )}
 
           <div className="mt-6">
             {isLoadingPrivate ? (
@@ -877,6 +891,9 @@ export default function Dashboard() {
             <p className="text-sm text-slate-500">Loading QR ticket...</p>
           ) : (
             <>
+              {CANCELLED_TRIP_STATUSES.includes(String(selectedTicket.status).toLowerCase()) && (
+                <TripCancelledChoice ticketUuid={selectedTicket.ticket_uuid} onChanged={loadPrivateData} />
+              )}
               <TicketCard
                 fromLabel={getOriginLabel(selectedTicket)}
                 toLabel={getDestinationLabel(selectedTicket)}
@@ -891,7 +908,7 @@ export default function Dashboard() {
               />
               <p className="mt-3 flex items-center gap-2 text-sm text-slate-600" data-testid="ticket-bus-service">
                 <span>Bus: <strong className="text-slate-900">{getFleetDisplayLabel(selectedTicket)}</strong></span>
-                <ServiceTypeChip serviceType={selectedTicket?.trip?.service_type} />
+                <RunInfoChips runPattern={selectedTicket?.run_info?.run_pattern} service={selectedTicket?.run_info?.service} serviceType={selectedTicket?.trip?.service_type} showStops />
                 {selectedTicket.journey_leg && (
                   <span data-testid="ticket-journey-leg" className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-600">
                     {selectedTicket.journey_leg === 'return' ? 'Return ticket' : 'Outbound ticket'}

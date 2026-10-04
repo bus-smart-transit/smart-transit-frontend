@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import Modal from '../ui/Modal';
 import ServiceTypeChip from '../ui/ServiceTypeChip';
+import RunInfoChips from '../ui/RunInfoChips';
 import { FOR_APPROVAL_LABEL } from '../../utils/assignmentRequest';
 import { formatManilaDate } from '../../utils/dates';
 
@@ -118,7 +119,7 @@ export default function AssignmentBlockCards({
 
                 <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-600">
                   <span data-testid="assignment-legs-count" className="rounded-full bg-slate-100 px-2.5 py-1 font-semibold">{card.legs_count} {card.legs_count === 1 ? 'leg' : 'legs'}</span>
-                  <ServiceTypeChip serviceType={card.service_type} />
+                  <RunInfoChips runPattern={card.run_pattern} service={card.service} serviceType={card.service_type} showStops />
                   {card.plate_number && <span className="font-data">{card.plate_number}</span>}
                 </div>
 

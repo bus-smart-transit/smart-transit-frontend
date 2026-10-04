@@ -3,6 +3,8 @@
  * (flat ring-based badges, no icon). Not used elsewhere yet, so free to
  * adopt their exact status vocabulary directly.
  */
+import { ticketStatusLabel } from '../../../utils/ticketResolution';
+
 const STYLES = {
   confirmed: 'bg-teal-50 text-teal-700 ring-1 ring-inset ring-teal-200',
   upcoming: 'bg-teal-50 text-teal-700 ring-1 ring-inset ring-teal-200',
@@ -18,6 +20,10 @@ const STYLES = {
   pending: 'bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-200',
   cancelled: 'bg-red-50 text-red-700 ring-1 ring-inset ring-red-200',
   refunded: 'bg-red-50 text-red-700 ring-1 ring-inset ring-red-200',
+  trip_cancelled: 'bg-amber-50 text-amber-800 ring-1 ring-inset ring-amber-300',
+  refund_pending: 'bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-200',
+  refund_review: 'bg-orange-50 text-orange-700 ring-1 ring-inset ring-orange-200',
+  rebooked: 'bg-sky-50 text-sky-700 ring-1 ring-inset ring-sky-200',
   warning: 'bg-orange-50 text-orange-700 ring-1 ring-inset ring-orange-200',
 };
 
@@ -27,7 +33,7 @@ export default function StatusBadge({ status, className = '' }) {
   const style = STYLES[String(status || '').toLowerCase()] || DEFAULT_STYLE;
   return (
     <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold whitespace-nowrap ${style} ${className}`}>
-      {status}
+      {ticketStatusLabel(status)}
     </span>
   );
 }

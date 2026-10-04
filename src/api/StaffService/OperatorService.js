@@ -198,6 +198,54 @@ class OperatorService extends StaffBaseService {
   // ── Fare Rules ──
   // The backend requires step-up for this call: pass the token from StepUpModal
   // (password confirmation), sent as the X-Step-Up-Token header.
+  // Batch 28 Stage 3, item 6: cancel a trip and settle the tickets of a cancelled trip for the passenger (rebook, refund,
+  // cash entry, reviewed amount). The server works out every amount and records who acted.
+  async cancelTrip(tripId, reason = '') {
+    return await this.request(`/operator/trips/${tripId}/cancel`, 'PATCH', reason ? { reason } : {});
+  }
+
+  async getTicketResolutions() {
+    return await this.request('/operator/ticket-resolutions', 'GET');
+  }
+
+  async getStaffTicketResolution(ticketUuid) {
+    return await this.request(`/operator/tickets/${ticketUuid}/resolution`, 'GET');
+  }
+
+  async chooseStaffTicketResolution(ticketUuid, body) {
+    return await this.request(`/operator/tickets/${ticketUuid}/resolution`, 'POST', body);
+  }
+
+  async recordCashRefund(resolutionId, note = '') {
+    return await this.request(`/operator/ticket-resolutions/${resolutionId}/cash`, 'POST', note ? { note } : {});
+  }
+
+  async reviewRefund(resolutionId, amount, note) {
+    return await this.request(`/operator/ticket-resolutions/${resolutionId}/review`, 'POST', { amount, note });
+  }
+
+  // Batch 28 Stage 3, item 7: peak-hour duration windows ("configured", never measured), the read-only report and the leg-time suggestion.
+  async getDurationFactors(routeId = null) {
+    return await this.request('/operator/duration-factors', 'GET', routeId ? { route_id: routeId } : {});
+  }
+
+  async saveDurationFactor(payload, id = null) {
+    return id
+      ? await this.request(`/operator/duration-factors/${id}`, 'PUT', payload)
+      : await this.request('/operator/duration-factors', 'POST', payload);
+  }
+
+  async deleteDurationFactor(id) {
+    return await this.request(`/operator/duration-factors/${id}`, 'DELETE');
+  }
+
+  async getDurationReport(routeId = null) {
+    return await this.request('/operator/duration-report', 'GET', routeId ? { route_id: routeId } : {});
+  }
+  async planShiftBlockLegs(params) {
+    return await this.request('/operator/shift-blocks/plan-legs', 'GET', params);
+  }
+
   async getFareRules(filters = {}) {
     return await this.request('/operator/fare-rules', 'GET', filters);
   }

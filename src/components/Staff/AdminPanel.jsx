@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import AdminService from '../../api/StaffService/AdminService';
 import FareRulesPanel from './FareRulesPanel';
+import { TicketResolutionQueue } from './TripCancellationsPanel';
+import DurationFactorsPanel from './DurationFactorsPanel';
 import useFareOptions from '../../api/hooks/Staff/useFareOptions';
 import { busLabelText } from '../../utils/busLabel';
 import { Plus, Edit, Trash2, AlertCircle, CheckCircle, Loader, ShieldCheck, MapPin, Route, Bus, Users, LogOut, Tag } from 'lucide-react';
@@ -10,6 +12,8 @@ const TAB_ITEMS = [
   { id: 'routes', label: 'Routes', icon: Route },
   { id: 'fleets', label: 'Fleets', icon: Bus },
   { id: 'fares', label: 'Fares', icon: Tag },
+  { id: 'refunds', label: 'Cancelled Trips', icon: AlertCircle },
+  { id: 'durations', label: 'Peak Hours', icon: Route },
   { id: 'accounts', label: 'Accounts', icon: Users },
 ];
 
@@ -249,6 +253,7 @@ export default function AdminPanel() {
       else if (activeTab === 'routes') loadRoutes();
       else if (activeTab === 'fleets') loadFleets();
       else if (activeTab === 'fares') { loadFleets(); loadRoutes(); }
+      else if (activeTab === 'durations') loadRoutes();
       else if (activeTab === 'accounts') loadAccounts();
     }, 0);
 
@@ -615,6 +620,14 @@ export default function AdminPanel() {
 
         {activeTab === 'fares' && (
           <FareRulesPanel service={AdminService} fleets={fleets} routes={routes} canCreateGeneral />
+        )}
+
+        {activeTab === 'refunds' && (
+          <TicketResolutionQueue service={AdminService} tone="dark" />
+        )}
+
+        {activeTab === 'durations' && (
+          <DurationFactorsPanel service={AdminService} routes={routes} tone="dark" />
         )}
 
         {activeTab === 'accounts' && (

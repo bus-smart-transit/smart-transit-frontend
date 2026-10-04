@@ -5,7 +5,7 @@ import { formatManilaDate } from '../../../utils/dates'
 import { formatDuration } from '../../../utils/tripTimeline'
 import { busLabelText } from '../../../utils/busLabel'
 import { FARE_UNAVAILABLE } from '../../../utils/serviceType'
-import ServiceTypeChip from '../../ui/ServiceTypeChip'
+import RunInfoChips from '../../ui/RunInfoChips'
 
 /**
  * One departure in the search results. Every value comes from the server: times are the scheduled
@@ -35,7 +35,7 @@ export function TripCard({ trip, fromName, toName, seatType = 'seated', showDate
               {trip.arrival_time || 'arrival unavailable'}
             </span>
             <span className="flex items-center gap-1.5" data-testid="trip-bus-label"><Bus size={15} aria-hidden="true" />{busLabelText(trip.bus_label)}</span>
-            <ServiceTypeChip serviceType={trip.service_type} />
+            <RunInfoChips runPattern={trip.run_pattern} service={trip.service} serviceType={trip.service_type} showStops />
             {duration && <span>{duration}</span>}
           </div>
           <p className="mt-2 flex items-center gap-1.5 text-sm text-slate-500">
