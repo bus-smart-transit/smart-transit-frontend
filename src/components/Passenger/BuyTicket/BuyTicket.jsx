@@ -69,6 +69,7 @@ export default function BuyTicket({ onTicketPurchased }) {
     dropoff,
     dropoffDraft,
     dropoffError,
+    dropoffOptions,
     dropoffModalVisible,
     error,
     form,
@@ -616,6 +617,7 @@ export default function BuyTicket({ onTicketPurchased }) {
           direction={timeline.trip.leg_direction}
           highlight={null}
           pin={dropoffDraft}
+          options={dropoffOptions}
           busy={Boolean(dropoff) && timelineState.loading}
           error={dropoffError}
           onPinChange={setDropoffDraft}

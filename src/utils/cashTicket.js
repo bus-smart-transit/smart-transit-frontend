@@ -79,6 +79,7 @@ export function boardingPointView(response) {
     destinations: good && Array.isArray(response?.destinations) ? response.destinations : [],
     customDropoffAvailable: good && response?.custom_dropoff?.available === true,
     distanceFromOriginKm: good ? Number(response?.boarding_point?.distance_from_origin_km ?? 0) : null,
+    alongLegM: good && Number.isFinite(Number(response?.boarding_point?.distance_along_leg_m)) ? Number(response.boarding_point.distance_along_leg_m) : null,
   };
 }
 
@@ -99,7 +100,10 @@ export function buildOnsiteItem({ tripId, form }) {
   if (form.boarding_mode === 'gps') item.boarding_mode = 'gps';
   else item.origin_stop_id = Number(form.origin_stop_id);
 
-  if (form.dropoff) {
+  if (form.dropoff && form.dropoff.pointId != null) {
+    // A designated drop-off point is named by id only; the server knows where it is.
+    item.alighting_point_id = Number(form.dropoff.pointId);
+  } else if (form.dropoff) {
     item.destination_lat = Number(form.dropoff.lat);
     item.destination_lng = Number(form.dropoff.lng);
     if (form.dropoff.label) item.destination_label = String(form.dropoff.label).slice(0, 255);

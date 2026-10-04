@@ -47,7 +47,8 @@ function TimelineRow({ row, canSelect, onSelect }) {
           {row.type === 'stop' && <span className="rounded-full bg-navy-50 px-2 py-0.5 font-semibold text-navy-700">Stop</span>}
           {row.is_boarding && <span className="rounded bg-emerald-100 px-1.5 py-0.5 font-semibold text-emerald-700">You board here</span>}
           {row.is_alighting && <span className="rounded bg-sky-100 px-1.5 py-0.5 font-semibold text-sky-700">You get off here</span>}
-          {row.custom && row.distance_from_route_m != null && (
+          {row.point_kind && <span className="rounded-full bg-amber-100 px-2 py-0.5 font-semibold capitalize text-amber-800">{row.point_kind}</span>}
+          {row.custom && !row.point_kind && row.distance_from_route_m != null && (
             <span>{Math.round(row.distance_from_route_m)} m from the route line</span>
           )}
         </span>
@@ -112,7 +113,7 @@ export default function TripTimeline({
   const availability = timeline.custom_dropoff_availability
   const canPin = offersPin && (availability ? availability.available : Boolean(journey?.boarding_stop_id))
   const pinReason = offersPin && !canPin
-    ? (availability?.reason || 'Choose where you board first, then pin where you want to get off.')
+    ? (availability?.reason || 'Choose where you board first, then choose where you want to get off.')
     : null
 
   return (
@@ -190,7 +191,7 @@ export default function TripTimeline({
               aria-describedby={pinReason ? 'custom-dropoff-reason' : undefined}
               className="inline-flex items-center gap-1.5 rounded-lg border border-navy-800 px-3 py-1.5 text-xs font-semibold text-navy-800 transition hover:bg-navy-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <MapPin size={14} /> Drop off somewhere else (pin on map)
+              <MapPin size={14} /> {timeline.dropoff_mode === 'designated_points' ? 'Drop off at a listed point (not a stop)' : 'Drop off somewhere else (pin on map)'}
             </button>
           )}
           {pinReason && <span id="custom-dropoff-reason" className="text-xs text-slate-500">{pinReason}</span>}

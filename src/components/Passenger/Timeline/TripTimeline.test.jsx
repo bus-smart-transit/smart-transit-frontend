@@ -71,6 +71,28 @@ describe('TripTimeline', () => {
     expect(screen.getByText(/drop off somewhere else/i)).toBeInTheDocument();
   });
 
+  test('on a listed-points route the control is worded for points, and a chosen point shows its kind', () => {
+    const onOpen = vi.fn();
+    render(
+      <TripTimeline
+        timeline={timeline({
+          allow_custom_dropoff: true,
+          dropoff_mode: 'designated_points',
+          custom_dropoff_availability: { available: true, reason: null },
+          journey: { boarding_stop_id: 1, alighting_stop_id: null, custom_dropoff: true },
+          stops: [row(1, { is_boarding: true, selectable: false }), row(null, { stop_id: null, name: 'Typed Point', type: 'custom', custom: true, point_kind: 'landmark', is_alighting: true }), row(5)],
+        })}
+        onOpenCustomDropoff={onOpen}
+      />,
+    );
+
+    expect(screen.queryByText(/drop off somewhere else/i)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /drop off at a listed point/i }));
+    expect(onOpen).toHaveBeenCalled();
+    expect(screen.getByText('Typed Point')).toBeInTheDocument();
+    expect(screen.getByText('landmark')).toBeInTheDocument();
+  });
+
   test('when the route offers the pin but the selection cannot use it, the control shows disabled with the server reason', () => {
     const reason = 'You board at the last stop of this trip, so there is nothing ahead to drop off at.';
     const onOpen = vi.fn();

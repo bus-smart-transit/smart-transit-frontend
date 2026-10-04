@@ -80,6 +80,18 @@ export async function getTripTimeline(tripId, selection = {}) {
   return data(response)
 }
 
+/**
+ * Batch 28 Stage 3, item 10: what the drop-off screen needs for a trip and a boarding point, from the server: the mode,
+ * whether a custom drop-off is possible, the restricted areas to shade and (listed-points mode) the points ahead.
+ */
+export async function getDropoffOptions(tripId, { boardingStopId = null, boardingAlongM = null } = {}) {
+  const params = {}
+  if (boardingStopId) params.boarding_stop_id = boardingStopId
+  if (boardingAlongM !== null && boardingAlongM !== undefined) params.boarding_along_m = boardingAlongM
+  const response = await api.get(`/trips/${tripId}/dropoff-options`, { params })
+  return data(response)
+}
+
 /** Address search proxy for the custom drop-off map (restricted to the region server-side). */
 export async function searchAddress(query) {
   const response = await api.get('/booking/address-search', { params: { q: query } })

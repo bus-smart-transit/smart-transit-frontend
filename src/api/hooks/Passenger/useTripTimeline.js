@@ -10,7 +10,7 @@ import { pollIntervalMs } from '../../../utils/tripTimeline'
  */
 export default function useTripTimeline({ tripId, boardingStopId, alightingStopId, dropoff, seatType }) {
   const requestKey = tripId
-    ? [tripId, boardingStopId || '', alightingStopId || '', dropoff ? `${dropoff.lat},${dropoff.lng}` : '', seatType || ''].join('|')
+    ? [tripId, boardingStopId || '', alightingStopId || '', dropoff ? (dropoff.pointId != null ? `point-${dropoff.pointId}` : `${dropoff.lat},${dropoff.lng}`) : '', seatType || ''].join('|')
     : null
 
   const [result, setResult] = useState({ key: null, data: null, error: null })
@@ -19,8 +19,10 @@ export default function useTripTimeline({ tripId, boardingStopId, alightingStopI
   const selection = {
     boarding_stop_id: boardingStopId,
     alighting_stop_id: alightingStopId,
-    dropoff_lat: dropoff?.lat,
-    dropoff_lng: dropoff?.lng,
+    // A designated drop-off point is named by id only; a pin sends its coordinates.
+    alighting_point_id: dropoff?.pointId ?? undefined,
+    dropoff_lat: dropoff?.pointId != null ? undefined : dropoff?.lat,
+    dropoff_lng: dropoff?.pointId != null ? undefined : dropoff?.lng,
     seat_type: seatType,
   }
   // Read inside the fetcher without making the effect depend on a new object each render.

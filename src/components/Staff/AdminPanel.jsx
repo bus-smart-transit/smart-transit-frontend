@@ -3,6 +3,7 @@ import AdminService from '../../api/StaffService/AdminService';
 import FareRulesPanel from './FareRulesPanel';
 import { TicketResolutionQueue } from './TripCancellationsPanel';
 import DurationFactorsPanel from './DurationFactorsPanel';
+import DropoffRulesPanel from './DropoffRulesPanel';
 import useFareOptions from '../../api/hooks/Staff/useFareOptions';
 import { busLabelText } from '../../utils/busLabel';
 import { Plus, Edit, Trash2, AlertCircle, CheckCircle, Loader, ShieldCheck, MapPin, Route, Bus, Users, LogOut, Tag } from 'lucide-react';
@@ -14,6 +15,7 @@ const TAB_ITEMS = [
   { id: 'fares', label: 'Fares', icon: Tag },
   { id: 'refunds', label: 'Cancelled Trips', icon: AlertCircle },
   { id: 'durations', label: 'Peak Hours', icon: Route },
+  { id: 'dropoff', label: 'Drop-off Rules', icon: MapPin },
   { id: 'accounts', label: 'Accounts', icon: Users },
 ];
 
@@ -254,6 +256,7 @@ export default function AdminPanel() {
       else if (activeTab === 'fleets') loadFleets();
       else if (activeTab === 'fares') { loadFleets(); loadRoutes(); }
       else if (activeTab === 'durations') loadRoutes();
+      else if (activeTab === 'dropoff') loadRoutes();
       else if (activeTab === 'accounts') loadAccounts();
     }, 0);
 
@@ -624,6 +627,10 @@ export default function AdminPanel() {
 
         {activeTab === 'refunds' && (
           <TicketResolutionQueue service={AdminService} tone="dark" />
+        )}
+
+        {activeTab === 'dropoff' && (
+          <DropoffRulesPanel service={AdminService} routes={routes} tone="dark" onRoutesChanged={loadRoutes} />
         )}
 
         {activeTab === 'durations' && (

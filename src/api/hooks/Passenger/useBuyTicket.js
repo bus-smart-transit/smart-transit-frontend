@@ -5,6 +5,7 @@ import { readApiError } from '../../../services/bookingService';
 import { useBookingStops, useDepartures, useTripResolution } from './useBookingSearch';
 import useBookingLink from './useBookingLink';
 import useTripTimeline from './useTripTimeline';
+import useDropoffOptions from './useDropoffOptions';
 import useRoundtrip from './useRoundtrip';
 import { buildRoundtripItems } from '../../../utils/roundtrip';
 import { findStopCode, withBookingParams } from '../../../utils/bookingQuery';
@@ -218,6 +219,12 @@ export default function useBuyTicket({ onTicketPurchased }) {
     seatType: form.seat_type,
   });
   const { timeline } = timelineState;
+  // Batch 28 Stage 3, item 10: restricted areas and designated points for the drop-off screen (loaded while it is open).
+  const dropoffOptionsState = useDropoffOptions({
+    tripId: trip?.trip_id ?? null,
+    boardingStopId: form.origin_stop_id || null,
+    enabled: dropoffModalOpen,
+  });
 
   // The fare comes from the same server computation the ticket is priced with (D4); it is
   // only usable while the timeline on screen matches the current selection.
@@ -316,7 +323,7 @@ export default function useBuyTicket({ onTicketPurchased }) {
   }, []);
 
   const applyDropoff = useCallback(() => {
-    if (dropoffDraft) setDropoff({ lat: dropoffDraft.lat, lng: dropoffDraft.lng, label: dropoffDraft.label || '' });
+    if (dropoffDraft) setDropoff({ lat: dropoffDraft.lat, lng: dropoffDraft.lng, label: dropoffDraft.label || '', pointId: dropoffDraft.pointId ?? undefined, kind: dropoffDraft.kind ?? undefined });
   }, [dropoffDraft]);
 
   const closeDropoffModal = useCallback(() => {
@@ -779,12 +786,15 @@ export default function useBuyTicket({ onTicketPurchased }) {
         seat_type: form.seat_type,
         origin_stop_id: parseInt(form.origin_stop_id, 10),
         ...(dropoff
-          ? {
+          ? (dropoff.pointId != null
+            // A designated point is named by id only: the server knows where it is.
+            ? { alighting_point_id: dropoff.pointId }
             // The server re-validates and snaps the pin; only the raw point is sent.
-            destination_lat: dropoff.lat,
-            destination_lng: dropoff.lng,
-            destination_label: (dropoff.label || '').trim() || undefined,
-          }
+            : {
+              destination_lat: dropoff.lat,
+              destination_lng: dropoff.lng,
+              destination_label: (dropoff.label || '').trim() || undefined,
+            })
           : { destination_stop_id: parseInt(effectiveAlightingStopId, 10) }),
       };
 
@@ -880,6 +890,7 @@ export default function useBuyTicket({ onTicketPurchased }) {
     dropoff,
     dropoffDraft,
     dropoffError,
+    dropoffOptions: dropoffOptionsState.options,
     dropoffModalVisible: dropoffModalOpen && !dropoffAccepted,
     error,
     form,

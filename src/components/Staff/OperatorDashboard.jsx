@@ -16,6 +16,7 @@ import { useOperatorDashboardData, useNotificationBell, useTripRequests, useDisp
 import RunInfoChips from '../ui/RunInfoChips'
 import { CancelTripModal, TicketResolutionQueue } from './TripCancellationsPanel'
 import DurationFactorsPanel from './DurationFactorsPanel'
+import DropoffRulesPanel from './DropoffRulesPanel'
 import LegTimeSuggestion from './LegTimeSuggestion'
 import AssignmentBlockCards from './AssignmentBlockCards'
 import {
@@ -1363,6 +1364,7 @@ function RoutesTab({ routes, stops, trips, onRefresh }) {
         </div>
       </div>
 
+      <DropoffRulesPanel service={OperatorService} routes={routes} onRoutesChanged={onRefresh} />
       <DurationFactorsPanel service={OperatorService} routes={routes} />
     </div>
   )

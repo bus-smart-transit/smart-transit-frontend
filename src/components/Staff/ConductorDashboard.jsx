@@ -26,6 +26,7 @@ import { useConductorPairing, useConductorDashboardData } from '../../api/hooks/
 import { getBusinessTodayLabel } from '../../utils/dates';
 import { destinationsAhead, isOnsiteFormComplete, orderedStopsForLeg, stopLabel } from '../../utils/cashTicket';
 import CustomDropoffModal from '../Passenger/Timeline/CustomDropoffModal';
+import useDropoffOptions from '../../api/hooks/Passenger/useDropoffOptions';
 import { isExpress } from '../../utils/serviceType';
 import ServiceTypeChip from '../ui/ServiceTypeChip';
 import { deriveTripStatus } from '../../utils/tripStatus';
@@ -242,6 +243,15 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   // Task 7: the pin is offered where the route allows it (by stop: the route flag; by bus position: the server's word).
   const routeAllowsDropoff = Boolean(trip?.fleet_route?.route?.allow_custom_dropoff);
   const dropoffAvailable = !tripIsExpress && (byBusPosition ? boardingView.customDropoffAvailable : routeAllowsDropoff);
+  // Batch 28 Stage 3, item 10: the route's drop-off mode, and (while the modal is open) the server's restricted areas and
+  // designated points for this trip and boarding point. Feedback only; the server re-checks the sale.
+  const routeDropoffMode = trip?.fleet_route?.route?.custom_dropoff_mode;
+  const dropoffOptionsState = useDropoffOptions({
+    tripId: trip?.trip_id ?? null,
+    boardingStopId: byBusPosition ? null : (onsiteForm.origin_stop_id || null),
+    boardingAlongM: byBusPosition ? boardingView.alongLegM : null,
+    enabled: showDropoffModal,
+  });
   const boardingReady = byBusPosition ? boardingView.good : Boolean(onsiteForm.origin_stop_id);
   const formReady = isOnsiteFormComplete(cashForm, boardingView);
 
@@ -707,7 +717,11 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                       <label htmlFor="onsite-destination" className="mb-1 block text-sm font-semibold text-slate-700">Select Destination</label>
                       {onsiteForm.dropoff ? (
                         <div data-testid="pinned-dropoff" className="flex items-center justify-between gap-2 rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-sm text-slate-800">
-                          <span className="truncate">Pinned: {onsiteForm.dropoff.label || `${Number(onsiteForm.dropoff.lat).toFixed(5)}, ${Number(onsiteForm.dropoff.lng).toFixed(5)}`}</span>
+                          <span className="truncate">
+                            {onsiteForm.dropoff.pointId != null
+                              ? `Drop-off point: ${onsiteForm.dropoff.label}${onsiteForm.dropoff.kind ? ` (${onsiteForm.dropoff.kind})` : ''}`
+                              : `Pinned: ${onsiteForm.dropoff.label || `${Number(onsiteForm.dropoff.lat).toFixed(5)}, ${Number(onsiteForm.dropoff.lng).toFixed(5)}`}`}
+                          </span>
                           <button type="button" className="shrink-0 text-xs font-semibold text-teal-700 underline" onClick={() => setOnsiteForm((prev) => ({ ...prev, dropoff: null }))}>Use a stop</button>
                         </div>
                       ) : (
@@ -733,7 +747,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                           className="mt-1.5 text-xs font-semibold text-teal-700 underline"
                           onClick={() => { setDraftPin(null); setShowDropoffModal(true); }}
                         >
-                          Pin a drop-off between stops instead
+                          {routeDropoffMode === 'designated_points' ? 'Choose a listed drop-off point instead' : 'Pin a drop-off between stops instead'}
                         </button>
                       )}
                     </div>
@@ -821,6 +835,8 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                 routeId={trip?.fleet_route?.route_id ?? trip?.fleet_route?.route?.route_id}
                 direction={trip?.leg_direction === 'reverse' ? 'reverse' : 'outbound'}
                 pin={draftPin}
+                options={dropoffOptionsState.options}
+                boardingAlongM={byBusPosition ? boardingView.alongLegM : null}
                 onPinChange={setDraftPin}
                 onClose={() => setShowDropoffModal(false)}
                 onConfirm={() => {
