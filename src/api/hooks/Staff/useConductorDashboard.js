@@ -524,9 +524,9 @@ export function useConductorDashboardData({ onLogout, pairing }) {
     return () => clearInterval(intervalId);
   }, [hasOpenShift, refreshEndBlockedReason]);
 
-  const handleStartShift = async () => {
+  const handleStartShift = async (openingCash = 0) => {
     try {
-      const res = await ConductorService.startConductorShift();
+      const res = await ConductorService.startConductorShift(openingCash);
       const shift = res?.data?.shift ?? null;
       setShiftState((prev) => ({
         ...prev,

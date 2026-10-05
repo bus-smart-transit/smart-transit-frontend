@@ -30,8 +30,9 @@ class ConductorService extends StaffBaseService {
     return await this.request('/conductor/shift/status', 'GET');
   }
 
-  async startConductorShift() {
-    return await this.request('/conductor/shift/start', 'POST');
+  // Batch 29: the cash the Chauffeur declares to be carrying at the start (default 0); expected cash starts from it.
+  async startConductorShift(openingCash = 0) {
+    return await this.request('/conductor/shift/start', 'POST', { opening_cash: Number(openingCash) || 0 });
   }
 
   async endConductorShift() {
