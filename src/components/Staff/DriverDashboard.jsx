@@ -221,6 +221,8 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   // shift (Batch 27 Part 2, Task 1): between and after its legs the same button is End Shift, which the
   // server allows only once every leg is completed or cancelled (end_blocked_reason says why not).
   const tripIsLive = ['departed', 'in-progress'].includes(String(trip?.status || '').toLowerCase());
+  // Batch 29: the shift (and the pairing key) unlock only after the assignment is accepted.
+  const needsAcceptance = Boolean(todayAssignedTrip) && !todayAssignedTrip.driver_accepted_at;
   const showEndShift = hasOpenShift && shiftState?.isBlockShift === true && !tripIsLive;
   const shiftAction = showEndShift
     ? {
@@ -240,7 +242,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     : {
       label: 'Start Shift',
       onClick: handleStartShift,
-      disabled: actionInFlight || !isPaired || !(hasActiveTrip || hasTodayAssignedTrip),
+      disabled: actionInFlight || needsAcceptance || !isPaired || !(hasActiveTrip || hasTodayAssignedTrip),
       className: 'inline-flex items-center gap-2 rounded-xl border border-teal-200 bg-teal-50 px-3 py-2 text-xs font-semibold text-teal-700 transition hover:bg-teal-100 disabled:opacity-60',
     };
 
@@ -251,6 +253,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     inFlight: actionInFlight,
     isPaired,
     hasWork: hasActiveTrip || hasTodayAssignedTrip,
+    needsAcceptance,
     tripIsLive,
     endBlockedReason: shiftState?.endBlockedReason,
   });

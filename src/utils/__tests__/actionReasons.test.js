@@ -13,6 +13,11 @@ describe('disabled action reasons (Batch 29)', () => {
     expect(shiftActionReason({ label: 'Start Shift', disabled: true, isPaired: true, hasWork: false })).toMatch(/nothing to start/);
   });
 
+  it('asks for acceptance before pairing or starting (the shift and the key unlock after accepting)', () => {
+    expect(shiftActionReason({ label: 'Start Shift', disabled: true, isPaired: false, hasWork: true, needsAcceptance: true })).toMatch(/Accept your assignment first/);
+    expect(shiftActionReason({ label: 'Start Shift', disabled: true, isPaired: false, hasWork: true, needsAcceptance: false })).toMatch(/Pairing is required/);
+  });
+
   it('passes the server reason through for End Shift and explains End Trip', () => {
     expect(shiftActionReason({ label: 'End Shift', disabled: true, isPaired: true, endBlockedReason: 'Finish leg 3 first.' })).toBe('Finish leg 3 first.');
     expect(shiftActionReason({ label: 'End Trip', disabled: true, isPaired: true, tripIsLive: false })).toMatch(/unlocks once the trip has departed/);

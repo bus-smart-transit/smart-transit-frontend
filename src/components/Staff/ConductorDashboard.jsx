@@ -270,6 +270,8 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   };
   const busRouteLabel = `${todayAssignedTrip?.fleet_route?.fleet?.plate_number || 'Fleet pending'} · ${todayAssignedTrip?.fleet_route?.route?.route_name || 'Route pending'}`;
 
+  // Batch 29: the shift (and the pairing key) unlock only after the assignment is accepted.
+  const needsAcceptance = Boolean(todayAssignedTrip) && !todayAssignedTrip.conductor_accepted_at;
   const shiftAction = hasOpenShift
     ? {
       label: 'End Shift',
@@ -281,7 +283,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     : {
       label: 'Start Shift',
       onClick: () => setConfirmStart(true),
-      disabled: actionInFlight || !isPaired || !(hasActiveTrip || hasTodayAssignedTrip),
+      disabled: actionInFlight || needsAcceptance || !isPaired || !(hasActiveTrip || hasTodayAssignedTrip),
       title: !isPaired ? 'Pairing is required before starting shift.' : undefined,
       className: 'inline-flex items-center gap-2 rounded-xl border border-teal-200 bg-teal-50 px-3 py-2 text-xs font-semibold text-teal-700 transition hover:bg-teal-100 disabled:opacity-60',
     };
@@ -293,6 +295,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     inFlight: actionInFlight,
     isPaired,
     hasWork: hasActiveTrip || hasTodayAssignedTrip,
+    needsAcceptance,
     endBlockedReason: shiftState?.endBlockedReason,
   });
   const ticketingBlocked = ticketingReason({ isPaired, hasOpenShift, hasActiveTrip, isFull: cashCapacity.isFull });

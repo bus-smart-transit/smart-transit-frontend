@@ -3,17 +3,19 @@
 // there is a reason. The rules themselves live on the server; this only explains what the screen already knows.
 
 const PAIRING = 'Pairing is required first. Pair with your partner to continue.';
+const ACCEPT = 'Accept your assignment first (Assigned Routes). Your shift and your pairing key unlock after that.';
 
 /** The header's Start Shift / End Trip / End Shift button. */
-export function shiftActionReason({ label, disabled, inFlight = false, isPaired, hasWork = true, tripIsLive = false, endBlockedReason = '' }) {
+export function shiftActionReason({ label, disabled, inFlight = false, isPaired, hasWork = true, needsAcceptance = false, tripIsLive = false, endBlockedReason = '' }) {
   if (!disabled || inFlight) return '';
   if (label === 'End Shift') return endBlockedReason || '';
   if (label === 'End Trip') {
     if (!isPaired) return PAIRING;
     return tripIsLive ? '' : 'End Trip unlocks once the trip has departed.';
   }
-  if (!isPaired) return PAIRING;
   if (!hasWork) return 'No open trip is assigned to you today, so there is nothing to start.';
+  if (needsAcceptance) return ACCEPT;
+  if (!isPaired) return PAIRING;
   return '';
 }
 
