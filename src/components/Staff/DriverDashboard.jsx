@@ -14,6 +14,8 @@ import {
 import PairingScreen from './PairingScreen';
 import StaffPortalLayout from './StaffPortalLayout';
 import AssignmentSection from './AssignmentSection';
+import MyScheduleList from './MyScheduleList';
+import { shiftActionReason, driverTripActionReason } from '../../utils/actionReasons';
 import CalendarSummaryStrip from './CalendarSummaryStrip';
 import DashboardCalendar from './DashboardCalendar';
 import { ModalShell } from '../ui/Modal';
@@ -28,16 +30,6 @@ import { getBusinessTodayLabel } from '../../utils/dates';
 import { deriveTripDurationLabel, deriveTripStatus } from '../../utils/tripStatus';
 import { FOR_APPROVAL_LABEL, isForApproval } from '../../utils/assignmentRequest';
 import DriverService from '../../api/StaffService/DriverService';
-
-const STATUS_COLOR = {
-  scheduled: '#153a6b',
-  delayed: '#e11d48',
-  boarding: '#3b82f6',
-  departed: '#f59e0b',
-  'in-progress': '#f59e0b',
-  completed: '#22c55e',
-  cancelled: '#ef4444',
-};
 
 // Batch 19 Part A: consolidated sidebar. "Assigned Routes" folds into
 // Dashboard (assigned-route/schedule/vehicle data belongs on the landing
@@ -252,6 +244,18 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
       className: 'inline-flex items-center gap-2 rounded-xl border border-teal-200 bg-teal-50 px-3 py-2 text-xs font-semibold text-teal-700 transition hover:bg-teal-100 disabled:opacity-60',
     };
 
+  // Batch 29: every disabled action says why, next to the button.
+  const shiftReason = shiftActionReason({
+    label: shiftAction.label,
+    disabled: shiftAction.disabled,
+    inFlight: actionInFlight,
+    isPaired,
+    hasWork: hasActiveTrip || hasTodayAssignedTrip,
+    tripIsLive,
+    endBlockedReason: shiftState?.endBlockedReason,
+  });
+  const tripActionReason = driverTripActionReason({ isPaired, hasOpenShift, status: trip?.status });
+
   return (
     <>
     <StaffPortalLayout
@@ -296,6 +300,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
               Refresh
             </button>
             <NotificationBellButton service={DriverService} role="driver" onOpenNotification={openTripFromNotification} />
+            {shiftReason && <p data-testid="shift-action-reason" className="basis-full text-xs text-amber-700 lg:text-right">{shiftReason}</p>}
           </div>
           </div>
         </header>
@@ -447,6 +452,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                   ■ End Trip
                 </button>
               </div>
+              {tripActionReason && <p data-testid="trip-action-reason" className="mt-2 text-xs text-amber-700">{tripActionReason}</p>}
             </article>
 
             <article className="staff-card md:col-span-2 xl:col-span-2">
@@ -595,38 +601,20 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
             "Active Trip" (live operational state), not Schedule. */}
         {!loading && activeTab === 'activeTrip' && (
           <section className="staff-card">
-            <h3 className="mb-4 text-base font-bold text-slate-900">My Shift Blocks</h3>
-            {shiftBlocks.length === 0 ? (
-              <p className="text-sm text-slate-500">No shift blocks assigned.</p>
-            ) : (
-              <div className="space-y-3">
-                {shiftBlocks.map((block) => (
-                  <div key={block.shift_block_id} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div>
-                        <p className="text-sm font-semibold text-slate-900 capitalize">{block.block_type} block — {block.scheduled_date}</p>
-                        <p className="text-xs text-slate-500">{block.fleet?.plate_number || 'Fleet -'} · {block.legs?.length ?? 0} legs</p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="rounded-full px-2 py-0.5 text-xs font-semibold uppercase" style={{ background: `${STATUS_COLOR[block.status === 'in_progress' ? 'in-progress' : block.status] || '#153a6b'}20`, color: STATUS_COLOR[block.status === 'in_progress' ? 'in-progress' : block.status] || '#153a6b' }}>
-                          {block.status.replace('_', ' ')}
-                        </span>
-                        {block.status === 'scheduled' && (
-                          <button
-                            type="button"
-                            onClick={() => handleConfirmShiftBlockTakeover(block.shift_block_id)}
-                            disabled={shiftBlockActionInFlight}
-                            className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
-                          >
-                            Confirm Takeover
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+            <h3 className="mb-4 text-base font-bold text-slate-900">My Schedule</h3>
+            <MyScheduleList
+              blocks={shiftBlocks}
+              renderActions={(block, section) => (block.status === 'scheduled' && section !== 'overdue' ? (
+                <button
+                  type="button"
+                  onClick={() => handleConfirmShiftBlockTakeover(block.shift_block_id)}
+                  disabled={shiftBlockActionInFlight}
+                  className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
+                >
+                  Confirm Takeover
+                </button>
+              ) : null)}
+            />
           </section>
         )}
 
@@ -655,6 +643,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                   End Trip
                 </button>
               </div>
+              {tripActionReason && <p data-testid="trip-action-reason" className="-mt-2 mb-3 text-xs text-amber-700">{tripActionReason}</p>}
               <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">Current Trip Summary</p>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 {[{label:'Total Distance', value: `${stops[stops.length-1]?.distance_from_origin_km ?? 0} km`}, {label:'Trip Time', value: deriveTripDurationLabel(trip) ?? 'Not started'}, {label:'Total Stops', value: String(stops.length)}].map(({label, value}) => (

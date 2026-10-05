@@ -265,6 +265,7 @@ export default function useBuyTicket({ onTicketPurchased }) {
     seatType: form.seat_type,
     today: stopsData.today,
     maxAdvanceDays: stopsData.maxAdvanceDays,
+    lastBookableDate: stopsData.lastBookableDate,
     unavailableReason: dropoff ? 'A custom drop-off is for one-way tickets. Choose a stop to book a roundtrip.' : '',
   });
   const roundtripOn = roundtrip.active;

@@ -6,7 +6,7 @@ import JourneyFields from '../BuyTicket/JourneyFields';
 import TripsPreview from '../Trips/TripsPreview';
 import { useBookingStops } from '../../../api/hooks/Passenger/useBookingSearch';
 import { useRegion } from '../../../api/hooks/useRegion';
-import { addDaysToDate, findStopCode, tripBookingPath } from '../../../utils/bookingQuery';
+import { findStopCode, lastBookableDateOf, tripBookingPath } from '../../../utils/bookingQuery';
 import heroBg from '../../../assets/hero.png';
 
 const stopName = (groups, stopId) => groups.flatMap((group) => group.stops).find((stop) => String(stop.stop_id) === String(stopId))?.name || '';
@@ -34,7 +34,7 @@ export default function LandingHero() {
   };
 
   // Convenience only: the server re-checks the stops and the date.
-  const maxDate = stops.today && stops.maxAdvanceDays ? addDaysToDate(stops.today, stops.maxAdvanceDays) : '';
+  const maxDate = lastBookableDateOf(stops);
   const dateOk = Boolean(date) && date >= stops.today && (!maxDate || date <= maxDate);
 
   const fromCode = findStopCode(stops.originGroups, journey.origin_stop_id);
@@ -112,6 +112,7 @@ export default function LandingHero() {
                 loadingDestinations={stops.loadingDestinations}
                 today={stops.today}
                 maxAdvanceDays={stops.maxAdvanceDays}
+                lastBookableDate={stops.lastBookableDate}
                 onChange={handleChange}
                 idPrefix="hero"
                 action={(

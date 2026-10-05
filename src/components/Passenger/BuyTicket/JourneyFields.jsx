@@ -1,5 +1,5 @@
 import { CalendarDays } from 'lucide-react'
-import { addDaysToDate } from '../../../utils/bookingQuery'
+import { bookingWindowHint, lastBookableDateOf } from '../../../utils/bookingQuery'
 import StopCombobox from './StopCombobox'
 
 /**
@@ -9,8 +9,10 @@ import StopCombobox from './StopCombobox'
  * from the server); only the server decides what is bookable. Book Now / Book Later is not here: it
  * is chosen on the booking page.
  */
-export default function JourneyFields({ value, originGroups, destinationGroups, loadingDestinations, today = '', maxAdvanceDays = null, onChange, action = null, idPrefix = 'journey' }) {
-  const maxDate = today && maxAdvanceDays ? addDaysToDate(today, maxAdvanceDays) : undefined
+export default function JourneyFields({ value, originGroups, destinationGroups, loadingDestinations, today = '', maxAdvanceDays = null, lastBookableDate = null, onChange, action = null, idPrefix = 'journey' }) {
+  const maxDate = lastBookableDateOf({ today, maxAdvanceDays, lastBookableDate }) || undefined
+  const tooFar = Boolean(maxDate && value.booking_date && value.booking_date > maxDate)
+  const hint = bookingWindowHint({ maxAdvanceDays, lastBookableDate: maxDate })
   return (
     <div className={`grid grid-cols-1 gap-3 sm:grid-cols-2 ${action ? 'lg:grid-cols-[1fr_1fr_auto_auto]' : 'lg:grid-cols-3'} lg:items-end`}>
       <StopCombobox
@@ -42,9 +44,15 @@ export default function JourneyFields({ value, originGroups, destinationGroups, 
             max={maxDate}
             disabled={!today}
             onChange={(e) => onChange('booking_date', e.target.value)}
+            aria-describedby={hint ? `${idPrefix}-date-hint` : undefined}
             className="w-full bg-transparent text-sm text-ink focus:outline-none"
           />
         </div>
+        {hint && (
+          <p id={`${idPrefix}-date-hint`} className={`mt-1 text-xs ${tooFar ? 'font-semibold text-red-600' : 'text-slate-500'}`}>
+            {tooFar ? `That date is too far ahead. ${hint}` : hint}
+          </p>
+        )}
       </div>
       {action}
     </div>

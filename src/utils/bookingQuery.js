@@ -73,6 +73,28 @@ export function withBookingParams(current, journey) {
   return next;
 }
 
+/**
+ * The last date a passenger may book (inclusive). The server sends it (booking window, Batch 29); the sum from
+ * today is only the fallback for an older response. '' = no limit known.
+ */
+export function lastBookableDateOf({ today = '', maxAdvanceDays = null, lastBookableDate = null } = {}) {
+  if (lastBookableDate) return lastBookableDate;
+  return today && Number(maxAdvanceDays) > 0 ? addDaysToDate(today, Number(maxAdvanceDays)) : '';
+}
+
+/** "Nov 4, 2026" from a YYYY-MM-DD calendar date, without a timezone shifting the day. */
+export function formatCalendarDate(isoDate) {
+  if (!DATE.test(isoDate || '')) return '';
+  return new Date(`${isoDate}T00:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+}
+
+/** The short sentence under a date picker explaining why later dates are greyed out. */
+export function bookingWindowHint({ maxAdvanceDays = null, lastBookableDate = '' } = {}) {
+  if (!lastBookableDate) return '';
+  const days = Number(maxAdvanceDays) > 0 ? `${Number(maxAdvanceDays)} days ahead` : 'a limited time ahead';
+  return `Tickets open up to ${days}. Latest date: ${formatCalendarDate(lastBookableDate)}.`;
+}
+
 /** A calendar date (YYYY-MM-DD) plus whole days; pure date arithmetic, so no timezone can shift it. */
 export function addDaysToDate(isoDate, days) {
   if (!DATE.test(isoDate || '')) return '';
@@ -80,3 +102,15 @@ export function addDaysToDate(isoDate, days) {
   const moved = new Date(Date.UTC(year, month - 1, day + days));
   return moved.toISOString().slice(0, 10);
 }
+
+/**
+ * Batch 29: a warning (never a block) when the service is dated beyond what passengers can book yet. The window comes
+ * from the server (same numbers as the passenger date picker); the schedule is still saved.
+ */
+export function bookingWindowWarning(tripDate, window) {
+  const last = window?.last_bookable_date
+  if (!tripDate || !last || tripDate <= last) return ''
+  const opens = Number(window.max_advance_days) > 0 ? addDaysToDate(tripDate, -Number(window.max_advance_days)) : ''
+  return `Passengers cannot book this date yet.${opens ? ` Booking opens on ${formatCalendarDate(opens)}.` : ''}`
+}
+

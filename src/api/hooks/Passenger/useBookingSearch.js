@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { getBookingStops, getDepartures, getTrips, readApiError, resolveTrip } from '../../../services/bookingService'
 import { findStopId } from '../../../utils/bookingQuery'
 
@@ -38,6 +38,7 @@ export function useBookingStops(originStopId, originCode = '') {
     // Today in Manila and the booking window, from the server, for the date picker.
     today: origins.meta?.today ?? '',
     maxAdvanceDays: origins.meta?.max_advance_days ?? null,
+    lastBookableDate: origins.meta?.last_bookable_date ?? null,
     // How many trips the home preview shows and how many a page of all trips holds (server config).
     previewLimit: origins.meta?.home_preview_limit ?? null,
     tripsPerPage: origins.meta?.trips_per_page ?? null,

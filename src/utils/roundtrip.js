@@ -19,16 +19,17 @@ export function addDays(date, days) {
  * Client-side checks of the return choice. Returns { returnDate?, returnTime? } messages; empty = fine.
  * Future only (today is the server's Manila today), no later than the booking window, and after the departure.
  */
-export function validateReturnInput({ outboundDate, outboundTime, returnDate, returnTime, today, maxAdvanceDays }) {
+export function validateReturnInput({ outboundDate, outboundTime, returnDate, returnTime, today, maxAdvanceDays, lastBookableDate = null }) {
   const errors = {}
+  const lastDate = lastBookableDate || (today && Number(maxAdvanceDays) > 0 ? addDays(today, Number(maxAdvanceDays)) : '')
   if (returnDate && !DATE.test(returnDate)) errors.returnDate = 'Choose a valid return date.'
   if (returnTime && !TIME.test(returnTime)) errors.returnTime = 'Choose a valid return time.'
   if (errors.returnDate || errors.returnTime) return errors
 
   if (returnDate && today && returnDate < today) {
     errors.returnDate = 'The return date has already passed (Manila time).'
-  } else if (returnDate && today && Number(maxAdvanceDays) > 0 && returnDate > addDays(today, Number(maxAdvanceDays))) {
-    errors.returnDate = `You can book up to ${maxAdvanceDays} days ahead.`
+  } else if (returnDate && lastDate && returnDate > lastDate) {
+    errors.returnDate = `You can book up to ${maxAdvanceDays} days ahead (until ${lastDate}).`
   } else if (returnDate && outboundDate && returnDate < outboundDate) {
     errors.returnDate = 'The return must be on or after your departure date.'
   } else if (returnDate && returnTime && outboundDate && outboundTime && returnDate === outboundDate && returnTime <= outboundTime) {

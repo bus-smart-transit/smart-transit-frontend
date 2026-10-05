@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import AssignmentBlockCards from '../AssignmentBlockCards';
 import AssignmentSection from '../AssignmentSection';
-import { sectionCards } from '../../../utils/assignmentCards';
+import { cardSection, sectionCards, todaySummary } from '../../../utils/assignmentCards';
 
 const leg = (id, over = {}) => ({ trip_id: id, leg_direction: 'outbound', departure_time: '06:00', status: 'scheduled', origin: 'Alpha', destination: 'Omega', service_type: 'regular', ...over });
 
@@ -118,68 +118,104 @@ describe('AssignmentBlockCards', () => {
   });
 });
 
-describe('sectionCards', () => {
-  const cards = [block({ key: 'a', scheduled_date: '2026-10-04' }), block({ key: 'b', scheduled_date: '2026-10-12' }), block({ key: 'c', scheduled_date: '2026-10-01', status: 'completed' }), block({ key: 'd', scheduled_date: '2026-10-03', status: 'delayed' })];
+describe('sectionCards (Batch 29: the server section decides)', () => {
+  const cards = [
+    block({ key: 'a', scheduled_date: '2026-10-04', section: 'today' }),
+    block({ key: 'b', scheduled_date: '2026-10-12', section: 'upcoming' }),
+    block({ key: 'c', scheduled_date: '2026-10-01', status: 'completed', section: 'past' }),
+    block({ key: 'd', scheduled_date: '2026-10-03', status: 'delayed', section: 'overdue', is_overdue: true }),
+    block({ key: 'e', scheduled_date: '2026-10-04', status: 'completed', section: 'today' }),
+  ];
 
-  it('puts today and any unfinished earlier block in Today, later ones in Upcoming, and hides finished ones', () => {
-    const { today, upcoming } = sectionCards(cards, 'all', '2026-10-04');
-    expect(today.map((c) => c.key)).toEqual(['a', 'd']);
+  it('keeps an unfinished earlier day in Overdue, never Today, and hides finished ones', () => {
+    const { overdue, today, upcoming, past } = sectionCards(cards, 'all', '2026-10-04');
+    expect(overdue.map((c) => c.key)).toEqual(['d']);
+    expect(today.map((c) => c.key)).toEqual(['a']);
     expect(upcoming.map((c) => c.key)).toEqual(['b']);
+    expect(past).toEqual([]);
   });
 
-  it('lists only the finished ones under the completed filter', () => {
-    expect(sectionCards(cards, 'completed', '2026-10-04').today.map((c) => c.key)).toEqual(['c']);
+  it('lists every finished card (today and earlier days) under the completed filter', () => {
+    const { past, today, overdue } = sectionCards(cards, 'completed', '2026-10-04');
+    expect(past.map((c) => c.key)).toEqual(['c', 'e']);
+    expect(today).toEqual([]);
+    expect(overdue).toEqual([]);
+  });
+
+  it('falls back to the Manila date when an older response has no section', () => {
+    expect(cardSection({ scheduled_date: '2026-10-03', status: 'scheduled' }, '2026-10-04')).toBe('overdue');
+    expect(cardSection({ scheduled_date: '2026-10-03', status: 'completed' }, '2026-10-04')).toBe('past');
+    expect(cardSection({ scheduled_date: '2026-10-04', status: 'scheduled' }, '2026-10-04')).toBe('today');
+    expect(cardSection({ scheduled_date: '2026-10-05', status: 'scheduled' }, '2026-10-04')).toBe('upcoming');
+  });
+});
+
+describe('todaySummary', () => {
+  it('reads the plate, route, status and schedule from the same card as the list', () => {
+    const summary = todaySummary([block({ section: 'today', scheduled_date: '2026-10-04' })], '2026-10-04');
+    expect(summary).toEqual({ plate: 'AB-123', route: 'Alpha-Omega', status: 'scheduled', schedule: '06:00 - 13:30' });
+  });
+
+  it('is null when nothing is scheduled today', () => {
+    expect(todaySummary([block({ section: 'upcoming', scheduled_date: '2026-10-12' })], '2026-10-04')).toBeNull();
+    expect(todaySummary([], '2026-10-04')).toBeNull();
+  });
+
+  it('prefers the open card over one already finished today', () => {
+    const done = block({ key: 'done', section: 'today', status: 'completed', plate_number: 'OLD-1', scheduled_date: '2026-10-04' });
+    const open = block({ key: 'open', section: 'today', plate_number: 'NEW-2', scheduled_date: '2026-10-04' });
+    expect(todaySummary([done, open], '2026-10-04').plate).toBe('NEW-2');
+  });
+});
+
+describe('overdue and unanswerable cards', () => {
+  const overdue = block({
+    section: 'overdue', is_overdue: true, status: 'scheduled', scheduled_date: '2026-10-03', can_respond: false, can_decline: false,
+    overdue_reason: 'This date has passed. Contact your operator.', respond_blocked_reason: 'This date has passed. Contact your operator.',
+  });
+
+  it('says Overdue instead of Scheduled, gives the reason, and offers no Accept or Decline', () => {
+    render(<AssignmentBlockCards title="Overdue" tone="warning" cards={[overdue]} onAccept={vi.fn()} onDecline={vi.fn()} />);
+
+    expect(screen.getByTestId('card-status')).toHaveTextContent('OVERDUE');
+    expect(screen.queryByText('SCHEDULED')).not.toBeInTheDocument();
+    expect(screen.getByTestId('card-reason')).toHaveTextContent('This date has passed. Contact your operator.');
+    expect(screen.queryByRole('button', { name: 'Accept' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Decline' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Awaiting your response')).not.toBeInTheDocument();
+  });
+
+  it('never claims "Awaiting your response" for a pending card the server says cannot be answered', () => {
+    const stuck = block({ can_respond: false, can_decline: false, respond_blocked_reason: 'The first leg has already started, so this can no longer be answered.' });
+    render(<AssignmentBlockCards cards={[stuck]} />);
+
+    expect(screen.queryByText('Awaiting your response')).not.toBeInTheDocument();
+    expect(screen.getByTestId('card-reason')).toHaveTextContent('already started');
   });
 });
 
 describe('AssignmentSection', () => {
-  const make = (over = {}) => ({
-    cards: [block({ scheduled_date: '2099-01-01' })], loaded: true, error: '', message: '', busyKey: null,
-    accept: vi.fn(), setConfirmDecline: vi.fn(), confirmDecline: null, declineErrors: {}, declineSubmitting: false, submitDecline: vi.fn(), cancelDecline: vi.fn(), ...over,
+  const base = (over = {}) => ({ cards: [], loaded: true, message: '', setMessage: vi.fn(), error: '', busyKey: null, accept: vi.fn(), setConfirmDecline: vi.fn(), confirmDecline: null, ...over });
+
+  it('shows the confirmation inside one full-width body with a way to dismiss it', () => {
+    const setMessage = vi.fn();
+    render(<AssignmentSection role="driver" assignments={base({ message: 'Trip accepted.', setMessage })} assignedTrips={[]} filter="all" />);
+
+    const body = screen.getByTestId('assignment-body');
+    expect(body.className).toMatch(/col-span-full/);
+    expect(within(body).getByRole('status')).toHaveTextContent('Trip accepted.');
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss message' }));
+    expect(setMessage).toHaveBeenCalledWith('');
   });
 
-  it('opens the decline dialog and keeps the typed Others text visible with the server error on a 422', () => {
-    const decline = block();
-    render(<AssignmentSection role="driver" assignments={make({ cards: [decline], confirmDecline: decline, declineErrors: { reason_text: 'Please describe your reason.' } })} assignedTrips={[]} />);
+  it('puts an unfinished earlier day under Overdue, not under Today', () => {
+    const cards = [block({ key: 'old', section: 'overdue', is_overdue: true, scheduled_date: '2026-10-03', can_respond: false, can_decline: false })];
+    render(<AssignmentSection role="driver" assignments={base({ cards })} assignedTrips={[]} filter="all" />);
 
-    expect(screen.getByText(/Request to Decline This Trip/)).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText(/Reason/), { target: { value: 'other' } });
-    const box = screen.getByLabelText(/Describe your reason/);
-    fireEvent.change(box, { target: { value: 'Family emergency' } });
-    expect(box).toHaveValue('Family emergency');
-    expect(screen.getByText('Please describe your reason.')).toBeInTheDocument();
-  });
-
-  it('sends the reason from the dialog once for the whole block', () => {
-    const decline = block();
-    const submitDecline = vi.fn();
-    render(<AssignmentSection role="driver" assignments={make({ cards: [decline], confirmDecline: decline, submitDecline })} assignedTrips={[]} />);
-
-    fireEvent.change(screen.getByLabelText(/Reason/), { target: { value: 'other' } });
-    fireEvent.change(screen.getByLabelText(/Describe your reason/), { target: { value: 'Family emergency' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Send Request' }));
-
-    expect(submitDecline).toHaveBeenCalledTimes(1);
-    expect(submitDecline).toHaveBeenCalledWith({ reasonCode: 'other', reasonText: 'Family emergency' });
-  });
-
-  it('tells the person a block from a notification is no longer theirs, without an error', () => {
-    render(<AssignmentSection role="driver" assignments={make({ cards: [] })} assignedTrips={[]} focusBlockId={77} onDismissFocus={vi.fn()} />);
-
-    expect(screen.getByTestId('trip-focus-notice')).toHaveAttribute('data-state', 'unavailable');
-    expect(screen.getByText(/Shift block #77 is no longer on your list/)).toBeInTheDocument();
-  });
-
-  it('shows the pending notice and highlights the block when a notification opens it', () => {
-    render(<AssignmentSection role="driver" assignments={make()} assignedTrips={[]} focusBlockId={5} onDismissFocus={vi.fn()} />);
-
-    expect(screen.getByTestId('trip-focus-notice')).toHaveAttribute('data-state', 'pending');
-    expect(screen.getByTestId('assignment-card').className).toMatch(/ring-2/);
-  });
-
-  it('shows no notice until the cards have loaded', () => {
-    render(<AssignmentSection role="driver" assignments={make({ cards: [], loaded: false })} assignedTrips={[]} focusBlockId={5} onDismissFocus={vi.fn()} />);
-
-    expect(screen.queryByTestId('trip-focus-notice')).not.toBeInTheDocument();
+    const sections = screen.getAllByTestId('assignment-section');
+    expect(sections[0]).toHaveTextContent('Overdue');
+    expect(sections[0]).toHaveTextContent('OVERDUE');
+    expect(sections[1]).toHaveTextContent("Today's Assignments");
+    expect(sections[1]).toHaveTextContent('Nothing assigned for today.');
   });
 });

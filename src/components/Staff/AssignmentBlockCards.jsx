@@ -14,12 +14,13 @@ const STATUS_CLASS = {
   'in-progress': 'bg-teal-100 text-teal-700',
   completed: 'bg-emerald-100 text-emerald-700',
   cancelled: 'bg-red-100 text-red-700',
+  overdue: 'bg-amber-100 text-amber-800',
 };
 
 const label = (value) => String(value || 'scheduled').replace(/[_-]/g, ' ').toUpperCase();
 
 /** The assignment-level badge: "For Approval" stays the assignment's status, not the block's. */
-function AssignmentBadge({ status, className = '' }) {
+function AssignmentBadge({ status, answerable = true, className = '' }) {
   if (status === 'for_approval') {
     return <span data-testid="assignment-badge" data-state="for_approval" className={`rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700 ${className}`}>{FOR_APPROVAL_LABEL}</span>;
   }
@@ -30,6 +31,9 @@ function AssignmentBadge({ status, className = '' }) {
     return <span data-testid="assignment-badge" data-state="accepted" className={`rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 ${className}`}>Accepted</span>;
   }
   if (status === 'pending') {
+    // A card that cannot be answered (date passed, already started) must not say "Awaiting your response":
+    // the reason line under it says why.
+    if (!answerable) return null;
     return <span data-testid="assignment-badge" data-state="pending" className={`rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-700 ${className}`}>Awaiting your response</span>;
   }
   return null;
@@ -72,6 +76,7 @@ function LegList({ card }) {
 export default function AssignmentBlockCards({
   title,
   cards,
+  tone = 'neutral',
   mode = 'staff',
   focusKey = null,
   busyKey = null,
@@ -89,7 +94,7 @@ export default function AssignmentBlockCards({
   }, [focusKey, cards.length]);
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4" data-testid="assignment-section">
+    <div className={`rounded-xl border p-4 ${tone === 'warning' ? 'border-amber-200 bg-amber-50' : 'border-slate-200 bg-slate-50'}`} data-testid="assignment-section" data-tone={tone}>
       {title && <h5 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">{title}</h5>}
       {cards.length === 0 ? (
         <div className="rounded-lg border border-dashed border-slate-200 bg-white p-4 text-sm text-slate-500">{emptyMessage}</div>
@@ -111,7 +116,8 @@ export default function AssignmentBlockCards({
                     <h6 className="truncate text-base font-bold text-slate-900">{card.route_name || `${card.origin || '-'} → ${card.destination || '-'}`}</h6>
                     <p className="text-sm text-slate-600">{card.origin || '-'} → {card.destination || '-'}</p>
                   </div>
-                  <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${STATUS_CLASS[card.status] || STATUS_CLASS.scheduled}`}>{label(card.status)}</span>
+                  {/* An unfinished card from an earlier day is "Overdue", never "Scheduled". */}
+                  <span data-testid="card-status" className={`rounded-full px-2.5 py-1 text-xs font-semibold ${STATUS_CLASS[card.is_overdue ? 'overdue' : card.status] || STATUS_CLASS.scheduled}`}>{card.is_overdue ? 'OVERDUE' : label(card.status)}</span>
                 </div>
 
                 <p className="mt-2 text-sm font-semibold text-slate-800">{formatManilaDate(card.scheduled_date) || card.scheduled_date || '-'}</p>
@@ -137,8 +143,12 @@ export default function AssignmentBlockCards({
                   </div>
                 ) : (
                   <div className="mt-3 flex flex-wrap items-center gap-2">
-                    <AssignmentBadge status={card.assignment_status} />
+                    <AssignmentBadge status={card.assignment_status} answerable={mode === 'operator' || card.can_respond !== false} />
                   </div>
+                )}
+
+                {mode !== 'operator' && (card.overdue_reason || card.respond_blocked_reason) && (
+                  <p data-testid="card-reason" className="mt-2 text-xs text-amber-700">{card.overdue_reason || card.respond_blocked_reason}</p>
                 )}
 
                 <div className="mt-3 flex flex-wrap gap-2">

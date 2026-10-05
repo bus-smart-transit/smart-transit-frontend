@@ -17,13 +17,16 @@ import {
 import PairingScreen from './PairingScreen';
 import StaffPortalLayout from './StaffPortalLayout';
 import AssignmentSection from './AssignmentSection';
+import MyScheduleList from './MyScheduleList';
 import CalendarSummaryStrip from './CalendarSummaryStrip';
 import DashboardCalendar from './DashboardCalendar';
 import { ModalShell } from '../ui/Modal';
 import StaffCalendar from './StaffCalendar';
 import NotificationBellButton from './NotificationBellButton';
 import { useConductorPairing, useConductorDashboardData } from '../../api/hooks/Staff/useConductorDashboard';
-import { getBusinessTodayLabel } from '../../utils/dates';
+import { getBusinessToday, getBusinessTodayLabel } from '../../utils/dates';
+import { todaySummary } from '../../utils/assignmentCards';
+import { shiftActionReason, ticketingReason } from '../../utils/actionReasons';
 import { destinationsAhead, isOnsiteFormComplete, orderedStopsForLeg, stopLabel } from '../../utils/cashTicket';
 import CustomDropoffModal from '../Passenger/Timeline/CustomDropoffModal';
 import useDropoffOptions from '../../api/hooks/Passenger/useDropoffOptions';
@@ -62,16 +65,6 @@ const formatDateTime = (value) => {
   const hh = String(date.getHours()).padStart(2, '0');
   const min = String(date.getMinutes()).padStart(2, '0');
   return `${yyyy}/${mm}/${dd} - ${hh}:${min}`;
-};
-
-const STATUS_COLOR = {
-  scheduled: '#153a6b',
-  delayed: '#e11d48',
-  boarding: '#3b82f6',
-  departed: '#f59e0b',
-  'in-progress': '#f59e0b',
-  completed: '#22c55e',
-  cancelled: '#ef4444',
 };
 
 const toCompactTime = (value) => {
@@ -266,6 +259,15 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     tripStatus: deriveTripStatus(trip || todayAssignedTrip),
   });
 
+  // Batch 29: the vehicle and trip tiles read the same card (and so the same fleet, route and status) as the Assigned
+  // Routes list; the live trip fills in only what the card lacks. Nothing is invented: a missing value says so.
+  const cardToday = todaySummary(assignments.cards, getBusinessToday());
+  const todayInfo = {
+    plate: cardToday?.plate ?? todayAssignedTrip?.fleet_route?.fleet?.plate_number ?? 'Unavailable',
+    route: cardToday?.route ?? todayAssignedTrip?.fleet_route?.route?.route_name ?? 'Unavailable',
+    status: cardToday?.status ?? todayAssignedTrip?.status ?? 'Unavailable',
+    schedule: cardToday?.schedule ?? (todayAssignedTrip ? formatTripSchedule(todayAssignedTrip) : 'Unavailable'),
+  };
   const busRouteLabel = `${todayAssignedTrip?.fleet_route?.fleet?.plate_number || 'Fleet pending'} · ${todayAssignedTrip?.fleet_route?.route?.route_name || 'Route pending'}`;
 
   const shiftAction = hasOpenShift
@@ -283,6 +285,17 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
       title: !isPaired ? 'Pairing is required before starting shift.' : undefined,
       className: 'inline-flex items-center gap-2 rounded-xl border border-teal-200 bg-teal-50 px-3 py-2 text-xs font-semibold text-teal-700 transition hover:bg-teal-100 disabled:opacity-60',
     };
+
+  // Batch 29: every disabled action says why, next to the button.
+  const shiftReason = shiftActionReason({
+    label: shiftAction.label,
+    disabled: shiftAction.disabled,
+    inFlight: actionInFlight,
+    isPaired,
+    hasWork: hasActiveTrip || hasTodayAssignedTrip,
+    endBlockedReason: shiftState?.endBlockedReason,
+  });
+  const ticketingBlocked = ticketingReason({ isPaired, hasOpenShift, hasActiveTrip, isFull: cashCapacity.isFull });
 
   return (
     <>
@@ -328,6 +341,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
               Refresh
             </button>
             <NotificationBellButton service={ConductorService} role="conductor" onOpenNotification={openTripFromNotification} />
+            {shiftReason && <p data-testid="shift-action-reason" className="basis-full text-xs text-amber-700 lg:text-right">{shiftReason}</p>}
             {actionMsg && <span className="basis-full rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">{actionMsg}</span>}
           </div>
           </div>
@@ -404,8 +418,8 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                     <Bus className="h-5 w-5 text-teal-600" />
                   </div>
                   <div>
-                    <p className="font-bold text-slate-900">{todayAssignedTrip?.fleet_route?.fleet?.plate_number ?? 'Bus #1'}</p>
-                    <p className="text-xs text-slate-500">{todayAssignedTrip?.fleet_route?.fleet?.make ?? 'Assigned Fleet'}</p>
+                    <p className="font-bold text-slate-900">{todayInfo.plate}</p>
+                    <p className="text-xs text-slate-500">{todayAssignedTrip?.fleet_route?.fleet?.make ?? (cardToday?.plate ? 'Assigned fleet' : 'No vehicle assigned for today')}</p>
                   </div>
                 </div>
               </div>
@@ -416,15 +430,15 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span className="text-slate-500">Route</span>
-                    <span className="font-semibold text-slate-900">{todayAssignedTrip?.fleet_route?.route?.route_name ?? '-'}</span>
+                    <span className="font-semibold text-slate-900">{todayInfo.route}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-500">Status</span>
-                    <span className="font-semibold capitalize text-teal-600">{todayAssignedTrip?.status ?? '-'}</span>
+                    <span className="font-semibold capitalize text-teal-600">{todayInfo.status}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-500">Schedule</span>
-                    <span className="font-data text-slate-700">{formatTripSchedule(todayAssignedTrip)}</span>
+                    <span className="font-data text-slate-700">{todayInfo.schedule}</span>
                   </div>
                 </div>
               </div>
@@ -507,54 +521,37 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
             block's own final-leg + GPS state. */}
         {!loading && activeTab === 'activeShift' && (
           <section className="staff-card">
-            <h3 className="mb-4 text-base font-bold text-slate-900">My Shift Blocks</h3>
-            {shiftBlocks.length === 0 ? (
-              <p className="text-sm text-slate-500">No shift blocks assigned.</p>
-            ) : (
-              <div className="space-y-3">
-                {shiftBlocks.map((block) => {
-                  const eligibility = shiftBlockEligibility[block.shift_block_id];
-                  return (
-                    <div key={block.shift_block_id} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div>
-                          <p className="text-sm font-semibold text-slate-900 capitalize">{block.block_type} block — {block.scheduled_date}</p>
-                          <p className="text-xs text-slate-500">{block.fleet?.plate_number || 'Fleet -'} · {block.legs?.length ?? 0} legs</p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="rounded-full px-2 py-0.5 text-xs font-semibold uppercase" style={{ background: `${STATUS_COLOR[block.status === 'in_progress' ? 'in-progress' : block.status] || '#153a6b'}20`, color: STATUS_COLOR[block.status === 'in_progress' ? 'in-progress' : block.status] || '#153a6b' }}>
-                            {block.status.replace('_', ' ')}
-                          </span>
-                          {block.status === 'in_progress' && (
-                            <button
-                              type="button"
-                              onClick={() => void checkShiftBlockEligibility(block.shift_block_id)}
-                              className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50"
-                            >
-                              Check Eligibility
-                            </button>
-                          )}
-                          {block.status === 'in_progress' && (
-                            <button
-                              type="button"
-                              onClick={() => handleInitiateShiftBlockHandoff(block.shift_block_id)}
-                              disabled={shiftBlockActionInFlight || !eligibility?.eligible}
-                              title={!eligibility?.eligible ? (eligibility?.reason || 'Check eligibility first — hand-off unlocks once the final leg arrives at the home terminal.') : undefined}
-                              className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
-                            >
-                              End Shift / Initiate Hand-off
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                      {eligibility && !eligibility.eligible && (
-                        <p className="mt-2 text-xs text-amber-600">{eligibility.reason}</p>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+            <h3 className="mb-4 text-base font-bold text-slate-900">My Schedule</h3>
+            <MyScheduleList
+              blocks={shiftBlocks}
+              renderActions={(block) => {
+                if (block.status !== 'in_progress') return null;
+                const eligibility = shiftBlockEligibility[block.shift_block_id];
+                const reason = !eligibility
+                  ? 'Press Check Eligibility first. Hand-off unlocks once the final leg arrives at the home terminal.'
+                  : (!eligibility.eligible ? eligibility.reason : '');
+                return (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => void checkShiftBlockEligibility(block.shift_block_id)}
+                      className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+                    >
+                      Check Eligibility
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleInitiateShiftBlockHandoff(block.shift_block_id)}
+                      disabled={shiftBlockActionInFlight || !eligibility?.eligible}
+                      className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
+                    >
+                      End Shift / Initiate Hand-off
+                    </button>
+                    {reason && <p className="basis-full text-xs text-amber-600" data-testid="handoff-reason">{reason}</p>}
+                  </>
+                );
+              }}
+            />
           </section>
         )}
 
@@ -792,6 +789,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                         Scan Ticket
                       </button>
                     </div>
+                    {ticketingBlocked && <p data-testid="ticketing-reason" className="text-xs text-amber-700">{ticketingBlocked}</p>}
 
                     <div className="grid grid-cols-2 gap-2">
                       <button
@@ -1078,6 +1076,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                 >
                   Verify &amp; End Shift
                 </button>
+                {!hasOpenShift && <p className="basis-full text-xs text-amber-700">No shift is open, so there is nothing to end.</p>}
               </div>
             </div>
             {actionMsg && <p className="mb-3 rounded-lg border border-teal-200 bg-teal-50 px-3 py-2 text-xs text-teal-700">{actionMsg}</p>}

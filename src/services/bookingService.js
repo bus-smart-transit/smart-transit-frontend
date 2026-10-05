@@ -23,6 +23,12 @@ export async function getBookingStops(originStopId = null) {
   return data(response)
 }
 
+/** The booking window ({ today, max_advance_days, last_bookable_date }), the same numbers the passenger date pickers use. */
+export async function getBookingWindow() {
+  const response = await api.get('/booking/window')
+  return data(response)
+}
+
 /** Checks the untrusted parts of a booking link (stop codes, date). Resolves to { from, to, date } or rejects with a friendly 422. */
 export async function getBookingLink({ from, to, date }) {
   const params = {}

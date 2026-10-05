@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import StaffPortalLayout from './StaffPortalLayout'
 import { buildOperatorForecast } from './routeForecast'
 import RouteMap from '../Map/RouteMap'
@@ -11,6 +11,8 @@ import useFareOptions from '../../api/hooks/Staff/useFareOptions'
 import HistoricalForecastPanel from './HistoricalForecastPanel'
 import { openPrintReport } from '../../utils/printReport'
 import OperatorService from '../../api/StaffService/OperatorService'
+import { getBookingWindow } from '../../services/bookingService'
+import { bookingWindowWarning } from '../../utils/bookingQuery'
 import { parseAppDate, getBusinessToday, debugLogBusinessTime } from '../../utils/dates'
 import { useOperatorDashboardData, useNotificationBell, useTripRequests, useDispatchDecisions, useFleetsTab, useRoutesTab, useTripsTab, useReportsTab, useShiftBlocksTab } from '../../api/hooks/Staff/useOperatorDashboard'
 import RunInfoChips from '../ui/RunInfoChips'
@@ -19,6 +21,7 @@ import DurationFactorsPanel from './DurationFactorsPanel'
 import DropoffRulesPanel from './DropoffRulesPanel'
 import LegTimeSuggestion from './LegTimeSuggestion'
 import AssignmentBlockCards from './AssignmentBlockCards'
+import { matchesStatusFilter } from '../../utils/assignmentCards'
 import {
   LayoutDashboard, Bus, MapPin, Clock, PieChart, Users, Settings,
   Plus, Eye, RefreshCw, Shield, Download,
@@ -145,7 +148,7 @@ function NotificationBell() {
   )
 }
 
-function Field({ label, type = 'text', value, onChange, required, placeholder, children }) {
+function Field({ label, type = 'text', value, onChange, required, placeholder, hint, children }) {
   return (
     <div>
       <label className="mb-1 block text-sm font-medium text-slate-700">{label}{required && <span className="text-red-500 ml-1">*</span>}</label>
@@ -153,9 +156,11 @@ function Field({ label, type = 'text', value, onChange, required, placeholder, c
         <input type={type} value={value} onChange={onChange} required={required} placeholder={placeholder}
           className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500" />
       )}
+      {hint && <p role="status" className="mt-1 text-xs text-amber-700">{hint}</p>}
     </div>
   )
 }
+
 
 const REQUEST_REASON_LABELS = { sick: 'Sick', vehicle_issue: 'Vehicle issue', schedule_conflict: 'Schedule conflict', other: 'Others' }
 
@@ -1398,6 +1403,13 @@ function TripsTab({ trips, drivers, conductors, onRefresh }) {
   } = useTripsTab({ trips, onRefresh })
   const [cancelTarget, setCancelTarget] = useState(null)
   const [cancelNotice, setCancelNotice] = useState('')
+  const [bookingWindow, setBookingWindow] = useState(null)
+  useEffect(() => {
+    if (!showModal) return undefined
+    let cancelled = false
+    getBookingWindow().then((w) => { if (!cancelled) setBookingWindow(w) }).catch(() => { if (!cancelled) setBookingWindow(null) })
+    return () => { cancelled = true }
+  }, [showModal])
 
   const driverMap = new Map(drivers.map(d => [Number(getStaffCompanyUserId(d)), d]))
   const conductorMap = new Map(conductors.map(c => [Number(getStaffCompanyUserId(c)), c]))
@@ -1560,7 +1572,7 @@ function TripsTab({ trips, drivers, conductors, onRefresh }) {
                 ))}
               </select>
             </Field>
-            <Field label="Trip Date" type="date" value={form.trip_date} onChange={e => setForm(p => ({...p, trip_date: e.target.value}))} required />
+            <Field label="Trip Date" type="date" value={form.trip_date} onChange={e => setForm(p => ({...p, trip_date: e.target.value}))} required hint={bookingWindowWarning(form.trip_date, bookingWindow)} />
             <Field label="Trip Type" required>
               <select value={form.trip_type} onChange={e => setForm(p => ({ ...p, trip_type: e.target.value }))} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500">
                 <option value="one_way">One-way (Ad hoc / Charter)</option>
@@ -1783,9 +1795,13 @@ function TripsTab({ trips, drivers, conductors, onRefresh }) {
 const BLOCK_STATUS_CHIP = {
   scheduled: 'bg-slate-100 text-slate-700',
   in_progress: 'bg-amber-100 text-amber-700',
+  delayed: 'bg-rose-100 text-rose-700',
+  boarding: 'bg-sky-100 text-sky-700',
   completed: 'bg-emerald-100 text-emerald-700',
   cancelled: 'bg-red-100 text-red-700',
 }
+// Batch 29: the table shows the one status derived from the legs (lifecycle_status), never the stored workflow column.
+const shownStatus = (block) => String(block.lifecycle_status ?? block.status ?? 'scheduled').replace('-', '_')
 const AUDIT_STATUS_CHIP = {
   not_applicable: 'bg-slate-100 text-slate-500',
   pending_review: 'bg-amber-100 text-amber-700',
@@ -1833,7 +1849,7 @@ function ShiftBlocksTab({ onOpenScheduler }) {
       <AssignmentBlockCards
         mode="operator"
         title="Block assignments"
-        cards={blockCards.filter((c) => statusFilter === 'all' || c.status === statusFilter)}
+        cards={blockCards.filter((c) => matchesStatusFilter(c.status, statusFilter))}
         emptyMessage="No shift blocks match this filter."
       />
 
@@ -1859,14 +1875,14 @@ function ShiftBlocksTab({ onOpenScheduler }) {
                 <td className="px-4 py-3 text-slate-700">{getStaffFullName(b.driver) || (b.driver_id ? `#${b.driver_id}` : 'Needs a replacement')}</td>
                 <td className="px-4 py-3 text-slate-700">{getStaffFullName(b.conductor) || (b.conductor_id ? `#${b.conductor_id}` : 'Needs a replacement')}</td>
                 <td className="px-4 py-3">
-                  <span className={`rounded-full px-2 py-0.5 text-xs font-semibold whitespace-nowrap ${BLOCK_STATUS_CHIP[b.status] ?? 'bg-slate-100 text-slate-600'}`}>{b.status}</span>
+                  <span className={`rounded-full px-2 py-0.5 text-xs font-semibold whitespace-nowrap ${BLOCK_STATUS_CHIP[shownStatus(b)] ?? 'bg-slate-100 text-slate-600'}`}>{shownStatus(b).replace('_', ' ')}</span>
                 </td>
                 <td className="px-4 py-3">
                   <span className={`rounded-full px-2 py-0.5 text-xs font-semibold whitespace-nowrap ${AUDIT_STATUS_CHIP[b.audit_status] ?? 'bg-slate-100 text-slate-600'}`}>{b.audit_status}</span>
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex flex-wrap gap-1">
-                    {b.status === 'scheduled' && (
+                    {b.status === 'scheduled' && ['scheduled', 'delayed', 'boarding'].includes(b.lifecycle_status ?? b.status) && (
                       <button type="button" onClick={() => handleCancel(b.shift_block_id)} className="rounded px-2 py-1 text-xs bg-red-100 text-red-700 hover:bg-red-200">Cancel</button>
                     )}
                     {b.status === 'in_progress' && (

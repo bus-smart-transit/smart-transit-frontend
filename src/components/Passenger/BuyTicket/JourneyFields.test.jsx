@@ -25,6 +25,22 @@ describe('JourneyFields (From, To, Date)', () => {
     expect(date).toHaveAttribute('max', '2026-10-31');
   });
 
+  test('the server last bookable date is the limit, with a short explanation of why later dates are off', () => {
+    const { rerender } = render(<JourneyFields value={value} originGroups={groups} destinationGroups={groups} today="2026-10-01" maxAdvanceDays={30} lastBookableDate="2026-10-31" onChange={() => {}} idPrefix="t" />);
+
+    expect(screen.getByLabelText('Date')).toHaveAttribute('max', '2026-10-31');
+    expect(screen.getByText('Tickets open up to 30 days ahead. Latest date: Oct 31, 2026.')).toBeInTheDocument();
+
+    rerender(<JourneyFields value={{ ...value, booking_date: '2026-11-18' }} originGroups={groups} destinationGroups={groups} today="2026-10-01" maxAdvanceDays={30} lastBookableDate="2026-10-31" onChange={() => {}} idPrefix="t" />);
+    expect(screen.getByText(/That date is too far ahead\. Tickets open up to 30 days ahead/)).toBeInTheDocument();
+  });
+
+  test('a changed server window moves the limit (config change is reflected)', () => {
+    render(<JourneyFields value={value} originGroups={groups} destinationGroups={groups} today="2026-10-01" maxAdvanceDays={45} lastBookableDate="2026-11-15" onChange={() => {}} idPrefix="t" />);
+
+    expect(screen.getByLabelText('Date')).toHaveAttribute('max', '2026-11-15');
+  });
+
   test('the date control waits for the server date, and reports changes', () => {
     const onChange = vi.fn();
     const { rerender } = render(<JourneyFields value={value} originGroups={groups} destinationGroups={groups} today="" onChange={onChange} idPrefix="t" />);
@@ -40,11 +56,12 @@ describe('booking stops meta and departures hooks', () => {
   beforeEach(() => vi.clearAllMocks());
 
   test('today and the booking window come from the server', async () => {
-    getBookingStops.mockResolvedValue({ groups: [], meta: { today: '2026-10-01', max_advance_days: 30 } });
+    getBookingStops.mockResolvedValue({ groups: [], meta: { today: '2026-10-01', max_advance_days: 30, last_bookable_date: '2026-10-31' } });
     const { result } = renderHook(() => useBookingStops(''));
 
     await waitFor(() => expect(result.current.today).toBe('2026-10-01'));
     expect(result.current.maxAdvanceDays).toBe(30);
+    expect(result.current.lastBookableDate).toBe('2026-10-31');
   });
 
   test('departures are requested only for Book Later with a journey and a date', async () => {

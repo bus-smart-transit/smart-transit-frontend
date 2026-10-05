@@ -312,6 +312,7 @@ export default function BuyTicket({ onTicketPurchased }) {
                       loadingDestinations={stopsData.loadingDestinations}
                       today={stopsData.today}
                       maxAdvanceDays={stopsData.maxAdvanceDays}
+                      lastBookableDate={stopsData.lastBookableDate}
                       onChange={handleJourneyChange}
                       idPrefix="book"
                     />
@@ -411,6 +412,7 @@ export default function BuyTicket({ onTicketPurchased }) {
                       roundtrip={roundtrip}
                       outboundDate={trip.trip_date}
                       today={stopsData.today}
+                      lastBookableDate={stopsData.lastBookableDate}
                       quantity={totalTickets}
                     />
                   )}

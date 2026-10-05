@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { extractFieldErrors } from '../../../utils/assignmentRequest';
 
+const MESSAGE_TTL_MS = 6000;
+
 /**
  * Batch 28, item 1: the Driver's / Chauffeur's assignment cards (one per shift block, plus one per
  * standalone trip). Accept and decline happen once, on the card; the server writes the block and all
@@ -18,6 +20,13 @@ export default function useAssignmentCards({ service, onChanged }) {
   const [confirmDecline, setConfirmDecline] = useState(null);
   const [declineErrors, setDeclineErrors] = useState({});
   const [declineSubmitting, setDeclineSubmitting] = useState(false);
+
+  // A notice such as "Trip accepted." is a confirmation, not a panel: it clears itself.
+  useEffect(() => {
+    if (!message) return undefined;
+    const timer = setTimeout(() => setMessage(''), MESSAGE_TTL_MS);
+    return () => clearTimeout(timer);
+  }, [message]);
 
   const refresh = useCallback(async () => {
     try {

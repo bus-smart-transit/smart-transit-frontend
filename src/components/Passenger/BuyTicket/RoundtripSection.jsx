@@ -33,7 +33,7 @@ function LegCard({ title, leg, quantity }) {
  * Trip type (One-way / Roundtrip), the return date and time, and the server's confirmation of both legs with
  * the no-cancellation rule, shown before anything is paid. All values come from the server's answer.
  */
-export default function RoundtripSection({ roundtrip, outboundDate, today, quantity = 1 }) {
+export default function RoundtripSection({ roundtrip, outboundDate, today, lastBookableDate = null, quantity = 1 }) {
   const { active, setActive, returnDate, setReturnDate, returnTime, setReturnTime, fieldErrors, loading, data, error, canPay, blockedReason } = roundtrip
 
   return (
@@ -52,7 +52,7 @@ export default function RoundtripSection({ roundtrip, outboundDate, today, quant
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="block text-sm font-semibold text-navy-950">
               <span className="flex items-center gap-1.5"><CalendarDays size={14} aria-hidden="true" /> Return date</span>
-              <input type="date" value={returnDate} min={outboundDate || today || undefined} onChange={(e) => setReturnDate(e.target.value)} className={FIELD} aria-invalid={Boolean(fieldErrors.returnDate)} />
+              <input type="date" value={returnDate} min={outboundDate || today || undefined} max={lastBookableDate || undefined} onChange={(e) => setReturnDate(e.target.value)} className={FIELD} aria-invalid={Boolean(fieldErrors.returnDate)} />
               {fieldErrors.returnDate && <span role="alert" className="mt-1 block text-xs font-normal text-red-600">{fieldErrors.returnDate}</span>}
             </label>
             <label className="block text-sm font-semibold text-navy-950">

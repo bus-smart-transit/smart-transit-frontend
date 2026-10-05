@@ -76,6 +76,7 @@ export default function AvailableTripsPage() {
             loadingDestinations={stops.loadingDestinations}
             today={stops.today}
             maxAdvanceDays={stops.maxAdvanceDays}
+            lastBookableDate={stops.lastBookableDate}
             onChange={handleChange}
             idPrefix="trips"
           />

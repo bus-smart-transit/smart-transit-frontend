@@ -9,15 +9,15 @@ import { roundtripPayState, validateReturnInput } from '../../../utils/roundtrip
  *
  * outbound: { mode: 'now' | 'later', date, time } is the journey the passenger has already chosen.
  */
-export default function useRoundtrip({ originStopId, destinationStopId, outbound, seatType, today, maxAdvanceDays, unavailableReason = '' }) {
+export default function useRoundtrip({ originStopId, destinationStopId, outbound, seatType, today, maxAdvanceDays, lastBookableDate = null, unavailableReason = '' }) {
   const [active, setActive] = useState(false)
   const [returnDate, setReturnDate] = useState('')
   const [returnTime, setReturnTime] = useState('')
   const [result, setResult] = useState({ key: '', data: null, error: '' })
 
   const fieldErrors = useMemo(
-    () => validateReturnInput({ outboundDate: outbound.date, outboundTime: outbound.mode === 'now' ? '' : outbound.time, returnDate, returnTime, today, maxAdvanceDays }),
-    [outbound.date, outbound.mode, outbound.time, returnDate, returnTime, today, maxAdvanceDays],
+    () => validateReturnInput({ outboundDate: outbound.date, outboundTime: outbound.mode === 'now' ? '' : outbound.time, returnDate, returnTime, today, maxAdvanceDays, lastBookableDate }),
+    [outbound.date, outbound.mode, outbound.time, returnDate, returnTime, today, maxAdvanceDays, lastBookableDate],
   )
 
   const requestKey = active && originStopId && destinationStopId && outbound.date && returnDate && returnTime

@@ -27,27 +27,55 @@ export default function AssignmentSection({ role, assignments, assignedTrips, fi
     else if (focusTripId) notice = describeAssignmentFocus(assignedTrips, focusTripId, role);
   }
 
-  const { today: todayCards, upcoming } = sectionCards(cards, filter, today);
+  const { overdue, today: todayCards, upcoming, past } = sectionCards(cards, filter, today);
   const declining = assignments.confirmDecline;
 
+  // One full-width wrapper: the dashboards lay this out in a grid, and each loose child (the message, the cards)
+  // used to take its own cell, leaving a large empty panel beside a short notice.
   return (
-    <>
+    <div className="col-span-full min-w-0" data-testid="assignment-body">
       <TripFocusNotice tripId={null} notice={notice} onDismiss={onDismissFocus} className="mb-4" />
-      {assignments.message && <p role="status" className="mb-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">{assignments.message}</p>}
+      {assignments.message && (
+        <div role="status" className="mb-3 flex items-start justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+          <span>{assignments.message}</span>
+          <button type="button" aria-label="Dismiss message" onClick={() => assignments.setMessage('')} className="shrink-0 text-xs font-semibold text-slate-500 hover:text-slate-800">Dismiss</button>
+        </div>
+      )}
       {assignments.error && <p role="alert" className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{assignments.error}</p>}
       {!loaded ? (
         <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-5 text-sm text-slate-500">Loading your assignments...</div>
       ) : (
         <div className="space-y-5">
-          <AssignmentBlockCards
-            title={filter === 'completed' ? 'Completed' : "Today's Assignments"}
-            cards={todayCards}
-            focusKey={focusKey}
-            busyKey={assignments.busyKey}
-            onAccept={assignments.accept}
-            onDecline={assignments.setConfirmDecline}
-            emptyMessage="Nothing assigned for today."
-          />
+          {overdue.length > 0 && (
+            <AssignmentBlockCards
+              title="Overdue"
+              tone="warning"
+              cards={overdue}
+              focusKey={focusKey}
+              busyKey={assignments.busyKey}
+              onAccept={assignments.accept}
+              onDecline={assignments.setConfirmDecline}
+            />
+          )}
+          {filter === 'completed' ? (
+            <AssignmentBlockCards
+              title="Completed"
+              cards={past}
+              focusKey={focusKey}
+              busyKey={assignments.busyKey}
+              emptyMessage="Nothing completed yet."
+            />
+          ) : (
+            <AssignmentBlockCards
+              title="Today's Assignments"
+              cards={todayCards}
+              focusKey={focusKey}
+              busyKey={assignments.busyKey}
+              onAccept={assignments.accept}
+              onDecline={assignments.setConfirmDecline}
+              emptyMessage="Nothing assigned for today."
+            />
+          )}
           {filter !== 'completed' && (
             <AssignmentBlockCards
               title="Upcoming Assignments"
@@ -73,6 +101,6 @@ export default function AssignmentSection({ role, assignments, assignedTrips, fi
           onSubmit={assignments.submitDecline}
         />
       )}
-    </>
+    </div>
   );
 }
