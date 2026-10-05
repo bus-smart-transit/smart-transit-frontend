@@ -49,7 +49,7 @@ export default function FinancialsPage({ service }) {
           <p className="text-xs text-slate-500">Paid tickets only. Dates and hours are Manila time.</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          {[['transactions', 'Export transactions (CSV)'], ['daily', 'Export daily summary (CSV)']].map(([type, label]) => (
+          {[['transactions', 'Export transactions (CSV)'], ['refunds', 'Export refunds (CSV)'], ['daily', 'Export daily summary (CSV)']].map(([type, label]) => (
             <button
               key={type}
               type="button"
@@ -73,7 +73,7 @@ export default function FinancialsPage({ service }) {
             </button>
           ))}
         </div>
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <label className="text-xs font-medium text-slate-600">From
             <input type="date" value={filters.from} max={filters.to || undefined} onChange={(e) => e.target.value && f.updateFilters({ from: e.target.value })} className={`${FIELD} mt-1`} />
           </label>
@@ -106,6 +106,12 @@ export default function FinancialsPage({ service }) {
               {options.trips.map((t) => <option key={t.trip_id} value={t.trip_id}>{t.label}</option>)}
             </select>
           </label>
+          <label className="col-span-2 text-xs font-medium text-slate-600">Refunds counted by
+            <select value={filters.refund_basis} onChange={(e) => f.updateFilters({ refund_basis: e.target.value })} className={`${FIELD} mt-1`}>
+              <option value="completed">Day completed (daily cash reconciliation)</option>
+              <option value="sale">Day of the original sale (profitability)</option>
+            </select>
+          </label>
         </div>
         <button type="button" onClick={f.resetFilters} className="inline-flex items-center gap-1 text-xs font-semibold text-slate-600 hover:text-slate-900">
           <RotateCcw className="h-3 w-3" aria-hidden="true" /> Reset filters
@@ -129,7 +135,7 @@ export default function FinancialsPage({ service }) {
 
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4" data-testid="kpis">
             <Kpi label="Gross revenue" value={formatPeso(kpis.gross)} hint="Paid tickets" testId="kpi-gross" />
-            <Kpi label="Refunds" value={formatPeso(kpis.refunds)} hint="Completed in this range" tone="text-rose-600" testId="kpi-refunds" />
+            <Kpi label="Refunds" value={formatPeso(kpis.refunds)} hint={filters.refund_basis === 'sale' ? 'Of tickets sold in this range' : 'Completed in this range'} tone="text-rose-600" testId="kpi-refunds" />
             <Kpi label="Net revenue" value={formatPeso(kpis.net)} hint="Gross minus refunds" tone="text-teal-700" testId="kpi-net" />
             <Kpi label="Paid tickets" value={formatCount(kpis.tickets)} hint={`${formatCount(kpis.boarded)} boarded`} testId="kpi-tickets" />
             <Kpi label="Average fare" value={formatPeso(kpis.average_fare)} hint="Gross per paid ticket" testId="kpi-average" />
@@ -139,7 +145,10 @@ export default function FinancialsPage({ service }) {
             </Card>
           </div>
           <p className="text-xs text-slate-500">
-            Refunds are counted on the day they were completed, so they can include tickets sold before this range. Boarded means the ticket was scanned on board.
+            {filters.refund_basis === 'sale'
+              ? 'Refunds are matched back to the day of the original sale, so each day shows what its sales really earned. Do not use this view to reconcile a cash drawer.'
+              : 'Refunds are counted on the day they were completed, when the money actually moved, so a closed day is never changed. They can include tickets sold before this range; the refunds export links each one to its original sale.'}
+            Boarded means the ticket was scanned on board.
           </p>
 
           <div className="grid gap-4 lg:grid-cols-2">

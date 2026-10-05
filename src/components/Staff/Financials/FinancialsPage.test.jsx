@@ -175,3 +175,30 @@ describe('FinancialsPage', () => {
     expect(table[1]).toHaveTextContent('40.00');
   });
 });
+
+
+describe('FinancialsPage refunds', () => {
+  it('counts refunds by completion day by default and lets the Operator switch to the sale day', async () => {
+    const service = makeService();
+    render(<FinancialsPage service={service} />);
+    await screen.findByTestId('kpi-gross');
+
+    expect(service.getFinancials).toHaveBeenLastCalledWith(expect.objectContaining({ refund_basis: 'completed' }));
+    expect(screen.getByTestId('kpi-refunds')).toHaveTextContent('Completed in this range');
+    expect(screen.getByText(/closed day is never changed/)).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Refunds counted by'), { target: { value: 'sale' } });
+    await waitFor(() => expect(service.getFinancials).toHaveBeenLastCalledWith(expect.objectContaining({ refund_basis: 'sale' })));
+    expect(service.getFinancialTransactions).toHaveBeenLastCalledWith(expect.objectContaining({ refund_basis: 'sale', page: 1 }));
+    expect(screen.getByText(/Do not use this view to reconcile a cash drawer/)).toBeInTheDocument();
+  });
+
+  it('exports the refund lines, linked to their original sales', async () => {
+    const service = makeService();
+    render(<FinancialsPage service={service} />);
+    await screen.findByTestId('kpi-gross');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Export refunds (CSV)' }));
+    await waitFor(() => expect(service.downloadFinancialExport).toHaveBeenLastCalledWith(expect.objectContaining({ type: 'refunds', refund_basis: 'completed' })));
+  });
+});

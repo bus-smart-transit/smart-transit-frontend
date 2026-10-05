@@ -12,7 +12,7 @@ const BLANK = { route_id: '', fleet_id: '', trip_id: '', payment_method: '', cha
  */
 export default function useFinancials({ service = OperatorService } = {}) {
   const today = getBusinessToday();
-  const [filters, setFilters] = useState({ from: today, to: today, ...BLANK });
+  const [filters, setFilters] = useState({ from: today, to: today, ...BLANK, refund_basis: 'completed' });
   const [table, setTable] = useState({ page: 1, sort: 'paid_at', dir: 'desc' });
   const [reload, setReload] = useState(0);
   const [summaryResult, setSummaryResult] = useState({ key: null, data: null, error: '' });
@@ -48,7 +48,7 @@ export default function useFinancials({ service = OperatorService } = {}) {
 
   const applyPreset = useCallback((key) => updateFilters(presetRange(key, getBusinessToday())), [updateFilters]);
 
-  const resetFilters = useCallback(() => updateFilters({ ...presetRange('today', getBusinessToday()), ...BLANK }), [updateFilters]);
+  const resetFilters = useCallback(() => updateFilters({ ...presetRange('today', getBusinessToday()), ...BLANK, refund_basis: 'completed' }), [updateFilters]);
 
   const sortBy = useCallback((column) => {
     setTable((prev) => ({ page: 1, sort: column, dir: prev.sort === column && prev.dir === 'desc' ? 'asc' : 'desc' }));
