@@ -358,6 +358,7 @@ export function useConductorDashboardData({ onLogout, pairing }) {
           openShift: payload?.open_shift ?? null,
           latestShift: payload?.latest_shift ?? null,
           endBlockedReason: payload?.end_blocked_reason ?? null,
+          cash: payload?.shift_cash ?? null,
           loading: false,
         });
       } else {
@@ -512,7 +513,7 @@ export function useConductorDashboardData({ onLogout, pairing }) {
   const refreshEndBlockedReason = useCallback(async () => {
     try {
       const res = await ConductorService.getConductorShiftStatus();
-      setShiftState((prev) => ({ ...prev, endBlockedReason: res?.data?.end_blocked_reason ?? null }));
+      setShiftState((prev) => ({ ...prev, endBlockedReason: res?.data?.end_blocked_reason ?? null, cash: res?.data?.shift_cash ?? null }));
     } catch {
       // Keep the last known state; the server still enforces the rule.
     }
@@ -1123,6 +1124,7 @@ export function useConductorDashboardData({ onLogout, pairing }) {
     loadOccupancy,
     loadEarnings,
     handleStartShift,
+  refreshEndBlockedReason,
     handleToggleAvailability,
     handleEndShift,
     checkShiftBlockEligibility,

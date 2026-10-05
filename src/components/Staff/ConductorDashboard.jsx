@@ -217,6 +217,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     loadOccupancy,
     loadEarnings,
     handleStartShift,
+  refreshEndBlockedReason,
     handleEndShift,
     checkShiftBlockEligibility,
     handleInitiateShiftBlockHandoff,
@@ -280,11 +281,13 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   const busRouteLabel = `${todayAssignedTrip?.fleet_route?.fleet?.plate_number || 'Fleet pending'} · ${todayAssignedTrip?.fleet_route?.route?.route_name || 'Route pending'}`;
 
   // Batch 29: the shift (and the pairing key) unlock only after the assignment is accepted.
+  // The shift's cash comes with the shift status (it does not depend on an active trip: by End Shift every leg is finished).
+  const endCash = shiftState?.cash ?? earnings?.shift ?? null;
   const needsAcceptance = Boolean(todayAssignedTrip) && !todayAssignedTrip.conductor_accepted_at;
   const shiftAction = hasOpenShift
     ? {
       label: 'End Shift',
-      onClick: () => setConfirmEnd(true),
+      onClick: () => { void refreshEndBlockedReason(); setConfirmEnd(true); },
       disabled: actionInFlight || !hasOpenShift || Boolean(shiftState?.endBlockedReason),
       title: shiftState?.endBlockedReason || undefined,
       className: 'inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 transition hover:bg-rose-100 disabled:opacity-60',
@@ -1083,7 +1086,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                 <button
                   type="button"
                   className="rounded-lg bg-teal-500 px-3 py-2 text-xs font-semibold text-white transition hover:bg-teal-600 disabled:cursor-not-allowed disabled:opacity-60"
-                  onClick={() => setConfirmEnd(true)}
+                  onClick={() => { void refreshEndBlockedReason(); setConfirmEnd(true); }}
                   disabled={actionInFlight || !hasOpenShift || Boolean(shiftState?.endBlockedReason)}
                 >
                   Verify &amp; End Shift
@@ -1258,12 +1261,12 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
           <div className="w-full max-w-sm rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl">
             <h3 className="mb-2 text-base font-bold text-slate-100">End Shift?</h3>
             <p className="mb-4 text-sm text-slate-400">Count the cash you are handing over. The Operator will confirm it later.</p>
-            {earnings?.shift && (
+            {endCash && (
               <dl className="mb-4 space-y-2 rounded-lg bg-slate-800 p-3 text-sm" data-testid="end-shift-cash">
-                <div className="flex justify-between"><dt className="text-slate-500">Opening cash</dt><dd className="font-data text-slate-100">₱{Number(earnings.shift.opening_cash).toFixed(2)}</dd></div>
-                <div className="flex justify-between"><dt className="text-slate-500">Cash sales</dt><dd className="font-data text-slate-100">₱{Number(earnings.shift.cash_sales).toFixed(2)}</dd></div>
-                <div className="flex justify-between"><dt className="text-slate-500">Cash refunds</dt><dd className="font-data text-slate-100">- ₱{Number(earnings.shift.cash_refunds).toFixed(2)}</dd></div>
-                <div className="flex justify-between border-t border-slate-700 pt-2"><dt className="text-slate-400">Expected cash</dt><dd className="font-data font-semibold text-slate-100">₱{Number(earnings.shift.expected_cash).toFixed(2)}</dd></div>
+                <div className="flex justify-between"><dt className="text-slate-500">Opening cash</dt><dd className="font-data text-slate-100">₱{Number(endCash.opening_cash).toFixed(2)}</dd></div>
+                <div className="flex justify-between"><dt className="text-slate-500">Cash sales</dt><dd className="font-data text-slate-100">₱{Number(endCash.cash_sales).toFixed(2)}</dd></div>
+                <div className="flex justify-between"><dt className="text-slate-500">Cash refunds</dt><dd className="font-data text-slate-100">- ₱{Number(endCash.cash_refunds).toFixed(2)}</dd></div>
+                <div className="flex justify-between border-t border-slate-700 pt-2"><dt className="text-slate-400">Expected cash</dt><dd className="font-data font-semibold text-slate-100">₱{Number(endCash.expected_cash).toFixed(2)}</dd></div>
               </dl>
             )}
             <label htmlFor="closing-cash" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">Closing cash count (₱)</label>
