@@ -22,9 +22,10 @@ import DropoffRulesPanel from './DropoffRulesPanel'
 import LegTimeSuggestion from './LegTimeSuggestion'
 import AssignmentBlockCards from './AssignmentBlockCards'
 import FinancialsPage from './Financials/FinancialsPage'
+import RemittancesPage from './Remittances/RemittancesPage'
 import { matchesStatusFilter } from '../../utils/assignmentCards'
 import {
-  LayoutDashboard, Bus, MapPin, Clock, PieChart, Users, Settings, Wallet,
+  LayoutDashboard, Bus, MapPin, Clock, PieChart, Users, Settings, Wallet, Banknote,
   Plus, Eye, RefreshCw, Shield, Download,
   X, ChevronDown, ChevronUp, Loader2, AlertTriangle, Bell, ArrowLeftRight, CalendarDays,
 } from 'lucide-react'
@@ -59,6 +60,7 @@ const NAV = [
 { key: 'calendar',   label: 'Calendar',   icon: CalendarDays },
   { key: 'shiftBlocks', label: 'Shift Blocks', icon: ArrowLeftRight },
   { key: 'financials', label: 'Financials', icon: Wallet },
+  { key: 'remittances', label: 'Remittances', icon: Banknote },
   { key: 'reports',    label: 'Reports',    icon: PieChart },
   { key: 'account',    label: 'Account',    icon: Settings },
 ]
@@ -2207,6 +2209,7 @@ export default function OperatorDashboard() {
         {activeTab === 'trips'      && <TripsTab trips={trips} drivers={drivers} conductors={conductors} onRefresh={loadFull} />}
         {activeTab === 'shiftBlocks' && <ShiftBlocksTab onOpenScheduler={() => setActiveTab('trips')} />}
         {activeTab === 'financials' && <FinancialsPage />}
+      {activeTab === 'remittances' && <RemittancesPage />}
       {activeTab === 'reports'    && <ReportsTab fleets={fleets} trips={trips} routes={routes} />}
         {activeTab === 'account'    && <AccountTab profile={profile} />}
     </StaffPortalLayout>

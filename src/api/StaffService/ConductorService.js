@@ -35,8 +35,10 @@ class ConductorService extends StaffBaseService {
     return await this.request('/conductor/shift/start', 'POST', { opening_cash: Number(openingCash) || 0 });
   }
 
-  async endConductorShift() {
-    return await this.request('/conductor/shift/end', 'POST');
+  // Batch 29: the cash the Chauffeur counts and hands over; the Operator confirms it later.
+  async endConductorShift(closingCash) {
+    const amount = Number(closingCash);
+    return await this.request('/conductor/shift/end', 'POST', Number.isFinite(amount) && closingCash !== '' && closingCash != null ? { closing_cash: amount } : {});
   }
 
   async getTripOccupancy() {

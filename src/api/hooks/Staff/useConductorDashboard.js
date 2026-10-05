@@ -581,10 +581,10 @@ export function useConductorDashboardData({ onLogout, pairing }) {
     }
   };
 
-  const handleEndShift = async () => {
+  const handleEndShift = async (closingCash) => {
     setActionInFlight(true);
     try {
-      const res = await ConductorService.endConductorShift();
+      const res = await ConductorService.endConductorShift(closingCash);
       const shift = res?.data?.shift ?? null;
       setShiftState((prev) => ({
         ...prev,

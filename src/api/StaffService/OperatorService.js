@@ -135,6 +135,15 @@ class OperatorService extends StaffBaseService {
   }
 
   // ── Reporting ──
+  // Batch 29, cash step 3: the remittance batch of each ended Chauffeur shift, and the Operator's confirmation.
+  async getRemittances(params = {}) {
+    return await this.request('/operator/remittances', 'GET', params);
+  }
+
+  async confirmRemittance(id, payload = {}) {
+    return await this.request(`/operator/remittances/${id}/confirm`, 'POST', payload);
+  }
+
   // Batch 29, Stage 2: the financial page (the server computes everything; nothing is derived here).
   async getFinancials(params = {}) {
     return await this.request('/operator/financials', 'GET', params);

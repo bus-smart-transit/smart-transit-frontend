@@ -138,6 +138,11 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   const [confirmStart, setConfirmStart] = useState(false);
   // Batch 29: the opening cash declared at Start Shift (text so the field can be edited freely; default 0).
   const [openingCash, setOpeningCash] = useState('0');
+  // Batch 29: End Shift asks for the cash counted and handed over; the Operator confirms it on the web dashboard.
+  const [confirmEnd, setConfirmEnd] = useState(false);
+  const [closingCash, setClosingCash] = useState('');
+  const closingCashValue = Number(closingCash);
+  const closingCashInvalid = closingCash === '' || !Number.isFinite(closingCashValue) || closingCashValue < 0;
   const openingCashValue = Number(openingCash === '' ? 0 : openingCash);
   const openingCashInvalid = !Number.isFinite(openingCashValue) || openingCashValue < 0;
   // The day the full calendar opens on when reached from the dashboard widget (null = today).
@@ -279,7 +284,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   const shiftAction = hasOpenShift
     ? {
       label: 'End Shift',
-      onClick: handleEndShift,
+      onClick: () => setConfirmEnd(true),
       disabled: actionInFlight || !hasOpenShift || Boolean(shiftState?.endBlockedReason),
       title: shiftState?.endBlockedReason || undefined,
       className: 'inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 transition hover:bg-rose-100 disabled:opacity-60',
@@ -1078,8 +1083,8 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                 <button
                   type="button"
                   className="rounded-lg bg-teal-500 px-3 py-2 text-xs font-semibold text-white transition hover:bg-teal-600 disabled:cursor-not-allowed disabled:opacity-60"
-                  onClick={handleEndShift}
-                  disabled={actionInFlight || !hasOpenShift}
+                  onClick={() => setConfirmEnd(true)}
+                  disabled={actionInFlight || !hasOpenShift || Boolean(shiftState?.endBlockedReason)}
                 >
                   Verify &amp; End Shift
                 </button>
@@ -1246,6 +1251,31 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
           </section>
         )}
     </StaffPortalLayout>
+
+      {/* End Shift confirmation: the Chauffeur declares the cash handed over (Batch 29). */}
+      {confirmEnd && (
+        <ModalShell label="End shift" onClose={() => setConfirmEnd(false)} closeOnOverlay={false} overlayClassName="bg-black/60">
+          <div className="w-full max-w-sm rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl">
+            <h3 className="mb-2 text-base font-bold text-slate-100">End Shift?</h3>
+            <p className="mb-4 text-sm text-slate-400">Count the cash you are handing over. The Operator will confirm it later.</p>
+            {earnings?.shift && (
+              <dl className="mb-4 space-y-2 rounded-lg bg-slate-800 p-3 text-sm" data-testid="end-shift-cash">
+                <div className="flex justify-between"><dt className="text-slate-500">Opening cash</dt><dd className="font-data text-slate-100">₱{Number(earnings.shift.opening_cash).toFixed(2)}</dd></div>
+                <div className="flex justify-between"><dt className="text-slate-500">Cash sales</dt><dd className="font-data text-slate-100">₱{Number(earnings.shift.cash_sales).toFixed(2)}</dd></div>
+                <div className="flex justify-between"><dt className="text-slate-500">Cash refunds</dt><dd className="font-data text-slate-100">- ₱{Number(earnings.shift.cash_refunds).toFixed(2)}</dd></div>
+                <div className="flex justify-between border-t border-slate-700 pt-2"><dt className="text-slate-400">Expected cash</dt><dd className="font-data font-semibold text-slate-100">₱{Number(earnings.shift.expected_cash).toFixed(2)}</dd></div>
+              </dl>
+            )}
+            <label htmlFor="closing-cash" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">Closing cash count (₱)</label>
+            <input id="closing-cash" type="number" inputMode="decimal" min="0" step="0.01" value={closingCash} onChange={(e) => setClosingCash(e.target.value)} aria-invalid={closingCashInvalid} placeholder="0.00" className="mb-1 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 outline-none focus:ring-2 focus:ring-teal-500" />
+            <p className="mb-4 text-xs text-slate-500">Enter the amount you counted, even if it is 0.</p>
+            <div className="flex gap-2">
+              <button type="button" onClick={() => setConfirmEnd(false)} className="flex-1 rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800">Cancel</button>
+              <button type="button" disabled={closingCashInvalid || actionInFlight} onClick={() => { setConfirmEnd(false); handleEndShift(closingCashValue); setClosingCash(''); }} className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-teal-500 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-600 disabled:opacity-50">End Shift</button>
+            </div>
+          </div>
+        </ModalShell>
+      )}
 
       {/* Start Shift confirmation (header toggle is the only entry point) */}
       {confirmStart && (
