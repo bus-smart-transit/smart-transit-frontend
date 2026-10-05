@@ -12,11 +12,11 @@ const shortId = (uuid) => String(uuid || '').slice(0, 8).toUpperCase();
 
 const MANILA = 'Asia/Manila';
 
-/** "2026-10-01 06:30 (Manila)". Stored trip values are already Manila wall-clock. */
+/** "2026-10-01 06:30". Stored trip values are already Manila wall-clock; the label does not name the timezone. */
 export function manilaDepartureLabel(ticket) {
   if (ticket?.trip_date) {
     const time = ticket.departure_time ? ` ${String(ticket.departure_time).slice(0, 5)}` : '';
-    return `${ticket.trip_date}${time} (Manila)`;
+    return `${ticket.trip_date}${time}`;
   }
   const instant = ticket?.valid_from ? new Date(ticket.valid_from) : null;
   if (!instant || Number.isNaN(instant.getTime())) return '-';
@@ -25,7 +25,7 @@ export function manilaDepartureLabel(ticket) {
       timeZone: MANILA, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
     }).formatToParts(instant).map((p) => [p.type, p.value]),
   );
-  return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute} (Manila)`;
+  return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}`;
 }
 
 /** What the image says, as plain data (drawn by renderTicketCanvas; testable without a canvas). */

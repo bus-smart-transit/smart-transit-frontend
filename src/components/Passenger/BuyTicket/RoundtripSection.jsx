@@ -56,7 +56,7 @@ export default function RoundtripSection({ roundtrip, outboundDate, today, lastB
               {fieldErrors.returnDate && <span role="alert" className="mt-1 block text-xs font-normal text-red-600">{fieldErrors.returnDate}</span>}
             </label>
             <label className="block text-sm font-semibold text-navy-950">
-              <span className="flex items-center gap-1.5"><Clock3 size={14} aria-hidden="true" /> Return time (Manila)</span>
+              <span className="flex items-center gap-1.5"><Clock3 size={14} aria-hidden="true" /> Return time</span>
               <input type="time" value={returnTime} onChange={(e) => setReturnTime(e.target.value)} className={FIELD} aria-invalid={Boolean(fieldErrors.returnTime)} />
               {fieldErrors.returnTime && <span role="alert" className="mt-1 block text-xs font-normal text-red-600">{fieldErrors.returnTime}</span>}
             </label>

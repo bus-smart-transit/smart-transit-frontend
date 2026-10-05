@@ -97,7 +97,7 @@ export default function DurationFactorsPanel({ service, routes = [], tone = 'lig
       <div>
         <h3 className={`text-sm font-semibold uppercase tracking-[0.14em] ${t.title}`}>Peak-hour duration factors</h3>
         <p className={`mt-1 text-xs ${t.muted}`}>
-          A window multiplies a route&apos;s stop offsets for a leg whose scheduled departure falls inside it (Manila time). With no matching window the factor is 1.0. These factors are configured by your team; the system does not measure them.
+          A window multiplies a route&apos;s stop offsets for a leg whose scheduled departure falls inside it. With no matching window the factor is 1.0. These factors are configured by your team; the system does not measure them.
         </p>
       </div>
 
@@ -146,8 +146,8 @@ export default function DurationFactorsPanel({ service, routes = [], tone = 'lig
           <option value="">Every day</option><option value="weekday">Weekdays</option><option value="weekend">Weekends</option>
         </select>
         <input aria-label="Factor" type="number" min="0.1" step="0.05" value={form.factor} onChange={set('factor')} required placeholder="Factor, e.g. 1.5" className={t.input} />
-        <label className={`text-xs ${t.muted}`}>From (Manila)<input type="time" value={form.start_time} onChange={set('start_time')} required className={`${t.input} mt-1 w-full`} /></label>
-        <label className={`text-xs ${t.muted}`}>To (Manila)<input type="time" value={form.end_time} onChange={set('end_time')} required className={`${t.input} mt-1 w-full`} /></label>
+        <label className={`text-xs ${t.muted}`}>From<input type="time" value={form.start_time} onChange={set('start_time')} required className={`${t.input} mt-1 w-full`} /></label>
+        <label className={`text-xs ${t.muted}`}>To<input type="time" value={form.end_time} onChange={set('end_time')} required className={`${t.input} mt-1 w-full`} /></label>
         <input aria-label="Note" value={form.note} maxLength={255} onChange={set('note')} placeholder="Note (optional)" className={`${t.input} md:col-span-2`} />
         <div className="md:col-span-4 flex gap-2">
           <button type="submit" disabled={saving} className={t.btn}>{saving ? 'Saving...' : editingId ? 'Update window' : 'Save window'}</button>

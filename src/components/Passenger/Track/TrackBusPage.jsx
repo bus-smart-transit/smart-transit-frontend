@@ -90,7 +90,7 @@ export default function TrackBusPage() {
                 {view.trip && <p className="text-sm">{formatManilaDate(view.trip.trip_date)} &middot; departs {view.trip.departure_time}</p>}
               </div>
               {view.message && <p className="mt-1 text-sm">{view.message}</p>}
-              {view.state === 'not_yet' && view.opens_at && <p className="mt-1 text-sm">Opens at {new Date(view.opens_at).toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Manila' })} (Manila time).</p>}
+              {view.state === 'not_yet' && view.opens_at && <p className="mt-1 text-sm">Opens at {new Date(view.opens_at).toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Manila' })}.</p>}
               {view.state === 'stale' && bus && <p className="mt-1 text-sm">Last update {Math.max(1, Math.round(bus.age_seconds / 60))} min ago.</p>}
               {refreshFailed && <p className="mt-1 text-sm" role="status">{error}</p>}
             </section>

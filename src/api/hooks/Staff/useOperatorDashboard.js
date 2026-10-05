@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import OperatorService from '../../StaffService/OperatorService';
 import { initFcmAndGetToken, stopForegroundListener } from '../../../services/fcmService';
-import { readDeepLink } from '../../../utils/notificationTarget';
+import { OPERATOR_ROLE, buildLocationSearch, defaultView, resolveOperatorLocation } from '../../../utils/operatorNav';
 
 // Architecture audit follow-up (CONF-03): OperatorDashboard.jsx's main
 // orchestrator component and its NotificationBell sub-component both called
@@ -25,8 +25,21 @@ import { readDeepLink } from '../../../utils/notificationTarget';
  */
 export function useOperatorDashboardData() {
   const navigate = useNavigate();
-  // Batch 27, Task 1: a link may open a given tab (?tab=trips&trip=ID); read once.
-  const [activeTab, setActiveTab] = useState(() => readDeepLink(typeof window !== 'undefined' ? window.location.search : '', 'operator').tab || 'dashboard');
+  const location = useLocation();
+  // Batch 27, Task 1: a link may open a given tab (?tab=trips&trip=ID); read once. Batch 30: an old tab name (trips,
+  // calendar, shiftBlocks, financials, remittances) opens its new place (Schedule or Finance, with a view), and the
+  // address is rewritten to it, so the sidebar item and view live in the address.
+  const [nav, setNav] = useState(() => resolveOperatorLocation(typeof window !== 'undefined' ? window.location.search : '', OPERATOR_ROLE));
+  const activeTab = nav.tab;
+  const view = nav.view;
+  const setActiveTab = useCallback((tab, nextView = null) => {
+    setNav({ tab, view: nextView ?? defaultView(tab, OPERATOR_ROLE), redirected: false });
+  }, []);
+  const setView = useCallback((nextView) => setNav((prev) => ({ ...prev, view: nextView })), []);
+  useEffect(() => {
+    const search = buildLocationSearch(location.search, nav.tab, nav.view);
+    if (search !== location.search) navigate({ pathname: location.pathname, search }, { replace: true });
+  }, [nav.tab, nav.view, location.pathname, location.search, navigate]);
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState(null);
   const [trips, setTrips] = useState([]);
@@ -134,6 +147,7 @@ export function useOperatorDashboardData() {
 
   return {
     activeTab, setActiveTab,
+    view, setView,
     loading,
     profile,
     trips,
@@ -930,11 +944,12 @@ export function useReportsTab() {
 
 /**
  * Batch 18: Shift Block Hand-off System — Operator/Dispatcher tab.
+ * Batch 30: the view filters on the cards it loaded (their status is the server's derived one), so there is no status
+ * request parameter any more; `reloadToken` makes the list reload after a schedule was created elsewhere on the page.
  */
-export function useShiftBlocksTab() {
+export function useShiftBlocksTab(reloadToken = 0) {
   const [blocks, setBlocks] = useState([]);
   const [blockCards, setBlockCards] = useState([]);
-  const [statusFilter, setStatusFilter] = useState('all');
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -944,9 +959,9 @@ export function useShiftBlocksTab() {
   const loadBlocks = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await OperatorService.getShiftBlocks(statusFilter === 'all' ? null : statusFilter);
+      const res = await OperatorService.getShiftBlocks();
       setBlocks(Array.isArray(res?.data) ? res.data : []);
-      // Batch 28: the cards (one per block, both roles' state) are secondary to the table.
+      // Batch 28: the cards (one per block, both roles' state) carry the status and section the view shows.
       try {
         const cardsRes = await OperatorService.getAssignmentBlocks();
         setBlockCards(Array.isArray(cardsRes?.data) ? cardsRes.data : []);
@@ -958,14 +973,14 @@ export function useShiftBlocksTab() {
     } finally {
       setLoading(false);
     }
-  }, [statusFilter]);
+  }, []);
 
   useEffect(() => {
     const timer = setTimeout(() => {
       void loadBlocks();
     }, 0);
     return () => clearTimeout(timer);
-  }, [loadBlocks]);
+  }, [loadBlocks, reloadToken]);
 
   useEffect(() => {
     OperatorService.getOperatorFleetRoutes().then((r) => setFleetRoutes(r?.data ?? [])).catch(() => {});
@@ -1022,7 +1037,6 @@ export function useShiftBlocksTab() {
   return {
     blocks,
     blockCards,
-    statusFilter, setStatusFilter,
     loading,
     showCreateModal, setShowCreateModal,
     saving,

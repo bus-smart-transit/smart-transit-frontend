@@ -32,12 +32,18 @@ function Section({ title, hint, children }) {
 /**
  * Batch 29, Stage 2: the Operator's financial page. Replaces the raw report table: paid tickets only, refunds as their
  * own figure, Manila days and hours, every number from the server's stored amounts. No fare is computed here.
+ *
+ * Batch 30: inside Finance the same page serves two tabs. `view="overview"` shows the figures and charts,
+ * `view="transactions"` the transaction log, both under the same filters (so switching keeps them); the default
+ * `view="all"` is the whole page. `embedded` drops the page heading, which the Finance page provides.
  */
-export default function FinancialsPage({ service }) {
+export default function FinancialsPage({ service, view = 'all', embedded = false }) {
   const f = useFinancials(service ? { service } : undefined);
   const { filters, summary, summaryError, summaryLoading } = f;
   const options = summary?.options ?? { routes: [], fleets: [], trips: [], channels: [] };
   const kpis = summary?.kpis;
+  const showOverview = view !== 'transactions';
+  const showTransactions = view !== 'overview';
 
   const onlineChannels = options.channels.filter((c) => c.method === 'online');
 
@@ -45,8 +51,8 @@ export default function FinancialsPage({ service }) {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-xl font-bold text-slate-900">Financials</h2>
-          <p className="text-xs text-slate-500">Paid tickets only. Dates and hours are Manila time.</p>
+          {!embedded && <h2 className="text-xl font-bold text-slate-900">Financials</h2>}
+          <p className="text-xs text-slate-500">Paid tickets only.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           {[['transactions', 'Export transactions (CSV)'], ['refunds', 'Export refunds (CSV)'], ['daily', 'Export daily summary (CSV)']].map(([type, label]) => (
@@ -118,7 +124,7 @@ export default function FinancialsPage({ service }) {
         </button>
       </Card>
 
-      {summaryError ? (
+      {!showOverview ? null : summaryError ? (
         <div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           <span>{summaryError}</span>
           <button type="button" onClick={f.retry} className="font-semibold underline">Try again</button>
@@ -157,7 +163,7 @@ export default function FinancialsPage({ service }) {
                 rows={summary.channels.map((c) => ({ key: `${c.method}-${c.channel}`, label: c.label, value: c.gross, sublabel: `${formatCount(c.tickets)} tickets · ${formatPercent(c.percent)}`, detail: c.refunds > 0 ? `Refunds ${formatPeso(c.refunds)} · Net ${formatPeso(c.net)}` : '' }))}
               />
             </Section>
-            <Section title="Revenue by hour" hint="Gross by the Manila hour of the sale.">
+            <Section title="Revenue by hour" hint="Gross by the hour of the sale.">
               <HourChart hours={summary.by_hour} />
             </Section>
             <Section title="By route">
@@ -186,15 +192,17 @@ export default function FinancialsPage({ service }) {
         </div>
       )}
 
-      <TransactionsTable
-        log={f.log}
-        loading={f.logLoading}
-        error={f.logError}
-        table={f.table}
-        onSort={f.sortBy}
-        onPage={f.goToPage}
-        onRetry={f.retry}
-      />
+      {showTransactions && (
+        <TransactionsTable
+          log={f.log}
+          loading={f.logLoading}
+          error={f.logError}
+          table={f.table}
+          onSort={f.sortBy}
+          onPage={f.goToPage}
+          onRetry={f.retry}
+        />
+      )}
     </div>
   );
 }

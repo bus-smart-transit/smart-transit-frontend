@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
 import StaffPortalLayout from './StaffPortalLayout'
 import { buildOperatorForecast } from './routeForecast'
 import RouteMap from '../Map/RouteMap'
@@ -14,20 +14,20 @@ import OperatorService from '../../api/StaffService/OperatorService'
 import { getBookingWindow } from '../../services/bookingService'
 import { bookingWindowWarning } from '../../utils/bookingQuery'
 import { parseAppDate, getBusinessToday, debugLogBusinessTime } from '../../utils/dates'
-import { useOperatorDashboardData, useNotificationBell, useTripRequests, useDispatchDecisions, useFleetsTab, useRoutesTab, useTripsTab, useReportsTab, useShiftBlocksTab } from '../../api/hooks/Staff/useOperatorDashboard'
+import { useOperatorDashboardData, useNotificationBell, useTripRequests, useDispatchDecisions, useFleetsTab, useRoutesTab, useTripsTab, useReportsTab } from '../../api/hooks/Staff/useOperatorDashboard'
 import RunInfoChips from '../ui/RunInfoChips'
 import { CancelTripModal, TicketResolutionQueue } from './TripCancellationsPanel'
 import DurationFactorsPanel from './DurationFactorsPanel'
 import DropoffRulesPanel from './DropoffRulesPanel'
 import LegTimeSuggestion from './LegTimeSuggestion'
-import AssignmentBlockCards from './AssignmentBlockCards'
-import FinancialsPage from './Financials/FinancialsPage'
-import RemittancesPage from './Remittances/RemittancesPage'
-import { matchesStatusFilter } from '../../utils/assignmentCards'
+import SchedulePage from './Schedule/SchedulePage'
+import ShiftBlocksView from './Schedule/ShiftBlocksView'
+import FinancePage from './Finance/FinancePage'
+import { OPERATOR_ROLE, navForRole, viewsForRole } from '../../utils/operatorNav'
 import {
-  LayoutDashboard, Bus, MapPin, Clock, PieChart, Users, Settings, Wallet, Banknote,
+  LayoutDashboard, Bus, MapPin, PieChart, Users, Settings, Wallet, CalendarDays,
   Plus, Eye, RefreshCw, Shield, Download,
-  X, ChevronDown, ChevronUp, Loader2, AlertTriangle, Bell, ArrowLeftRight, CalendarDays,
+  X, ChevronDown, ChevronUp, Loader2, AlertTriangle, Bell,
 } from 'lucide-react'
 
 const fmt = (v) => {
@@ -51,19 +51,13 @@ const STATUS_CHIP = {
   cancelled:     'bg-red-100 text-red-700',
 }
 
-const NAV = [
-  { key: 'dashboard',  label: 'Dashboard',  icon: LayoutDashboard },
-  { key: 'staffs',     label: 'Staffs',     icon: Users },
-  { key: 'fleets',     label: 'Fleets',     icon: Bus },
-  { key: 'routes',     label: 'Routes',     icon: MapPin },
-  { key: 'trips',      label: 'Trips',      icon: Clock },
-{ key: 'calendar',   label: 'Calendar',   icon: CalendarDays },
-  { key: 'shiftBlocks', label: 'Shift Blocks', icon: ArrowLeftRight },
-  { key: 'financials', label: 'Financials', icon: Wallet },
-  { key: 'remittances', label: 'Remittances', icon: Banknote },
-  { key: 'reports',    label: 'Reports',    icon: PieChart },
-  { key: 'account',    label: 'Account',    icon: Settings },
-]
+// Batch 30: Trips, Calendar and Shift Blocks are the three views of Schedule; Financials and Remittances are tabs of
+// Finance; Reports stays its own item (fleet reports and the forecast are not financial). The items, their views and
+// the roles that may see them are in utils/operatorNav.js; this only attaches the icons.
+const NAV_ICONS = {
+  dashboard: LayoutDashboard, staffs: Users, fleets: Bus, routes: MapPin, schedule: CalendarDays, finance: Wallet, reports: PieChart, account: Settings,
+}
+const NAV = navForRole(OPERATOR_ROLE).map((item) => ({ ...item, icon: NAV_ICONS[item.key] }))
 
 const getStaffFullName = (row) => row?.name || row?.user?.name || row?.user?.username || row?.username || '-'
 const getStaffUsername = (row) => row?.user?.username || row?.username || row?.name || '-'
@@ -1379,9 +1373,136 @@ function RoutesTab({ routes, stops, trips, onRefresh }) {
   )
 }
 
-function TripsTab({ trips, drivers, conductors, onRefresh }) {
+// Batch 30: the create form behind the one "+ Schedule" button of the Schedule page (it was inside the Trips view). It
+// is the same form and the same handler (useTripsTab); only its place changed, so it opens from any Schedule view.
+function ScheduleServiceModal({ state, drivers, conductors }) {
+  const { showModal, setShowModal, form, setForm, saving, msg, fleetRoutes, handleSchedule } = state
+  const [bookingWindow, setBookingWindow] = useState(null)
+  useEffect(() => {
+    if (!showModal) return undefined
+    let cancelled = false
+    getBookingWindow().then((w) => { if (!cancelled) setBookingWindow(w) }).catch(() => { if (!cancelled) setBookingWindow(null) })
+    return () => { cancelled = true }
+  }, [showModal])
+
+  const defaultLegTimesByBlock = {
+    morning: ['06:00', '08:30', '11:00', '13:30'],
+    afternoon: ['12:00', '14:30', '17:00', '19:30'],
+  }
+
+  const updateLegTime = (index, value) => {
+    setForm((prev) => ({
+      ...prev,
+      leg_departure_times: (Array.isArray(prev.leg_departure_times) ? prev.leg_departure_times : defaultLegTimesByBlock[prev.block_type] || defaultLegTimesByBlock.morning)
+        .map((time, i) => (i === index ? value : time)),
+    }))
+  }
+
+  if (!showModal) return null
+
+  return (    <Modal title="Schedule Service" onClose={() => setShowModal(false)}>
+      <p className="-mt-2 mb-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-800">
+        One unified schedule form: choose <strong>One-way</strong> for ad hoc/charter trips, or <strong>Round trip</strong> for shift-block scheduling.
+      </p>
+      <form className="space-y-4" onSubmit={handleSchedule}>
+        <Field label="Fleet Route" required>
+          <select value={form.fleet_route_id} onChange={e => setForm(p => ({...p, fleet_route_id: e.target.value}))} required className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500">
+            <option value="">Select a fleet routeâ€¦</option>
+            {fleetRoutes.map(fr => (
+              <option key={fr.fleet_route_id} value={fr.fleet_route_id}>{fr.fleet?.plate_number} â€” {fr.route?.route_name}</option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Trip Date" type="date" value={form.trip_date} onChange={e => setForm(p => ({...p, trip_date: e.target.value}))} required hint={bookingWindowWarning(form.trip_date, bookingWindow)} />
+        <Field label="Trip Type" required>
+          <select value={form.trip_type} onChange={e => setForm(p => ({ ...p, trip_type: e.target.value }))} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500">
+            <option value="one_way">One-way (Ad hoc / Charter)</option>
+            <option value="round_trip">Round trip (Shift Block)</option>
+          </select>
+        </Field>
+        <Field label="Service Type" required>
+          <select value={form.service_type || 'regular'} onChange={e => setForm(p => ({ ...p, service_type: e.target.value }))} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500" data-testid="service-type-select">
+            <option value="regular">Regular (stops at every stop)</option>
+            <option value="express">Express (limited stops, no fare yet)</option>
+          </select>
+        </Field>
+
+        {form.trip_type === 'one_way' ? (
+          <>
+            <Field label="Departure Time" type="time" value={form.departure_time} onChange={e => setForm(p => ({...p, departure_time: e.target.value}))} required />
+            <Field label="Notes (optional)" value={form.notes} onChange={e => setForm(p => ({...p, notes: e.target.value}))} placeholder="Any notesâ€¦" />
+          </>
+        ) : (
+          <>
+            <Field label="Block Type" required>
+              <select
+                value={form.block_type}
+                onChange={e => setForm(p => ({
+                  ...p,
+                  block_type: e.target.value,
+                  leg_departure_times: defaultLegTimesByBlock[e.target.value] || defaultLegTimesByBlock.morning,
+                }))}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500"
+              >
+                <option value="morning">Morning</option>
+                <option value="afternoon">Afternoon</option>
+              </select>
+            </Field>
+            <div className="grid grid-cols-2 gap-2">
+              {(Array.isArray(form.leg_departure_times) ? form.leg_departure_times : defaultLegTimesByBlock[form.block_type] || defaultLegTimesByBlock.morning).map((time, index) => (
+                <Field
+                  key={`leg-time-${index}`}
+                  label={`Leg ${index + 1} Departure`}
+                  type="time"
+                  value={time}
+                  onChange={(e) => updateLegTime(index, e.target.value)}
+                  required
+                />
+              ))}
+            </div>
+            <LegTimeSuggestion
+              fleetRouteId={form.fleet_route_id}
+              date={form.trip_date}
+              firstTime={(Array.isArray(form.leg_departure_times) ? form.leg_departure_times : defaultLegTimesByBlock[form.block_type] || defaultLegTimesByBlock.morning)[0]}
+              serviceType={form.service_type || 'regular'}
+              expectedLegs={(Array.isArray(form.leg_departure_times) ? form.leg_departure_times : defaultLegTimesByBlock[form.block_type] || defaultLegTimesByBlock.morning).length}
+              onApply={(times) => setForm((prev) => ({ ...prev, leg_departure_times: times }))}
+            />
+          </>
+        )}
+        <Field label="Driver" required>
+          <select value={form.driver_id} onChange={e => setForm(p => ({ ...p, driver_id: e.target.value }))} required className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500">
+            <option value="">Select a driverâ€¦</option>
+            {drivers.map(d => (
+              <option key={getStaffCompanyUserId(d)} value={getStaffCompanyUserId(d)}>
+                {getStaffFullName(d) || getStaffUsername(d)} ({getStaffEmail(d)})
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Conductor" required>
+          <select value={form.conductor_id} onChange={e => setForm(p => ({ ...p, conductor_id: e.target.value }))} required className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500">
+            <option value="">Select a conductorâ€¦</option>
+            {conductors.map(c => (
+              <option key={getStaffCompanyUserId(c)} value={getStaffCompanyUserId(c)}>
+                {getStaffFullName(c) || getStaffUsername(c)} ({getStaffEmail(c)})
+              </option>
+            ))}
+          </select>
+        </Field>
+        {msg && <p className="text-sm text-red-600">{msg}</p>}
+        <div className="flex justify-end gap-2 pt-2">
+          <button type="button" onClick={() => setShowModal(false)} className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50">Cancel</button>
+          <button type="submit" disabled={saving} className="flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-60">
+            {saving && <Loader2 className="h-4 w-4 animate-spin" />}Schedule
+          </button>
+        </div>
+      </form>
+    </Modal>
+  )
+}
+function TripsTab({ drivers, conductors, onRefresh, tripsState }) {
   const {
-    showModal, setShowModal,
     selectedTrip, setSelectedTrip,
     tripFilter, setTripFilter,
     gpsHistory,
@@ -1391,29 +1512,19 @@ function TripsTab({ trips, drivers, conductors, onRefresh }) {
     confirmComplete, setConfirmComplete,
     statusOverrideSaving,
     statusOverrideMsg,
-    form, setForm,
     assignId, setAssignId,
     saving,
     actionInFlight,
     msg, setMsg,
-    fleetRoutes,
     visibleTrips,
-    handleSchedule,
     handleAssign,
     handleAction,
     handleConfirmedComplete,
     handleStatusOverride,
     loadTripGpsHistory,
-  } = useTripsTab({ trips, onRefresh })
+  } = tripsState
   const [cancelTarget, setCancelTarget] = useState(null)
   const [cancelNotice, setCancelNotice] = useState('')
-  const [bookingWindow, setBookingWindow] = useState(null)
-  useEffect(() => {
-    if (!showModal) return undefined
-    let cancelled = false
-    getBookingWindow().then((w) => { if (!cancelled) setBookingWindow(w) }).catch(() => { if (!cancelled) setBookingWindow(null) })
-    return () => { cancelled = true }
-  }, [showModal])
 
   const driverMap = new Map(drivers.map(d => [Number(getStaffCompanyUserId(d)), d]))
   const conductorMap = new Map(conductors.map(c => [Number(getStaffCompanyUserId(c)), c]))
@@ -1448,23 +1559,11 @@ function TripsTab({ trips, drivers, conductors, onRefresh }) {
     return tripDateStr < todayStart && !['completed', 'cancelled'].includes(trip?.status)
   }
 
-  const defaultLegTimesByBlock = {
-    morning: ['06:00', '08:30', '11:00', '13:30'],
-    afternoon: ['12:00', '14:30', '17:00', '19:30'],
-  }
-
-  const updateLegTime = (index, value) => {
-    setForm((prev) => ({
-      ...prev,
-      leg_departure_times: (Array.isArray(prev.leg_departure_times) ? prev.leg_departure_times : defaultLegTimesByBlock[prev.block_type] || defaultLegTimesByBlock.morning)
-        .map((time, i) => (i === index ? value : time)),
-    }))
-  }
-
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold text-slate-900">Trips</h2>        <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Trips</h3>
+        <div className="flex flex-wrap items-center gap-2">
           <label htmlFor="operator-trip-filter" className="text-xs font-semibold uppercase tracking-wide text-slate-500">Filter</label>
           <select
             id="operator-trip-filter"
@@ -1479,12 +1578,8 @@ function TripsTab({ trips, drivers, conductors, onRefresh }) {
           <button type="button" onClick={onRefresh} className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50">
             <RefreshCw className="h-4 w-4" /> Refresh
           </button>
-          <button type="button" onClick={() => { setShowModal(true); setMsg('') }} className="flex items-center gap-1.5 rounded-lg bg-teal-600 px-3 py-2 text-sm font-semibold text-white hover:bg-teal-700">
-            <Plus className="h-4 w-4" /> +Schedule
-          </button>
         </div>
       </div>
-      {msg && <p className="rounded-lg bg-teal-50 border border-teal-200 px-4 py-2 text-sm text-teal-800">{msg}</p>}
       {[
         { key: 'today', title: "Today's Trips", list: todaysTrips },
         { key: 'upcoming', title: 'Upcoming Trips', list: upcomingTrips },
@@ -1562,107 +1657,6 @@ function TripsTab({ trips, drivers, conductors, onRefresh }) {
         </div>
       ))}
 
-      {showModal && (
-        <Modal title="Schedule Service" onClose={() => setShowModal(false)}>
-          <p className="-mt-2 mb-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-800">
-            One unified schedule form: choose <strong>One-way</strong> for ad hoc/charter trips, or <strong>Round trip</strong> for shift-block scheduling.
-          </p>
-          <form className="space-y-4" onSubmit={handleSchedule}>
-            <Field label="Fleet Route" required>
-              <select value={form.fleet_route_id} onChange={e => setForm(p => ({...p, fleet_route_id: e.target.value}))} required className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500">
-                <option value="">Select a fleet route…</option>
-                {fleetRoutes.map(fr => (
-                  <option key={fr.fleet_route_id} value={fr.fleet_route_id}>{fr.fleet?.plate_number} — {fr.route?.route_name}</option>
-                ))}
-              </select>
-            </Field>
-            <Field label="Trip Date" type="date" value={form.trip_date} onChange={e => setForm(p => ({...p, trip_date: e.target.value}))} required hint={bookingWindowWarning(form.trip_date, bookingWindow)} />
-            <Field label="Trip Type" required>
-              <select value={form.trip_type} onChange={e => setForm(p => ({ ...p, trip_type: e.target.value }))} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500">
-                <option value="one_way">One-way (Ad hoc / Charter)</option>
-                <option value="round_trip">Round trip (Shift Block)</option>
-              </select>
-            </Field>
-            <Field label="Service Type" required>
-              <select value={form.service_type || 'regular'} onChange={e => setForm(p => ({ ...p, service_type: e.target.value }))} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500" data-testid="service-type-select">
-                <option value="regular">Regular (stops at every stop)</option>
-                <option value="express">Express (limited stops, no fare yet)</option>
-              </select>
-            </Field>
-
-            {form.trip_type === 'one_way' ? (
-              <>
-                <Field label="Departure Time" type="time" value={form.departure_time} onChange={e => setForm(p => ({...p, departure_time: e.target.value}))} required />
-                <Field label="Notes (optional)" value={form.notes} onChange={e => setForm(p => ({...p, notes: e.target.value}))} placeholder="Any notes…" />
-              </>
-            ) : (
-              <>
-                <Field label="Block Type" required>
-                  <select
-                    value={form.block_type}
-                    onChange={e => setForm(p => ({
-                      ...p,
-                      block_type: e.target.value,
-                      leg_departure_times: defaultLegTimesByBlock[e.target.value] || defaultLegTimesByBlock.morning,
-                    }))}
-                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500"
-                  >
-                    <option value="morning">Morning</option>
-                    <option value="afternoon">Afternoon</option>
-                  </select>
-                </Field>
-                <div className="grid grid-cols-2 gap-2">
-                  {(Array.isArray(form.leg_departure_times) ? form.leg_departure_times : defaultLegTimesByBlock[form.block_type] || defaultLegTimesByBlock.morning).map((time, index) => (
-                    <Field
-                      key={`leg-time-${index}`}
-                      label={`Leg ${index + 1} Departure`}
-                      type="time"
-                      value={time}
-                      onChange={(e) => updateLegTime(index, e.target.value)}
-                      required
-                    />
-                  ))}
-                </div>
-                <LegTimeSuggestion
-                  fleetRouteId={form.fleet_route_id}
-                  date={form.trip_date}
-                  firstTime={(Array.isArray(form.leg_departure_times) ? form.leg_departure_times : defaultLegTimesByBlock[form.block_type] || defaultLegTimesByBlock.morning)[0]}
-                  serviceType={form.service_type || 'regular'}
-                  expectedLegs={(Array.isArray(form.leg_departure_times) ? form.leg_departure_times : defaultLegTimesByBlock[form.block_type] || defaultLegTimesByBlock.morning).length}
-                  onApply={(times) => setForm((prev) => ({ ...prev, leg_departure_times: times }))}
-                />
-              </>
-            )}
-            <Field label="Driver" required>
-              <select value={form.driver_id} onChange={e => setForm(p => ({ ...p, driver_id: e.target.value }))} required className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500">
-                <option value="">Select a driver…</option>
-                {drivers.map(d => (
-                  <option key={getStaffCompanyUserId(d)} value={getStaffCompanyUserId(d)}>
-                    {getStaffFullName(d) || getStaffUsername(d)} ({getStaffEmail(d)})
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <Field label="Conductor" required>
-              <select value={form.conductor_id} onChange={e => setForm(p => ({ ...p, conductor_id: e.target.value }))} required className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500">
-                <option value="">Select a conductor…</option>
-                {conductors.map(c => (
-                  <option key={getStaffCompanyUserId(c)} value={getStaffCompanyUserId(c)}>
-                    {getStaffFullName(c) || getStaffUsername(c)} ({getStaffEmail(c)})
-                  </option>
-                ))}
-              </select>
-            </Field>
-            {msg && <p className="text-sm text-red-600">{msg}</p>}
-            <div className="flex justify-end gap-2 pt-2">
-              <button type="button" onClick={() => setShowModal(false)} className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50">Cancel</button>
-              <button type="submit" disabled={saving} className="flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-60">
-                {saving && <Loader2 className="h-4 w-4 animate-spin" />}Schedule
-              </button>
-            </div>
-          </form>
-        </Modal>
-      )}
 
       {cancelNotice && <p role="status" className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{cancelNotice}</p>}
       <TicketResolutionQueue service={OperatorService} />
@@ -1796,114 +1790,37 @@ function TripsTab({ trips, drivers, conductors, onRefresh }) {
   )
 }
 
-const BLOCK_STATUS_CHIP = {
-  scheduled: 'bg-slate-100 text-slate-700',
-  in_progress: 'bg-amber-100 text-amber-700',
-  delayed: 'bg-rose-100 text-rose-700',
-  boarding: 'bg-sky-100 text-sky-700',
-  completed: 'bg-emerald-100 text-emerald-700',
-  cancelled: 'bg-red-100 text-red-700',
-}
-// Batch 29: the table shows the one status derived from the legs (lifecycle_status), never the stored workflow column.
-const shownStatus = (block) => String(block.lifecycle_status ?? block.status ?? 'scheduled').replace('-', '_')
-const AUDIT_STATUS_CHIP = {
-  not_applicable: 'bg-slate-100 text-slate-500',
-  pending_review: 'bg-amber-100 text-amber-700',
-  reviewed: 'bg-emerald-100 text-emerald-700',
-}
-
-// Batch 18: Shift Block Hand-off System — Operator/Dispatcher tab.
-// Section 4.1's dynamic action-button table: Scheduled -> Cancel;
-// In Progress -> Dispatcher override hand-off (exception handling,
-// Section 4.3 — normal hand-off is conductor-initiated from their own
-// portal once the GPS/final-leg eligibility check passes); Completed ->
-// audit_status badge + Mark Reviewed.
-function ShiftBlocksTab({ onOpenScheduler }) {
-  const {
-    blocks,
-    blockCards,
-    statusFilter, setStatusFilter,
-    loading,
-    msg,
-    handleCancel,
-    handleOverrideHandoff,
-    handleMarkReviewed,
-  } = useShiftBlocksTab()
+// Batch 30: the Schedule page. One page for what used to be three sidebar items (Trips, Calendar, Shift Blocks): the
+// views are Calendar, Blocks (Schedule/ShiftBlocksView.jsx) and Trips, and the one "+ Schedule" button opens the
+// existing create form from any of them. A schedule created from one view refreshes the others.
+function ScheduleTab({ trips, drivers, conductors, onRefresh, view, onViewChange, calendarFocus }) {
+  const [reloadToken, setReloadToken] = useState(0)
+  const refreshAll = useCallback(() => {
+    onRefresh()
+    setReloadToken((token) => token + 1)
+  }, [onRefresh])
+  const tripsState = useTripsTab({ trips, onRefresh: refreshAll })
+  const views = viewsForRole('schedule', OPERATOR_ROLE)
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold text-slate-900">Shift Blocks</h2>
-        <div className="flex flex-wrap items-center gap-2">
-          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
-            <option value="all">All</option>
-            <option value="scheduled">Scheduled</option>
-            <option value="in_progress">In Progress</option>
-            <option value="completed">Completed</option>
-            <option value="cancelled">Cancelled</option>
-          </select>
-          <button type="button" onClick={onOpenScheduler} className="flex items-center gap-1.5 rounded-lg bg-teal-600 px-3 py-2 text-sm font-semibold text-white hover:bg-teal-700">
-            <Plus className="h-4 w-4" /> +Schedule
-          </button>
-        </div>
-      </div>
-
-      {msg && <p className="rounded-lg bg-teal-50 border border-teal-200 px-4 py-2 text-sm text-teal-800">{msg}</p>}
-
-      <AssignmentBlockCards
-        mode="operator"
-        title="Block assignments"
-        cards={blockCards.filter((c) => matchesStatusFilter(c.status, statusFilter))}
-        emptyMessage="No shift blocks match this filter."
-      />
-
-      <div className="staff-card staff-card-flush overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-slate-50">
-            <tr className="border-b border-slate-200">
-              {['Date', 'Type', 'Fleet', 'Driver', 'Conductor', 'Status', 'Audit', 'Actions'].map((h) => (
-                <th key={h} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 whitespace-nowrap">{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr><td colSpan={8} className="px-5 py-8 text-center text-sm text-slate-400">Loading…</td></tr>
-            ) : blocks.length === 0 ? (
-              <tr><td colSpan={8} className="px-5 py-8 text-center text-sm text-slate-400">No shift blocks found.</td></tr>
-            ) : blocks.map((b) => (
-              <tr key={b.shift_block_id} className="border-b border-slate-100 hover:bg-slate-50">
-                <td className="px-4 py-3 text-slate-700 whitespace-nowrap">{fmtDate(b.scheduled_date)}</td>
-                <td className="px-4 py-3 text-slate-700 capitalize">{b.block_type}</td>
-                <td className="px-4 py-3 text-slate-700">{b.fleet?.plate_number || '-'}</td>
-                <td className="px-4 py-3 text-slate-700">{getStaffFullName(b.driver) || (b.driver_id ? `#${b.driver_id}` : 'Needs a replacement')}</td>
-                <td className="px-4 py-3 text-slate-700">{getStaffFullName(b.conductor) || (b.conductor_id ? `#${b.conductor_id}` : 'Needs a replacement')}</td>
-                <td className="px-4 py-3">
-                  <span className={`rounded-full px-2 py-0.5 text-xs font-semibold whitespace-nowrap ${BLOCK_STATUS_CHIP[shownStatus(b)] ?? 'bg-slate-100 text-slate-600'}`}>{shownStatus(b).replace('_', ' ')}</span>
-                </td>
-                <td className="px-4 py-3">
-                  <span className={`rounded-full px-2 py-0.5 text-xs font-semibold whitespace-nowrap ${AUDIT_STATUS_CHIP[b.audit_status] ?? 'bg-slate-100 text-slate-600'}`}>{b.audit_status}</span>
-                </td>
-                <td className="px-4 py-3">
-                  <div className="flex flex-wrap gap-1">
-                    {b.status === 'scheduled' && ['scheduled', 'delayed', 'boarding'].includes(b.lifecycle_status ?? b.status) && (
-                      <button type="button" onClick={() => handleCancel(b.shift_block_id)} className="rounded px-2 py-1 text-xs bg-red-100 text-red-700 hover:bg-red-200">Cancel</button>
-                    )}
-                    {b.status === 'in_progress' && (
-                      <button type="button" onClick={() => handleOverrideHandoff(b.shift_block_id)} className="rounded px-2 py-1 text-xs bg-indigo-100 text-indigo-700 hover:bg-indigo-200" title="Dispatcher override — force hand-off regardless of GPS state (exception handling)">Override Hand-off</button>
-                    )}
-                    {b.status === 'completed' && b.audit_status === 'pending_review' && (
-                      <button type="button" onClick={() => handleMarkReviewed(b.shift_block_id)} className="rounded px-2 py-1 text-xs bg-emerald-100 text-emerald-700 hover:bg-emerald-200">Mark Reviewed</button>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-    </div>
+    <>
+      <SchedulePage
+        views={views}
+        view={view}
+        onViewChange={onViewChange}
+        onCreate={() => { tripsState.setShowModal(true); tripsState.setMsg('') }}
+      >
+        {(active) => (
+          <>
+            {tripsState.msg && <p className="rounded-lg border border-teal-200 bg-teal-50 px-4 py-2 text-sm text-teal-800">{tripsState.msg}</p>}
+            {active === 'calendar' && <StaffCalendar key={calendarFocus || 'today'} service={OperatorService} initialDate={calendarFocus} refreshKey={reloadToken} />}
+            {active === 'blocks' && <ShiftBlocksView reloadToken={reloadToken} />}
+            {active === 'trips' && <TripsTab drivers={drivers} conductors={conductors} onRefresh={refreshAll} tripsState={tripsState} />}
+          </>
+        )}
+      </SchedulePage>
+      <ScheduleServiceModal state={tripsState} drivers={drivers} conductors={conductors} />
+    </>
   )
 }
 
@@ -2154,6 +2071,7 @@ export default function OperatorDashboard() {
   const [calendarFocus, setCalendarFocus] = useState(null)
   const {
     activeTab, setActiveTab,
+    view, setView,
     loading,
     profile,
     trips,
@@ -2197,20 +2115,27 @@ export default function OperatorDashboard() {
             conductors={conductors}
             fleets={fleets}
             onRequestDecided={loadFull}
-            onOpenCalendar={(date) => { setCalendarFocus(date); setActiveTab('calendar') }}
+            onOpenCalendar={(date) => { setCalendarFocus(date); setActiveTab('schedule', 'calendar') }}
           />
         )}
-        {activeTab === 'calendar'   && <StaffCalendar key={calendarFocus || 'today'} service={OperatorService} initialDate={calendarFocus} />}
+        {activeTab === 'schedule'   && (
+          <ScheduleTab
+            trips={trips}
+            drivers={drivers}
+            conductors={conductors}
+            onRefresh={loadFull}
+            view={view}
+            onViewChange={setView}
+            calendarFocus={calendarFocus}
+          />
+        )}
         {activeTab === 'staffs'     && (
           <StaffDirectoryTab drivers={drivers} conductors={conductors} onRefresh={loadFull} onCreateAccount={handleCreateAccount} />
         )}
         {activeTab === 'fleets'     && <FleetsTab fleets={fleets} routes={routes} trips={trips} onRefresh={loadFull} />}
         {activeTab === 'routes'     && <RoutesTab routes={routes} stops={stops} trips={trips} onRefresh={loadFull} />}
-        {activeTab === 'trips'      && <TripsTab trips={trips} drivers={drivers} conductors={conductors} onRefresh={loadFull} />}
-        {activeTab === 'shiftBlocks' && <ShiftBlocksTab onOpenScheduler={() => setActiveTab('trips')} />}
-        {activeTab === 'financials' && <FinancialsPage />}
-      {activeTab === 'remittances' && <RemittancesPage />}
-      {activeTab === 'reports'    && <ReportsTab fleets={fleets} trips={trips} routes={routes} />}
+        {activeTab === 'finance'    && <FinancePage views={viewsForRole('finance', OPERATOR_ROLE)} view={view} onViewChange={setView} />}
+        {activeTab === 'reports'    && <ReportsTab fleets={fleets} trips={trips} routes={routes} />}
         {activeTab === 'account'    && <AccountTab profile={profile} />}
     </StaffPortalLayout>
   )

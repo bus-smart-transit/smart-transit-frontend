@@ -63,13 +63,13 @@ export default function useOnsiteReceiptPrinter() {
         </head>
         <body>
           <h1>Smart Transit Onsite Checkout Receipt</h1>
-          <p class="muted">Printed: ${formatManilaDateTime(new Date().toISOString())} (Manila time)</p>
+          <p class="muted">Printed: ${formatManilaDateTime(new Date().toISOString())}</p>
           <div class="meta">
             <p><strong>Transaction Ref:</strong> ${payment.transaction_reference || '-'}</p>
             <p><strong>Payment ID:</strong> ${payment.payment_id || '-'}</p>
             <p><strong>Payment:</strong> Cash</p>
             <p><strong>Issued By:</strong> ${receipt.issuedBy || '-'}</p>
-            <p><strong>Recorded At:</strong> ${receipt.createdAtLabel || '-'} (Manila time)</p>
+            <p><strong>Recorded At:</strong> ${receipt.createdAtLabel || '-'}</p>
           </div>
 
           <table>

@@ -80,7 +80,7 @@ describe('booking stops meta and departures hooks', () => {
   });
 
   test('a rejected date becomes a message, not a crash', async () => {
-    getDepartures.mockRejectedValue({ response: { data: { errors: { date: ['That date has already passed (Manila time).'] } } } });
+    getDepartures.mockRejectedValue({ response: { data: { errors: { date: ['That date has already passed.'] } } } });
     const { result } = renderHook(() => useDepartures({ enabled: true, originStopId: '1', destinationStopId: '2', date: '2020-01-01', seatType: 'seated' }));
 
     await waitFor(() => expect(result.current.error).toMatch(/already passed/));

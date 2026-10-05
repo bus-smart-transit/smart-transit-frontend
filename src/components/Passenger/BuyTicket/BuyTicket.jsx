@@ -353,7 +353,7 @@ export default function BuyTicket({ onTicketPurchased }) {
 
                     {bookingMode === 'later' && !resolution.loading && departuresState.departures.length > 0 && (
                       <div>
-                        <p className={LABEL}>Departure time (Manila) at {boardingLabel}</p>
+                        <p className={LABEL}>Departure time at {boardingLabel}</p>
                         <div role="radiogroup" aria-label="Departure time" className="mt-2 flex flex-wrap gap-2">
                           {departuresState.departures.map((departure) => {
                             const selected = String(trip?.trip_id) === String(departure.trip_id);

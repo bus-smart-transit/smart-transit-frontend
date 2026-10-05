@@ -71,7 +71,7 @@ export function HourChart({ hours }) {
           <span key={h.hour} className="flex-1 text-center">{h.hour % 3 === 0 ? String(h.hour).padStart(2, '0') : ''}</span>
         ))}
       </div>
-      <p className="mt-2 text-xs text-slate-500">Busiest hour: {busiest.label} ({formatPeso(busiest.gross)}, {formatCount(busiest.tickets)} tickets). Hours are Manila time.</p>
+      <p className="mt-2 text-xs text-slate-500">Busiest hour: {busiest.label} ({formatPeso(busiest.gross)}, {formatCount(busiest.tickets)} tickets).</p>
     </div>
   );
 }

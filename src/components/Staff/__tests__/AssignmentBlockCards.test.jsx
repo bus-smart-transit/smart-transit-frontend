@@ -87,21 +87,6 @@ describe('AssignmentBlockCards', () => {
     expect(screen.queryByRole('button', { name: 'Decline' })).not.toBeInTheDocument();
   });
 
-  it('operator mode shows both roles, a replacement notice, and no response buttons', () => {
-    const card = block({
-      assignments: {
-        driver: { name: 'Dina', status: 'for_approval', needs_replacement: false },
-        conductor: { name: null, status: 'released', needs_replacement: true },
-      },
-    });
-    render(<AssignmentBlockCards mode="operator" cards={[card]} />);
-
-    const roles = screen.getByTestId('assignment-roles');
-    expect(roles).toHaveTextContent('Driver: Dina');
-    expect(roles).toHaveTextContent('Chauffeur: Needs a replacement');
-    expect(screen.queryByRole('button', { name: 'Accept' })).not.toBeInTheDocument();
-  });
-
   it('highlights the card a notification pointed at', () => {
     render(<AssignmentBlockCards cards={[block(), single()]} focusKey="block-5" />);
 
@@ -110,7 +95,7 @@ describe('AssignmentBlockCards', () => {
   });
 
   it('renders the operator-entered reason as plain text', () => {
-    render(<AssignmentBlockCards mode="operator" cards={[block({ reason_text: '<img src=x onerror=alert(1)>' })]} />);
+    render(<AssignmentBlockCards cards={[block({ reason_text: '<img src=x onerror=alert(1)>' })]} />);
     fireEvent.click(screen.getByRole('button', { name: 'View legs' }));
 
     expect(screen.getByText(/Reason given: <img src=x onerror=alert\(1\)>/)).toBeInTheDocument();

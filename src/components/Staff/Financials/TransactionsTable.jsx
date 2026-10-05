@@ -3,7 +3,7 @@ import Card from '../../ui/Card';
 import { STATUS_STYLE, formatCount, formatPaidAt, formatPeso } from '../../../utils/financials';
 
 const COLUMNS = [
-  { key: 'paid_at', label: 'Time (Manila)', sort: 'paid_at' },
+  { key: 'paid_at', label: 'Time', sort: 'paid_at' },
   { key: 'transaction_id', label: 'Transaction' },
   { key: 'bus', label: 'Bus', sort: 'bus' },
   { key: 'route', label: 'Route', sort: 'route' },

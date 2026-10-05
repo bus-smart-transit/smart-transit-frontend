@@ -27,7 +27,7 @@ export function validateReturnInput({ outboundDate, outboundTime, returnDate, re
   if (errors.returnDate || errors.returnTime) return errors
 
   if (returnDate && today && returnDate < today) {
-    errors.returnDate = 'The return date has already passed (Manila time).'
+    errors.returnDate = 'The return date has already passed.'
   } else if (returnDate && lastDate && returnDate > lastDate) {
     errors.returnDate = `You can book up to ${maxAdvanceDays} days ahead (until ${lastDate}).`
   } else if (returnDate && outboundDate && returnDate < outboundDate) {

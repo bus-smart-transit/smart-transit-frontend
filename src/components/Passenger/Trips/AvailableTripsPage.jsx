@@ -97,7 +97,7 @@ export default function AvailableTripsPage() {
                   ? `${results.from?.name || 'Any stop'} \u2192 ${results.to?.name || 'Any stop'}`
                   : 'All routes'}
               </h2>
-              {shownDate && <p className="text-sm text-slate-500">{formatManilaDate(shownDate)} (Manila time)</p>}
+              {shownDate && <p className="text-sm text-slate-500">{formatManilaDate(shownDate)}</p>}
             </div>
             {!loading && (
               <p className="text-sm font-medium text-slate-500">{results.total} trip{results.total === 1 ? '' : 's'} found</p>

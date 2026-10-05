@@ -156,16 +156,17 @@ function RemittanceCard({ row, busy, error, onConfirm, onResolve }) {
 
 /**
  * Batch 29, cash step 3: the Operator's list of remittance batches, one per ended Chauffeur shift. Every figure comes
- * from the server; the Operator only enters the amount they counted.
+ * from the server; the Operator only enters the amount they counted. Batch 30: `embedded` (inside the Finance page)
+ * drops the heading, which the Finance tab provides.
  */
-export default function RemittancesPage({ service }) {
+export default function RemittancesPage({ service, embedded = false }) {
   const r = useRemittances(service ? { service } : undefined);
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-xl font-bold text-slate-900">Remittances</h2>
+          {!embedded && <h2 className="text-xl font-bold text-slate-900">Remittances</h2>}
           <p className="text-xs text-slate-500">The cash handed over after each Chauffeur shift. Count it, then confirm.</p>
         </div>
         <div className="inline-flex max-w-full flex-wrap rounded-lg border border-slate-200 bg-white p-0.5 text-sm font-semibold" role="group" aria-label="Status">
