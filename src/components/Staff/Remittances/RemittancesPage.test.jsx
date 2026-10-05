@@ -100,3 +100,78 @@ describe('RemittancesPage', () => {
     await waitFor(() => expect(failing.getRemittances).toHaveBeenCalledTimes(2));
   });
 });
+
+
+describe('RemittancesPage tolerance and resolution', () => {
+  const flagged = () => row({
+    status: 'flagged', confirmed_amount: 150, confirmed_at: '2026-10-06 08:15:00', confirmed_by_name: 'Test Operator', expected_cash: 160, expected_now: 160,
+    declared_cash: 150, variance: -10, variance_kind: 'short', tolerance_applied: 0, flagged_at: '2026-10-06 08:15:00',
+  });
+
+  it('shows the difference on a pending batch before it is confirmed', async () => {
+    const pending = row({ declared_cash: 150, variance_now: -10, variance_now_kind: 'short' });
+    render(<RemittancesPage service={makeService({ getRemittances: vi.fn().mockResolvedValue(page([pending])) })} />);
+
+    expect(await screen.findByTestId('variance-now')).toHaveTextContent('Short by');
+    expect(screen.getByTestId('variance-now')).toHaveTextContent('10.00');
+  });
+
+  it('shows a flagged batch with its variance, and resolves it only with an explanation', async () => {
+    const service = makeService({ getRemittances: vi.fn().mockResolvedValue(page([flagged()], { status: 'flagged' })), resolveRemittance: vi.fn().mockResolvedValue({ data: {} }) });
+    render(<RemittancesPage service={service} />);
+
+    expect(await screen.findByTestId('remittance-status')).toHaveTextContent('Flagged');
+    expect(screen.getByTestId('flag-details')).toHaveTextContent('Short by');
+    expect(screen.getByTestId('flag-details')).toHaveTextContent('10.00');
+    expect(screen.getByTestId('flag-details')).toHaveTextContent('Investigate the difference');
+
+    const resolve = screen.getByRole('button', { name: 'Resolve' });
+    expect(resolve).toBeDisabled();                              // the explanation is required
+    fireEvent.change(screen.getByLabelText(/Explanation of the discrepancy/), { target: { value: '   ' } });
+    expect(resolve).toBeDisabled();                              // a blank one does not count
+    fireEvent.change(screen.getByLabelText(/Explanation of the discrepancy/), { target: { value: 'Fare returned to a passenger' } });
+    expect(resolve).toBeEnabled();
+    fireEvent.click(resolve);
+
+    await waitFor(() => expect(service.resolveRemittance).toHaveBeenCalledWith(1, { resolution_note: 'Fare returned to a passenger' }));
+    await waitFor(() => expect(service.getRemittances).toHaveBeenCalledTimes(2));
+  });
+
+  it('keeps the flagged variance visible after the batch is resolved, and offers no further action', async () => {
+    const resolved = { ...flagged(), status: 'resolved', resolution: { note: 'Fare returned to a passenger', resolved_by_name: 'Test Operator', resolved_at: '2026-10-07 09:00:00' } };
+    render(<RemittancesPage service={makeService({ getRemittances: vi.fn().mockResolvedValue(page([resolved], { status: 'resolved' })) })} />);
+
+    expect(await screen.findByTestId('remittance-status')).toHaveTextContent('Resolved');
+    const details = screen.getByTestId('flag-details');
+    expect(details).toHaveTextContent('Was flagged');
+    expect(details).toHaveTextContent('Short by');
+    expect(details).toHaveTextContent('10.00');
+    expect(screen.getByTestId('resolution')).toHaveTextContent('Fare returned to a passenger');
+    expect(screen.getByTestId('resolution')).toHaveTextContent('Test Operator');
+    expect(screen.queryByRole('button', { name: 'Resolve' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Confirm remittance' })).not.toBeInTheDocument();
+  });
+
+  it('says a small variance was within the tolerance and approved, and that an exact one matched', async () => {
+    const within = row({ status: 'confirmed', confirmed_amount: 157, confirmed_at: '2026-10-06 08:15:00', confirmed_by_name: 'Test Operator', variance: -3, variance_kind: 'short', tolerance_applied: 5 });
+    const exact = row({ id: 2, status: 'confirmed', confirmed_amount: 160, confirmed_at: '2026-10-06 08:20:00', confirmed_by_name: 'Test Operator', variance: 0, variance_kind: 'matched', tolerance_applied: 0 });
+    render(<RemittancesPage service={makeService({ getRemittances: vi.fn().mockResolvedValue(page([within, exact], { status: 'confirmed' })) })} />);
+
+    const lines = await screen.findAllByTestId('variance');
+    expect(lines[0]).toHaveTextContent('Short by');
+    expect(lines[0]).toHaveTextContent('within the tolerance of');
+    expect(lines[1]).toHaveTextContent('Matched the expected cash');
+    expect(lines[1]).not.toHaveTextContent('tolerance');
+  });
+
+  it('offers the Flagged and Resolved filters', async () => {
+    const service = makeService();
+    render(<RemittancesPage service={service} />);
+    await screen.findByTestId('remittance-card');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Flagged' }));
+    await waitFor(() => expect(service.getRemittances).toHaveBeenLastCalledWith({ status: 'flagged', page: 1 }));
+    fireEvent.click(screen.getByRole('button', { name: 'Resolved' }));
+    await waitFor(() => expect(service.getRemittances).toHaveBeenLastCalledWith({ status: 'resolved', page: 1 }));
+  });
+});

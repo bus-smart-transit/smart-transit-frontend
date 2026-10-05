@@ -41,6 +41,19 @@ export default function useRemittances({ service = OperatorService } = {}) {
     }
   }, [service]);
 
+  const resolve = useCallback(async (id, { note }) => {
+    setBusyId(id);
+    setErrors((prev) => ({ ...prev, [id]: '' }));
+    try {
+      await service.resolveRemittance(id, { resolution_note: note });
+      setReload((n) => n + 1);
+    } catch (err) {
+      setErrors((prev) => ({ ...prev, [id]: err?.message || 'The remittance could not be resolved.' }));
+    } finally {
+      setBusyId(null);
+    }
+  }, [service]);
+
   const current = result.key === key;
   return {
     status, setStatus, page, setPage,
@@ -49,6 +62,6 @@ export default function useRemittances({ service = OperatorService } = {}) {
     error: current ? result.error : '',
     loading: !current,
     hasData: current && Boolean(result.data),
-    retry, confirm, busyId, errors,
+    retry, confirm, resolve, busyId, errors,
   };
 }

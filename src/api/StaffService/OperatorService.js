@@ -140,6 +140,11 @@ class OperatorService extends StaffBaseService {
     return await this.request('/operator/remittances', 'GET', params);
   }
 
+  // A flagged batch is closed out with a required explanation; the variance it was flagged for is kept.
+  async resolveRemittance(id, payload = {}) {
+    return await this.request(`/operator/remittances/${id}/resolve`, 'POST', payload);
+  }
+
   async confirmRemittance(id, payload = {}) {
     return await this.request(`/operator/remittances/${id}/confirm`, 'POST', payload);
   }
