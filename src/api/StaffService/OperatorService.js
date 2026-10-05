@@ -135,6 +135,20 @@ class OperatorService extends StaffBaseService {
   }
 
   // ── Reporting ──
+  // Batch 29, Stage 2: the financial page (the server computes everything; nothing is derived here).
+  async getFinancials(params = {}) {
+    return await this.request('/operator/financials', 'GET', params);
+  }
+
+  async getFinancialTransactions(params = {}) {
+    return await this.request('/operator/financials/transactions', 'GET', params);
+  }
+
+  // The CSV text built by the server from the same query as the screen. Listing JSON first keeps a validation error JSON.
+  async downloadFinancialExport(params = {}) {
+    return await this.request('/operator/financials/export', 'GET', params, { Accept: 'application/json, text/csv' });
+  }
+
   async getFinancialReport(fleetId, params = {}) {
     return await this.request(`/operator/fleets/${fleetId}/reports/financial`, 'GET', params);
   }

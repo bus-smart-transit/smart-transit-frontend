@@ -21,9 +21,10 @@ import DurationFactorsPanel from './DurationFactorsPanel'
 import DropoffRulesPanel from './DropoffRulesPanel'
 import LegTimeSuggestion from './LegTimeSuggestion'
 import AssignmentBlockCards from './AssignmentBlockCards'
+import FinancialsPage from './Financials/FinancialsPage'
 import { matchesStatusFilter } from '../../utils/assignmentCards'
 import {
-  LayoutDashboard, Bus, MapPin, Clock, PieChart, Users, Settings,
+  LayoutDashboard, Bus, MapPin, Clock, PieChart, Users, Settings, Wallet,
   Plus, Eye, RefreshCw, Shield, Download,
   X, ChevronDown, ChevronUp, Loader2, AlertTriangle, Bell, ArrowLeftRight, CalendarDays,
 } from 'lucide-react'
@@ -57,6 +58,7 @@ const NAV = [
   { key: 'trips',      label: 'Trips',      icon: Clock },
 { key: 'calendar',   label: 'Calendar',   icon: CalendarDays },
   { key: 'shiftBlocks', label: 'Shift Blocks', icon: ArrowLeftRight },
+  { key: 'financials', label: 'Financials', icon: Wallet },
   { key: 'reports',    label: 'Reports',    icon: PieChart },
   { key: 'account',    label: 'Account',    icon: Settings },
 ]
@@ -2048,12 +2050,9 @@ function ReportsTab({ fleets, trips, routes }) {
         <div className="flex-1 min-w-40">
           <label className="mb-1 block text-xs font-medium text-slate-600">Report Type</label>
           <select value={reportType} onChange={e => setReportType(e.target.value)} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-teal-500">
-            <option value="financial">Financial Audit</option>
-            <option value="revenue">Revenue by Route</option>
             <option value="adherence">Route Adherence</option>
             <option value="occupancy">Occupancy Trends</option>
             <option value="daily">Daily Summary</option>
-            <option value="channels">Payment Channels</option>
           </select>
         </div>
         <div className="flex items-end">
@@ -2207,7 +2206,8 @@ export default function OperatorDashboard() {
         {activeTab === 'routes'     && <RoutesTab routes={routes} stops={stops} trips={trips} onRefresh={loadFull} />}
         {activeTab === 'trips'      && <TripsTab trips={trips} drivers={drivers} conductors={conductors} onRefresh={loadFull} />}
         {activeTab === 'shiftBlocks' && <ShiftBlocksTab onOpenScheduler={() => setActiveTab('trips')} />}
-        {activeTab === 'reports'    && <ReportsTab fleets={fleets} trips={trips} routes={routes} />}
+        {activeTab === 'financials' && <FinancialsPage />}
+      {activeTab === 'reports'    && <ReportsTab fleets={fleets} trips={trips} routes={routes} />}
         {activeTab === 'account'    && <AccountTab profile={profile} />}
     </StaffPortalLayout>
   )

@@ -897,7 +897,7 @@ export function useTripsTab({ trips, onRefresh }) {
  */
 export function useReportsTab() {
   const [selectedFleet, setSelectedFleet] = useState('');
-  const [reportType, setReportType] = useState('financial');
+  const [reportType, setReportType] = useState('adherence'); // revenue figures moved to the Financials tab (Batch 29)
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState('');
