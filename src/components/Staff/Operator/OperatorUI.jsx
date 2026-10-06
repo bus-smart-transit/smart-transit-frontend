@@ -112,25 +112,34 @@ export function OpEmpty({ children }) {
 /**
  * columns: [{ key, header, render?(row), className? }]. A `render` returns the cell content; without one the cell
  * shows row[key]. Wide tables scroll sideways inside the card instead of breaking the page.
+ *
+ * Below the `md` breakpoint (Batch 31 phase 5) each row becomes a small card: the header row is hidden visually
+ * (it stays for screen readers) and every cell shows its column header before its value. The table roles are set
+ * explicitly because a table whose display is changed loses them in some browsers.
  */
 export function OpTable({ columns, rows, rowKey, empty = 'Nothing to show.', caption }) {
   if (!rows.length) return <OpEmpty>{empty}</OpEmpty>;
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-sm">
+      <table role="table" className="w-full text-sm max-md:block">
         {caption && <caption className="sr-only">{caption}</caption>}
-        <thead>
-          <tr className="border-b border-slate-100">
+        <thead role="rowgroup" className="max-md:sr-only">
+          <tr role="row" className="border-b border-slate-100">
             {columns.map((column) => (
-              <th key={column.key} scope="col" className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{column.header}</th>
+              <th key={column.key} role="columnheader" scope="col" className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{column.header}</th>
             ))}
           </tr>
         </thead>
-        <tbody>
+        <tbody role="rowgroup" className="max-md:block">
           {rows.map((row) => (
-            <tr key={rowKey(row)} className="border-b border-slate-50 last:border-0 hover:bg-slate-50">
+            <tr key={rowKey(row)} role="row" className="border-b border-slate-50 last:border-0 hover:bg-slate-50 max-md:mb-3 max-md:block max-md:rounded-xl max-md:border max-md:border-slate-200 max-md:p-3 max-md:last:mb-0">
               {columns.map((column) => (
-                <td key={column.key} className={`px-3 py-2 text-slate-700 ${column.className ?? ''}`}>
+                <td
+                  key={column.key}
+                  role="cell"
+                  data-label={column.header}
+                  className={`px-3 py-2 text-slate-700 max-md:flex max-md:items-baseline max-md:justify-between max-md:gap-4 max-md:px-0 max-md:py-1.5 max-md:text-right max-md:whitespace-normal max-md:[&_*]:whitespace-normal before:text-left before:text-xs before:font-semibold before:uppercase before:tracking-wide before:text-slate-500 before:content-[attr(data-label)] md:before:hidden ${column.header ? '' : 'max-md:justify-end'} ${column.className ?? ''}`}
+                >
                   {column.render ? column.render(row) : row[column.key] ?? '-'}
                 </td>
               ))}

@@ -53,6 +53,15 @@ describe('Operator UI primitives', () => {
     expect(screen.getByText('No routes.')).toBeInTheDocument();
   });
 
+  it('table cells carry their column header so a phone can show each row as a card', () => {
+    const columns = [{ key: 'name', header: 'Name' }, { key: 'act', header: '', render: () => <button type="button">Open</button> }];
+    render(<OpTable caption="Routes" columns={columns} rows={[{ id: 1, name: 'Davao - Tagum' }]} rowKey={(row) => row.id} />);
+    const table = screen.getByRole('table', { name: 'Routes' });
+    expect(within(table).getAllByRole('row')).toHaveLength(2);
+    expect(within(table).getByText('Davao - Tagum').closest('td')).toHaveAttribute('data-label', 'Name');
+    expect(within(table).getByRole('button', { name: 'Open' })).toBeInTheDocument();
+  });
+
   it('empty state is plain text', () => {
     render(<OpEmpty>Nothing here.</OpEmpty>);
     expect(screen.getByText('Nothing here.')).toBeInTheDocument();
