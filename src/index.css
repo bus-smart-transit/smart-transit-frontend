@@ -14,6 +14,13 @@
     --staff-card-padding-desktop: 1.5rem;
     --staff-card-padding-compact: 0.75rem;
     --staff-card-padding-roomy: 2rem;
+    /* Batch 31: Operator pages use a 4px spacing scale. */
+    --op-space-1: 0.25rem;
+    --op-space-2: 0.5rem;
+    --op-space-3: 0.75rem;
+    --op-space-4: 1rem;
+    --op-space-6: 1.5rem;
+    --op-space-8: 2rem;
   }
   body {
     background-color: #f1f5f9;
