@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 import { RefreshCw, Bus, Route as RouteIcon, AlertTriangle, Ticket, CalendarClock } from 'lucide-react';
 import { OpPageHeader, OpCard, OpChip, OpStat, OpBar, OpStackedBar, OpTable, OpEmpty } from './OperatorUI';
 import { OP_SPACE, TRIP_STATUS_TONE } from './operatorUiTokens';
@@ -6,11 +6,12 @@ import RunInfoChips from '../../ui/RunInfoChips';
 import CalendarSummaryStrip from '../CalendarSummaryStrip';
 import DashboardCalendar from '../DashboardCalendar';
 import OperatorService from '../../../api/StaffService/OperatorService';
-import { useFleetLocations, useDispatchAdvice, useRouteAdherence } from '../../../api/hooks/Staff/useOperatorDashboardExtras';
+import { useFleetLocations, useDispatchAdvice, useRouteAdherence, useNow } from '../../../api/hooks/Staff/useOperatorDashboardExtras';
 import {
   buildDashboardView, capacityOf, ticketsSold, loadPct, departureLabel, routeNameOf, plateOf,
-  locationForTrip, gpsStatus, HIGH_LOAD_PCT,
+  locationForTrip, gpsStatus, decisionPayload, HIGH_LOAD_PCT,
 } from '../../../utils/operatorDashboardView';
+import RerouteAdviceItem from './RerouteAdviceItem';
 import { getBusinessTodayLabel, formatManilaDateTime } from '../../../utils/dates';
 
 const STATUS_LABEL = {
@@ -22,15 +23,6 @@ const GPS_CHIP = {
 const PRIORITY_TONE = { high: 'danger', medium: 'warning', low: 'info' };
 
 const personName = (person) => person?.user?.name || person?.name || person?.user?.username || person?.username || null;
-
-function useNow(intervalMs = 30000) {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), intervalMs);
-    return () => clearInterval(timer);
-  }, [intervalMs]);
-  return now;
-}
 
 function TodaysTrips({ trips, locations, nowMs }) {
   const columns = [
@@ -133,39 +125,7 @@ function DispatchDecisionBoard({ advice, decisions, saving, error, onDecide }) {
       <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Reroute advice</h3>
       {advice.length === 0 ? <OpEmpty>No route needs review right now.</OpEmpty> : (
         <ul className="space-y-3">
-          {advice.map((item) => (
-            <li key={item.key} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <OpChip tone={PRIORITY_TONE[item.priority]}>{item.priority === 'high' ? 'High priority' : 'Review'}</OpChip>
-                <span className="text-sm font-semibold text-slate-900">{item.route}</span>
-              </div>
-              <p className="mt-2 text-sm text-slate-600">{item.text}</p>
-              {item.decisionLabel ? (
-                <p className="mt-2 text-xs font-semibold text-emerald-700">
-                  Recorded: {item.decisionLabel}{item.decidedAt ? ` (${formatManilaDateTime(item.decidedAt)})` : ''}
-                </p>
-              ) : (
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    disabled={saving === item.tripId}
-                    onClick={() => onDecide(item, 'accept')}
-                    className="rounded-lg bg-teal-600 px-3 py-2 text-xs font-semibold text-white hover:bg-teal-500 disabled:opacity-60"
-                  >
-                    {saving === item.tripId ? 'Saving...' : 'Acknowledge advice'}
-                  </button>
-                  <button
-                    type="button"
-                    disabled={saving === item.tripId}
-                    onClick={() => onDecide(item, 'keep')}
-                    className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-                  >
-                    Keep current route
-                  </button>
-                </div>
-              )}
-            </li>
-          ))}
+          {advice.map((item) => <RerouteAdviceItem key={item.key} item={item} saving={saving} onDecide={onDecide} />)}
         </ul>
       )}
       {error && <p role="alert" className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">{error}</p>}
@@ -197,10 +157,7 @@ export default function OperatorDashboardPage({ trips, drivers, conductors, flee
   const view = useMemo(() => buildDashboardView({ trips, fleets, locations, nowMs }), [trips, fleets, locations, nowMs]);
   const { kpis } = view;
 
-  const handleDecide = (item, decision) => decide(item.tripId, decision, {
-    route: item.route,
-    reason: decision === 'accept' ? `Operator acknowledged the advice: ${item.reasons.join(' and ')}.` : `Operator kept the current route despite: ${item.reasons.join(' and ')}.`,
-  });
+  const handleDecide = (item, decision) => decide(item.tripId, decision, decisionPayload(item, decision));
 
   return (
     <div className={OP_SPACE.stack}>

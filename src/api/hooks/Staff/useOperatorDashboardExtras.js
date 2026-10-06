@@ -6,6 +6,16 @@ import { getBusinessToday } from '../../../utils/dates';
  * Batch 31: data hooks for the reworked Operator Dashboard and Fleets pages. The page components only render.
  */
 
+/** The current time in ms, refreshed on an interval, so "last seen" and stale-GPS states keep moving. */
+export function useNow(intervalMs = 30000) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), intervalMs);
+    return () => clearInterval(timer);
+  }, [intervalMs]);
+  return now;
+}
+
 /** Every fleet's last reported position (one row per fleet), refreshed on an interval while the tab is visible. */
 export function useFleetLocations({ intervalMs = 20000 } = {}) {
   const [locations, setLocations] = useState([]);

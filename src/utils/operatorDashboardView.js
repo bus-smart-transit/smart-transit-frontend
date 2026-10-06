@@ -86,6 +86,14 @@ export function tripsToday(trips = [], today = getBusinessToday()) {
 const DECISION_LABEL = { accept: 'Advice acknowledged', keep: 'Kept current route' };
 export const decisionLabel = (decision) => DECISION_LABEL[decision] ?? null;
 
+/** The body saved with a decision: the route and a reason that says what the Operator was answering. */
+export const decisionPayload = (item, decision) => ({
+  route: item.route,
+  reason: decision === 'accept'
+    ? `Operator acknowledged the advice: ${item.reasons.join(' and ')}.`
+    : `Operator kept the current route despite: ${item.reasons.join(' and ')}.`,
+});
+
 function alertsFor(todays, locations, nowMs) {
   const alerts = [];
   for (const trip of todays) {

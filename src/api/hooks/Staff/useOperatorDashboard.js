@@ -266,65 +266,6 @@ export function useNotificationBell() {  const [open, setOpen] = useState(false)
   };
 }
 
-const DISPATCH_STORAGE_KEY = 'smarttransit.operator.dispatch.decisions';
-
-/**
- * Dispatch accept/keep decisions for DashboardTab's route-health/predictive
- * reroute panel — persisted to localStorage so a page refresh doesn't lose
- * the operator's in-progress decisions. Previously DashboardTab's own
- * `selectedDispatch`/`dispatching` state and `handleDispatchDecision`.
- */
-export function useDispatchDecisions(trips) {
-  const [selectedDispatch, setSelectedDispatch] = useState(() => {
-    if (typeof window === 'undefined' || !window.localStorage) return {};
-
-    try {
-      const raw = window.localStorage.getItem(DISPATCH_STORAGE_KEY);
-      return raw ? JSON.parse(raw) : {};
-    } catch {
-      return {};
-    }
-  });
-  const [dispatching, setDispatching] = useState({});
-
-  useEffect(() => {
-    if (typeof window === 'undefined' || !window.localStorage) return;
-
-    try {
-      window.localStorage.setItem(DISPATCH_STORAGE_KEY, JSON.stringify(selectedDispatch));
-    } catch {
-      // Ignore storage issues in restricted environments.
-    }
-  }, [selectedDispatch]);
-
-  const handleDispatchDecision = useCallback((routeName, decision, meta = {}) => {
-    const matchedTrip = trips.find(trip => (trip.fleet_route?.route?.route_name || 'Unassigned Route') === routeName);
-    const tripId = matchedTrip?.trip_id;
-
-    setSelectedDispatch(prev => ({ ...prev, [routeName]: decision }));
-
-    if (!tripId) return;
-
-    setDispatching(prev => ({ ...prev, [routeName]: true }));
-
-    const payload = {
-      decision,
-      route: meta.alternativeRoute || meta.routeName || routeName,
-      reason: meta.reason || meta.recommendation || `${decision === 'accept' ? 'Operator accepted the reroute recommendation.' : 'Operator kept the current route.'}`,
-    };
-
-    OperatorService.saveDispatchDecision(tripId, payload)
-      .catch(() => {
-        setSelectedDispatch(prev => ({ ...prev, [routeName]: decision }));
-      })
-      .finally(() => {
-        setDispatching(prev => ({ ...prev, [routeName]: false }));
-      });
-  }, [trips]);
-
-  return { selectedDispatch, dispatching, handleDispatchDecision };
-}
-
 /**
  * All state, effects, and handlers for FleetsTab (fleet creation, route
  * assignment, fare rules, live GPS locations, focused-trip map view).
@@ -428,8 +369,10 @@ export function useFleetsTab({ onRefresh }) {
       setFleetForm({ plate_number: '', bus_company_name: '', body_no: '', seated_capacity: '', standing_capacity: '', fleet_type: 'public', vehicle_class: '', route_id: '', start_time: '06:00', end_time: '22:00' });
       setManageMsg('Fleet created successfully.');
       onRefresh();
+      return true;
     } catch (err) {
       setManageMsg(err?.message || 'Failed to create fleet.');
+      return false;
     } finally {
       setManageSaving(false);
     }
@@ -448,8 +391,10 @@ export function useFleetsTab({ onRefresh }) {
       setAssignForm({ fleet_id: '', route_id: '', start_time: '06:00', end_time: '22:00' });
       setManageMsg('Route assigned to fleet successfully.');
       onRefresh();
+      return true;
     } catch (err) {
       setManageMsg(err?.message || 'Failed to assign route to fleet.');
+      return false;
     } finally {
       setManageSaving(false);
     }
@@ -467,6 +412,7 @@ export function useFleetsTab({ onRefresh }) {
     focusedTripId, setFocusedTripId,
     fleetLocations,
     manageMsg,
+    clearManageMsg: () => setManageMsg(''),
     manageSaving,
     fleetForm, setFleetForm,
     assignForm, setAssignForm,
