@@ -22,7 +22,7 @@ export function OpPageHeader({ title, subtitle, action = null }) {
 
 export function OpCard({ title, subtitle, badge = null, children, className = '', padding = 'md' }) {
   return (
-    <Card padding={padding} className={className}>
+    <Card padding={padding} className={`min-w-0 ${className}`}>
       {(title || badge) && (
         <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
           <div className="min-w-0">
@@ -39,7 +39,7 @@ export function OpCard({ title, subtitle, badge = null, children, className = ''
 
 export function OpChip({ tone = 'neutral', children, className = '' }) {
   return (
-    <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold ${toneOf(tone).chip} ${className}`}>
+    <span className={`inline-flex items-center whitespace-nowrap rounded-full px-2 py-1 text-xs font-semibold ${toneOf(tone).chip} ${className}`}>
       {children}
     </span>
   );
@@ -47,7 +47,7 @@ export function OpChip({ tone = 'neutral', children, className = '' }) {
 
 export function OpStat({ label, value, hint = null, tone = 'neutral', icon: Icon = null }) {
   return (
-    <Card padding="sm" className="p-4!">
+    <Card padding="sm" className="min-w-0 p-4!">
       <div className="flex items-start justify-between gap-2">
         <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</p>
         {Icon && <Icon className="h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />}
