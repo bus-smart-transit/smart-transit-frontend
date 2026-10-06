@@ -462,8 +462,10 @@ export function useRoutesTab({ onRefresh }) {
       setEditingStopId(null);
       setManageMsg(editingStopId ? 'Stop updated successfully.' : 'Stop created successfully.');
       onRefresh();
+      return true;
     } catch (err) {
       setManageMsg(err?.message || 'Failed to save stop.');
+      return false;
     } finally {
       setManageSaving(false);
     }
@@ -541,8 +543,10 @@ export function useRoutesTab({ onRefresh }) {
       setRouteForm({ route_name: '', origin: '', destination: '' });
       setManageMsg('Route created successfully.');
       onRefresh();
+      return true;
     } catch (err) {
       setManageMsg(err?.message || 'Failed to create route.');
+      return false;
     } finally {
       setManageSaving(false);
     }
@@ -564,8 +568,10 @@ export function useRoutesTab({ onRefresh }) {
       }));
       setManageMsg('Stop assigned to route successfully.');
       onRefresh();
+      return true;
     } catch (err) {
       setManageMsg(err?.message || 'Failed to assign stop to route.');
+      return false;
     } finally {
       setManageSaving(false);
     }
@@ -614,6 +620,7 @@ export function useRoutesTab({ onRefresh }) {
 
   return {
     manageMsg,
+    clearManageMsg: () => setManageMsg(''),
     manageSaving,
     editingStopId, setEditingStopId,
     stopForm, setStopForm,

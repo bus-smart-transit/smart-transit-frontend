@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import StaffPortalLayout from './StaffPortalLayout'
 import OperatorDashboardPage from './Operator/OperatorDashboardPage'
 import FleetsPage from './Operator/FleetsPage'
+import RoutesPage from './Operator/RoutesPage'
 import StaffCalendar from './StaffCalendar'
 import { ModalShell } from '../ui/Modal'
 import HistoricalForecastPanel from './HistoricalForecastPanel'
@@ -10,11 +11,9 @@ import OperatorService from '../../api/StaffService/OperatorService'
 import { getBookingWindow } from '../../services/bookingService'
 import { bookingWindowWarning } from '../../utils/bookingQuery'
 import { parseAppDate, getBusinessToday, debugLogBusinessTime } from '../../utils/dates'
-import { useOperatorDashboardData, useNotificationBell, useTripRequests, useRoutesTab, useTripsTab, useReportsTab } from '../../api/hooks/Staff/useOperatorDashboard'
+import { useOperatorDashboardData, useNotificationBell, useTripRequests, useTripsTab, useReportsTab } from '../../api/hooks/Staff/useOperatorDashboard'
 import RunInfoChips from '../ui/RunInfoChips'
 import { CancelTripModal, TicketResolutionQueue } from './TripCancellationsPanel'
-import DurationFactorsPanel from './DurationFactorsPanel'
-import DropoffRulesPanel from './DropoffRulesPanel'
 import LegTimeSuggestion from './LegTimeSuggestion'
 import SchedulePage from './Schedule/SchedulePage'
 import ShiftBlocksView from './Schedule/ShiftBlocksView'
@@ -23,7 +22,7 @@ import { OPERATOR_ROLE, navForRole, viewsForRole } from '../../utils/operatorNav
 import {
   LayoutDashboard, Bus, MapPin, PieChart, Users, Settings, Wallet, CalendarDays,
   Plus, Eye, RefreshCw, Shield, Download,
-  X, ChevronDown, ChevronUp, Loader2, AlertTriangle, Bell,
+  X, Loader2, AlertTriangle, Bell,
 } from 'lucide-react'
 
 const fmt = (v) => {
@@ -331,315 +330,6 @@ function StaffDirectoryTab({ drivers, conductors, onRefresh, onCreateAccount }) 
           </form>
         </Modal>
       )}
-    </div>
-  )
-}
-
-function RoutesTab({ routes, stops, trips, onRefresh }) {
-  const [expanded, setExpanded] = useState(null)
-  const {
-    manageMsg,
-    manageSaving,
-    editingStopId, setEditingStopId,
-    stopForm, setStopForm,
-    routeForm, setRouteForm,
-    routeStopForm, setRouteStopForm,
-    assignedStopIds,
-    suggestedStopOrder,
-    handleCreateStop,
-    handleDeleteStop,
-    handleRemoveStopFromRoute,
-    handleToggleCustomDropoff,
-    handleToggleStopExpress,
-    handleCreateRoute,
-    handleAddStopToRoute,
-  } = useRoutesTab({ onRefresh })
-
-  const availableStops = stops.filter((stop) => !assignedStopIds.includes(Number(stop?.stop_id)))
-
-  const analyticsRows = routes.map((route) => {
-    const routeTrips = trips.filter((trip) => Number(trip?.fleet_route?.route?.route_id) === Number(route?.route_id))
-    const totalTrips = routeTrips.length
-    const completedTrips = routeTrips.filter((trip) => String(trip?.status || '').toLowerCase() === 'completed').length
-    const adherencePct = totalTrips > 0 ? Math.round((completedTrips / totalTrips) * 100) : 0
-
-    const passengersTotal = routeTrips.reduce((sum, trip) => sum + Number(trip?.total_occupancy ?? 0), 0)
-    const days = new Set(routeTrips.map((trip) => String(trip?.trip_date || '').slice(0, 10)).filter(Boolean)).size || 1
-    const avgDailyPassengers = Math.round(passengersTotal / days)
-
-    const hourBuckets = routeTrips.reduce((acc, trip) => {
-      // Same underlying bug as Issue #2 (Batch 10/11): each trip's own
-      // departure_time, not the fleet route's shared operating-hours
-      // start_time, must drive per-trip bucketing — otherwise every trip on
-      // a route collapses into one identical hour bucket.
-      const startRaw = String(trip?.departure_time || trip?.fleet_route?.start_time || '').trim()
-      const hourLabel = /^\d{2}:\d{2}/.test(startRaw) ? `${startRaw.slice(0, 2)}:00` : 'Unscheduled'
-      acc[hourLabel] = (acc[hourLabel] || 0) + 1
-      return acc
-    }, {})
-
-    const peakEntry = Object.entries(hourBuckets).sort((a, b) => b[1] - a[1])[0]
-
-    return {
-      routeId: route.route_id,
-      routeName: route.route_name,
-      totalTrips,
-      avgDailyPassengers,
-      adherencePct,
-      peakHour: peakEntry ? `${peakEntry[0]} (${peakEntry[1]} trips)` : 'No trip data',
-    }
-  })
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold text-slate-900">Routes</h2>
-        <button type="button" onClick={onRefresh} className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50">
-          <RefreshCw className="h-4 w-4" /> Refresh
-        </button>
-      </div>
-
-      <div className="staff-grid xl:grid-cols-3">
-        <form onSubmit={handleCreateStop} className="staff-card">
-          <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-600">{editingStopId ? 'Edit Stop' : 'Add Stop'}</h3>
-          <div className="mt-3 grid gap-2">
-            <input value={stopForm.stop_name} onChange={(event) => setStopForm((prev) => ({ ...prev, stop_name: event.target.value }))} required placeholder="Stop name" className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
-            <input value={stopForm.location} onChange={(event) => setStopForm((prev) => ({ ...prev, location: event.target.value }))} placeholder="Location label" className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
-            <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500">
-              Coordinates are auto-resolved from location label and stop name.
-            </p>
-          </div>
-          <div className="mt-3 flex gap-2">
-            <button type="submit" disabled={manageSaving} className="rounded-lg bg-teal-600 px-3 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-60">
-              {editingStopId ? 'Update Stop' : 'Create Stop'}
-            </button>
-            {editingStopId && (
-              <button
-                type="button"
-                onClick={() => {
-                  setEditingStopId(null)
-                  setStopForm({ stop_name: '', location: '' })
-                }}
-                className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50"
-              >
-                Cancel
-              </button>
-            )}
-          </div>
-        </form>
-
-        <form onSubmit={handleCreateRoute} className="staff-card">
-          <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-600">Add Route</h3>
-          <div className="mt-3 grid gap-2">
-            <input value={routeForm.route_name} onChange={(event) => setRouteForm((prev) => ({ ...prev, route_name: event.target.value }))} required placeholder="Route name" className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
-            <input value={routeForm.origin} onChange={(event) => setRouteForm((prev) => ({ ...prev, origin: event.target.value }))} required placeholder="Origin" className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
-            <input value={routeForm.destination} onChange={(event) => setRouteForm((prev) => ({ ...prev, destination: event.target.value }))} required placeholder="Destination" className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
-          </div>
-          <button type="submit" disabled={manageSaving} className="mt-3 rounded-lg bg-cyan-600 px-3 py-2 text-sm font-semibold text-white hover:bg-cyan-700 disabled:opacity-60">Create Route</button>
-        </form>
-
-        <form onSubmit={handleAddStopToRoute} className="staff-card">
-          <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-600">Assign Stop to Route</h3>
-          <div className="mt-3 grid gap-2">
-            <select value={routeStopForm.route_id} onChange={(event) => setRouteStopForm((prev) => ({ ...prev, route_id: event.target.value }))} required className="rounded-lg border border-slate-200 px-3 py-2 text-sm">
-              <option value="">Select route</option>
-              {routes.map((route) => <option key={`route-${route.route_id}`} value={route.route_id}>{route.route_name}</option>)}
-            </select>
-            <select value={routeStopForm.stop_id} onChange={(event) => setRouteStopForm((prev) => ({ ...prev, stop_id: event.target.value }))} required className="rounded-lg border border-slate-200 px-3 py-2 text-sm">
-              <option value="">Select stop</option>
-              {availableStops.map((stop) => <option key={`stop-${stop.stop_id}`} value={stop.stop_id}>{stop.stop_name}</option>)}
-            </select>
-            <input type="number" min="1" value={routeStopForm.stop_order} onChange={(event) => setRouteStopForm((prev) => ({ ...prev, stop_order: event.target.value }))} required placeholder="Stop order" className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
-            {suggestedStopOrder && (
-              <p className="text-xs text-slate-500">Suggested next order: {suggestedStopOrder}</p>
-            )}
-          </div>
-          <button type="submit" disabled={manageSaving} className="mt-3 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-60">Assign Stop</button>
-        </form>
-      </div>
-
-      {manageMsg && (
-        <p className={`rounded-lg border px-4 py-2 text-sm ${manageMsg.toLowerCase().includes('failed') ? 'border-red-200 bg-red-50 text-red-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}>
-          {manageMsg}
-        </p>
-      )}
-
-      <div className="staff-card staff-card-flush overflow-hidden">
-        <div className="border-b border-slate-100 px-5 py-3">
-          <h3 className="text-sm font-semibold text-slate-900">Stops Directory</h3>
-          <p className="text-xs text-slate-500">Edit or remove stops used in route planning.</p>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50">
-              <tr className="border-b border-slate-200">
-                {['ID', 'Stop', 'Location', 'Latitude', 'Longitude', 'Actions'].map((h) => (
-                  <th key={`stops-${h}`} className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {stops.length === 0 ? (
-                <tr><td colSpan={6} className="px-5 py-8 text-center text-sm text-slate-400">No stops found.</td></tr>
-              ) : stops.map((stop) => (
-                <tr key={`stop-row-${stop.stop_id}`} className="border-b border-slate-100 hover:bg-slate-50">
-                  <td className="px-5 py-3 font-mono text-xs text-slate-600">#{stop.stop_id}</td>
-                  <td className="px-5 py-3 font-semibold text-slate-900">{stop.stop_name}</td>
-                  <td className="px-5 py-3 text-slate-600">{stop.location || '-'}</td>
-                  <td className="px-5 py-3 text-slate-600">{stop.latitude ?? '-'}</td>
-                  <td className="px-5 py-3 text-slate-600">{stop.longitude ?? '-'}</td>
-                  <td className="px-5 py-3">
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setEditingStopId(stop.stop_id)
-                          setStopForm({
-                            stop_name: stop.stop_name || '',
-                            location: stop.location || '',
-                          })
-                        }}
-                        className="rounded border border-cyan-200 bg-cyan-50 px-2 py-1 text-xs font-semibold text-cyan-700 hover:bg-cyan-100"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => { void handleDeleteStop(stop.stop_id) }}
-                        className="rounded border border-red-200 bg-red-50 px-2 py-1 text-xs font-semibold text-red-700 hover:bg-red-100"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <div className="staff-card staff-card-flush overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-slate-50">
-            <tr className="border-b border-slate-200">
-              {['ID','Name','Origin','Destination','Stops','Custom drop-off',''].map((h,i) => (
-                <th key={i} className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {routes.length === 0
-              ? <tr><td colSpan={7} className="px-5 py-8 text-center text-sm text-slate-400">No routes found.</td></tr>
-              : routes.map(r => (
-                <>
-                  <tr key={r.route_id} className="border-b border-slate-100 hover:bg-slate-50">
-                    <td className="px-5 py-3 font-mono text-xs text-slate-600">#{r.route_id}</td>
-                    <td className="px-5 py-3 font-semibold text-slate-900">{r.route_name}</td>
-                    <td className="px-5 py-3 text-slate-600">{r.origin || '-'}</td>
-                    <td className="px-5 py-3 text-slate-600">{r.destination || '-'}</td>
-                    <td className="px-5 py-3 text-slate-600">{r.route_stops?.length ?? 0}</td>
-                    <td className="px-5 py-3">
-                      <label className="inline-flex items-center gap-2 text-xs font-medium text-slate-700">
-                        <input
-                          type="checkbox"
-                          checked={Boolean(r.allow_custom_dropoff)}
-                          disabled={manageSaving}
-                          onChange={(event) => { void handleToggleCustomDropoff(r.route_id, event.target.checked) }}
-                          aria-label={`Allow custom drop-off pins on ${r.route_name}`}
-                        />
-                        {r.allow_custom_dropoff ? 'On' : 'Off'}
-                      </label>
-                    </td>
-                    <td className="px-5 py-3">
-                      <button type="button" onClick={() => setExpanded(expanded === r.route_id ? null : r.route_id)} className="text-teal-600 hover:text-teal-700">
-                        {expanded === r.route_id ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                      </button>
-                    </td>
-                  </tr>
-                  {expanded === r.route_id && (
-                    <tr key={`${r.route_id}-custom-dropoff`} className="bg-slate-50">
-                      <td colSpan={7} className="px-8 py-3">
-                        <p className="text-xs text-slate-500">Custom drop-off lets passengers pin a drop-off point on this route (off by default). The pin must be on the route line and ahead of where the passenger boards.</p>
-                      </td>
-                    </tr>
-                  )}
-                  {expanded === r.route_id && r.route_stops?.length > 0 && (
-                    <tr key={`${r.route_id}-stops`} className="bg-slate-50">
-                      <td colSpan={7} className="px-8 py-3">
-                        <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Stops</p>
-                        <ol className="flex flex-wrap gap-2">
-                          {r.route_stops.sort((a,b) => a.stop_order - b.stop_order).map((rs, idx) => (
-                            <li key={rs.route_stop_id ?? idx} className="inline-flex items-center gap-1 rounded-full bg-white border border-slate-200 px-3 py-1 text-xs text-slate-700">
-                              <span>{idx+1}. {rs.stop?.stop_name || `Stop #${rs.stop_id}`}</span>
-                              {rs.stop_type !== 'pass_through' && (rs.route_stop_id || rs.id) && (
-                                <label className="inline-flex items-center gap-1 text-[11px] text-amber-800" title="Express trips stop here">
-                                  <input
-                                    type="checkbox"
-                                    checked={Boolean(rs.served_by_express)}
-                                    disabled={manageSaving}
-                                    onChange={(event) => { void handleToggleStopExpress(r.route_id, rs.route_stop_id || rs.id, event.target.checked) }}
-                                    aria-label={`Express trips stop at ${rs.stop?.stop_name || rs.stop_id}`}
-                                  />
-                                  Express
-                                </label>
-                              )}
-                              {(rs.route_stop_id || rs.id) && (
-                                <button
-                                  type="button"
-                                  onClick={() => { void handleRemoveStopFromRoute(r.route_id, rs.route_stop_id || rs.id) }}
-                                  className="rounded-full px-1 text-red-600 hover:bg-red-50"
-                                  title="Remove stop from route"
-                                >
-                                  ×
-                                </button>
-                              )}
-                            </li>
-                          ))}
-                        </ol>
-                      </td>
-                    </tr>
-                  )}
-                </>
-              ))
-            }
-          </tbody>
-        </table>
-      </div>
-
-      <div className="staff-card staff-card-flush overflow-hidden">
-        <div className="border-b border-slate-100 px-5 py-3">
-          <h3 className="text-sm font-semibold text-slate-900">Route Analytics</h3>
-          <p className="text-xs text-slate-500">Includes total trips, average daily passengers, route adherence, and peak departure window.</p>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50">
-              <tr className="border-b border-slate-200">
-                {['Route', 'Total Trips', 'Avg Daily Passengers', 'Route Adherence', 'Peak Hours'].map((h) => (
-                  <th key={h} className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {analyticsRows.length === 0 ? (
-                <tr><td colSpan={5} className="px-5 py-8 text-center text-sm text-slate-400">No route analytics available yet.</td></tr>
-              ) : analyticsRows.map((row) => (
-                <tr key={`analytics-${row.routeId}`} className="border-b border-slate-100 hover:bg-slate-50">
-                  <td className="px-5 py-3 font-medium text-slate-900">{row.routeName}</td>
-                  <td className="px-5 py-3 text-slate-700">{row.totalTrips}</td>
-                  <td className="px-5 py-3 text-slate-700">{row.avgDailyPassengers}</td>
-                  <td className="px-5 py-3 text-slate-700">{row.adherencePct}%</td>
-                  <td className="px-5 py-3 text-slate-700">{row.peakHour}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <DropoffRulesPanel service={OperatorService} routes={routes} onRoutesChanged={onRefresh} />
-      <DurationFactorsPanel service={OperatorService} routes={routes} />
     </div>
   )
 }
@@ -1408,7 +1098,7 @@ export default function OperatorDashboard() {
           <StaffDirectoryTab drivers={drivers} conductors={conductors} onRefresh={loadFull} onCreateAccount={handleCreateAccount} />
         )}
         {activeTab === 'fleets'     && <FleetsPage fleets={fleets} routes={routes} trips={trips} onRefresh={loadFull} />}
-        {activeTab === 'routes'     && <RoutesTab routes={routes} stops={stops} trips={trips} onRefresh={loadFull} />}
+        {activeTab === 'routes'     && <RoutesPage routes={routes} stops={stops} trips={trips} fleets={fleets} onRefresh={loadFull} onOpenSchedule={() => setActiveTab('schedule')} onOpenFleets={() => setActiveTab('fleets')} />}
         {activeTab === 'finance'    && <FinancePage views={viewsForRole('finance', OPERATOR_ROLE)} view={view} onViewChange={setView} />}
         {activeTab === 'reports'    && <ReportsTab fleets={fleets} trips={trips} routes={routes} />}
         {activeTab === 'account'    && <AccountTab profile={profile} />}

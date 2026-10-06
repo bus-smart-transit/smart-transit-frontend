@@ -153,7 +153,7 @@ export default function FareRulesPanel({ service, fleets = [], routes = [], canC
           </thead>
           <tbody>
             {rules.length === 0 ? (
-              <tr><td colSpan={12} className={`px-2 py-4 text-center ${t.muted}`}>{loadError || 'No fare rules match.'}</td></tr>
+              <tr><td colSpan={12} className={`px-2 py-4 text-left ${t.muted}`}>{loadError || 'No fare rules match.'}</td></tr>
             ) : rules.map((rule) => (
               <tr key={rule.fare_rule_id} className={`border-t ${t.row}`} data-testid="fare-rule-row">
                 <td className="px-2 py-1.5">{ruleScope(rule)}</td>
