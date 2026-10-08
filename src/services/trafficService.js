@@ -1,5 +1,6 @@
 import { deriveCorridorName } from '../utils/corridor';
 import { TRAFFIC_CONFIG } from '../config/trafficConfig';
+import api from './api';
 
 const getEnv = (name) => {
   if (typeof import.meta !== 'undefined' && import.meta.env) {
@@ -153,6 +154,127 @@ async function fetchMapboxFreeFlowSeconds(liveUrl) {
   }
 }
 
+/**
+ * Turns a provider's travel time (and its own no-traffic time, when it has one) into the status the apps show.
+ * Congestion is only claimed against a real baseline; without one the level is "unknown" and no delay is shown.
+ */
+function composeTrafficStatus({ provider, durationSeconds, freeFlowSeconds, alerts, route, stops }) {
+  const routeName = route?.route_name || route?.name || route?.routeName || '';
+  const corridorName = deriveCorridorName(stops);
+  const etaMinutes = Math.max(2, Math.round(durationSeconds / 60));
+
+  let level = 'unknown';
+  let delayMinutes = null;
+  if (freeFlowSeconds) {
+    delayMinutes = Math.max(0, Math.round((durationSeconds - freeFlowSeconds) / 60));
+    const ratio = (durationSeconds - freeFlowSeconds) / freeFlowSeconds;
+    const { moderate, heavy } = TRAFFIC_CONFIG.delayRatio;
+    const significant = delayMinutes >= TRAFFIC_CONFIG.minDelayMinutes;
+    level = significant && ratio >= heavy ? 'heavy' : significant && ratio >= moderate ? 'moderate' : 'normal';
+  }
+  const label = level === 'heavy' ? 'Heavy traffic' : level === 'moderate' ? 'Moderate traffic' : level === 'normal' ? 'Normal flow' : 'Travel time only';
+  const where = routeName ? `Assigned route ${routeName}${corridorName ? ` (${corridorName})` : ''}` : null;
+
+  return {
+    level,
+    label,
+    etaMinutes,
+    delayMinutes,
+    suggestion: level === 'unknown'
+      ? `${where ? `${where}: ` : ''}travel time to the next stop from the routing provider. Live congestion data is not available; follow dispatcher guidance and on-road conditions.`
+      : level === 'heavy'
+        ? where
+          ? `${where} is heavily congested. Follow dispatcher guidance and watch the next stop closely.`
+          : 'Traffic is heavy. Follow dispatcher guidance and adjust departure timing if instructed.'
+        : level === 'moderate'
+          ? where
+            ? `${where} is building congestion. Monitor the next stop closely.`
+            : 'Traffic is building. Keep monitoring the route and next stop.'
+          : where
+            ? `${where} is stable. Proceed normally.`
+            : 'Proceed normally \u2014 road conditions are stable.',
+    routeName,
+    corridorName,
+    alerts: alerts.length > 0
+      ? alerts
+      : [{
+        road: routeName || 'Assigned route',
+        severity: level === 'heavy' ? 'danger' : level === 'moderate' ? 'warn' : 'info',
+        etaMinutes,
+        detail: `No detailed incident segments were returned by ${provider.toUpperCase()}, using travel-time signal.`,
+      }],
+    dataSource: provider,
+  };
+}
+
+// Server-side traffic (TomTom): the browser asks our API, which holds the key, shares answers between drivers and
+// counts the provider requests. A status is reused for a short while while the next stop is unchanged, so the
+// driver app's frequent GPS updates do not turn into frequent requests.
+const backendCache = { key: '', at: 0, status: null };
+
+export function resetTrafficCache() {
+  backendCache.key = '';
+  backendCache.at = 0;
+  backendCache.status = null;
+}
+
+const UNAVAILABLE_DETAIL = {
+  not_configured: 'Live traffic is not set up on the server; no ETA or delay estimate is shown.',
+  budget_reached: 'This month\u2019s traffic allowance is used up; no ETA or delay estimate is shown.',
+  provider_limit: 'The traffic provider is not accepting requests right now; no ETA or delay estimate is shown.',
+  provider_error: 'The traffic provider did not answer; no ETA or delay estimate is shown.',
+  no_travel_time: 'The traffic provider returned no travel time for this trip; no ETA or delay estimate is shown.',
+  busy: 'Traffic data is busy right now; no ETA or delay estimate is shown.',
+};
+
+async function fetchBackendTrafficStatus({ currentLat, currentLng, nextStop, route, stops }) {
+  const key = `${Number(nextStop.latitude).toFixed(4)},${Number(nextStop.longitude).toFixed(4)}`;
+  const now = Date.now();
+  if (backendCache.status && backendCache.key === key && now - backendCache.at < TRAFFIC_CONFIG.backend.minRefreshMs) {
+    return backendCache.status;
+  }
+  if (now < trafficBackoffUntil) {
+    return buildFallbackTrafficStatus({ route, stops });
+  }
+
+  try {
+    const response = await api.get('/traffic/segment', {
+      params: {
+        from_lat: Number(currentLat),
+        from_lng: Number(currentLng),
+        to_lat: Number(nextStop.latitude),
+        to_lng: Number(nextStop.longitude),
+      },
+    });
+    const data = response?.data?.data;
+    trafficFailureCount = 0;
+    trafficBackoffUntil = 0;
+
+    const travelSeconds = Number(data?.travel_time_s);
+    const status = data?.available && Number.isFinite(travelSeconds) && travelSeconds > 0
+      ? composeTrafficStatus({
+        provider: data.provider || 'tomtom',
+        durationSeconds: travelSeconds,
+        freeFlowSeconds: Number(data.no_traffic_s) > 0 ? Number(data.no_traffic_s) : null,
+        alerts: [],
+        route,
+        stops,
+      })
+      : buildFallbackTrafficStatus({ route, stops, detail: UNAVAILABLE_DETAIL[data?.reason] ?? UNAVAILABLE_DETAIL.provider_error });
+
+    backendCache.key = key;
+    backendCache.at = now;
+    backendCache.status = status;
+    return status;
+  } catch {
+    trafficFailureCount += 1;
+    if (trafficFailureCount >= 2) {
+      trafficBackoffUntil = Date.now() + Math.min(60000, 15000 * trafficFailureCount);
+    }
+    return buildFallbackTrafficStatus({ route, stops });
+  }
+}
+
 export async function fetchTrafficStatus({
   currentLat,
   currentLng,
@@ -168,8 +290,12 @@ export async function fetchTrafficStatus({
   const endpointBase = getEnv('VITE_TRAFFIC_API_BASE') || '';
   const apiKey = getEnv('VITE_TRAFFIC_API_KEY') || '';
 
-  if (provider === 'fallback' || !endpointBase) {
+  if (provider === 'fallback' || (provider !== 'backend' && !endpointBase)) {
     return buildFallbackTrafficStatus({ route, stops });
+  }
+
+  if (provider === 'backend') {
+    return fetchBackendTrafficStatus({ currentLat, currentLng, nextStop, route, stops });
   }
 
   if (Date.now() < trafficBackoffUntil) {
@@ -221,7 +347,6 @@ export async function fetchTrafficStatus({
 
     const routeData = data?.routes?.[0];
     const routeName = route?.route_name || route?.name || route?.routeName || '';
-    const corridorName = deriveCorridorName(stops);
     const durationSeconds = Number(provider === 'mapbox' ? routeData?.duration : routeData?.summary?.duration);
 
     // A provider answer without a travel time is "unavailable", never a default.
@@ -235,55 +360,13 @@ export async function fetchTrafficStatus({
       });
     }
 
-    const etaMinutes = Math.max(2, Math.round(durationSeconds / 60));
     const alerts = provider === 'mapbox' ? buildMapboxAlerts(routeData, routeName) : buildOrsAlerts(routeData, routeName);
 
     // Congestion is only claimed against a real baseline: the provider's own free-flow time
     // for this same trip. Without one (ORS has no traffic data, or the baseline request
     // failed) the level is unknown and no delay figure is shown.
     const freeFlowSeconds = provider === 'mapbox' ? await fetchMapboxFreeFlowSeconds(url) : null;
-    let level = 'unknown';
-    let delayMinutes = null;
-    if (freeFlowSeconds) {
-      delayMinutes = Math.max(0, Math.round((durationSeconds - freeFlowSeconds) / 60));
-      const ratio = (durationSeconds - freeFlowSeconds) / freeFlowSeconds;
-      const { moderate, heavy } = TRAFFIC_CONFIG.delayRatio;
-      const significant = delayMinutes >= TRAFFIC_CONFIG.minDelayMinutes;
-      level = significant && ratio >= heavy ? 'heavy' : significant && ratio >= moderate ? 'moderate' : 'normal';
-    }
-    const label = level === 'heavy' ? 'Heavy traffic' : level === 'moderate' ? 'Moderate traffic' : level === 'normal' ? 'Normal flow' : 'Travel time only';
-    const where = routeName ? `Assigned route ${routeName}${corridorName ? ` (${corridorName})` : ''}` : null;
-
-    return {
-      level,
-      label,
-      etaMinutes,
-      delayMinutes,
-      suggestion: level === 'unknown'
-        ? `${where ? `${where}: ` : ''}travel time to the next stop from the routing provider. Live congestion data is not available; follow dispatcher guidance and on-road conditions.`
-        : level === 'heavy'
-        ? where
-          ? `${where} is heavily congested. Follow dispatcher guidance and watch the next stop closely.`
-          : 'Traffic is heavy. Follow dispatcher guidance and adjust departure timing if instructed.'
-        : level === 'moderate'
-          ? where
-            ? `${where} is building congestion. Monitor the next stop closely.`
-            : 'Traffic is building. Keep monitoring the route and next stop.'
-          : where
-            ? `${where} is stable. Proceed normally.`
-            : 'Proceed normally — road conditions are stable.',
-      routeName,
-      corridorName,
-      alerts: alerts.length > 0
-        ? alerts
-        : [{
-          road: routeName || 'Assigned route',
-          severity: level === 'heavy' ? 'danger' : level === 'moderate' ? 'warn' : 'info',
-          etaMinutes,
-          detail: `No detailed incident segments were returned by ${provider.toUpperCase()}, using travel-time signal.`,
-        }],
-      dataSource: provider,
-    };
+    return composeTrafficStatus({ provider, durationSeconds, freeFlowSeconds, alerts, route, stops });
   } catch {
     return buildFallbackTrafficStatus({ route, stops });
   }

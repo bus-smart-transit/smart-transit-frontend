@@ -9,4 +9,7 @@ export const TRAFFIC_CONFIG = {
   delayRatio: { moderate: 0.25, heavy: 0.6 },
   // Smaller differences are noise and read as normal flow.
   minDelayMinutes: 1,
+  // Server-side traffic (TomTom): a status is reused for this long while the next stop is unchanged, so the
+  // driver app's frequent GPS updates do not become frequent provider requests.
+  backend: { minRefreshMs: 90000 },
 }
