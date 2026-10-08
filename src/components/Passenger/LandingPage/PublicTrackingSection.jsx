@@ -4,10 +4,15 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import RouteMap from '../../Map/RouteMap';
 import PassengerService from '../../../api/PassengerService/PassengerService';
 import { haversineM } from '../../../utils/geo';
+import { describeBusPlace } from '../../../utils/busPlace';
+import { fetchRouteMapData } from '../../../services/routeMapService';
 import { fetchTrafficStatus } from '../../../services/trafficService';
 import { busLabelText } from '../../../utils/busLabel';
 
 const POLL_MS = 12000;
+
+// The stops of a bus's route, ordered for its leg direction, are what name its place.
+const routeKeyOf = (row) => `${Number(row?.route_id)}:${row?.leg_direction === 'reverse' ? 'reverse' : 'outbound'}`;
 
 // Popup content is built with DOM nodes (never HTML strings) so plate numbers
 // and other operator-entered text cannot inject markup.
@@ -119,6 +124,8 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
   const [etaState, setEtaState] = useState({ label: 'Waiting for selected bus', etaMinutes: null });
   const [pollingEnabled, setPollingEnabled] = useState(true);
   const [selectedRouteStops, setSelectedRouteStops] = useState([]);
+  const [stopsByRoute, setStopsByRoute] = useState({});
+  const requestedRoutesRef = useRef(new Set());
 
   const selectedFleet = fleets.find((row) => Number(row?.fleet_id) === Number(selectedFleetId)) || fleets[0] || null;
 
@@ -269,6 +276,34 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
     setPollingEnabled(true);
     void refreshFleets();
   };
+
+  // Load the stops of every live bus's route once, so each bus can be placed by stop name instead of coordinates.
+  useEffect(() => {
+    const wanted = new Map();
+    fleets.forEach((row) => {
+      if (Number(row?.route_id) > 0) wanted.set(routeKeyOf(row), row);
+    });
+    const missing = [...wanted.entries()].filter(([key]) => !requestedRoutesRef.current.has(key));
+    if (missing.length === 0) return undefined;
+
+    const timer = setTimeout(() => {
+      missing.forEach(([key, row]) => {
+        requestedRoutesRef.current.add(key);
+        fetchRouteMapData(Number(row.route_id), row.leg_direction === 'reverse' ? 'reverse' : 'outbound')
+          .then((data) => setStopsByRoute((prev) => ({ ...prev, [key]: data.stops })))
+          .catch(() => requestedRoutesRef.current.delete(key));
+      });
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [fleets]);
+
+  const placeLabel = (row) => {
+    if (!(Number(row?.route_id) > 0)) return 'On the road (route not available)';
+    const stops = stopsByRoute[routeKeyOf(row)];
+    if (!stops) return 'Finding the bus location...';
+    return describeBusPlace(stops, row.latitude, row.longitude)?.text ?? 'On the road';
+  };
+  const coordinatesTitle = (row) => `${Number(row?.latitude).toFixed(5)}, ${Number(row?.longitude).toFixed(5)}`;
 
   useEffect(() => {
     if (!userCoords || !selectedFleet) {
@@ -440,7 +475,7 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
               </div>
               <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
                 <p className="text-[11px] uppercase tracking-widest text-slate-500">Location</p>
-                <p className="mt-1 inline-flex items-center gap-1 text-sm font-semibold text-slate-900"><MapPin className="h-3.5 w-3.5 text-teal-600" />{selectedFleet ? `${Number(selectedFleet.latitude).toFixed(4)}, ${Number(selectedFleet.longitude).toFixed(4)}` : 'N/A'}</p>
+                <p className="mt-1 flex items-start gap-1 text-sm font-semibold text-slate-900" title={selectedFleet ? coordinatesTitle(selectedFleet) : undefined}><MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-teal-600" /><span>{selectedFleet ? placeLabel(selectedFleet) : 'N/A'}</span></p>
                 <p className="text-[11px] text-slate-500 capitalize">{selectedFleet?.trip_status || 'idle'}</p>
               </div>
               <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
@@ -511,7 +546,7 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
                       </span>
                     </div>
                     <p className="mt-1 text-xs capitalize text-slate-600">{row?.trip_status || 'active'} • {formatDistance(row?._distanceM)}</p>
-                    <p className="mt-1 text-xs text-slate-500">{Number(row?.latitude).toFixed(4)}, {Number(row?.longitude).toFixed(4)}</p>
+                    <p className="mt-1 text-xs text-slate-500" title={coordinatesTitle(row)}>{placeLabel(row)}</p>
                   </button>
                 );
               })}
