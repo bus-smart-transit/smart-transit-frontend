@@ -1,4 +1,5 @@
 import { MAP_CONFIG } from '../../config/mapConfig'
+import { SRC_CONGESTION } from './congestionLayer'
 
 /**
  * Batch 25, Issue 1: a map must never fail silently. This watches a MapLibre
@@ -55,6 +56,9 @@ export function watchMapHealth(map, { onFail, onTrouble, onRecover } = {}) {
   }
 
   const handleError = (event) => {
+    // The optional congestion layer reports its own problems (the driver map says so); it must never turn the
+    // basemap into "Some map tiles could not be loaded".
+    if (event?.sourceId === SRC_CONGESTION) return
     const isTileError = Boolean(event?.sourceId || event?.tile)
     if (!loaded) {
       // Before load, anything that is not a single tile (style JSON, sprite,

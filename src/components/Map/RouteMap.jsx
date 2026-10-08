@@ -8,6 +8,7 @@ import { getRegion, regionMapBounds } from '../../services/regionService'
 import { MAP_CONFIG } from '../../config/mapConfig'
 import { emptyCollection, fitToPoints, renderRouteLayers } from './routeLayers'
 import { watchMapHealth } from './mapHealth'
+import { congestionTransformRequest } from './congestionLayer'
 import MapUnavailable from './MapUnavailable'
 
 const SRC_VEHICLE = 'rm-vehicle'
@@ -137,6 +138,8 @@ function RouteMapInner({
           style: MAP_CONFIG.basemapStyleUrl,
           bounds: regionMapBounds(region),
           fitBoundsOptions: { padding: 16 },
+          // Only the driver's congestion tiles (our server) get the staff token; every other request is untouched.
+          transformRequest: congestionTransformRequest,
         })
         mapRef.current = map
         stopWatching = watchMapHealth(map, {

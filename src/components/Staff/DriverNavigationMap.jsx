@@ -1,5 +1,6 @@
-﻿import { useEffect, useMemo, useState } from 'react';
+﻿import { useCallback, useEffect, useMemo, useState } from 'react';
 import RouteMap from '../Map/RouteMap';
+import { isCongestionLayerAvailable, showCongestionLayer } from '../Map/congestionLayer';
 
 const ROUTE_STATUS_TEXT = {
   idle: 'No route assigned',
@@ -19,6 +20,8 @@ const ROUTE_STATUS_TEXT = {
  *   "Location not on route" with the distance. No connecting line is drawn.
  * - Header and progress come from the trip, its route and its acknowledged
  *   stops, never from constants.
+ * - Road congestion (TomTom live traffic colours) is a layer the driver can switch on. It is off by default, only
+ *   offered when the app uses server-side traffic, and says so when it cannot be loaded.
  */
 export default function DriverNavigationMap({ trip, stops = [], lastGpsRef }) {
   const route = trip?.fleet_route?.route;
@@ -30,6 +33,20 @@ export default function DriverNavigationMap({ trip, stops = [], lastGpsRef }) {
 
   const [vehicle, setVehicle] = useState(null);
   const [routeStatus, setRouteStatus] = useState('loading');
+  const [map, setMap] = useState(null);
+  const [congestionOn, setCongestionOn] = useState(false);
+  const [congestionProblem, setCongestionProblem] = useState(false);
+  const congestionOffered = isCongestionLayerAvailable();
+
+  const handleMapReady = useCallback((readyMap) => setMap(readyMap), []);
+
+  useEffect(() => {
+    if (!map || !congestionOn) return undefined;
+    return showCongestionLayer(map, {
+      onProblem: () => setCongestionProblem(true),
+      onRecover: () => setCongestionProblem(false),
+    });
+  }, [map, congestionOn]);
 
   useEffect(() => {
     // The GPS watcher keeps lastGpsRef fresh; sample it once a second.
@@ -71,6 +88,23 @@ export default function DriverNavigationMap({ trip, stops = [], lastGpsRef }) {
           {isReturnLeg ? 'Return leg' : 'Outbound leg'}
         </span>
         <span className="ml-auto text-xs text-slate-400">{ROUTE_STATUS_TEXT[routeStatus] || ''}</span>
+        {congestionOffered && (
+          <button
+            type="button"
+            aria-pressed={congestionOn}
+            onClick={() => {
+              setCongestionProblem(false);
+              setCongestionOn((on) => !on);
+            }}
+            className={`rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${
+              congestionOn
+                ? 'border-amber-400 bg-amber-400/15 text-amber-200'
+                : 'border-slate-700 bg-slate-800 text-slate-300 hover:border-slate-500'
+            }`}
+          >
+            Traffic congestion
+          </button>
+        )}
       </div>
       <RouteMap
         routeId={routeId}
@@ -78,8 +112,23 @@ export default function DriverNavigationMap({ trip, stops = [], lastGpsRef }) {
         vehicle={vehicle}
         acknowledgedStopIds={acknowledgedStopIds}
         onRouteStatus={setRouteStatus}
+        onMapReady={handleMapReady}
         className="relative h-105 w-full"
       />
+      {congestionOn && (
+        <div className="flex flex-wrap items-center gap-4 border-t border-slate-800 px-4 py-2 text-xs text-slate-400">
+          {congestionProblem ? (
+            <span className="text-amber-300">Congestion colours are unavailable right now. The route and your position still work.</span>
+          ) : (
+            <>
+              <span className="flex items-center gap-1.5"><span className="h-1.5 w-5 rounded-full" style={{ backgroundColor: '#2EAB30' }} />Flowing</span>
+              <span className="flex items-center gap-1.5"><span className="h-1.5 w-5 rounded-full" style={{ backgroundColor: '#F1BF40' }} />Slow</span>
+              <span className="flex items-center gap-1.5"><span className="h-1.5 w-5 rounded-full" style={{ backgroundColor: '#E70704' }} />Heavy or stopped</span>
+              <span className="ml-auto">Live road speed compared with free flow, from TomTom</span>
+            </>
+          )}
+        </div>
+      )}
       <div className="flex flex-wrap gap-4 border-t border-slate-800 px-4 py-2 text-xs text-slate-400">
         <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded-full bg-teal-600" />Your position</span>
         <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded-full bg-teal-400" />Completed stop</span>
