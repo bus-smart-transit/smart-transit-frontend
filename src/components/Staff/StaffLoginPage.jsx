@@ -1,5 +1,5 @@
 ﻿import { useEffect, useRef, useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import {
   ArrowLeft,
   BadgeCheck,
@@ -25,6 +25,8 @@ const ROLES = [
 
 export default function StaffLoginPage() {
   const navigate = useNavigate();
+  // A page that sends the person here (for example after a password reset) can leave a one-line notice.
+  const notice = useLocation().state?.notice || '';
   const otpRefs = useRef([]);
   const [selectedRole, setSelectedRole] = useState('driver');
   const [showPassword, setShowPassword] = useState(false);
@@ -276,6 +278,13 @@ export default function StaffLoginPage() {
                   );
                 })}
               </div>
+
+              {notice && (
+                <div role="status" className="mb-4 flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5">
+                  <BadgeCheck className="h-4 w-4 text-emerald-600 shrink-0" />
+                  <p className="text-sm text-emerald-800">{notice}</p>
+                </div>
+              )}
 
               {error && (
                 <div role="alert" className="mb-4 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5">

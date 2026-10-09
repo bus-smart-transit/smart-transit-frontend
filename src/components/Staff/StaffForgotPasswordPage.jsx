@@ -100,9 +100,6 @@ export default function StaffForgotPasswordPage() {
             <Link to="/employee/login" className="text-teal-700 hover:text-teal-800 font-medium">
               Back to sign in
             </Link>
-            <Link to="/employee/reset-password" className="text-slate-600 hover:text-slate-800">
-              I have a token
-            </Link>
           </div>
         </div>
       </div>
