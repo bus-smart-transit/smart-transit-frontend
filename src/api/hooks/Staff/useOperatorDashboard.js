@@ -868,19 +868,29 @@ export function useReportsTab() {
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState('');
+  // The period. Empty means the server's default (this month so far). `ranRange` is the period the report on screen was
+  // run for, so a print or a download names that period even if the pickers were changed afterwards.
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [ranRange, setRanRange] = useState({ from: '', to: '' });
 
   const fetchReport = async () => {
     if (!selectedFleet) { setMsg('Please select a fleet first.'); return; }
+    if (startDate && endDate && endDate < startDate) { setMsg('The end date cannot be before the start date.'); return; }
+    const params = {};
+    if (startDate) params.start_date = startDate;
+    if (endDate) params.end_date = endDate;
     setLoading(true); setMsg(''); setReport(null);
     try {
       let res;
-      if (reportType === 'financial')  res = await OperatorService.getFinancialReport(selectedFleet);
-      else if (reportType === 'revenue')   res = await OperatorService.getRevenueByRoute(selectedFleet);
-      else if (reportType === 'adherence') res = await OperatorService.getRouteAdherence(selectedFleet);
-      else if (reportType === 'occupancy') res = await OperatorService.getOccupancyTrends(selectedFleet);
-      else if (reportType === 'daily')     res = await OperatorService.getDailySummary(selectedFleet);
-      else if (reportType === 'channels')  res = await OperatorService.getPaymentChannels(selectedFleet);
+      if (reportType === 'financial')  res = await OperatorService.getFinancialReport(selectedFleet, params);
+      else if (reportType === 'revenue')   res = await OperatorService.getRevenueByRoute(selectedFleet, params);
+      else if (reportType === 'adherence') res = await OperatorService.getRouteAdherence(selectedFleet, params);
+      else if (reportType === 'occupancy') res = await OperatorService.getOccupancyTrends(selectedFleet, params);
+      else if (reportType === 'daily')     res = await OperatorService.getDailySummary(selectedFleet, params);
+      else if (reportType === 'channels')  res = await OperatorService.getPaymentChannels(selectedFleet, params);
       setReport(res?.data ?? res);
+      setRanRange({ from: startDate, to: endDate });
     } catch (err) { setMsg(err?.message || 'Failed to load report.'); }
     finally { setLoading(false); }
   };
@@ -888,6 +898,9 @@ export function useReportsTab() {
   return {
     selectedFleet, setSelectedFleet,
     reportType, setReportType,
+    startDate, setStartDate,
+    endDate, setEndDate,
+    ranRange,
     report,
     loading,
     msg, setMsg,

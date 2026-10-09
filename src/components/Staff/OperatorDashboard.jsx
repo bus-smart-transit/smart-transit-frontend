@@ -7,6 +7,8 @@ import StaffCalendar from './StaffCalendar'
 import { ModalShell } from '../ui/Modal'
 import HistoricalForecastPanel from './HistoricalForecastPanel'
 import { openPrintReport } from '../../utils/printReport'
+import { reportFileName, reportToCsv } from '../../utils/reportCsv'
+import { saveCsv } from '../../utils/financials'
 import OperatorService from '../../api/StaffService/OperatorService'
 import { getBookingWindow } from '../../services/bookingService'
 import { bookingWindowWarning } from '../../utils/bookingQuery'
@@ -113,7 +115,7 @@ function NotificationBell() {
           </div>
           <div className="max-h-96 space-y-2 overflow-y-auto">
             {loadingNotifications && notifications.length === 0 ? (
-              <p className="py-6 text-center text-sm text-slate-400">Loading…</p>
+              <p className="py-6 text-center text-sm text-slate-400">Loading...</p>
             ) : notifications.length === 0 ? (
               <p className="py-6 text-center text-sm text-slate-400">No notifications yet.</p>
             ) : (
@@ -630,7 +632,7 @@ function TripsTab({ drivers, conductors, onRefresh, tripsState }) {
           <form className="space-y-4" onSubmit={handleAssign}>
             <Field label={`Select ${assignModal.type}`} required>
               <select value={assignId} onChange={e => setAssignId(e.target.value)} required className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500">
-                <option value="">Choose…</option>
+                <option value="">Choose...</option>
                 {(assignModal.type === 'driver' ? drivers : conductors).map(p => (
                   <option key={getStaffCompanyUserId(p)} value={getStaffCompanyUserId(p)}>{getStaffFullName(p) || getStaffUsername(p)} ({getStaffEmail(p)})</option>
                 ))}
@@ -790,11 +792,19 @@ function ReportsTab({ fleets, trips, routes }) {
   const {
     selectedFleet, setSelectedFleet,
     reportType, setReportType,
+    startDate, setStartDate,
+    endDate, setEndDate,
+    ranRange,
     report,
     loading,
     msg, setMsg,
     fetchReport,
   } = useReportsTab()
+
+  // The period of the report on screen, in words (the server's default is this month so far).
+  const periodLabel = ranRange.from || ranRange.to
+    ? `${ranRange.from || 'start of month'} to ${ranRange.to || 'today'}`
+    : 'This month so far'
 
   const renderValue = (value) => {
     if (value == null || value === '') return '-'
@@ -901,12 +911,26 @@ function ReportsTab({ fleets, trips, routes }) {
 
     const opened = openPrintReport({
       title: `${reportLabel} - ${fleetLabel}`,
-      meta: [['Fleet', fleetLabel], ['Report', reportLabel]],
+      meta: [['Fleet', fleetLabel], ['Report', reportLabel], ['Period', periodLabel]],
       columns: reportColumns,
       rows: reportRows,
       format: (value) => String(renderValue(value)),
     });
     if (!opened) setMsg('Unable to open print preview. Please allow pop-ups for this site.');
+  }
+
+  // The file has every column and the same text as the table (the screen shows only the first 14 columns).
+  const handleDownloadCsv = () => {
+    if (!report || reportRows.length === 0) {
+      setMsg('Run a report first before downloading.');
+      return;
+    }
+    const allColumns = [...new Set(reportRows.flatMap((row) => Object.keys(row || {})))];
+    const plate = fleets.find((fleet) => String(fleet.fleet_id) === String(selectedFleet))?.plate_number || selectedFleet;
+    saveCsv(
+      reportToCsv(allColumns, reportRows, (value) => String(renderValue(value))),
+      reportFileName({ type: reportType, fleet: plate, from: ranRange.from, to: ranRange.to }),
+    );
   }
   return (
     <div className="space-y-5">
@@ -923,7 +947,7 @@ function ReportsTab({ fleets, trips, routes }) {
         <div className="flex-1 min-w-40">
           <label className="mb-1 block text-xs font-medium text-slate-600">Fleet</label>
           <select value={selectedFleet} onChange={e => setSelectedFleet(e.target.value)} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-teal-500">
-            <option value="">Select fleet…</option>
+            <option value="">Select fleet...</option>
             {fleets.map(f => <option key={f.fleet_id} value={f.fleet_id}>{f.plate_number}</option>)}
           </select>
         </div>
@@ -934,6 +958,14 @@ function ReportsTab({ fleets, trips, routes }) {
             <option value="occupancy">Occupancy Trends</option>
             <option value="daily">Daily Summary</option>
           </select>
+        </div>
+        <div className="min-w-36">
+          <label htmlFor="report-from" className="mb-1 block text-xs font-medium text-slate-600">From</label>
+          <input id="report-from" type="date" value={startDate} max={endDate || undefined} onChange={e => setStartDate(e.target.value)} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-teal-500" />
+        </div>
+        <div className="min-w-36">
+          <label htmlFor="report-to" className="mb-1 block text-xs font-medium text-slate-600">To</label>
+          <input id="report-to" type="date" value={endDate} min={startDate || undefined} onChange={e => setEndDate(e.target.value)} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-teal-500" />
         </div>
         <div className="flex items-end">
           <button type="button" onClick={fetchReport} disabled={loading} className="flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-60">
@@ -952,10 +984,23 @@ function ReportsTab({ fleets, trips, routes }) {
             Print / Save PDF
           </button>
         </div>
+        <div className="flex items-end">
+          <button
+            type="button"
+            onClick={handleDownloadCsv}
+            disabled={!report || reportRows.length === 0}
+            className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+          >
+            <Download className="h-4 w-4" />
+            Download CSV
+          </button>
+        </div>
       </div>
+      <p className="-mt-2 text-xs text-slate-500">Leave both dates empty for this month so far.</p>
       {msg && <p className="rounded-lg bg-red-50 border border-red-200 px-4 py-2 text-sm text-red-700">{msg}</p>}
       {report && (
         <div className="staff-card">
+          <p className="mb-2 text-xs text-slate-500" data-testid="report-period">Period: {periodLabel}</p>
           {reportColumns.length > 0 ? (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -1049,7 +1094,7 @@ export default function OperatorDashboard() {
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center bg-slate-50">
-        <div className="flex items-center gap-2 text-slate-500"><Loader2 className="h-5 w-5 animate-spin" /> Loading dashboard…</div>
+        <div className="flex items-center gap-2 text-slate-500"><Loader2 className="h-5 w-5 animate-spin" /> Loading dashboard...</div>
       </div>
     )
   }
