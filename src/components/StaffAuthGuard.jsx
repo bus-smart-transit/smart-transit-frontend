@@ -1,7 +1,9 @@
 import { Navigate, Outlet } from 'react-router-dom';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { TokenManager } from '../utils/TokenManager.js';
 import StaffService from '../api/StaffService/StaffBaseService';
+import useInactivityTimeout from '../api/hooks/useInactivityTimeout';
+import { STAFF_INACTIVITY_MINUTES } from '../config/sessionConfig';
 
 /**
  * Validates a staff token against the backend before allowing a redirect or
@@ -93,5 +95,22 @@ export function StaffProtectedRoute({ allowedRoles }) {
     return () => window.removeEventListener('storage', handleStorageChange);
   }, [allowedRoles]);
 
-  return isAuth ? <Outlet /> : <Navigate to="/employee/login" replace />;
+  // The Operator portal signs out after a stretch with nobody touching the screen (see config/sessionConfig.js for why
+  // only that role). The session is ended on the server too; the sign-in page says why.
+  const [timedOutAfter, setTimedOutAfter] = useState(0);
+  const role = TokenManager.getStaffRole();
+  const idleMinutes = STAFF_INACTIVITY_MINUTES[role] || 0;
+  const endIdleSession = useCallback(() => {
+    StaffService.logout(role).catch(() => {});
+    TokenManager.clearStaffSession();
+    setTimedOutAfter(idleMinutes);
+    setIsAuth(false);
+  }, [role, idleMinutes]);
+  useInactivityTimeout({ minutes: isAuth ? idleMinutes : 0, onTimeout: endIdleSession });
+
+  if (isAuth) return <Outlet />;
+  const notice = timedOutAfter
+    ? `You were signed out after ${timedOutAfter} minutes without activity. Sign in again to continue.`
+    : undefined;
+  return <Navigate to="/employee/login" replace state={notice ? { notice } : undefined} />;
 }
