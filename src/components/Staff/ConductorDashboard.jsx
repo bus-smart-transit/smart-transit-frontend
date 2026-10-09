@@ -865,7 +865,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                   <div className="mb-4 flex items-center justify-between">
                     <div>
                       <h3 className="text-base font-bold text-slate-900">Scan Ticket</h3>
-                      <p className="text-xs text-slate-500">Use camera scanner or paste the ticket UUID manually.</p>
+                      <p className="text-xs text-slate-500">Use the camera scanner, or type the 8-character Ticket ID printed on the ticket (or paste the full ticket code).</p>
                     </div>
                     <button
                       type="button"
@@ -938,7 +938,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                   <div className="mt-4 flex gap-2">
                     <input
                       type="text"
-                      placeholder="ticket-uuid-here"
+                      placeholder="Ticket ID, e.g. 3F9A12BC"
                       value={scanUuid}
                       onChange={(e) => {
                         setScanUuid(e.target.value);

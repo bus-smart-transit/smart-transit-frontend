@@ -643,8 +643,8 @@ export function useConductorDashboardData({ onLogout, pairing }) {
     }
 
     if (!ticketUuid) {
-      setScanResult({ success: false, msg: 'Please provide a ticket UUID before scanning.' });
-      setScannerStatus('Please provide a ticket UUID.');
+      setScanResult({ success: false, msg: 'Please enter the Ticket ID (or scan the QR code) before scanning.' });
+      setScannerStatus('Please enter a Ticket ID.');
       if (manageBusy) {
         scannerBusyRef.current = false;
         setScannerBusy(false);
