@@ -23,9 +23,13 @@ export default function TicketCard({
   validLabel,
   expiresLabel,
   trackingToken = '',
+  onRenewLink = null,
 }) {
   const footer = STATUS_FOOTER[String(statusLabel).toLowerCase()] ?? STATUS_FOOTER.issued;
   const [copied, setCopied] = useState(false);
+  // Replacing the link is a two-step action: it cuts off anyone who has the old one, including the passenger's own copies.
+  const [renewStep, setRenewStep] = useState('idle'); // idle | confirm | working | error
+  const [renewError, setRenewError] = useState('');
   // The link that follows this ticket's bus; only while the ticket is still usable.
   const canTrack = Boolean(trackingToken) && ['valid', 'issued', 'boarded'].includes(String(statusLabel).toLowerCase());
 
@@ -36,6 +40,18 @@ export default function TicketCard({
       setTimeout(() => setCopied(false), 2000);
     } catch {
       setCopied(false);
+    }
+  };
+
+  const renew = async () => {
+    setRenewStep('working');
+    setRenewError('');
+    try {
+      await onRenewLink();
+      setRenewStep('idle');
+    } catch (err) {
+      setRenewError(err?.message || 'The tracking link could not be replaced. Try again.');
+      setRenewStep('error');
     }
   };
 
@@ -92,6 +108,40 @@ export default function TicketCard({
           >
             {copied ? 'Link copied' : 'Copy tracking link'}
           </button>
+          {typeof onRenewLink === 'function' && renewStep === 'idle' && (
+            <button
+              type="button"
+              onClick={() => setRenewStep('confirm')}
+              className="rounded-full border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+            >
+              New tracking link
+            </button>
+          )}
+        </div>
+      )}
+
+      {canTrack && typeof onRenewLink === 'function' && renewStep !== 'idle' && (
+        <div role="group" aria-label="Replace tracking link" className="mx-3.5 mb-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-900">
+          <p>The old link stops working at once, for everyone who has it. Your ticket QR code is not affected.</p>
+          {renewStep === 'error' && <p role="alert" className="mt-1 text-red-700">{renewError}</p>}
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={renewStep === 'working'}
+              onClick={renew}
+              className="rounded-full bg-amber-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-60"
+            >
+              {renewStep === 'working' ? 'Replacing...' : 'Replace link'}
+            </button>
+            <button
+              type="button"
+              disabled={renewStep === 'working'}
+              onClick={() => setRenewStep('idle')}
+              className="rounded-full border border-amber-300 px-4 py-1.5 text-sm font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-60"
+            >
+              Keep the old link
+            </button>
+          </div>
         </div>
       )}
 

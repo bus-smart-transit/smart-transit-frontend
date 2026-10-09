@@ -37,6 +37,11 @@ class PassengerService extends RoleAuthServiceBase {
     return await this.request(`/${this.endpointBase}/tickets/${ticketUuid}/qr`, "GET");
   }
 
+  // Replaces the ticket's tracking link: the old link stops working at once, the new token is returned.
+  async renewTrackingLink(ticketUuid) {
+    return await this.request(`/${this.endpointBase}/tickets/${ticketUuid}/tracking-link`, "POST");
+  }
+
   // Batch 28 Stage 3, item 6: rebook or refund a ticket of a trip the OPERATOR cancelled (the server decides every amount).
   async getTicketResolution(ticketUuid) {
     return await this.request(`/${this.endpointBase}/tickets/${ticketUuid}/resolution`, "GET");

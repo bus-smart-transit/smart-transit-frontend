@@ -162,6 +162,14 @@ export default function Dashboard() {
 
   const numericPoints = Number(profile?.reward_points ?? user?.reward_points ?? 0);
 
+  // A replaced tracking link, by ticket: the card shows the new one at once, the old one no longer works on the server.
+  const [renewedTokens, setRenewedTokens] = useState({});
+  const renewTrackingLink = async (ticketUuid) => {
+    const res = await PassengerService.renewTrackingLink(ticketUuid);
+    const token = res?.data?.tracking_token;
+    if (token) setRenewedTokens((prev) => ({ ...prev, [ticketUuid]: token }));
+  };
+
   // S2: ticket-history status filter — Scheduled/Completed/Expired/Group,
   // defaulting to "Scheduled". "Group" counts transaction references shared
   // by more than one ticket (a multi-ticket purchase).
@@ -881,7 +889,8 @@ export default function Dashboard() {
                 statusLabel={selectedTicket.status || '-'}
                 validLabel={formatDateTime(selectedTicket.valid_from ?? selectedTicketQr?.valid_from)}
                 expiresLabel={formatDateTime(selectedTicket.expires_at ?? selectedTicketQr?.expires_at)}
-                trackingToken={selectedTicket.tracking_token || ''}
+                trackingToken={renewedTokens[selectedTicket.ticket_uuid] || selectedTicket.tracking_token || ''}
+                onRenewLink={selectedTicket.ticket_uuid ? () => renewTrackingLink(selectedTicket.ticket_uuid) : null}
               />
               <p className="mt-3 flex items-center gap-2 text-sm text-slate-600" data-testid="ticket-bus-service">
                 <span>Bus: <strong className="text-slate-900">{getFleetDisplayLabel(selectedTicket)}</strong></span>
