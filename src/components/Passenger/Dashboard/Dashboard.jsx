@@ -21,6 +21,8 @@ import { buildBookingQuery } from '../../../utils/bookingQuery';
 import RunInfoChips from '../../ui/RunInfoChips';
 import TripCancelledChoice from '../Ticket/TripCancelledChoice';
 import { CANCELLED_TRIP_STATUSES } from '../../../utils/ticketResolution';
+import { formatPeso } from '../../../utils/financials';
+import { REWARDS } from '../../../config/rewardsConfig';
 
 const preloadMapView = () =>
   Promise.all([
@@ -158,12 +160,6 @@ export default function Dashboard() {
     return `${values[0]} +${values.length - 1} more`;
   };
 
-  const rewardCatalog = [
-    { id: 'r1', title: 'P20 Fare Discount', desc: 'Use on any single trip.', cost: 100 },
-    { id: 'r2', title: 'Free Seat Reservation Fee', desc: 'Waives the reservation fee on your next booking.', cost: 150 },
-    { id: 'r3', title: 'P50 Fare Discount', desc: 'Use on any single trip.', cost: 250 },
-    { id: 'r4', title: 'Free One-Way Ticket', desc: 'Redeem a full one-way fare on any route.', cost: 400 },
-  ];
   const numericPoints = Number(profile?.reward_points ?? user?.reward_points ?? 0);
 
   // S2: ticket-history status filter — Scheduled/Completed/Expired/Group,
@@ -601,55 +597,36 @@ export default function Dashboard() {
           <Card className="!bg-navy-900 p-6 text-white sm:p-8">
             <p className="text-sm text-navy-200">Your Rewards Points</p>
             <p className="mt-1 font-display text-4xl font-bold">{Number(numericPoints).toFixed(0)} pts</p>
-            <p className="mt-1 text-sm text-teal-300">Current Tier: Silver Rider</p>
-            <div className="mt-4 max-w-sm">
-              <div className="h-2 w-full overflow-hidden rounded-full bg-white/10">
-                <div className="h-full rounded-full bg-teal-400" style={{ width: `${Math.min(100, (numericPoints / 500) * 100)}%` }} />
-              </div>
-              <p className="mt-1.5 text-xs text-navy-200">{Number(numericPoints).toFixed(0)} / 500 pts to Gold Rider</p>
-            </div>
+            <p className="mt-1 text-sm text-teal-300">Worth {formatPeso(numericPoints * REWARDS.pesoValueOfPoint)} off an online one-way booking.</p>
           </Card>
 
           <Card className="p-6">
             <h2 className="font-display text-lg font-semibold text-navy-950">How SmartPoints Work</h2>
             <p className="mt-2 text-sm leading-relaxed text-slate-500">
-              Buy a ticket → earn SmartPoints → save your points → use them to reduce the cost of your next SmartTransit ticket.
+              Pay for a ticket online, earn SmartPoints, then use them to take pesos off your next online booking.
             </p>
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
               <div className="rounded-xl border border-slate-200 p-4">
                 <p className="text-sm font-semibold text-navy-950">1. Earn</p>
-                <p className="mt-1 text-xs leading-relaxed text-slate-500">₱1 spent on a ticket = 1 SmartPoint, added automatically after a successful payment.</p>
+                <p className="mt-1 text-xs leading-relaxed text-slate-500">You earn 1 SmartPoint for every ₱{REWARDS.pesosPerPointEarned} you pay, added automatically once the payment succeeds.</p>
               </div>
               <div className="rounded-xl border border-slate-200 p-4">
-                <p className="text-sm font-semibold text-navy-950">2. Save</p>
-                <p className="mt-1 text-xs leading-relaxed text-slate-500">Once you reach 100 points, they're ready to use on any future ticket.</p>
+                <p className="text-sm font-semibold text-navy-950">2. Keep</p>
+                <p className="mt-1 text-xs leading-relaxed text-slate-500">Your balance is shown here and at checkout. If a payment fails or is not completed in time, the points you used are given back.</p>
               </div>
               <div className="rounded-xl border border-slate-200 p-4">
                 <p className="text-sm font-semibold text-navy-950">3. Use</p>
-                <p className="mt-1 text-xs leading-relaxed text-slate-500">1 SmartPoint = ₱1 off. Switch on "Use SmartPoints" at checkout to apply it automatically.</p>
+                <p className="mt-1 text-xs leading-relaxed text-slate-500">1 SmartPoint = ₱{REWARDS.pesoValueOfPoint} off. Turn on "Use reward points" at checkout on a one-way booking. You always pay at least ₱1 online.</p>
               </div>
             </div>
           </Card>
 
-          <Card className="p-6">
-            <h2 className="font-display text-lg font-semibold text-navy-950">Available Rewards</h2>
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              {rewardCatalog.map((item) => {
-                const canRedeem = numericPoints >= item.cost;
-                return (
-                  <div key={item.id} className="rounded-xl border border-slate-200 p-4">
-                    <h3 className="text-sm font-semibold text-navy-950">{item.title}</h3>
-                    <p className="mt-1 text-xs leading-relaxed text-slate-500">{item.desc}</p>
-                    <div className="mt-3 flex items-center justify-between gap-3">
-                      <strong className="text-sm font-semibold text-navy-950">{item.cost} pts</strong>
-                      <Button variant={canRedeem ? 'primary' : 'secondary'} size="xs" disabled={!canRedeem}>
-                        {canRedeem ? 'Redeem' : 'Not enough points'}
-                      </Button>
-                    </div>
-                  </div>
-                );
-              })}
+          <Card className="flex flex-wrap items-center justify-between gap-3 p-6">
+            <div>
+              <h2 className="font-display text-lg font-semibold text-navy-950">Use your points</h2>
+              <p className="mt-1 text-sm text-slate-500">Points are applied when you book. There is nothing to redeem here.</p>
             </div>
+            <Button variant="primary" size="sm" onClick={() => navigate('/passenger/book')}>Book a trip</Button>
           </Card>
 
           <Card className="p-6">
