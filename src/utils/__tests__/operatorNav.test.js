@@ -13,9 +13,9 @@ describe('Operator sidebar (Batch 30)', () => {
     for (const old of ['trips', 'calendar', 'shiftBlocks', 'financials', 'remittances']) expect(keys).not.toContain(old);
   });
 
-  test('Schedule has Calendar, Blocks, Trips; Finance has Overview, Transactions, Remittances', () => {
+  test('Schedule has Calendar, Blocks, Trips; Finance has Overview, Transactions, Remittances, Refunds', () => {
     expect(viewsForRole('schedule', 'operator').map((v) => v.label)).toEqual(['Calendar', 'Blocks', 'Trips']);
-    expect(viewsForRole('finance', 'operator').map((v) => v.label)).toEqual(['Overview', 'Transactions', 'Remittances']);
+    expect(viewsForRole('finance', 'operator').map((v) => v.label)).toEqual(['Overview', 'Transactions', 'Remittances', 'Refunds']);
   });
 
   test('Reports stays its own item: fleet reports and the forecast are not financial', () => {

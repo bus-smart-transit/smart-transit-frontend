@@ -41,10 +41,10 @@ const renderPage = (view, service = makeService(), v = views) => {
 };
 
 describe('FinancePage', () => {
-  it('has one heading and the Overview, Transactions and Remittances tabs', async () => {
+  it('has one heading and the Overview, Transactions, Remittances and Refunds tabs', async () => {
     renderPage('overview');
     expect(screen.getByRole('heading', { name: 'Finance' })).toBeInTheDocument();
-    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Overview', 'Transactions', 'Remittances']);
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Overview', 'Transactions', 'Remittances', 'Refunds']);
     await screen.findByTestId('kpi-gross');
   });
 
@@ -69,6 +69,15 @@ describe('FinancePage', () => {
     expect(card).toHaveTextContent('Test Conductor');
     expect(card).toHaveTextContent('160.00');
     expect(screen.queryByText('Not yet available')).not.toBeInTheDocument();
+    expect(screen.getAllByRole('heading', { level: 2 })).toHaveLength(1);
+  });
+
+  it('Refunds shows the payments that need a refund, with no second heading', async () => {
+    const service = makeService();
+    service.getUnfulfilledPayments = vi.fn().mockResolvedValue({ data: { data: [], meta: { page: 1, per_page: 20, total: 0, last_page: 1, status: 'needs_refund', counts: { needs_refund: 0, refunded: 0 } } } });
+    renderPage('refunds', service);
+    expect(await screen.findByTestId('refunds-empty')).toHaveTextContent('Nothing needs a refund');
+    expect(service.getUnfulfilledPayments).toHaveBeenCalledWith({ status: 'needs_refund', page: 1 });
     expect(screen.getAllByRole('heading', { level: 2 })).toHaveLength(1);
   });
 

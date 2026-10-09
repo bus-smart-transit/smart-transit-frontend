@@ -3,7 +3,7 @@
 // on the same screen.
 //
 //  - Schedule  = Calendar, Blocks, Trips (was three sidebar items).
-//  - Finance   = Overview, Transactions, Remittances (was Financials and Remittances).
+//  - Finance   = Overview, Transactions, Remittances, Refunds (was Financials and Remittances).
 //  - Reports   stays its own item: it holds fleet reports and the historical forecast, which are not financial.
 //
 // Each item and view lists the roles that may see it, so nothing is visible by default. Today only the Operator
@@ -34,6 +34,7 @@ export const OPERATOR_VIEWS = {
     { key: 'overview', label: 'Overview', roles: OPERATOR_ONLY },
     { key: 'transactions', label: 'Transactions', roles: OPERATOR_ONLY },
     { key: 'remittances', label: 'Remittances', roles: OPERATOR_ONLY },
+    { key: 'refunds', label: 'Refunds', roles: OPERATOR_ONLY },
   ],
 };
 

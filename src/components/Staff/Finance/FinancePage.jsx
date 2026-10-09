@@ -1,6 +1,7 @@
 import ViewTabs from '../../ui/ViewTabs';
 import FinancialsPage from '../Financials/FinancialsPage';
 import RemittancesPage from '../Remittances/RemittancesPage';
+import PaymentRefundsPage from '../Refunds/PaymentRefundsPage';
 
 /**
  * Batch 30: the Finance page. One heading and the tabs the role may see: Overview and Transactions (the Financials
@@ -18,7 +19,9 @@ export default function FinancePage({ views, view, onViewChange, service }) {
       <div role="tabpanel" aria-label={views.find((v) => v.key === active)?.label}>
         {active === 'remittances'
           ? <RemittancesPage service={service} embedded />
-          : <FinancialsPage service={service} view={active} embedded />}
+          : active === 'refunds'
+            ? <PaymentRefundsPage service={service} embedded />
+            : <FinancialsPage service={service} view={active} embedded />}
       </div>
     </div>
   );

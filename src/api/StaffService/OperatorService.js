@@ -149,6 +149,16 @@ class OperatorService extends StaffBaseService {
     return await this.request(`/operator/remittances/${id}/confirm`, 'POST', payload);
   }
 
+  // Online payments that were charged but could not become tickets (a payment that arrived after its seats were
+  // released), and the Operator's record that they refunded one in PayMongo (the note is the refund id). No money moves.
+  async getUnfulfilledPayments(params = {}) {
+    return await this.request('/operator/payments/needs-refund', 'GET', params);
+  }
+
+  async recordPaymentRefund(id, payload = {}) {
+    return await this.request(`/operator/payments/${id}/refunded`, 'POST', payload);
+  }
+
   // Batch 29, Stage 2: the financial page (the server computes everything; nothing is derived here).
   async getFinancials(params = {}) {
     return await this.request('/operator/financials', 'GET', params);
