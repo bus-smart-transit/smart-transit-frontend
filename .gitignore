@@ -33,3 +33,6 @@ dist-ssr
 *.sw?
 .vercel
 .env*
+
+test-results/
+playwright-report/

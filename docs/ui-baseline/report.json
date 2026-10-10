@@ -1,0 +1,140 @@
+[
+  {
+    "page": "dashboard",
+    "width": 1280,
+    "overflowX": false
+  },
+  {
+    "page": "staffs",
+    "width": 1280,
+    "overflowX": false
+  },
+  {
+    "page": "fleets",
+    "width": 1280,
+    "overflowX": false
+  },
+  {
+    "page": "routes",
+    "width": 1280,
+    "overflowX": false
+  },
+  {
+    "page": "schedule-calendar",
+    "width": 1280,
+    "overflowX": false
+  },
+  {
+    "page": "schedule-blocks",
+    "width": 1280,
+    "overflowX": false
+  },
+  {
+    "page": "schedule-trips",
+    "width": 1280,
+    "overflowX": false
+  },
+  {
+    "page": "finance-overview",
+    "width": 1280,
+    "overflowX": false
+  },
+  {
+    "page": "finance-transactions",
+    "width": 1280,
+    "overflowX": false
+  },
+  {
+    "page": "finance-remittances",
+    "width": 1280,
+    "overflowX": false
+  },
+  {
+    "page": "finance-refunds",
+    "width": 1280,
+    "overflowX": false
+  },
+  {
+    "page": "reports",
+    "width": 1280,
+    "overflowX": false
+  },
+  {
+    "page": "account",
+    "width": 1280,
+    "overflowX": false
+  },
+  {
+    "width": 1280,
+    "problems": []
+  },
+  {
+    "page": "dashboard",
+    "width": 390,
+    "overflowX": false
+  },
+  {
+    "page": "staffs",
+    "width": 390,
+    "overflowX": false
+  },
+  {
+    "page": "fleets",
+    "width": 390,
+    "overflowX": false
+  },
+  {
+    "page": "routes",
+    "width": 390,
+    "overflowX": false
+  },
+  {
+    "page": "schedule-calendar",
+    "width": 390,
+    "overflowX": false
+  },
+  {
+    "page": "schedule-blocks",
+    "width": 390,
+    "overflowX": false
+  },
+  {
+    "page": "schedule-trips",
+    "width": 390,
+    "overflowX": false
+  },
+  {
+    "page": "finance-overview",
+    "width": 390,
+    "overflowX": false
+  },
+  {
+    "page": "finance-transactions",
+    "width": 390,
+    "overflowX": false
+  },
+  {
+    "page": "finance-remittances",
+    "width": 390,
+    "overflowX": false
+  },
+  {
+    "page": "finance-refunds",
+    "width": 390,
+    "overflowX": false
+  },
+  {
+    "page": "reports",
+    "width": 390,
+    "overflowX": false
+  },
+  {
+    "page": "account",
+    "width": 390,
+    "overflowX": false
+  },
+  {
+    "width": 390,
+    "problems": []
+  }
+]
