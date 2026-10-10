@@ -1,4 +1,4 @@
-﻿import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -220,7 +220,7 @@ export default function StaffLoginPage() {
 
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col lg:grid lg:grid-cols-[1fr_1.2fr]">
-      {/* Left panel â€” dark navy branding */}
+      {/* Left panel - dark navy branding */}
       <div className="hidden lg:flex flex-col items-center justify-center bg-[#0D1B2A] px-8 py-12 text-white">
         <div className="flex flex-col items-center text-center gap-5 max-w-xs">
           {/* Bus icon */}
@@ -235,7 +235,7 @@ export default function StaffLoginPage() {
         </div>
       </div>
 
-      {/* Right panel â€” form */}
+      {/* Right panel - form */}
       <div className="flex flex-col items-center justify-center min-h-screen px-6 py-10 bg-white lg:px-12">
         <div className="w-full max-w-sm">
           {/* Mobile logo */}
@@ -445,7 +445,7 @@ export default function StaffLoginPage() {
                   {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend code'}
                 </button>
                 <button type="button" onClick={cancelOtp} className="text-slate-500 hover:text-slate-700">
-                  â† Back to login
+                  ← Back to login
                 </button>
               </div>
             </>

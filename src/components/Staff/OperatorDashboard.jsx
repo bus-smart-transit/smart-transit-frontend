@@ -370,9 +370,9 @@ function ScheduleServiceModal({ state, drivers, conductors }) {
       <form className="space-y-4" onSubmit={handleSchedule}>
         <Field label="Fleet Route" required>
           <select value={form.fleet_route_id} onChange={e => setForm(p => ({...p, fleet_route_id: e.target.value}))} required className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500">
-            <option value="">Select a fleet routeâ€¦</option>
+            <option value="">Select a fleet route...</option>
             {fleetRoutes.map(fr => (
-              <option key={fr.fleet_route_id} value={fr.fleet_route_id}>{fr.fleet?.plate_number} â€” {fr.route?.route_name}</option>
+              <option key={fr.fleet_route_id} value={fr.fleet_route_id}>{fr.fleet?.plate_number} - {fr.route?.route_name}</option>
             ))}
           </select>
         </Field>
@@ -393,7 +393,7 @@ function ScheduleServiceModal({ state, drivers, conductors }) {
         {form.trip_type === 'one_way' ? (
           <>
             <Field label="Departure Time" type="time" value={form.departure_time} onChange={e => setForm(p => ({...p, departure_time: e.target.value}))} required />
-            <Field label="Notes (optional)" value={form.notes} onChange={e => setForm(p => ({...p, notes: e.target.value}))} placeholder="Any notesâ€¦" />
+            <Field label="Notes (optional)" value={form.notes} onChange={e => setForm(p => ({...p, notes: e.target.value}))} placeholder="Any notes..." />
           </>
         ) : (
           <>
@@ -435,7 +435,7 @@ function ScheduleServiceModal({ state, drivers, conductors }) {
         )}
         <Field label="Driver" required>
           <select value={form.driver_id} onChange={e => setForm(p => ({ ...p, driver_id: e.target.value }))} required className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500">
-            <option value="">Select a driverâ€¦</option>
+            <option value="">Select a driver...</option>
             {drivers.map(d => (
               <option key={getStaffCompanyUserId(d)} value={getStaffCompanyUserId(d)}>
                 {getStaffFullName(d) || getStaffUsername(d)} ({getStaffEmail(d)})
@@ -445,7 +445,7 @@ function ScheduleServiceModal({ state, drivers, conductors }) {
         </Field>
         <Field label="Conductor" required>
           <select value={form.conductor_id} onChange={e => setForm(p => ({ ...p, conductor_id: e.target.value }))} required className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500">
-            <option value="">Select a conductorâ€¦</option>
+            <option value="">Select a conductor...</option>
             {conductors.map(c => (
               <option key={getStaffCompanyUserId(c)} value={getStaffCompanyUserId(c)}>
                 {getStaffFullName(c) || getStaffUsername(c)} ({getStaffEmail(c)})
