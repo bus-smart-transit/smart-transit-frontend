@@ -209,7 +209,7 @@ export default function OperatorDashboardPage({ trips, drivers, conductors, flee
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <OpCard title="Passenger load factor" subtitle={`Tickets sold against seats and standing room, by route. ${HIGH_LOAD_PCT}% or more is near full.`}>
+        <OpCard title="Tickets sold against capacity" subtitle={`By route, today. This counts tickets sold, not people on board. ${HIGH_LOAD_PCT}% or more is called near full.`}>
           {view.loadByRoute.length === 0 ? <OpEmpty>No tickets or trips to measure today.</OpEmpty> : (
             <div className="space-y-4">
               {view.loadByRoute.map((row) => (
