@@ -259,10 +259,10 @@ export function useConductorDashboardData({ onLogout, pairing }) {
 
     try {
       await ConductorService.setTwoFactorPreference(enabled, 'conductor');
-      setActionMsg(enabled ? '2FA enabled for your account.' : '2FA disabled for your account.');
+      setActionMsg(enabled ? 'Extra login security is on for your account.' : 'Extra login security is off for your account.');
     } catch (err) {
       setTwoFactorEnabled(!enabled);
-      setActionMsg(err?.message || 'Failed to update 2FA preference.');
+      setActionMsg(err?.message || 'We could not update extra login security. Please try again.');
     } finally {
       setSaving2fa(false);
     }
@@ -535,7 +535,7 @@ export function useConductorDashboardData({ onLogout, pairing }) {
         latestShift: shift,
       }));
       void refreshEndBlockedReason();
-      setActionMsg(res?.message || 'Conductor shift started');
+      setActionMsg(res?.message || 'Chauffeur shift started');
       setActiveTab('occupancy');
     } catch (err) {
       setActionMsg(err?.message || 'Unable to start shift right now.');
@@ -592,7 +592,7 @@ export function useConductorDashboardData({ onLogout, pairing }) {
         openShift: null,
         latestShift: shift,
       }));
-      setActionMsg(res?.message || 'Conductor shift ended');
+      setActionMsg(res?.message || 'Chauffeur shift ended');
     } catch (err) {
       setActionMsg(err?.message || 'Unable to end shift right now.');
       void refreshEndBlockedReason();

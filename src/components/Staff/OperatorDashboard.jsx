@@ -244,7 +244,7 @@ function StaffDirectoryTab({ drivers, conductors, onRefresh, onCreateAccount }) 
           >
             <option value="all">All roles</option>
             <option value="driver">Driver</option>
-            <option value="conductor">Conductor</option>
+            <option value="conductor">Chauffeur</option>
           </select>
           <button type="button" onClick={onRefresh} className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50">
             <RefreshCw className="h-4 w-4" /> Refresh
@@ -312,7 +312,7 @@ function StaffDirectoryTab({ drivers, conductors, onRefresh, onCreateAccount }) 
                 className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500"
               >
                 <option value="driver">Driver</option>
-                <option value="conductor">Conductor</option>
+                <option value="conductor">Chauffeur</option>
               </select>
             </Field>
             <Field label="Full Name" value={form.name} onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))} required placeholder="Juan Dela Cruz" />
@@ -443,9 +443,9 @@ function ScheduleServiceModal({ state, drivers, conductors }) {
             ))}
           </select>
         </Field>
-        <Field label="Conductor" required>
+        <Field label="Chauffeur" required>
           <select value={form.conductor_id} onChange={e => setForm(p => ({ ...p, conductor_id: e.target.value }))} required className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500">
-            <option value="">Select a conductor...</option>
+            <option value="">Select a chauffeur...</option>
             {conductors.map(c => (
               <option key={getStaffCompanyUserId(c)} value={getStaffCompanyUserId(c)}>
                 {getStaffFullName(c) || getStaffUsername(c)} ({getStaffEmail(c)})
@@ -556,7 +556,7 @@ function TripsTab({ drivers, conductors, onRefresh, tripsState }) {
             <table className="w-full text-sm">
               <thead className="bg-slate-50">
                 <tr className="border-b border-slate-200">
-                  {['ID','Date','Departure','Route','Fleet','Driver','Conductor','Status','Actions'].map(h => (
+                  {['ID','Date','Departure','Route','Fleet','Driver','Chauffeur','Status','Actions'].map(h => (
                     <th key={h} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
@@ -671,7 +671,7 @@ function TripsTab({ drivers, conductors, onRefresh, tripsState }) {
         <Modal title={`Trip #${selectedTrip.trip_id} Details`} onClose={() => setSelectedTrip(null)}>
           <div className="space-y-4">
             <dl className="grid grid-cols-2 gap-3 text-sm">
-              {[['Date', fmtDate(selectedTrip.trip_date)],['Status', selectedTrip.status],['Route', selectedTrip.fleet_route?.route?.route_name],['Fleet', selectedTrip.fleet_route?.fleet?.plate_number],['Driver', getStaffFullName(selectedTrip.driver) || selectedTrip.driver?.user?.email || 'Unassigned'],['Conductor', getStaffFullName(selectedTrip.conductor) || selectedTrip.conductor?.user?.email || 'Unassigned'],['Revenue', fmt(selectedTrip.total_revenue)]].map(([label, value]) => (
+              {[['Date', fmtDate(selectedTrip.trip_date)],['Status', selectedTrip.status],['Route', selectedTrip.fleet_route?.route?.route_name],['Fleet', selectedTrip.fleet_route?.fleet?.plate_number],['Driver', getStaffFullName(selectedTrip.driver) || selectedTrip.driver?.user?.email || 'Unassigned'],['Chauffeur', getStaffFullName(selectedTrip.conductor) || selectedTrip.conductor?.user?.email || 'Unassigned'],['Revenue', fmt(selectedTrip.total_revenue)]].map(([label, value]) => (
                 <div key={label}>
                   <dt className="text-xs font-medium uppercase tracking-wide text-slate-400">{label}</dt>
                   <dd className="mt-0.5 font-semibold text-slate-900">{value || '-'}</dd>
@@ -700,7 +700,7 @@ function TripsTab({ drivers, conductors, onRefresh, tripsState }) {
                   disabled={statusOverrideSaving}
                   className="mt-2 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700 disabled:opacity-60"
                 >
-                  {statusOverrideSaving ? 'Updating...' : 'Force Complete'}
+                  {statusOverrideSaving ? 'Updating...' : 'Complete anyway'}
                 </button>
                 {statusOverrideMsg && <p className="mt-2 text-xs font-medium text-amber-800">{statusOverrideMsg}</p>}
               </div>

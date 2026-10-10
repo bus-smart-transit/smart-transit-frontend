@@ -51,7 +51,7 @@ export default function HistoricalForecastPanel({ trips, routes, fleets }) {
     const fleetName = fleets.find((f) => String(f.fleet_id) === String(filters.fleetId))?.plate_number || 'All fleets'
     const opened = openPrintReport({
       title: 'Historical Forecast',
-      meta: [['Report', 'Historical Forecast (heuristic estimate)'], ['From', filters.from || 'Any'], ['To', filters.to || 'Any'], ['Route', routeName], ['Fleet', fleetName]],
+      meta: [['Report', 'Historical Forecast (estimate from past trips)'], ['From', filters.from || 'Any'], ['To', filters.to || 'Any'], ['Route', routeName], ['Fleet', fleetName]],
       columns: PRINT_COLUMNS,
       rows,
     })

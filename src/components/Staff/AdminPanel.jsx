@@ -59,7 +59,7 @@ export default function AdminPanel() {
       const res = await AdminService.getStops();
       setStops(res?.data ?? []);
     } catch (err) {
-      showMessage(err.message || 'Failed to load stops', false);
+      showMessage(err.message || 'We could not load stops. Please try again.', false);
     } finally {
       setLoading(false);
     }
@@ -227,7 +227,7 @@ export default function AdminPanel() {
       setAllDrivers(drivers?.data ?? []);
       setAllConductors(conductors?.data ?? []);
     } catch (err) {
-      showMessage(err.message || 'Failed to load accounts', false);
+      showMessage(err.message || 'We could not load staff accounts. Please try again.', false);
     } finally {
       setLoading(false);
     }
@@ -271,7 +271,7 @@ export default function AdminPanel() {
             <ShieldCheck className="h-4 w-4 text-sky-400" />
             Admin Panel
           </div>
-          <p className="mb-4 text-xs text-slate-500">Manage stops, routes, fleets, and personnel records.</p>
+          <p className="mb-4 text-xs text-slate-500">Manage stops, routes, fleets, and staff accounts.</p>
 
           <nav className="relative mt-2 flex flex-col gap-1 pl-3">
             <div className="absolute bottom-2 left-1.75 top-2 w-px bg-slate-800" aria-hidden="true" />
@@ -332,7 +332,7 @@ export default function AdminPanel() {
             <form onSubmit={handleAddStop} className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5 lg:col-span-1">
               <div className="mb-4 border-b border-slate-800 pb-4">
                 <h2 className="text-lg font-semibold text-slate-100">{editingStopId ? 'Edit Stop' : 'Add Stop'}</h2>
-                <p className="mt-1 text-xs text-slate-500">Register station points for route mapping and passenger pickups.</p>
+                <p className="mt-1 text-xs text-slate-500">Add the stops used by routes and passenger pickups.</p>
               </div>
               <div className="space-y-3">
                 <input
@@ -602,7 +602,7 @@ export default function AdminPanel() {
                         <p className="text-xs text-slate-400" data-testid="fleet-bus-label">Passenger label: {busLabelText(fleet.bus_label ?? (fleet.bus_company_name && fleet.body_no ? `${fleet.bus_company_name} - ${fleet.body_no}` : null))}</p>
                         <p className="text-sm text-slate-400">{fleet.seated_capacity} seated + {fleet.standing_capacity} standing = {fleet.capacity} total</p>
                         <p className="text-xs text-slate-400" data-testid="fleet-class">
-                          {fleet.fleet_type || 'public'} fleet &middot; {fareOptions.vehicle_classes.find(entry => entry.key === fleet.vehicle_class)?.label || 'class not specified'}
+                          {fleet.fleet_type || 'public'} fleet &middot; {fareOptions.vehicle_classes.find(entry => entry.key === fleet.vehicle_class)?.label || 'bus type not set'}
                         </p>
                       </div>
                       <div className="flex gap-2">
@@ -701,7 +701,7 @@ export default function AdminPanel() {
                   className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2.5 text-sm text-white outline-none transition focus:border-sky-500"
                 >
                   <option value="driver">Driver</option>
-                  <option value="conductor">Conductor</option>
+                  <option value="conductor">Chauffeur</option>
                 </select>
                 <button type="submit" disabled={loading} className="flex w-full items-center justify-center gap-2 rounded-xl bg-sky-600 px-3 py-2.5 text-sm font-semibold text-white transition hover:bg-sky-500 disabled:cursor-not-allowed disabled:opacity-60">
                   {loading ? <Loader className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
@@ -732,12 +732,12 @@ export default function AdminPanel() {
 
               <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
                 <div className="mb-4 border-b border-slate-800 pb-4">
-                  <h2 className="text-lg font-semibold text-slate-100">Conductors ({allConductors.length})</h2>
+                  <h2 className="text-lg font-semibold text-slate-100">Chauffeurs ({allConductors.length})</h2>
                   <p className="mt-1 text-xs text-slate-500">Fare and passenger flow personnel.</p>
                 </div>
                 <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
                   {allConductors.length === 0 ? (
-                    <p className="rounded-xl border border-dashed border-slate-700 bg-slate-900 p-6 text-center text-sm text-slate-400">No conductors yet</p>
+                    <p className="rounded-xl border border-dashed border-slate-700 bg-slate-900 p-6 text-center text-sm text-slate-400">No chauffeurs yet</p>
                   ) : (
                     allConductors.map(conductor => (
                       <div key={conductor.company_user_id} className="rounded-xl border border-slate-700 bg-slate-900/70 p-3">

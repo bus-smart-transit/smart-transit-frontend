@@ -560,7 +560,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                       disabled={shiftBlockActionInFlight || !eligibility?.eligible}
                       className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
                     >
-                      End Shift / Initiate Hand-off
+                      End shift or hand over
                     </button>
                     {reason && <p className="basis-full text-xs text-amber-600" data-testid="handoff-reason">{reason}</p>}
                   </>
@@ -1045,10 +1045,10 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                                       className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
                                       onClick={() => handleAlight(p.ticket_id)}
                                       disabled={!isPaired}
-                                      title={!isPaired ? 'Pairing is required to record alighting.' : undefined}
+                                      title={!isPaired ? 'You must be paired before you can mark a drop-off.' : undefined}
                                     >
                                       <UserCheck className="h-3.5 w-3.5" />
-                                      Record Alight
+                                      Mark as dropped off
                                     </button>
                                   )}
                                 </td>
@@ -1216,12 +1216,12 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                 <div className="inline-flex h-16 w-16 items-center justify-center rounded-full bg-linear-to-br from-emerald-600 to-teal-600 text-2xl font-bold text-white">
                   {(profile?.name || 'C')[0].toUpperCase()}
                 </div>
-                <h3 className="mt-2 text-lg font-semibold text-slate-900">{profile?.name || 'Conductor'}</h3>
-                <p className="text-xs text-slate-500">Verified Conductor</p>
+                <h3 className="mt-2 text-lg font-semibold text-slate-900">{profile?.name || 'Chauffeur'}</h3>
+                <p className="text-xs text-slate-500">Verified Chauffeur</p>
               </div>
               <div className="space-y-3 text-sm">
                 <div className="flex items-center justify-between"><span className="text-slate-500">Email</span><strong className="text-slate-900">{profile?.user?.email || profile?.email || '-'}</strong></div>
-                <div className="flex items-center justify-between"><span className="text-slate-500">Conductor ID</span><strong className="font-data text-slate-900">{profile?.company_user_id || '-'}</strong></div>
+                <div className="flex items-center justify-between"><span className="text-slate-500">Chauffeur ID</span><strong className="font-data text-slate-900">{profile?.company_user_id || '-'}</strong></div>
                 <div className="flex items-center justify-between"><span className="text-slate-500">Status</span><strong className="text-emerald-600">Active</strong></div>
                 <div className="flex items-center justify-between"><span className="text-slate-500">Shift Started</span><strong className="font-data text-slate-900">{formatDateTime(shiftState?.latestShift?.started_at)}</strong></div>
                 <div className="flex items-center justify-between"><span className="text-slate-500">Shift Ended</span><strong className="font-data text-slate-900">{formatDateTime(shiftState?.latestShift?.ended_at)}</strong></div>
@@ -1229,7 +1229,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
             </article>
 
             <article className="staff-card">
-              <h4 className="mb-3 text-base font-semibold text-slate-900">Security & 2FA</h4>
+              <h4 className="mb-3 text-base font-semibold text-slate-900">Security and extra login code</h4>
               <div className="space-y-3">
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-slate-600">Two-Factor Authentication</span>
@@ -1306,7 +1306,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
       {confirmCheckout && (
         <ModalShell label="Record cash payment" onClose={() => setConfirmCheckout(false)} closeOnOverlay={false} overlayClassName="bg-black/60">
           <div className="w-full max-w-sm rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl">
-            <h3 className="mb-2 text-base font-bold text-slate-100">Record Cash Payment?</h3>
+            <h3 className="mb-2 text-base font-bold text-slate-100">Save this cash payment?</h3>
             <p className="mb-4 text-sm text-slate-400">This will create a payment record. <strong className="text-amber-300">This cannot be undone.</strong></p>
             <dl className="mb-4 grid grid-cols-2 gap-2 rounded-lg bg-slate-800 p-3 text-sm">
               <div><dt className="text-xs text-slate-500">Passenger Type</dt><dd className="font-semibold text-slate-100 capitalize">{onsiteForm.seat_type}</dd></div>

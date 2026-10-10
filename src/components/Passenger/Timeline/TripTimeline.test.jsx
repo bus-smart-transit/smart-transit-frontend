@@ -25,18 +25,18 @@ const timeline = (overrides = {}) => ({
 });
 
 describe('TripTimeline', () => {
-  test('shows the header with the bus class and fleet type as not specified when unset, badges, ETA unavailable, and folds pass-through runs', () => {
+  test('shows the header with the bus type and service type as not set when unset, badges, arrival time not available, and folds pass-through runs', () => {
     render(<TripTimeline timeline={timeline()} />);
 
     expect(screen.getByText('Last Stop')).toBeInTheDocument();
     expect(screen.getByText(/via Mid A, Mid B/)).toBeInTheDocument();
     expect(screen.getByText('BUS - 1')).toBeInTheDocument();
     expect(screen.getByText('1 h 35 min')).toBeInTheDocument();
-    expect(screen.getByTestId('timeline-bus-class')).toHaveTextContent('Class not specified');
-    expect(screen.getByTestId('timeline-bus-class')).toHaveTextContent('Fleet type not specified');
+    expect(screen.getByTestId('timeline-bus-class')).toHaveTextContent('Bus type not set');
+    expect(screen.getByTestId('timeline-bus-class')).toHaveTextContent('Service type not set');
     expect(screen.getByText('You board here')).toBeInTheDocument();
     expect(screen.getByText('You get off here')).toBeInTheDocument();
-    expect(screen.getByText('ETA unavailable')).toBeInTheDocument();
+    expect(screen.getByText('Arrival time not available')).toBeInTheDocument();
     expect(screen.queryByText('Stop 3')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /show 3 stops/i }));
@@ -48,7 +48,7 @@ describe('TripTimeline', () => {
 
     expect(screen.getByTestId('timeline-bus-class')).toHaveTextContent('Aircon');
     expect(screen.getByTestId('timeline-bus-class')).toHaveTextContent('Public');
-    expect(screen.getByTestId('timeline-bus-class')).not.toHaveTextContent('not specified');
+    expect(screen.getByTestId('timeline-bus-class')).not.toHaveTextContent('not set');
   });
 
   test('choosing a selectable stop asks the server to recompute via the callback', () => {
@@ -87,7 +87,7 @@ describe('TripTimeline', () => {
     );
 
     expect(screen.queryByText(/drop off somewhere else/i)).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /drop off at a listed point/i }));
+    fireEvent.click(screen.getByRole('button', { name: /get off at a listed drop-off point/i }));
     expect(onOpen).toHaveBeenCalled();
     expect(screen.getByText('Typed Point')).toBeInTheDocument();
     expect(screen.getByText('landmark')).toBeInTheDocument();

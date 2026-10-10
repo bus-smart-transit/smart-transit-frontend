@@ -20,7 +20,7 @@ const LEGEND = [
 
 function EtaCell({ row }) {
   const time = etaLabel(row)
-  if (!time) return <span className="text-xs text-slate-400">ETA unavailable</span>
+  if (!time) return <span className="text-xs text-slate-400">Arrival time not available</span>
   return (
     <span className="text-right">
       <span className="text-sm font-semibold text-navy-950">{time}</span>
@@ -49,7 +49,7 @@ function TimelineRow({ row, canSelect, onSelect }) {
           {row.is_alighting && <span className="rounded bg-sky-100 px-1.5 py-0.5 font-semibold text-sky-700">You get off here</span>}
           {row.point_kind && <span className="rounded-full bg-amber-100 px-2 py-0.5 font-semibold capitalize text-amber-800">{row.point_kind}</span>}
           {row.custom && !row.point_kind && row.distance_from_route_m != null && (
-            <span>{Math.round(row.distance_from_route_m)} m from the route line</span>
+            <span>{Math.round(row.distance_from_route_m)} m from the bus route</span>
           )}
         </span>
       </span>
@@ -81,7 +81,7 @@ function TimelineRow({ row, canSelect, onSelect }) {
 /**
  * A2: the trip timeline. Rows, ETAs, journey flags and totals all come from the
  * server (GET /trips/{id}/timeline); choosing a stop or a drop-off pin asks the
- * server to recompute. Nothing is invented: a missing ETA reads "ETA unavailable".
+ * server to recompute. Nothing is invented: a missing ETA reads "Arrival time not available".
  */
 export default function TripTimeline({
   timeline,
@@ -127,9 +127,9 @@ export default function TripTimeline({
           <span className="inline-flex items-center gap-1" data-testid="timeline-bus-label"><Bus size={13} /> {busLabelText(bus?.label)}</span>
           <RunInfoChips runPattern={timeline.trip?.run_pattern} service={timeline.trip?.service} serviceType={timeline.trip?.service_type} showStops />
           <span data-testid="timeline-bus-class">
-            {bus?.class_label || 'Class not specified'}
+            {bus?.class_label || 'Bus type not set'}
             {' \u00b7 '}
-            {bus?.fleet_type ? `${bus.fleet_type.charAt(0).toUpperCase()}${bus.fleet_type.slice(1)}` : 'Fleet type not specified'}
+            {bus?.fleet_type ? `${bus.fleet_type.charAt(0).toUpperCase()}${bus.fleet_type.slice(1)}` : 'Service type not set'}
           </span>
           {timeline.trip?.departure_time && <span>Departs {timeline.trip.departure_time}</span>}
           {facts.map((fact) => (
@@ -191,7 +191,7 @@ export default function TripTimeline({
               aria-describedby={pinReason ? 'custom-dropoff-reason' : undefined}
               className="inline-flex items-center gap-1.5 rounded-lg border border-navy-800 px-3 py-1.5 text-xs font-semibold text-navy-800 transition hover:bg-navy-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <MapPin size={14} /> {timeline.dropoff_mode === 'designated_points' ? 'Drop off at a listed point (not a stop)' : 'Drop off somewhere else (pin on map)'}
+              <MapPin size={14} /> {timeline.dropoff_mode === 'designated_points' ? 'Get off at a listed drop-off point' : 'Drop off somewhere else (choose on the map)'}
             </button>
           )}
           {pinReason && <span id="custom-dropoff-reason" className="text-xs text-slate-500">{pinReason}</span>}

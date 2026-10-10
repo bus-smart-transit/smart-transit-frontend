@@ -8,8 +8,8 @@ import { formatManilaDate } from '../../../utils/dates'
 
 const STATE_STYLE = {
   tracking: { label: 'Live', tone: 'bg-emerald-50 text-emerald-800 ring-emerald-200' },
-  stale: { label: 'Last known position', tone: 'bg-amber-50 text-amber-800 ring-amber-200' },
-  no_signal: { label: 'No signal yet', tone: 'bg-slate-100 text-slate-700 ring-slate-200' },
+  stale: { label: 'Bus location may be old', tone: 'bg-amber-50 text-amber-800 ring-amber-200' },
+  no_signal: { label: 'Bus location not available yet', tone: 'bg-slate-100 text-slate-700 ring-slate-200' },
   waiting: { label: 'Not departed yet', tone: 'bg-sky-50 text-sky-800 ring-sky-200' },
   not_yet: { label: 'Tracking opens soon', tone: 'bg-sky-50 text-sky-800 ring-sky-200' },
   arrived: { label: 'Trip completed', tone: 'bg-emerald-50 text-emerald-800 ring-emerald-200' },
@@ -21,7 +21,7 @@ const STATE_STYLE = {
 // "08:15 (in 12 min)": measured against the server's clock at the time of the answer, so a
 // phone with the wrong time still reads correctly.
 function etaText(stop, generatedAt) {
-  if (!stop?.eta_time) return 'ETA unavailable'
+  if (!stop?.eta_time) return 'Arrival time not available'
   const minutes = Math.round((Date.parse(stop.eta) - Date.parse(generatedAt)) / 60000)
   const rel = Number.isFinite(minutes) ? (minutes <= 0 ? ' (now)' : ` (in ${minutes} min)`) : ''
   return `${stop.eta_time}${rel}`

@@ -174,7 +174,7 @@ export default function BuyTicket({ onTicketPurchased }) {
 
       {checkoutStatus === 'pending' && (
         <Card className="p-4">
-          <h2 className="font-display text-lg font-semibold text-navy-950">Checkout in Progress</h2>
+          <h2 className="font-display text-lg font-semibold text-navy-950">Payment in progress</h2>
           <p className="mt-2 text-sm text-slate-500">
             Finish the payment in the payment tab (or in your GCash / Maya app if it opens). This page updates
             when the payment is confirmed. Your seats are held for a short time while you pay.
@@ -201,7 +201,7 @@ export default function BuyTicket({ onTicketPurchased }) {
                 </p>
                 <QrImage content={qrTickets[0].group_qr_content} alt="Group boarding QR" size={400} className="mt-2 h-40 w-40 rounded-lg" />
                 <p className="mt-2 text-xs text-teal-700">
-                  The conductor scans this QR to board all passengers in your order at once.
+                  The chauffeur scans this QR to board all passengers in your order at once.
                 </p>
                 <div className="mt-3">
                   <SaveQrButton ticket={qrTickets[0]} group groupSize={qrTickets.length} active={Boolean(qrTickets[0]?.group_qr_content)} />
@@ -390,7 +390,7 @@ export default function BuyTicket({ onTicketPurchased }) {
                       <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
                         {[
                           [Clock3, 'Departure', `${trip.boarding_time} at ${boardingLabel}`],
-                          [Clock3, 'Arrival', alightingRow?.eta_time || 'ETA unavailable'],
+                          [Clock3, 'Arrival', alightingRow?.eta_time || 'Arrival time not available'],
                           [Bus, 'Bus', busLabelText(trip.bus_label)],
                           [MapPin, 'Duration', formatDuration(timeline?.header?.duration_minutes) || '-'],
                         ].map(([Icon, label, value]) => (
@@ -402,7 +402,7 @@ export default function BuyTicket({ onTicketPurchased }) {
                       </div>
                     )}
                     {trip && !trip.boarding_time_is_scheduled_offset && (
-                      <p className="mt-2 text-xs text-slate-500">This is the trip start time; a per-stop schedule is not set for this route.</p>
+                      <p className="mt-2 text-xs text-slate-500">This is the trip start time; stop-by-stop times are not set for this route.</p>
                     )}
                     {formErrors.trip && <p className="mt-2 text-xs text-red-600">{formErrors.trip}</p>}
                   </div>
@@ -521,7 +521,7 @@ export default function BuyTicket({ onTicketPurchased }) {
                     {!isGuestCheckout && !roundtrip.active && (
                       <div className="mt-4 rounded-xl border border-slate-200 px-4 py-2">
                         <p className="pt-1.5 text-sm text-slate-500">
-                          {loadingRewards ? 'Loading reward balance...' : <>Available Rewards: <strong className="text-navy-950">{Number(availableRewardPoints || 0).toFixed(0)} RP</strong></>}
+                          {loadingRewards ? 'Loading reward balance...' : <>Available Rewards: <strong className="text-navy-950">{Number(availableRewardPoints || 0).toFixed(0)} points</strong></>}
                         </p>
                         <Toggle
                           checked={Boolean(form.use_rewards)}
@@ -546,7 +546,7 @@ export default function BuyTicket({ onTicketPurchased }) {
                               className={FIELD}
                             />
                             <div className={`mt-1.5 text-xs ${isRewardRequestInsufficient ? 'text-red-600' : 'text-slate-500'}`}>
-                              Max usable now: {Number(maxRedeemableRewardPoints || 0).toFixed(0)} RP
+                              You can use up to {Number(maxRedeemableRewardPoints || 0).toFixed(0)} points now
                               {isRewardRequestInsufficient ? ' (insufficient for requested amount)' : ''}
                             </div>
                             {formErrors.reward_points_to_use && <div className="mt-1 text-xs text-red-600">{formErrors.reward_points_to_use}</div>}
@@ -579,7 +579,7 @@ export default function BuyTicket({ onTicketPurchased }) {
               </SummaryRow>
               <SummaryRow label={roundtrip.active ? 'Passengers' : 'Quantity'}>{totalTickets}</SummaryRow>
               <SummaryRow label="Gross Total">PHP {Number(grossTotal || 0).toFixed(2)}</SummaryRow>
-              <SummaryRow label="Rewards Applied">{Number(rewardPointsToApply || 0).toFixed(0)} RP</SummaryRow>
+              <SummaryRow label="Rewards Applied">{Number(rewardPointsToApply || 0).toFixed(0)} points</SummaryRow>
             </dl>
             <div className="mt-2 flex items-center justify-between border-t border-slate-200 pt-4">
               <span className="text-sm font-semibold text-navy-950">Net Total</span>

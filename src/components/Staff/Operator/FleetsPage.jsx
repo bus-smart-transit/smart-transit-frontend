@@ -136,7 +136,7 @@ function TrackFleetModal({ row, advice, saving, error, onDecide, onClose, onOpen
             <div><dt className="text-xs text-slate-500">Route</dt><dd className="font-semibold text-slate-900">{routeNameOf(trip)}</dd></div>
             <div><dt className="text-xs text-slate-500">Scheduled departure</dt><dd className="font-semibold text-slate-900">{departureLabel(trip)}</dd></div>
             <div><dt className="text-xs text-slate-500">Driver</dt><dd className="font-semibold text-slate-900">{personName(trip.driver) ?? 'Not assigned'}</dd></div>
-            <div><dt className="text-xs text-slate-500">Conductor</dt><dd className="font-semibold text-slate-900">{personName(trip.conductor) ?? 'Not assigned'}</dd></div>
+            <div><dt className="text-xs text-slate-500">Chauffeur</dt><dd className="font-semibold text-slate-900">{personName(trip.conductor) ?? 'Not assigned'}</dd></div>
             <div><dt className="text-xs text-slate-500">Tickets sold</dt><dd className="font-semibold text-slate-900">{ticketsSold(trip)} of {capacityOf(trip) || '-'}{pct === null ? '' : ` (${pct}%)`}</dd></div>
             <div><dt className="text-xs text-slate-500">Trip status</dt><dd className="font-semibold capitalize text-slate-900">{String(trip.status).replace('-', ' ')}</dd></div>
           </dl>
@@ -194,13 +194,13 @@ export default function FleetsPage({ fleets, routes, trips, onRefresh }) {
         {(row.fleet.body_no || row.fleet.bus_company_name) && <span className="block text-xs text-slate-500">{[row.fleet.body_no, row.fleet.bus_company_name].filter(Boolean).join(' - ')}</span>}
       </span>
     ) },
-    { key: 'type', header: 'Type', render: (row) => <span className="whitespace-nowrap text-xs">{row.fleet.fleet_type || 'public'}<span className="block text-slate-500">{classLabel(row.fleet.vehicle_class) || 'Class not specified'}</span></span> },
+    { key: 'type', header: 'Type', render: (row) => <span className="whitespace-nowrap text-xs">{row.fleet.fleet_type || 'public'}<span className="block text-slate-500">{classLabel(row.fleet.vehicle_class) || 'Bus type not set'}</span></span> },
     { key: 'capacity', header: 'Capacity', render: (row) => <span className="whitespace-nowrap text-xs">{row.fleet.capacity ?? '-'}<span className="block text-slate-500">{row.fleet.seated_capacity ?? 0} seated, {row.fleet.standing_capacity ?? 0} standing</span></span> },
     { key: 'routes', header: 'Routes', render: (row) => (row.routes.length ? row.routes.join(', ') : <span className="text-slate-400">No route</span>) },
     { key: 'status', header: 'Status', render: (row) => <OpChip tone={row.status.tone}>{row.status.label}</OpChip> },
     { key: 'trip', header: 'Current or next trip', render: (row) => (row.nextTripLabel ?? <span className="text-slate-400">No trip left today</span>), className: 'whitespace-nowrap' },
     { key: 'gps', header: 'GPS', render: (row) => (row.liveTrip
-      ? <span className="whitespace-nowrap"><OpChip tone={GPS_TONE[row.gps.state]}>{row.gps.state === 'live' ? 'Live' : row.gps.state === 'none' ? 'No GPS' : row.gps.state === 'stale' ? 'Stale' : row.gps.state === 'weak' ? 'Weak' : 'Off route'}</OpChip>{row.lastSeen && <span className="ml-2 text-xs text-slate-500">{row.lastSeen}</span>}</span>
+      ? <span className="whitespace-nowrap"><OpChip tone={GPS_TONE[row.gps.state]}>{row.gps.state === 'live' ? 'Live' : row.gps.state === 'none' ? 'No GPS' : row.gps.state === 'stale' ? 'Out of date' : row.gps.state === 'weak' ? 'Weak signal' : 'Off route'}</OpChip>{row.lastSeen && <span className="ml-2 text-xs text-slate-500">{row.lastSeen}</span>}</span>
       : <span className="text-xs text-slate-500">{row.lastSeen ? `Last seen ${row.lastSeen}` : '-'}</span>) },
     { key: 'action', header: '', render: (row) => (
       <button

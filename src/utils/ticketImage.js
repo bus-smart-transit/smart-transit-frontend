@@ -59,7 +59,7 @@ export function buildTicketImageModel(ticket, { group = false, groupSize = 1 } =
     title: group ? 'SmartTransit Group Ticket' : 'SmartTransit Ticket',
     qrContent: content || null,
     lines,
-    footer: group ? 'Show this QR once to board everyone in this order' : 'Present this QR code to the conductor when boarding',
+    footer: group ? 'Show this QR once to board everyone in this order' : 'Present this QR code to the chauffeur when boarding',
   };
 }
 

@@ -387,7 +387,7 @@ export default function useBuyTicket({ onTicketPurchased }) {
                 <div><span class="k">Fare Paid</span><span class="v">PHP ${Number(ticket.amount || 0).toFixed(2)}</span></div>
               </div>
             </div>
-            <div class="foot">Valid Ticket — Present QR code to board</div>
+            <div class="foot">Valid ticket. Show this QR code when boarding</div>
           </article>
           <script>window.onload = function () { window.print(); };</script>
         </body>
@@ -774,7 +774,7 @@ export default function useBuyTicket({ onTicketPurchased }) {
           : 'Your fare is not ready yet. Check the journey above and try again.';
       }
       if (!roundtripOn && form.use_rewards && isRewardRequestInsufficient) {
-        nextErrors.reward_points_to_use = `Insufficient reward points for this booking. Max usable now: ${maxRedeemableRewardPoints} RP.`;
+        nextErrors.reward_points_to_use = `You do not have enough reward points for this booking. You can use up to ${maxRedeemableRewardPoints} points now.`;
       }
 
       if (Object.keys(nextErrors).length > 0) {

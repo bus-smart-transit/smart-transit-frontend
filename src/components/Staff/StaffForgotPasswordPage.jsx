@@ -44,7 +44,7 @@ export default function StaffForgotPasswordPage() {
             <h1 className="font-display text-3xl font-bold tracking-wide">SMARTTRANSIT</h1>
             <p className="mt-1 text-base text-slate-400">Staff Security</p>
           </div>
-          <p className="text-sm text-slate-400">Recover access for driver, conductor, or operator accounts.</p>
+          <p className="text-sm text-slate-400">Recover access for driver, chauffeur, or operator accounts.</p>
         </div>
       </div>
 

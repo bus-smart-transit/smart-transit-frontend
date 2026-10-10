@@ -19,7 +19,7 @@ import { TokenManager } from '../../utils/TokenManager.js';
 
 const ROLES = [
   { value: 'driver', label: 'Driver', icon: Bus, desc: 'Manage trips and route navigation' },
-  { value: 'conductor', label: 'Conductor', icon: Ticket, desc: 'Handle ticket validation and occupancy' },
+  { value: 'conductor', label: 'Chauffeur', icon: Ticket, desc: 'Handle ticket validation and occupancy' },
   { value: 'operator', label: 'Operator', icon: Users, desc: 'Monitor fleets, schedules, and reports' },
 ];
 

@@ -71,7 +71,7 @@ describe('TrackBusPage', () => {
     getTracking.mockResolvedValue(view({ state: 'stale', bus: { ...view().bus, age_seconds: 300 } }));
     renderPage();
 
-    expect(await screen.findByText('Last known position')).toBeInTheDocument();
+    expect(await screen.findByText('Bus location may be old')).toBeInTheDocument();
     expect(screen.getByText('Last update 5 min ago.')).toBeInTheDocument();
   });
 

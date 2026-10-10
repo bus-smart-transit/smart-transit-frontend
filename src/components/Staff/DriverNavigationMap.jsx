@@ -6,8 +6,8 @@ const ROUTE_STATUS_TEXT = {
   idle: 'No route assigned',
   loading: 'Loading route…',
   ready: '✓ Route loaded',
-  no_geometry: 'Route path not generated yet',
-  error: 'Route could not be loaded',
+  no_geometry: 'The route line is not ready yet',
+  error: 'We could not load this route. Please try again.',
 };
 
 /**

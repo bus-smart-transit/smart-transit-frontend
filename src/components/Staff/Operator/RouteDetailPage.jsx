@@ -68,7 +68,7 @@ function OverviewTab({ row, trips, routesTab, onChangeDropoff }) {
     <div className={OP_SPACE.stack}>
       <div className={OP_SPACE.inline}>
         <OpChip tone={row.status.tone}>{row.status.label}</OpChip>
-        {row.geometryIssue && <OpChip tone="warning">Route line needs regenerating</OpChip>}
+        {row.geometryIssue && <OpChip tone="warning">Route line needs to be redrawn</OpChip>}
         {route.geometry_error && <span className="text-xs text-slate-500">{route.geometry_error}</span>}
       </div>
       <section aria-label="Route summary" className="grid grid-cols-2 gap-4 lg:grid-cols-5">

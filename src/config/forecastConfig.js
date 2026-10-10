@@ -6,7 +6,7 @@
 
 export const FORECAST_CONFIG = {
   heuristicNotice:
-    'Heuristic estimate. Scores come from trip status, crew coverage and cancellations using fixed weights (config/forecastConfig.js). They are not measured or provider-backed traffic data.',
+    'Estimate only. Scores come from past trip status, crew coverage and cancellations, using fixed weights (config/forecastConfig.js). They are not measured or live traffic data.',
 
   // Points added to a route's risk score per occurrence.
   riskWeights: {

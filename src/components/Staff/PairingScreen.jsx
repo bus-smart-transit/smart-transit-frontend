@@ -15,7 +15,7 @@ import QrImage from '../Passenger/Ticket/QrImage';
 const isLikelyPin = (value) => /^\d{6}$/.test(String(value || '').trim());
 
 export default function PairingScreen({ role, onPaired, onLogout, paired = false, pairingReason = '' }) {
-  const partnerRole = role === 'driver' ? 'Conductor' : 'Driver';
+  const partnerRole = role === 'driver' ? 'Chauffeur' : 'Driver';
 
   const [myToken, setMyToken] = useState(null);
   const [loadingToken, setLoadingToken] = useState(true);

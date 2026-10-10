@@ -111,10 +111,10 @@ export default function Dashboard() {
 
     try {
       await PassengerService.setTwoFactorPreference(enabled);
-      setTwoFactorMsg(enabled ? '2FA enabled. Future logins require OTP.' : '2FA disabled. Future logins skip OTP.');
+      setTwoFactorMsg(enabled ? 'Extra login security is on. You will enter a one-time code each time you sign in.' : 'Extra login security is off. You will not need a one-time code to sign in.');
     } catch (err) {
       setTwoFactorOverride(null);
-      setTwoFactorMsg(err?.message || 'Unable to update 2FA preference right now.');
+      setTwoFactorMsg(err?.message || 'We could not update your extra login security right now. Please try again.');
     } finally {
       setUpdating2fa(false);
     }

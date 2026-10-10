@@ -4,11 +4,11 @@ import { Navigation } from 'lucide-react';
 import QrImage from './QrImage';
 
 const STATUS_FOOTER = {
-  valid:     { text: 'Valid Ticket — Present QR code to board', mod: 'border-emerald-300 bg-emerald-50 text-emerald-800' },
+  valid:     { text: 'Valid ticket. Show this QR code when boarding', mod: 'border-emerald-300 bg-emerald-50 text-emerald-800' },
   issued:    { text: 'Ticket Issued — Ready for boarding', mod: 'border-emerald-300 bg-emerald-50 text-emerald-800' },
   boarded:   { text: 'Boarded — You are currently on this trip', mod: 'border-sky-300 bg-sky-50 text-sky-700' },
   alighted:  { text: 'Trip Completed — Thank you for riding!', mod: 'border-slate-300 bg-slate-100 text-slate-600' },
-  expired:   { text: 'Ticket Expired — This ticket is no longer valid', mod: 'border-red-300 bg-red-50 text-red-800' },
+  expired:   { text: 'This ticket has expired', mod: 'border-red-300 bg-red-50 text-red-800' },
   cancelled: { text: 'Ticket Cancelled', mod: 'border-red-300 bg-red-50 text-red-900' },
 };
 

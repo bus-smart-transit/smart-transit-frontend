@@ -113,7 +113,7 @@ const resolveDriverHeaderBadge = ({
   if (!hasOpenShift) return { label: 'Shift not started', tone: 'border-sky-200 bg-sky-50 text-sky-700' };
   if (!isAvailable) return { label: 'Marked unavailable', tone: 'border-slate-200 bg-slate-50 text-slate-600' };
   const tripIsMoving = ['in_transit', 'at_stop'].includes(tripStatus?.key);
-  if (hasActiveTrip && tripIsMoving && !gpsActive) return { label: 'GPS acquiring', tone: 'border-violet-200 bg-violet-50 text-violet-700' };
+  if (hasActiveTrip && tripIsMoving && !gpsActive) return { label: 'Finding your location', tone: 'border-violet-200 bg-violet-50 text-violet-700' };
   // A1: once the trip is live the badge is the trip's own derived status.
   if (hasActiveTrip && tripStatus) return { label: tripStatus.label, tone: tripStatus.tone };
   return { label: 'Ready', tone: 'border-emerald-200 bg-emerald-50 text-emerald-700' };
@@ -462,7 +462,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
               <div className="mb-4 flex items-center justify-between">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Route health</p>
-                  <h4 className="text-base font-bold text-slate-900">Traffic & ETA</h4>
+                  <h4 className="text-base font-bold text-slate-900">Traffic and arrival time</h4>
                 </div>
                 <span className={`rounded-full px-2.5 py-1 text-xs font-bold uppercase tracking-[0.15em] ${
                   trafficStatus.dataSource === 'fallback' || trafficStatus.level === 'unknown'
@@ -479,7 +479,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
 
               {trafficStatus.dataSource === 'fallback' && (
                 <p className="mb-3 rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-500">
-                  Live traffic provider is unavailable. ETA and delay are hidden until provider-backed data is available.
+                  Live traffic is not available right now. Arrival time and delay are hidden until it is back.
                 </p>
               )}
 
@@ -798,8 +798,8 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
             no longer embeds the full PairingScreen widget here. */}
         {!loading && activeTab === 'activeTrip' && !isPaired && (
           <section className="rounded-xl border border-amber-200 bg-amber-50 p-4">
-            <p className="text-sm font-semibold text-amber-800">Not paired with your conductor yet</p>
-            <p className="mt-1 text-sm text-amber-700">Live actions (start boarding, depart, end trip, acknowledge stops) stay disabled until pairing is complete. Trip data below stays visible.</p>
+            <p className="text-sm font-semibold text-amber-800">Not paired with your chauffeur yet</p>
+            <p className="mt-1 text-sm text-amber-700">Live actions (start boarding, depart, end trip, acknowledge stops) stay off until you are paired with your chauffeur. Trip data below stays visible.</p>
             <button
               type="button"
               onClick={() => setActiveTab('pin')}
@@ -824,7 +824,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
               />
             )}
             <article className="staff-card staff-card-roomy">
-              <h4 className="mb-3 text-base font-semibold text-slate-900">Daily PIN Verification</h4>
+              <h4 className="mb-3 text-base font-semibold text-slate-900">Daily PIN check</h4>
               {!isPaired && (
                 <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">{pairingReason}</p>
               )}
@@ -858,7 +858,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                       </div>
                     )}
                     <div className="flex items-center justify-between"><span className="text-slate-500">Driver Verified</span><strong className={pin.driver_verified_at ? 'text-emerald-600' : 'text-slate-400'}>{pin.driver_verified_at ? '✓ Yes' : 'Not yet'}</strong></div>
-                    <div className="flex items-center justify-between"><span className="text-slate-500">Conductor Verified</span><strong className={pin.conductor_verified_at ? 'text-emerald-600' : 'text-slate-400'}>{pin.conductor_verified_at ? '✓ Yes' : 'Not yet'}</strong></div>
+                    <div className="flex items-center justify-between"><span className="text-slate-500">Chauffeur Verified</span><strong className={pin.conductor_verified_at ? 'text-emerald-600' : 'text-slate-400'}>{pin.conductor_verified_at ? '✓ Yes' : 'Not yet'}</strong></div>
                   </div>
                   {pin.both_verified && (
                     <div className="mb-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-center text-xs font-semibold text-emerald-700">
@@ -902,7 +902,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
             </article>
 
             <article className="staff-card">
-              <h4 className="mb-3 text-base font-semibold text-slate-900">PIN and Trip Context</h4>
+              <h4 className="mb-3 text-base font-semibold text-slate-900">PIN and trip details</h4>
               <div className="space-y-3 text-sm">
                 <div className="flex items-center justify-between"><span className="text-slate-500">Trip ID</span><strong className="font-data text-slate-900">{pin?.trip_id ?? trip?.trip_id ?? '-'}</strong></div>
                 <div className="flex items-center justify-between"><span className="text-slate-500">Route</span><strong className="text-slate-900">{pin?.route_name || currentRoute?.route_name || '-'}</strong></div>
@@ -914,7 +914,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
             </article>
 
             <article className="staff-card">
-              <h4 className="mb-3 text-base font-semibold text-slate-900">Security & 2FA</h4>
+              <h4 className="mb-3 text-base font-semibold text-slate-900">Security and extra login code</h4>
               <div className="space-y-3 text-sm">
                 <div className="flex items-center justify-between">
                   <div>

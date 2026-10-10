@@ -361,10 +361,10 @@ export default function usePassengerDashboard({ preloadMapView }) {
     const footerMessages = {
       boarded:   'Boarded — You are currently on this trip',
       alighted:  'Trip Completed — Thank you for riding!',
-      expired:   'Ticket Expired — This ticket is no longer valid',
+      expired:   'This ticket has expired',
       cancelled: 'Ticket Cancelled',
     };
-    const footerText = footerMessages[ticketStatus] ?? 'Valid Ticket — Present QR code to board';
+    const footerText = footerMessages[ticketStatus] ?? 'Valid ticket. Show this QR code when boarding';
     const footerStyles = {
       boarded:   'border:1px solid #7dd3fc;background:#e0f2fe;color:#0369a1;',
       alighted:  'border:1px solid #94a3b8;background:#f1f5f9;color:#475569;',

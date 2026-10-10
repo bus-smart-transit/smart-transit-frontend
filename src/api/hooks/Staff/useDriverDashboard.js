@@ -225,7 +225,7 @@ export function useDriverDashboardData({ onLogout, pairing }) {
     suggestion: 'Live provider traffic data is unavailable right now.',
   });
   const isPaired = pairing?.paired === true;
-  const pairingReason = pairing?.reason || 'Waiting for pairing with your Conductor before enabling session-synced features.';
+  const pairingReason = pairing?.reason || 'Waiting for pairing with your Chauffeur before enabling session-synced features.';
   const hasActiveTrip = isCurrentOrSameDayTrip(trip);
   // Batch 13, Issue #1: `hasActiveTrip` (derived from /driver/trips/current,
   // which only resolves once a shift is OPEN) can never be true before the
@@ -789,7 +789,7 @@ export function useDriverDashboardData({ onLogout, pairing }) {
     setMsg2fa('');
     try {
       await DriverService.setTwoFactorPreference(enabled, 'driver');
-      setMsg2fa(enabled ? '2FA enabled.' : '2FA disabled.');
+      setMsg2fa(enabled ? 'Extra login security is on.' : 'Extra login security is off.');
     } catch (err) {
       setTwoFactorEnabled(!enabled);
       setMsg2fa(err?.message || 'Failed to update.');

@@ -118,7 +118,7 @@ export default function RoutesPage({ routes, stops, trips, fleets, onRefresh, on
     { key: 'distance', header: 'Distance', className: 'whitespace-nowrap', render: (row) => (row.distanceKm === null ? '-' : `${row.distanceKm} km`) },
     { key: 'duration', header: 'Travel time', className: 'whitespace-nowrap', render: (row) => formatDuration(row.durationMin) ?? '-' },
     { key: 'fleets', header: 'Active fleets', render: (row) => (row.activeFleets.length ? <span className="text-xs">{row.activeFleets.length}<span className="block text-slate-500">{row.activeFleets.map((item) => item.plate).join(', ')}</span></span> : <span className="text-slate-400">0</span>) },
-    { key: 'status', header: 'Status', render: (row) => <span className="inline-flex flex-wrap gap-1"><OpChip tone={row.status.tone}>{row.status.label}</OpChip>{row.geometryIssue && <OpChip tone="warning">Line needs regenerating</OpChip>}</span> },
+    { key: 'status', header: 'Status', render: (row) => <span className="inline-flex flex-wrap gap-1"><OpChip tone={row.status.tone}>{row.status.label}</OpChip>{row.geometryIssue && <OpChip tone="warning">Line needs to be redrawn</OpChip>}</span> },
     { key: 'open', header: '', render: (row) => <button type="button" aria-label={`Open route ${row.route.route_name}`} onClick={() => setSelectedRouteId(row.routeId)} className={SECONDARY}>Open</button> },
   ];
 

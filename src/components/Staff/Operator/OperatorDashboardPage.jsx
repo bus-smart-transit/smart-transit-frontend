@@ -18,7 +18,7 @@ const STATUS_LABEL = {
   scheduled: 'Scheduled', delayed: 'Delayed', boarding: 'Boarding', departed: 'On the road', 'in-progress': 'On the road', completed: 'Completed', cancelled: 'Cancelled',
 };
 const GPS_CHIP = {
-  live: ['success', 'GPS live'], stale: ['warning', 'GPS stale'], weak: ['warning', 'GPS weak'], off_route: ['warning', 'Off route'], none: ['neutral', 'No GPS'],
+  live: ['success', 'GPS live'], stale: ['warning', 'GPS out of date'], weak: ['warning', 'GPS signal weak'], off_route: ['warning', 'Off route'], none: ['neutral', 'No GPS'],
 };
 const PRIORITY_TONE = { high: 'danger', medium: 'warning', low: 'info' };
 
@@ -33,7 +33,7 @@ function TodaysTrips({ trips, locations, nowMs }) {
       <span className="whitespace-nowrap text-xs">
         {personName(trip.driver) ?? <em className="text-amber-700">No driver</em>}
         <br />
-        {personName(trip.conductor) ?? <em className="text-amber-700">No conductor</em>}
+        {personName(trip.conductor) ?? <em className="text-amber-700">No chauffeur</em>}
       </span>
     ) },
     { key: 'status', header: 'Status', render: (trip) => <OpChip tone={TRIP_STATUS_TONE[trip.status] ?? 'neutral'}>{STATUS_LABEL[trip.status] ?? trip.status}</OpChip> },
@@ -250,7 +250,7 @@ export default function OperatorDashboardPage({ trips, drivers, conductors, flee
       <div className="grid gap-4 lg:grid-cols-2">
         <DispatchDecisionBoard advice={view.advice} decisions={view.decisions} saving={savingTripId} error={error} onDecide={handleDecide} />
         <OpCard
-          title="Fleet deployment recommendation"
+          title="Suggested bus assignments"
           subtitle="Idle fleets matched against routes under pressure (delays or near-full trips)."
           badge={<button type="button" onClick={onOpenSchedule} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">Open Schedule</button>}
         >
@@ -271,7 +271,7 @@ export default function OperatorDashboardPage({ trips, drivers, conductors, flee
 
       <section aria-label="Roster" className="grid grid-cols-3 gap-4">
         <OpStat label="Drivers" value={drivers.length} />
-        <OpStat label="Conductors" value={conductors.length} />
+        <OpStat label="Chauffeurs" value={conductors.length} />
         <OpStat label="Fleets" value={fleets.length} />
       </section>
     </div>

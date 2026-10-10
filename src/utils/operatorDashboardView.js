@@ -103,7 +103,7 @@ function alertsFor(todays, locations, nowMs) {
       alerts.push({ key: `${trip.trip_id}-delayed`, kind: 'delayed', tone: 'danger', route: routeNameOf(trip), tripId: trip.trip_id, title: `Trip #${trip.trip_id} is delayed`, detail: where, action: 'Contact the crew and keep passengers informed.' });
     }
     if (['scheduled', 'delayed', 'boarding'].includes(status) && (!hasDriver(trip) || !hasConductor(trip))) {
-      const missing = !hasDriver(trip) && !hasConductor(trip) ? 'a driver and a conductor' : !hasDriver(trip) ? 'a driver' : 'a conductor';
+      const missing = !hasDriver(trip) && !hasConductor(trip) ? 'a driver and a chauffeur' : !hasDriver(trip) ? 'a driver' : 'a chauffeur';
       alerts.push({ key: `${trip.trip_id}-crew`, kind: 'crew', tone: 'warning', route: routeNameOf(trip), tripId: trip.trip_id, title: `Trip #${trip.trip_id} still needs ${missing}`, detail: where, action: 'Assign the missing crew in Schedule before departure.' });
     }
     if (['departed', 'in-progress'].includes(status)) {
