@@ -41,6 +41,9 @@ function load(cards, blocks = cards.map((c) => index({ shift_block_id: c.shift_b
   OperatorService.getAssignmentBlocks.mockResolvedValue({ data: cards });
 }
 
+// The crew, the legs and the actions live in the modal that the card opens.
+const openCard = (cardEl) => { fireEvent.click(cardEl); return screen.getByTestId('shift-block-modal'); };
+
 beforeEach(() => {
   vi.clearAllMocks();
   OperatorService.getOperatorFleetRoutes.mockResolvedValue({ data: [] });
@@ -102,11 +105,12 @@ describe('ShiftBlocksView sections', () => {
   });
 });
 
-describe('assignment indicators', () => {
+describe('assignment indicators (in the modal)', () => {
   it('shows one line per person with the role and a small state while the block can be answered', async () => {
     load([card()]);
     render(<ShiftBlocksView />);
 
+    openCard(await screen.findByTestId('shift-block-card'));
     const rows = await screen.findAllByTestId('staff-row');
     expect(rows).toHaveLength(2);
     expect(rows[0]).toHaveTextContent('Dina Driver');
@@ -121,6 +125,7 @@ describe('assignment indicators', () => {
   it('shows For approval for a release request', async () => {
     load([card({ assignments: { driver: who(6, 'Dina Driver', 'for_approval'), conductor: who(7, 'Carl Chauffeur', 'accepted') } })]);
     render(<ShiftBlocksView />);
+    openCard(await screen.findByTestId('shift-block-card'));
     await screen.findAllByTestId('staff-row');
     expect(screen.getAllByTestId('assignment-indicator')[0]).toHaveTextContent('For Approval');
   });
@@ -133,12 +138,14 @@ describe('assignment indicators', () => {
     fireEvent.click(await screen.findByRole('button', { name: /^Past/ }));
     const cardEl = await screen.findByTestId('shift-block-card');
     expect(within(cardEl).getByTestId('card-status')).toHaveTextContent('COMPLETED');
-    expect(within(cardEl).queryAllByTestId('assignment-indicator')).toHaveLength(0);
-    expect(cardEl).not.toHaveTextContent('Awaiting');
+    const modal = openCard(cardEl);
+    expect(within(modal).getByTestId('modal-status')).toHaveTextContent('COMPLETED');
+    expect(within(modal).queryAllByTestId('assignment-indicator')).toHaveLength(0);
+    expect(modal).not.toHaveTextContent('Awaiting');
     // Both people are still listed, one line each.
-    expect(within(cardEl).getAllByTestId('staff-row')).toHaveLength(2);
+    expect(within(modal).getAllByTestId('staff-row')).toHaveLength(2);
     // No Cancel on a block whose legs are done.
-    expect(within(cardEl).queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument();
+    expect(within(modal).queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument();
   });
 
   it('hides the states on cancelled and on past-dated blocks, and says "Overdue - date has passed" on an overdue one', async () => {
@@ -150,17 +157,21 @@ describe('assignment indicators', () => {
     await screen.findByTestId('overdue-strip');
     fireEvent.click(screen.getByRole('button', { name: 'All' }));
 
-    expect(screen.queryAllByTestId('assignment-indicator')).toHaveLength(0);
     const overdueCard = within(screen.getByTestId('section-overdue')).getByTestId('shift-block-card');
     expect(within(overdueCard).getByTestId('overdue-note')).toHaveTextContent('Overdue - date has passed');
     expect(within(overdueCard).getByTestId('card-status')).toHaveTextContent('BOARDING'); // the server's derived status
     expect(within(screen.getByTestId('section-past')).getByTestId('card-status')).toHaveTextContent('CANCELLED');
+    openCard(overdueCard);
+    expect(screen.queryAllByTestId('assignment-indicator')).toHaveLength(0);
   });
 
   it('names an unfilled seat "Needs a replacement" without a state', async () => {
     load([card({ assignments: { driver: who(null, null, 'released', { needs_replacement: true }), conductor: who(7, 'Carl Chauffeur', 'accepted') } })]);
     render(<ShiftBlocksView />);
-    const rows = await screen.findAllByTestId('staff-row');
+    const cardEl = await screen.findByTestId('shift-block-card');
+    expect(within(cardEl).getByTestId('crew-summary')).toHaveTextContent('1 crew assigned');
+    expect(within(cardEl).getByTestId('crew-summary')).toHaveTextContent('Needs a replacement');
+    const rows = within(openCard(cardEl)).getAllByTestId('staff-row');
     expect(rows[0]).toHaveTextContent('Needs a replacement');
     expect(within(rows[0]).queryByTestId('assignment-indicator')).not.toBeInTheDocument();
   });
@@ -179,15 +190,14 @@ describe('filters', () => {
     render(<ShiftBlocksView />);
     await screen.findAllByTestId('shift-block-card');
 
-    for (const name of ['Status', 'Route', 'Driver or Chauffeur', 'From', 'To']) expect(screen.getByLabelText(name)).toBeInTheDocument();
+    for (const name of ['Status', 'Route', 'From', 'To']) expect(screen.getByLabelText(name)).toBeInTheDocument();
     const routes = within(screen.getByLabelText('Route')).getAllByRole('option').map((o) => o.textContent);
     expect(routes).toEqual(['All routes', 'Alpha-Omega', 'Beta-Gamma']);
-    const people = within(screen.getByLabelText('Driver or Chauffeur')).getAllByRole('option').map((o) => o.textContent);
-    expect(people).toContain('Ben Driver (Driver)');
-    expect(people).toContain('Carl Chauffeur (Chauffeur)');
+    // Batch 35: the crew filter is gone; the crew is in the block's modal.
+    expect(screen.queryByLabelText('Driver or Chauffeur')).not.toBeInTheDocument();
   });
 
-  it('filters by status, route and person, and resets', async () => {
+  it('filters by status and route, and resets', async () => {
     load(cards);
     render(<ShiftBlocksView />);
     await screen.findAllByTestId('shift-block-card');
@@ -203,9 +213,6 @@ describe('filters', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Reset filters' }));
     expect(shown()).toEqual(['block-1', 'block-2', 'block-3']);
-
-    fireEvent.change(screen.getByLabelText('Driver or Chauffeur'), { target: { value: 'driver:8' } });
-    expect(shown()).toEqual(['block-2']);
   });
 
   it('a date range looks at every section, including past ones', async () => {
@@ -220,27 +227,84 @@ describe('filters', () => {
   });
 });
 
-describe('the card', () => {
-  it('keeps View legs, and has no second "+ Schedule" button', async () => {
+describe('the card and its one modal', () => {
+  it('is compact: no person rows and no View legs button, only a short crew line', async () => {
     load([card()]);
     render(<ShiftBlocksView />);
 
-    fireEvent.click(await screen.findByRole('button', { name: 'View legs' }));
-    expect(within(screen.getByTestId('assignment-legs')).getAllByRole('listitem')).toHaveLength(2);
+    const cardEl = await screen.findByTestId('shift-block-card');
+    expect(within(cardEl).queryByTestId('staff-row')).not.toBeInTheDocument();
+    expect(within(cardEl).queryByRole('button', { name: 'View legs' })).not.toBeInTheDocument();
+    expect(within(cardEl).getByTestId('crew-summary')).toHaveTextContent('2 crew assigned');
+    expect(cardEl).not.toHaveTextContent('Dina Driver');
+    expect(within(cardEl).getByTestId('shift-block-legs-count')).toHaveTextContent('2 legs');
     expect(screen.queryByRole('button', { name: /\+\s*Schedule/ })).not.toBeInTheDocument();
   });
 
-  it('keeps the block actions: Cancel while nothing has run, and Mark Reviewed once completed', async () => {
+  it('opens one modal with the crew, the legs and the status; the Close button, the X and Esc close it', async () => {
+    load([card()]);
+    render(<ShiftBlocksView />);
+    const cardEl = await screen.findByTestId('shift-block-card');
+
+    const modal = openCard(cardEl);
+    expect(screen.getAllByRole('dialog')).toHaveLength(1);
+    expect(within(modal).getByTestId('modal-status')).toHaveTextContent('SCHEDULED');
+    expect(within(modal).getAllByTestId('staff-row').map((r) => r.getAttribute('data-role'))).toEqual(['driver', 'conductor']);
+    expect(within(within(modal).getByTestId('assignment-legs')).getAllByRole('listitem')).toHaveLength(2);
+    expect(within(modal).getByTestId('assignment-legs')).toHaveTextContent('Return');
+
+    fireEvent.click(within(modal).getByRole('button', { name: 'Close' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    openCard(cardEl);
+    const closeButtons = screen.getAllByRole('button', { name: 'Close' });
+    expect(closeButtons).toHaveLength(2); // the X in the title row and the Close button
+    fireEvent.click(closeButtons[0]);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    openCard(cardEl);
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('opens from the keyboard with Enter or Space', async () => {
+    load([card()]);
+    render(<ShiftBlocksView />);
+    const cardEl = await screen.findByTestId('shift-block-card');
+    expect(cardEl).toHaveAttribute('tabindex', '0');
+
+    fireEvent.keyDown(cardEl, { key: 'Enter' });
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    fireEvent.keyDown(cardEl, { key: ' ' });
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('a one-way block shows a single trip', async () => {
+    load([card({ legs_count: 1, legs: [leg(1)], run_pattern: 'one_way' })]);
+    render(<ShiftBlocksView />);
+
+    const modal = openCard(await screen.findByTestId('shift-block-card'));
+    expect(within(within(modal).getByTestId('assignment-legs')).getAllByRole('listitem')).toHaveLength(1);
+    expect(within(modal).getAllByTestId('staff-row')).toHaveLength(2);
+  });
+
+  it('keeps the block actions in the modal: Cancel while nothing has run, and Mark Reviewed once completed', async () => {
     load(
       [card({ shift_block_id: 1 }), card({ shift_block_id: 2, key: 'block-2', status: 'completed', section: 'today', answerable: false })],
       [index({ shift_block_id: 1 }), index({ shift_block_id: 2, status: 'completed', lifecycle_status: 'completed', audit_status: 'pending_review' })],
     );
     render(<ShiftBlocksView />);
     const cards = await screen.findAllByTestId('shift-block-card');
-
-    fireEvent.click(within(cards[0]).getByRole('button', { name: 'Cancel' }));
-    await waitFor(() => expect(OperatorService.cancelShiftBlock).toHaveBeenCalledWith(1));
+    expect(within(cards[0]).queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument();
     expect(within(cards[1]).getByTestId('audit-chip')).toHaveTextContent('Pending review');
-    expect(within(cards[1]).getByRole('button', { name: 'Mark Reviewed' })).toBeInTheDocument();
+
+    fireEvent.click(within(openCard(cards[0])).getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(OperatorService.cancelShiftBlock).toHaveBeenCalledWith(1));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    expect(within(openCard((await screen.findAllByTestId('shift-block-card'))[1])).getByRole('button', { name: 'Mark Reviewed' })).toBeInTheDocument();
   });
 });

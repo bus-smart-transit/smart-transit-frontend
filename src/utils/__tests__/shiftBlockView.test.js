@@ -91,10 +91,9 @@ describe('filters', () => {
     expect(ids(applyFilters(cards, { ...EMPTY_FILTERS, route: 'Alpha-Omega' }))).toEqual([1, 3]);
   });
 
-  test('by driver or chauffeur (either role)', () => {
-    expect(ids(applyFilters(cards, { ...EMPTY_FILTERS, person: 'driver:6' }))).toEqual([1, 3]);
-    expect(ids(applyFilters(cards, { ...EMPTY_FILTERS, person: 'conductor:7' }))).toEqual([1, 2]);
-    expect(ids(applyFilters(cards, { ...EMPTY_FILTERS, person: 'driver:8' }))).toEqual([2]);
+  test('there is no crew filter: a person value in the filters is ignored', () => {
+    expect('person' in EMPTY_FILTERS).toBe(false);
+    expect(ids(applyFilters(cards, { ...EMPTY_FILTERS, person: 'driver:6' }))).toEqual([1, 2, 3]);
   });
 
   test('by date range, both ends included', () => {
@@ -108,9 +107,9 @@ describe('filters', () => {
     expect(isFiltering({ ...EMPTY_FILTERS, route: 'Alpha-Omega' })).toBe(true);
   });
 
-  test('the choices come from the loaded cards (no fixed routes or names)', () => {
+  test('the choices come from the loaded cards (no fixed routes)', () => {
     const opts = filterOptions(cards);
     expect(opts.routes).toEqual(['Alpha-Omega', 'Beta-Gamma']);
-    expect(opts.people.map((p) => p.label)).toEqual(['Ben Driver (Driver)', 'Carl Chauffeur (Chauffeur)', 'Dina Driver (Driver)']);
+    expect(opts.people).toBeUndefined();
   });
 });

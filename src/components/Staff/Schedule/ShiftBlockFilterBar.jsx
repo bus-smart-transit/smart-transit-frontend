@@ -5,15 +5,15 @@ import { EMPTY_FILTERS, STATUS_OPTIONS, isFiltering } from '../../../utils/shift
 const FIELD = 'mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500';
 
 /**
- * Batch 30: the named filters of the Shift Blocks view (status, route, driver or chauffeur, date range). The route and
- * person choices come from the cards that were loaded, never from a fixed list.
+ * Batch 30 and 35: the named filters of the Shift Blocks view (status, route, date range). The route choices come from the
+ * cards that were loaded, never from a fixed list. There is no crew filter: the crew of a block is in its modal.
  */
 export default function ShiftBlockFilterBar({ filters, onChange, options }) {
   const set = (patch) => onChange({ ...filters, ...patch });
 
   return (
     <Card as="section" aria-label="Filters" padding="sm" className="space-y-3">
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <label className="text-xs font-medium text-slate-600">Status
           <select value={filters.status} onChange={(e) => set({ status: e.target.value })} className={FIELD}>
             {STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
@@ -23,12 +23,6 @@ export default function ShiftBlockFilterBar({ filters, onChange, options }) {
           <select value={filters.route} onChange={(e) => set({ route: e.target.value })} className={FIELD}>
             <option value="">All routes</option>
             {options.routes.map((r) => <option key={r} value={r}>{r}</option>)}
-          </select>
-        </label>
-        <label className="text-xs font-medium text-slate-600">Driver or Chauffeur
-          <select value={filters.person} onChange={(e) => set({ person: e.target.value })} className={FIELD}>
-            <option value="">Everyone</option>
-            {options.people.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
           </select>
         </label>
         <label className="text-xs font-medium text-slate-600">From

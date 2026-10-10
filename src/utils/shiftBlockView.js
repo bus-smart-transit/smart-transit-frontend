@@ -30,31 +30,20 @@ export const STATUS_OPTIONS = [
   { value: 'cancelled', label: 'Cancelled' },
 ];
 
-export const EMPTY_FILTERS = { status: 'all', route: '', person: '', from: '', to: '' };
+export const EMPTY_FILTERS = { status: 'all', route: '', from: '', to: '' };
 
 export const isFiltering = (filters) => Object.keys(EMPTY_FILTERS).some((key) => (filters?.[key] ?? EMPTY_FILTERS[key]) !== EMPTY_FILTERS[key]);
 
 const norm = (value) => String(value || '').toLowerCase();
 const OPEN = ['scheduled', 'delayed', 'boarding'];
 
-/** The people on a card, for the person filter: [{ value: 'driver:6', role, id, name }]. */
-export function cardPeople(card) {
-  return ['driver', 'conductor']
-    .map((role) => ({ role, id: card?.assignments?.[role]?.staff_id, name: card?.assignments?.[role]?.name }))
-    .filter((p) => p.id && p.name)
-    .map((p) => ({ ...p, value: `${p.role}:${p.id}` }));
-}
-
 export const roleLabel = (role) => (role === 'driver' ? 'Driver' : 'Chauffeur');
 
-/** The choices for the Route and Driver or Chauffeur filters, taken from the cards themselves. */
+/** The choices for the Route filter, taken from the cards themselves. */
 export function filterOptions(cards) {
   const list = Array.isArray(cards) ? cards : [];
   const routes = [...new Set(list.map((c) => c?.route_name).filter(Boolean))].sort((a, b) => a.localeCompare(b));
-  const seen = new Map();
-  list.forEach((c) => cardPeople(c).forEach((p) => { if (!seen.has(p.value)) seen.set(p.value, { value: p.value, label: `${p.name} (${roleLabel(p.role)})` }); }));
-  const people = [...seen.values()].sort((a, b) => a.label.localeCompare(b.label));
-  return { routes, people };
+  return { routes };
 }
 
 export function applyFilters(cards, filters = EMPTY_FILTERS) {
@@ -62,7 +51,6 @@ export function applyFilters(cards, filters = EMPTY_FILTERS) {
   return (Array.isArray(cards) ? cards : []).filter((card) => {
     if (!matchesStatusFilter(card?.status, f.status)) return false;
     if (f.route && card?.route_name !== f.route) return false;
-    if (f.person && !cardPeople(card).some((p) => p.value === f.person)) return false;
     const date = String(card?.scheduled_date || '');
     if (f.from && (!date || date < f.from)) return false;
     if (f.to && (!date || date > f.to)) return false;
