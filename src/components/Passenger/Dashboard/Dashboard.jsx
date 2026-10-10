@@ -13,7 +13,7 @@ import Card from '../../ui/Card';
 import Button from '../../ui/Button';
 import StatusBadge from '../../ui/StatusBadge';
 import SearchBar from '../../ui/SearchBar';
-import Toggle from '../../ui/Toggle';
+import ProfilePage from '../../Account/ProfilePage';
 import Modal from '../../ui/Modal';
 import { parseAppDate, getBusinessToday } from '../../../utils/dates';
 import { busLabelText } from '../../../utils/busLabel';
@@ -669,53 +669,17 @@ export default function Dashboard() {
     }
 
     if (visibleTab === 'profile') {
-      const initial = (profile?.name || user?.name || 'P').charAt(0).toUpperCase();
       return (
-        <div className="space-y-6">
-          <Card className="p-6">
-            <div className="flex items-center gap-4">
-              <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-teal-400 font-display text-2xl font-bold text-navy-900">
-                {initial}
-              </span>
-              <div>
-                <p className="font-display text-lg font-bold text-navy-950">{profile?.name || user?.name || '-'}</p>
-                <p className="text-sm text-slate-500">{profile?.user?.email || user?.email || '-'}</p>
-              </div>
-            </div>
-            <div className="mt-6 grid gap-4 sm:grid-cols-3">
-              <div>
-                <p className="text-xs text-slate-400">Contact Number</p>
-                <p className="mt-0.5 text-sm font-semibold text-navy-950">{profile?.phone_num || '-'}</p>
-              </div>
-              <div>
-                <p className="text-xs text-slate-400">Address</p>
-                <p className="mt-0.5 text-sm font-semibold text-navy-950">{profile?.address || '-'}</p>
-              </div>
-              <div>
-                <p className="text-xs text-slate-400">Rewards Points</p>
-                <p className="mt-0.5 text-sm font-semibold text-navy-950">{points}</p>
-              </div>
-            </div>
-          </Card>
-
-          <Card className="p-6">
-            {profile ? (
-              <Toggle
-                checked={twoFactorEnabled}
-                onChange={handleTwoFactorToggle}
-                disabled={updating2fa}
-                label="Login 2FA"
-                description="Require a 6-digit OTP during sign-in."
-              />
-            ) : (
-              <p className="text-sm text-slate-500">Loading…</p>
-            )}
-            {twoFactorMsg && <p className="mt-2 text-xs font-medium text-teal-700">{twoFactorMsg}</p>}
-          </Card>
-        </div>
+        <ProfilePage
+          role="passenger"
+          profile={profile}
+          loading={isLoadingPrivate}
+          error={privateError}
+          twoFactor={{ enabled: twoFactorEnabled, saving: updating2fa, message: twoFactorMsg, onChange: handleTwoFactorToggle }}
+          onSignOut={handleLogout}
+        />
       );
     }
-
     return null;
   };
 

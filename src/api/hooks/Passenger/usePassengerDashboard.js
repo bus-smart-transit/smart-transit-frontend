@@ -453,7 +453,9 @@ export default function usePassengerDashboard({ preloadMapView }) {
   }, [isAuthenticated, loadPrivateData, navigate, preloadMapView]);
 
   useEffect(() => {
-    const tabParam = String(searchParams.get('tab') || '').trim().toLowerCase();
+    const rawTab = String(searchParams.get('tab') || '').trim().toLowerCase();
+    // Every portal calls this page "Account"; for a passenger the tab is still named "profile" in the address.
+    const tabParam = rawTab === 'account' ? 'profile' : rawTab;
     if (!tabParam) return;
 
     // There is one booking page; an old ?tab=buy link goes there.

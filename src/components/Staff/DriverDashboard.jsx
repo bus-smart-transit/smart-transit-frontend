@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import PairingScreen from './PairingScreen';
 import StaffPortalLayout from './StaffPortalLayout';
+import ProfilePage from '../Account/ProfilePage';
 import AssignmentSection from './AssignmentSection';
 import MyScheduleList from './MyScheduleList';
 import { shiftActionReason, driverTripActionReason } from '../../utils/actionReasons';
@@ -194,6 +195,8 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     handleConfirmShiftBlockTakeover,
     handleLogout,
     handleToggleTwoFactor,
+    availabilitySaving,
+    handleToggleAvailability,
   } = useDriverDashboardData({ onLogout, pairing });
   const openFullCalendar = (date) => {
     setCalendarFocus(date);
@@ -883,54 +886,16 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
           </section>
         )}
 
-        {!loading && activeTab === 'account' && (
-          <section className="staff-grid lg:grid-cols-2">
-            <article className="staff-card">
-              <h4 className="mb-3 text-base font-semibold text-slate-900">Profile Information</h4>
-              <div className="mb-4 flex flex-col items-center rounded-xl border border-slate-200 bg-slate-50 p-4 text-center">
-                <div className="inline-flex h-16 w-16 items-center justify-center rounded-full bg-linear-to-br from-blue-600 to-indigo-600 text-2xl font-bold text-white">
-                  {(profile?.name || 'D')[0].toUpperCase()}
-                </div>
-                <h3 className="mt-2 text-lg font-semibold text-slate-900">{profile?.name || 'Driver'}</h3>
-                <p className="text-xs text-slate-500">Verified Driver</p>
-              </div>
-              <div className="space-y-3 text-sm">
-                <div className="flex items-center justify-between"><span className="text-slate-500">Email</span><strong className="text-slate-900">{profile?.user?.email || profile?.email || '-'}</strong></div>
-                <div className="flex items-center justify-between"><span className="text-slate-500">Driver ID</span><strong className="font-data text-slate-900">{profile?.company_user_id || '-'}</strong></div>
-                <div className="flex items-center justify-between"><span className="text-slate-500">Status</span><strong className="text-emerald-600">Active</strong></div>
-              </div>
-            </article>
-
-            <article className="staff-card">
-              <h4 className="mb-3 text-base font-semibold text-slate-900">PIN and trip details</h4>
-              <div className="space-y-3 text-sm">
-                <div className="flex items-center justify-between"><span className="text-slate-500">Trip ID</span><strong className="font-data text-slate-900">{pin?.trip_id ?? trip?.trip_id ?? '-'}</strong></div>
-                <div className="flex items-center justify-between"><span className="text-slate-500">Route</span><strong className="text-slate-900">{pin?.route_name || currentRoute?.route_name || '-'}</strong></div>
-                <div className="flex items-center justify-between"><span className="text-slate-500">Fleet</span><strong className="font-data text-slate-900">{pin?.fleet_plate_number || currentFleet?.plate_number || '-'}</strong></div>
-                <div className="flex items-center justify-between"><span className="text-slate-500">Date</span><strong className="font-data text-slate-900">{formatDateTime(pin?.pin_date || trip?.trip_date)}</strong></div>
-                <div className="flex items-center justify-between"><span className="text-slate-500">Shift Started</span><strong className="font-data text-slate-900">{formatDateTime(shiftState?.latestShift?.started_at)}</strong></div>
-                <div className="flex items-center justify-between"><span className="text-slate-500">Shift Ended</span><strong className="font-data text-slate-900">{formatDateTime(shiftState?.latestShift?.ended_at)}</strong></div>
-              </div>
-            </article>
-
-            <article className="staff-card">
-              <h4 className="mb-3 text-base font-semibold text-slate-900">Security and extra login code</h4>
-              <div className="space-y-3 text-sm">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-slate-700 font-medium">Two-Factor Authentication</p>
-                    <p className="text-xs text-slate-500 mt-0.5">Require OTP verification on every login.</p>
-                  </div>
-                  <label className="relative inline-flex cursor-pointer items-center">
-                    <input type="checkbox" className="sr-only peer" checked={twoFactorEnabled}
-                      onChange={(e) => handleToggleTwoFactor(e.target.checked)} disabled={saving2fa} />
-                    <div className="h-6 w-11 rounded-full bg-slate-200 peer-checked:bg-teal-500 peer-focus:ring-2 peer-focus:ring-teal-400 transition-colors after:absolute after:top-0.5 after:left-0.5 after:h-5 after:w-5 after:rounded-full after:bg-white after:shadow after:transition-all peer-checked:after:translate-x-full" />
-                  </label>
-                </div>
-                {msg2fa && <p className={`text-xs rounded px-2 py-1 ${msg2fa.toLowerCase().includes('fail') ? 'bg-red-50 text-red-700' : 'bg-teal-50 text-teal-700'}`}>{msg2fa}</p>}
-              </div>
-            </article>
-          </section>
+        {activeTab === 'account' && (
+          <ProfilePage
+            role="driver"
+            profile={profile}
+            loading={loading}
+            twoFactor={{ enabled: twoFactorEnabled, saving: saving2fa, message: msg2fa, onChange: handleToggleTwoFactor }}
+            availability={{ value: isAvailable, saving: availabilitySaving, onChange: handleToggleAvailability }}
+            assignment={{ route: currentRoute?.route_name ?? null, fleet: currentFleet?.plate_number ?? null }}
+            onSignOut={handleLogout}
+          />
         )}
     </StaffPortalLayout>
 

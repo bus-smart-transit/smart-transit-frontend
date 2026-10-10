@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import PairingScreen from './PairingScreen';
 import StaffPortalLayout from './StaffPortalLayout';
+import ProfilePage from '../Account/ProfilePage';
 import AssignmentSection from './AssignmentSection';
 import MyScheduleList from './MyScheduleList';
 import CalendarSummaryStrip from './CalendarSummaryStrip';
@@ -212,6 +213,8 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     pageTitle,
     handleAssignedTripFilterChange,
     handleTwoFactorToggle,
+    availabilitySaving,
+    handleToggleAvailability,
     stopScanner,
     loadData,
     loadOccupancy,
@@ -1208,50 +1211,19 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
           </section>
         )}
 
-        {!loading && activeTab === 'account' && (
-          <section className="staff-grid lg:grid-cols-2">
-            <article className="staff-card">
-              <h4 className="mb-3 text-base font-semibold text-slate-900">Profile Information</h4>
-              <div className="mb-4 flex flex-col items-center rounded-xl border border-slate-200 bg-slate-50 p-4 text-center">
-                <div className="inline-flex h-16 w-16 items-center justify-center rounded-full bg-linear-to-br from-emerald-600 to-teal-600 text-2xl font-bold text-white">
-                  {(profile?.name || 'C')[0].toUpperCase()}
-                </div>
-                <h3 className="mt-2 text-lg font-semibold text-slate-900">{profile?.name || 'Chauffeur'}</h3>
-                <p className="text-xs text-slate-500">Verified Chauffeur</p>
-              </div>
-              <div className="space-y-3 text-sm">
-                <div className="flex items-center justify-between"><span className="text-slate-500">Email</span><strong className="text-slate-900">{profile?.user?.email || profile?.email || '-'}</strong></div>
-                <div className="flex items-center justify-between"><span className="text-slate-500">Chauffeur ID</span><strong className="font-data text-slate-900">{profile?.company_user_id || '-'}</strong></div>
-                <div className="flex items-center justify-between"><span className="text-slate-500">Status</span><strong className="text-emerald-600">Active</strong></div>
-                <div className="flex items-center justify-between"><span className="text-slate-500">Shift Started</span><strong className="font-data text-slate-900">{formatDateTime(shiftState?.latestShift?.started_at)}</strong></div>
-                <div className="flex items-center justify-between"><span className="text-slate-500">Shift Ended</span><strong className="font-data text-slate-900">{formatDateTime(shiftState?.latestShift?.ended_at)}</strong></div>
-              </div>
-            </article>
-
-            <article className="staff-card">
-              <h4 className="mb-3 text-base font-semibold text-slate-900">Security and extra login code</h4>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-slate-600">Two-Factor Authentication</span>
-                  <label className="relative inline-flex cursor-pointer items-center">
-                    <input
-                      type="checkbox"
-                      className="sr-only peer"
-                      checked={twoFactorEnabled}
-                      onChange={handleTwoFactorToggle}
-                      disabled={saving2fa}
-                    />
-                    <div className="h-6 w-11 rounded-full bg-slate-200 transition-colors peer-checked:bg-emerald-500 after:absolute after:left-0.5 after:top-0.5 after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-transform peer-checked:after:translate-x-5" />
-                  </label>
-                </div>
-                {actionMsg && (
-                  <p className={`text-xs ${actionMsg.includes('enabled') ? 'text-emerald-600' : 'text-sky-600'}`}>
-                    {actionMsg}
-                  </p>
-                )}
-              </div>
-            </article>
-          </section>
+        {activeTab === 'account' && (
+          <ProfilePage
+            role="conductor"
+            profile={profile}
+            loading={loading}
+            twoFactor={{ enabled: twoFactorEnabled, saving: saving2fa, message: actionMsg, onChange: (enabled) => handleTwoFactorToggle({ target: { checked: enabled } }) }}
+            availability={{ value: isAvailable, saving: availabilitySaving, onChange: handleToggleAvailability }}
+            assignment={{
+              route: todayInfo.route === 'Unavailable' ? null : todayInfo.route,
+              fleet: todayInfo.plate === 'Unavailable' ? null : todayInfo.plate,
+            }}
+            onSignOut={handleLogout}
+          />
         )}
     </StaffPortalLayout>
 

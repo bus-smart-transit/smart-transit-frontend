@@ -17,13 +17,14 @@ import { useOperatorDashboardData, useNotificationBell, useTripRequests, useTrip
 import RunInfoChips from '../ui/RunInfoChips'
 import { CancelTripModal, TicketResolutionQueue } from './TripCancellationsPanel'
 import LegTimeSuggestion from './LegTimeSuggestion'
+import ProfilePage from '../Account/ProfilePage'
 import SchedulePage from './Schedule/SchedulePage'
 import ShiftBlocksView from './Schedule/ShiftBlocksView'
 import FinancePage from './Finance/FinancePage'
 import { OPERATOR_ROLE, navForRole, viewsForRole } from '../../utils/operatorNav'
 import {
   LayoutDashboard, Bus, MapPin, PieChart, Users, Settings, Wallet, CalendarDays,
-  Plus, Eye, RefreshCw, Shield, Download,
+  Plus, Eye, RefreshCw, Download,
   X, Loader2, AlertTriangle, Bell,
 } from 'lucide-react'
 
@@ -1032,46 +1033,6 @@ function ReportsTab({ fleets, trips, routes }) {
   )
 }
 
-function AccountTab({ profile }) {
-  const user  = profile?.user ?? {}
-  const staff = profile ?? {}
-  const displayName = staff?.name || user?.name || user?.username || user?.email || 'Operator'
-  return (
-    <div className="max-w-xl space-y-5">
-      <h2 className="text-xl font-bold text-slate-900">Account</h2>
-      <div className="staff-card staff-card-roomy space-y-4">
-        <div className="flex items-center gap-4">
-          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-teal-600 text-xl font-bold text-white">
-            {String(displayName)[0].toUpperCase()}
-          </div>
-          <div>
-            <p className="font-semibold text-slate-900">{displayName}</p>
-            <p className="text-sm text-slate-500">{user.email}</p>
-          </div>
-        </div>
-        <dl className="space-y-2 text-sm">
-          {[['Role', user.role],['Joined', fmtDate(user.created_at)],['Company ID', staff.company_user_id]].map(([label, value]) => (
-            <div key={label} className="flex items-center justify-between border-t border-slate-100 pt-2">
-              <dt className="text-slate-500">{label}</dt>
-              <dd className="font-medium text-slate-900">{value || '-'}</dd>
-            </div>
-          ))}
-        </dl>
-      </div>
-      <div className="staff-card staff-card-roomy">
-        <div className="flex items-start gap-3">
-          <Shield className="mt-0.5 h-5 w-5 shrink-0 text-teal-600" />
-          <div className="flex-1">
-            <p className="font-semibold text-slate-900">Two-Factor Authentication</p>
-            <p className="mt-0.5 text-sm text-slate-500">OTP-based 2FA is mandatory for operator accounts and is always enforced on login.</p>
-          </div>
-          <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700">Always Enabled</span>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 export default function OperatorDashboard() {
   // The day the Calendar page opens on when reached from the dashboard widget (null = today).
   const [calendarFocus, setCalendarFocus] = useState(null)
@@ -1146,7 +1107,7 @@ export default function OperatorDashboard() {
         {activeTab === 'routes'     && <RoutesPage routes={routes} stops={stops} trips={trips} fleets={fleets} onRefresh={loadFull} onOpenSchedule={() => setActiveTab('schedule')} onOpenFleets={() => setActiveTab('fleets')} />}
         {activeTab === 'finance'    && <FinancePage views={viewsForRole('finance', OPERATOR_ROLE)} view={view} onViewChange={setView} />}
         {activeTab === 'reports'    && <ReportsTab fleets={fleets} trips={trips} routes={routes} />}
-        {activeTab === 'account'    && <AccountTab profile={profile} />}
+        {activeTab === 'account'    && <ProfilePage role="operator" profile={profile} loading={loading} onSignOut={handleLogout} />}
         </div>
     </StaffPortalLayout>
   )
