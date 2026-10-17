@@ -5,6 +5,7 @@ import { getBusinessToday } from '../../../../utils/dates';
 
 const mocks = vi.hoisted(() => ({
   getOperatorRoute: vi.fn(),
+  regenerateRouteGeometry: vi.fn(),
   createOperatorRoute: vi.fn(),
   createOperatorStop: vi.fn(),
   updateOperatorStop: vi.fn(),
@@ -173,6 +174,33 @@ describe('Route detail', () => {
     expect(screen.getByText('Completion rate')).toBeInTheDocument();
     expect(screen.getByText('50%')).toBeInTheDocument();
     expect(screen.queryByText(/adherence/i)).not.toBeInTheDocument();
+  });
+
+  it('shows redraw status and asks before queuing for a route the Operator may manage', async () => {
+    const onRefresh = vi.fn();
+    const route = { ...routes[0], can_regenerate_geometry: true, geometry_stale: true, geometry_generated_at: '2026-10-16 13:44:17' };
+    renderPage({ routes: [route, routes[1]], onRefresh });
+    await openTagum();
+
+    expect(screen.getByText('Needs redraw')).toBeInTheDocument();
+    expect(screen.getByText(/Last drawn:/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Redraw route line' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent('uses routing-provider quota');
+    expect(mocks.regenerateRouteGeometry).not.toHaveBeenCalled();
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Redraw route line' }));
+    await waitFor(() => expect(mocks.regenerateRouteGeometry).toHaveBeenCalledWith(4));
+    expect(onRefresh).toHaveBeenCalled();
+  });
+
+  it('does not offer redraw for a route the server marks outside the Operator scope', async () => {
+    const route = { ...routes[0], can_regenerate_geometry: false, geometry_stale: true };
+    renderPage({ routes: [route, routes[1]] });
+    await openTagum();
+
+    expect(screen.getByText('Needs redraw')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Redraw route line' })).not.toBeInTheDocument();
   });
 
   it('toggles custom drop-off from the overview', async () => {

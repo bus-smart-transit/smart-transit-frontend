@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import AdminService from '../../api/StaffService/AdminService';
 import FareRulesPanel from './FareRulesPanel';
 import { TicketResolutionQueue } from './TripCancellationsPanel';
@@ -6,7 +6,11 @@ import DurationFactorsPanel from './DurationFactorsPanel';
 import DropoffRulesPanel from './DropoffRulesPanel';
 import useFareOptions from '../../api/hooks/Staff/useFareOptions';
 import { busLabelText } from '../../utils/busLabel';
-import { Plus, Edit, Trash2, AlertCircle, CheckCircle, Loader, ShieldCheck, MapPin, Route, Bus, Users, LogOut, Tag } from 'lucide-react';
+import { Plus, Edit, Trash2, AlertCircle, CheckCircle, Loader, ShieldCheck, MapPin, Route, Bus, Users, LogOut, Tag, RotateCw } from 'lucide-react';
+import Modal from '../ui/Modal';
+import RouteMap from '../Map/RouteMap';
+import { formatManilaDateTime } from '../../utils/dates';
+import { clearRouteMapCache } from '../../services/routeMapService';
 
 const TAB_ITEMS = [
   { id: 'stops', label: 'Stops', icon: MapPin },
@@ -35,6 +39,9 @@ export default function AdminPanel() {
   const [routes, setRoutes] = useState([]);
   const [routeForm, setRouteForm] = useState({ route_name: '', origin: '', destination: '' });
   const [editingRouteId, setEditingRouteId] = useState(null);
+  const [selectedRoute, setSelectedRoute] = useState(null);
+  const [redrawSavingRouteId, setRedrawSavingRouteId] = useState(null);
+  const selectedRouteRef = useRef(null);
 
   // Fleets
   const [fleets, setFleets] = useState([]);
@@ -154,6 +161,23 @@ export default function AdminPanel() {
     }
   };
 
+  const handleRedrawRoute = async (route) => {
+    if (!window.confirm(`Redraw the route line for ${route.route_name}? This uses routing-provider quota. The current line will be kept if the redraw fails.`)) return;
+
+    setRedrawSavingRouteId(route.route_id);
+    setError('');
+    try {
+      await AdminService.regenerateRouteGeometry(route.route_id);
+      setRoutes((current) => current.map((item) => item.route_id === route.route_id ? { ...item, geometry_stale: true, geometry_regeneration_pending: true } : item));
+      setSelectedRoute((current) => current?.route_id === route.route_id ? { ...current, geometry_stale: true, geometry_regeneration_pending: true } : current);
+      showMessage('Route line redraw queued.', true);
+    } catch (err) {
+      showMessage(err.message || 'We could not queue the route line redraw.', false);
+    } finally {
+      setRedrawSavingRouteId(null);
+    }
+  };
+
   // ──── FLEETS ────
   const loadFleets = useCallback(async () => {
     setLoading(true);
@@ -262,6 +286,36 @@ export default function AdminPanel() {
 
     return () => clearTimeout(timer);
   }, [activeTab, loadAccounts, loadFleets, loadRoutes, loadStops]);
+
+  const hasPendingRouteRedraw = routes.some((route) => route.geometry_regeneration_pending);
+  useEffect(() => {
+    selectedRouteRef.current = selectedRoute;
+  }, [selectedRoute]);
+
+  useEffect(() => {
+    if (activeTab !== 'routes' || !hasPendingRouteRedraw) return undefined;
+
+    const timer = setInterval(async () => {
+      try {
+        const response = await AdminService.getRoutes();
+        const currentRoutes = response?.data ?? [];
+        const previousSelectedRoute = selectedRouteRef.current;
+        const updatedSelectedRoute = previousSelectedRoute
+          ? currentRoutes.find((route) => route.route_id === previousSelectedRoute.route_id) || previousSelectedRoute
+          : null;
+        if (previousSelectedRoute && updatedSelectedRoute
+          && previousSelectedRoute.geometry_generated_at !== updatedSelectedRoute.geometry_generated_at) {
+          clearRouteMapCache();
+        }
+        setRoutes(currentRoutes);
+        setSelectedRoute(updatedSelectedRoute);
+      } catch {
+        // Keep showing the queued state and retry the status read.
+      }
+    }, 2000);
+
+    return () => clearInterval(timer);
+  }, [activeTab, hasPendingRouteRedraw]);
 
   return (
     <div className="grid min-h-screen grid-cols-1 bg-slate-950 text-white lg:grid-cols-[280px_1fr]">
@@ -481,6 +535,10 @@ export default function AdminPanel() {
                       <div className="flex-1">
                         <p className="font-semibold text-white">{route.route_name}</p>
                         <p className="text-sm text-slate-400">{route.origin || 'Origin N/A'} to {route.destination || 'Destination N/A'}</p>
+                        <p className="mt-1 text-xs text-slate-400">
+                          {route.geometry_stale ? <span className="font-semibold text-amber-300">Needs redraw</span> : 'Route line current'}
+                          {route.geometry_regeneration_pending ? ' · Redraw in progress' : ''}
+                        </p>
                         <label className="mt-1 inline-flex items-center gap-2 text-xs text-slate-300">
                           <input
                             type="checkbox"
@@ -492,6 +550,7 @@ export default function AdminPanel() {
                         </label>
                       </div>
                       <div className="flex gap-2">
+                        <button type="button" onClick={() => setSelectedRoute(route)} className="rounded-lg border border-slate-700 px-2 py-1 text-xs font-semibold text-slate-200 transition hover:bg-slate-700">Route details</button>
                         <button onClick={() => { setEditingRouteId(route.route_id); setRouteForm(route); }} className="rounded-lg border border-slate-700 p-2 transition hover:bg-slate-700">
                           <Edit className="h-4 w-4 text-sky-400" />
                         </button>
@@ -753,6 +812,30 @@ export default function AdminPanel() {
         )}
         </div>
       </main>
+      <Modal open={Boolean(selectedRoute)} onClose={() => setSelectedRoute(null)} title={selectedRoute ? `Route details: ${selectedRoute.route_name}` : 'Route details'} size="xl" fullScreenOnMobile>
+        {selectedRoute && (
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
+              <div>
+                <p className="font-semibold text-slate-900">{selectedRoute.origin || '-'} to {selectedRoute.destination || '-'}</p>
+                <p className="text-xs text-slate-500">Last drawn: {selectedRoute.geometry_generated_at ? formatManilaDateTime(selectedRoute.geometry_generated_at) : 'Not drawn yet'}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => { void handleRedrawRoute(selectedRoute); }}
+                disabled={Boolean(selectedRoute.geometry_regeneration_pending) || redrawSavingRouteId === selectedRoute.route_id}
+                className="inline-flex items-center gap-2 rounded-lg bg-sky-600 px-3 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <RotateCw className="h-4 w-4" aria-hidden="true" />
+                {redrawSavingRouteId === selectedRoute.route_id ? 'Queuing...' : (selectedRoute.geometry_regeneration_pending ? 'Redrawing...' : 'Redraw route line')}
+              </button>
+            </div>
+            {selectedRoute.geometry_stale && <p className="text-sm font-semibold text-amber-700">Needs redraw</p>}
+            {selectedRoute.geometry_error && <p role="alert" className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">The previous route line was kept. {selectedRoute.geometry_error}</p>}
+            <RouteMap key={`${selectedRoute.route_id}:${selectedRoute.geometry_generated_at || 'none'}`} routeId={Number(selectedRoute.route_id)} direction="outbound" showStopOffsets showStatus className="relative h-80 w-full overflow-hidden rounded-xl" />
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

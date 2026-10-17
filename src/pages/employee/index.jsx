@@ -8,6 +8,7 @@ const StaffResetPasswordPage = lazy(() => import('../../components/Staff/StaffRe
 const DriverDashboard = lazy(() => import('../../components/Staff/DriverDashboard'));
 const ConductorDashboard = lazy(() => import('../../components/Staff/ConductorDashboard'));
 const OperatorDashboard = lazy(() => import('../../components/Staff/OperatorDashboard'));
+const AdminPanel = lazy(() => import('../../components/Staff/AdminPanel'));
 
 function EmployeeRouteFallback() {
 	return (
@@ -37,6 +38,10 @@ export default function EmployeeBaseRouter() {
 
 				<Route element={<StaffProtectedRoute allowedRoles={["operator"]} />}>
 					<Route path="operator/dashboard" element={<OperatorDashboard />} />
+				</Route>
+
+				<Route element={<StaffProtectedRoute allowedRoles={["admin"]} />}>
+					<Route path="admin/dashboard" element={<AdminPanel />} />
 				</Route>
 
 				<Route path="*" element={<Navigate to="/employee/login" replace />} />

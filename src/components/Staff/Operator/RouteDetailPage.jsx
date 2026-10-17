@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { ArrowLeft } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { ArrowLeft, RotateCw } from 'lucide-react';
 import { OpPageHeader, OpCard, OpChip, OpStat, OpTable } from './OperatorUI';
 import { OP_SPACE, TRIP_STATUS_TONE } from './operatorUiTokens';
 import ViewTabs from '../../ui/ViewTabs';
@@ -11,7 +11,8 @@ import DurationFactorsPanel from '../DurationFactorsPanel';
 import OperatorService from '../../../api/StaffService/OperatorService';
 import { routeActivity, upcomingTripsFor, assignmentsOnRoute, sortedRouteStops, formatDuration } from '../../../utils/operatorRouteView';
 import { departureLabel } from '../../../utils/operatorDashboardView';
-import { formatManilaDate } from '../../../utils/dates';
+import { formatManilaDate, formatManilaDateTime } from '../../../utils/dates';
+import { clearRouteMapCache } from '../../../services/routeMapService';
 
 const INPUT = 'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500';
 const PRIMARY = 'inline-flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-500 disabled:opacity-60';
@@ -61,8 +62,7 @@ function AssignStopModal({ open, onClose, route, stops, form, setForm, saving, m
   );
 }
 
-function OverviewTab({ row, trips, routesTab, onChangeDropoff }) {
-  const { route } = row;
+function OverviewTab({ row, route, trips, routesTab, onChangeDropoff, onRedraw, redrawPending, redrawSaving, redrawError, routeMapVersion }) {
   const activity = routeActivity(route.route_id, trips);
   return (
     <div className={OP_SPACE.stack}>
@@ -79,9 +79,25 @@ function OverviewTab({ row, trips, routesTab, onChangeDropoff }) {
         <OpStat label="Active fleets" value={row.activeFleets.length} tone={row.activeFleets.length ? 'success' : 'neutral'} />
       </section>
       <div className="grid gap-4 lg:grid-cols-2">
-        <OpCard title="Route map" subtitle="The saved route line with its stops.">
+        <OpCard
+          title="Route map"
+          subtitle="Original stop coordinates are shown against the saved line; open a stop marker to see its offset. No stop is moved."
+          badge={route.can_regenerate_geometry ? (
+            <button type="button" className={SECONDARY} onClick={onRedraw} disabled={redrawSaving || redrawPending || route.geometry_regeneration_pending}>
+              <RotateCw className="h-3.5 w-3.5" aria-hidden="true" />
+              {redrawSaving ? 'Queuing...' : (redrawPending || route.geometry_regeneration_pending ? 'Redrawing...' : 'Redraw route line')}
+            </button>
+          ) : null}
+        >
+          <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600">
+            <span>Last drawn: {route.geometry_generated_at ? formatManilaDateTime(route.geometry_generated_at) : 'Not drawn yet'}</span>
+            {route.geometry_stale && <span className="font-semibold text-amber-700" data-testid="geometry-stale">Needs redraw</span>}
+            {route.geometry_regeneration_pending && <span role="status">Redraw in progress</span>}
+          </div>
+          {route.geometry_error && <p role="alert" className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">The previous route line was kept. {route.geometry_error}</p>}
+          {redrawError && <p role="alert" className="mb-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{redrawError}</p>}
           <div className="overflow-hidden rounded-xl border border-slate-200">
-            <RouteMap routeId={Number(route.route_id)} direction="outbound" vehicle={null} showStatus={false} className="relative h-72 w-full" />
+            <RouteMap key={`${route.route_id}:${route.geometry_generated_at || 'none'}:${routeMapVersion}`} routeId={Number(route.route_id)} direction="outbound" vehicle={null} showStatus={false} showStopOffsets className="relative h-72 w-full" />
           </div>
         </OpCard>
         <div className={OP_SPACE.stack}>
@@ -244,7 +260,54 @@ export default function RouteDetailPage({
 }) {
   const [tab, setTab] = useState('overview');
   const [assignOpen, setAssignOpen] = useState(false);
+  const [redrawConfirmOpen, setRedrawConfirmOpen] = useState(false);
+  const [redrawSaving, setRedrawSaving] = useState(false);
+  const [redrawPending, setRedrawPending] = useState(false);
+  const [redrawError, setRedrawError] = useState('');
+  const [geometryStatus, setGeometryStatus] = useState(null);
+  const [routeMapVersion, setRouteMapVersion] = useState(0);
   const { route } = row;
+  const geometryRoute = geometryStatus?.route_id === route.route_id ? { ...route, ...geometryStatus } : route;
+
+  useEffect(() => {
+    if (!redrawPending) return undefined;
+
+    const timer = setInterval(async () => {
+      try {
+        const response = await OperatorService.getOperatorRoute(route.route_id);
+        const latest = response?.data ?? response;
+        if (!latest) return;
+
+        setGeometryStatus(latest);
+        if (!latest.geometry_regeneration_pending) {
+          setRedrawPending(false);
+          clearRouteMapCache();
+          setRouteMapVersion((version) => version + 1);
+          void onRefresh();
+        }
+      } catch {
+        // Keep polling; the route status endpoint may be briefly unavailable.
+      }
+    }, 2000);
+
+    return () => clearInterval(timer);
+  }, [redrawPending, route.route_id, onRefresh]);
+
+  const handleRedraw = async () => {
+    setRedrawSaving(true);
+    setRedrawError('');
+    try {
+      await OperatorService.regenerateRouteGeometry(route.route_id);
+      setRedrawConfirmOpen(false);
+      setRedrawPending(true);
+      await onRefresh();
+    } catch (error) {
+      setRedrawError(error?.message || 'We could not queue the redraw. Please try again later.');
+      setRedrawConfirmOpen(false);
+    } finally {
+      setRedrawSaving(false);
+    }
+  };
 
   const openAssign = () => {
     const nextOrder = String(Math.max(0, ...sortedRouteStops(route).map((item) => Number(item.stop_order) || 0)) + 1);
@@ -268,7 +331,7 @@ export default function RouteDetailPage({
       <ViewTabs label="Route sections" tabs={ROUTE_TABS} value={tab} onChange={setTab} />
 
       <div role="tabpanel" aria-label={ROUTE_TABS.find((item) => item.key === tab)?.label}>
-        {tab === 'overview' && <OverviewTab row={row} trips={trips} routesTab={routesTab} onChangeDropoff={(allow) => { void routesTab.handleToggleCustomDropoff(route.route_id, allow); }} />}
+        {tab === 'overview' && <OverviewTab row={row} route={geometryRoute} trips={trips} routesTab={routesTab} onChangeDropoff={(allow) => { void routesTab.handleToggleCustomDropoff(route.route_id, allow); }} onRedraw={() => setRedrawConfirmOpen(true)} redrawPending={redrawPending} redrawSaving={redrawSaving} redrawError={redrawError} routeMapVersion={routeMapVersion} />}
         {tab === 'stops' && <StopsTab route={route} routesTab={routesTab} onOpenAssign={openAssign} />}
         {tab === 'schedule' && <ScheduleTab row={row} fleets={fleets} trips={trips} onOpenSchedule={onOpenSchedule} />}
         {tab === 'fleets' && <FleetsTab row={row} fleets={fleets} onOpenFleets={onOpenFleets} />}
@@ -295,6 +358,17 @@ export default function RouteDetailPage({
         message={routesTab.manageMsg}
         onSubmit={routesTab.handleAddStopToRoute}
       />
+
+      <Modal open={redrawConfirmOpen} onClose={() => setRedrawConfirmOpen(false)} title="Redraw route line">
+        <p className="text-sm text-slate-600">This queues a fresh route line from the current stops and uses routing-provider quota. The existing line stays in place if the redraw fails.</p>
+        <div className="mt-5 flex justify-end gap-2">
+          <button type="button" onClick={() => setRedrawConfirmOpen(false)} className={SECONDARY} disabled={redrawSaving}>Cancel</button>
+          <button type="button" onClick={() => { void handleRedraw(); }} className={PRIMARY} disabled={redrawSaving}>
+            <RotateCw className="h-3.5 w-3.5" aria-hidden="true" />
+            {redrawSaving ? 'Queuing...' : 'Redraw route line'}
+          </button>
+        </div>
+      </Modal>
     </div>
   );
 }

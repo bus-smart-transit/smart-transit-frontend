@@ -39,6 +39,10 @@ class OperatorService extends StaffBaseService {
     return await this.request(`/operator/routes/${routeId}`, 'GET');
   }
 
+  async regenerateRouteGeometry(routeId) {
+    return await this.request(`/operator/routes/${routeId}/geometry/regenerate`, 'POST');
+  }
+
   // ── Stops ──
   async getOperatorStops() {
     return await this.request('/operator/stops', 'GET');

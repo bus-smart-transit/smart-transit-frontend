@@ -64,6 +64,7 @@ function RouteMapInner({
   onRouteData,
   onMapReady,
   onRetry,
+  showStopOffsets = false,
   className = 'relative h-full min-h-64 w-full',
 }) {
   const containerRef = useRef(null)
@@ -87,6 +88,18 @@ function RouteMapInner({
   const loadError = fetched.key === requestKey ? fetched.error : ''
 
   const routeCoords = useMemo(() => routeData?.geometry?.coordinates || [], [routeData])
+  const displayedRouteData = useMemo(() => {
+    if (!showStopOffsets || !routeData) return routeData
+
+    return {
+      ...routeData,
+      stops: routeData.stops.map((stop) => ({
+        ...stop,
+        latitude: stop.sourceLatitude ?? stop.latitude,
+        longitude: stop.sourceLongitude ?? stop.longitude,
+      })),
+    }
+  }, [routeData, showStopOffsets])
 
   const vehicleState = useMemo(
     () => computeVehicleState({ vehicle, routeCoords, nowMs }),
@@ -202,14 +215,14 @@ function RouteMapInner({
     const maplibregl = libRef.current
     if (!mapReady || !map || !maplibregl) return
 
-    const points = renderRouteLayers(map, maplibregl, routeData, { highlight, acknowledgedStopIds })
+    const points = renderRouteLayers(map, maplibregl, displayedRouteData, { highlight, acknowledgedStopIds, showStopOffsets })
 
     const key = `${routeData?.routeId || 'none'}:${routeData?.direction || ''}:${points.length}`
     if (fittedKeyRef.current !== key && points.length > 0) {
       fitToPoints(map, maplibregl, points)
       fittedKeyRef.current = key
     }
-  }, [mapReady, routeData, highlight, acknowledgedStopIds])
+  }, [mapReady, displayedRouteData, routeData?.direction, routeData?.routeId, highlight, acknowledgedStopIds, showStopOffsets])
 
   // 4. Vehicle marker with interpolated movement.
   useEffect(() => {

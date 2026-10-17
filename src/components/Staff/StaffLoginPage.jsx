@@ -1,14 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import {
-  ArrowLeft,
   BadgeCheck,
   Bus,
   Eye,
   EyeOff,
   IdCard,
   KeyRound,
-  Mail,
   Shield,
   Ticket,
   TriangleAlert,
@@ -21,6 +19,7 @@ const ROLES = [
   { value: 'driver', label: 'Driver', icon: Bus, desc: 'Manage trips and route navigation' },
   { value: 'conductor', label: 'Chauffeur', icon: Ticket, desc: 'Handle ticket validation and occupancy' },
   { value: 'operator', label: 'Operator', icon: Users, desc: 'Monitor fleets, schedules, and reports' },
+  { value: 'admin', label: 'Admin', icon: Shield, desc: 'Manage system routes, stops, and accounts' },
 ];
 
 export default function StaffLoginPage() {

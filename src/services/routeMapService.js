@@ -27,16 +27,26 @@ export async function fetchRouteMapData(routeId, direction = 'outbound') {
 
   const geometryPayload = geometryRes?.data?.data || {}
   const stops = (Array.isArray(stopsRes?.data?.data) ? stopsRes.data.data : [])
-    .map((stop) => ({
-      stopId: Number(stop.stop_id),
-      name: stop.stop_name || '',
-      sequence: Number(stop.stop_order),
-      type: stop.stop_type || 'stop',
-      distanceKm: Number(stop.distance_from_origin_km),
-      // Prefer the road-snapped coordinate the server computed for routing.
-      latitude: Number(stop.snapped_latitude ?? stop.latitude),
-      longitude: Number(stop.snapped_longitude ?? stop.longitude),
-    }))
+    .map((stop) => {
+      const sourceLatitude = stop.latitude == null ? null : Number(stop.latitude)
+      const sourceLongitude = stop.longitude == null ? null : Number(stop.longitude)
+      const snappedLatitude = stop.snapped_latitude == null ? null : Number(stop.snapped_latitude)
+      const snappedLongitude = stop.snapped_longitude == null ? null : Number(stop.snapped_longitude)
+
+      return {
+        stopId: Number(stop.stop_id),
+        name: stop.stop_name || '',
+        sequence: Number(stop.stop_order),
+        type: stop.stop_type || 'stop',
+        distanceKm: Number(stop.distance_from_origin_km),
+        // Other maps keep the same snapped marker they have always used.
+        latitude: snappedLatitude ?? sourceLatitude,
+        longitude: snappedLongitude ?? sourceLongitude,
+        sourceLatitude,
+        sourceLongitude,
+        distanceToLineM: stop.distance_to_line_m == null ? null : Number(stop.distance_to_line_m),
+      }
+    })
     .filter((stop) => Number.isFinite(stop.latitude) && Number.isFinite(stop.longitude))
 
   const value = {

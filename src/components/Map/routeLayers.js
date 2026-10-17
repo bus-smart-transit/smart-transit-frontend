@@ -26,7 +26,7 @@ export function setGeoJson(map, id, data) {
  * acknowledgedStopIds: stop ids already passed on this leg.
  * Returns the [lng, lat] points the view should fit to.
  */
-export function renderRouteLayers(map, maplibregl, routeData, { highlight = null, acknowledgedStopIds = [] } = {}) {
+export function renderRouteLayers(map, maplibregl, routeData, { highlight = null, acknowledgedStopIds = [], showStopOffsets = false } = {}) {
   const stops = routeData?.stops || []
   const line = routeData?.geometry?.coordinates?.length >= 2 ? routeData.geometry.coordinates : null
 
@@ -59,6 +59,7 @@ export function renderRouteLayers(map, maplibregl, routeData, { highlight = null
           type: stop.type,
           state,
           seqLabel: stop.type === 'pass_through' ? '' : String(stop.sequence),
+          distanceToLineM: stop.distanceToLineM,
         },
         geometry: { type: 'Point', coordinates: [stop.longitude, stop.latitude] },
       }
@@ -117,7 +118,11 @@ export function renderRouteLayers(map, maplibregl, routeData, { highlight = null
       if (!feature) return
       const node = document.createElement('p')
       node.style.cssText = 'margin:0;font-size:12px;font-weight:700;color:#0f172a;'
-      node.textContent = String(feature.properties?.name || 'Stop')
+      const name = String(feature.properties?.name || 'Stop')
+      const offset = Number(feature.properties?.distanceToLineM)
+      node.textContent = showStopOffsets
+        ? `${name} - ${Number.isFinite(offset) ? `${offset.toFixed(1)} m from route line` : 'route line offset unavailable'}`
+        : name
       new maplibregl.Popup({ offset: 12 }).setLngLat(feature.geometry.coordinates).setDOMContent(node).addTo(map)
     })
     map.on('mouseenter', LYR_STOPS, () => { map.getCanvas().style.cursor = 'pointer' })

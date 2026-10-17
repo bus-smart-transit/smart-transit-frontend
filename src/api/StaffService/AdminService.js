@@ -28,6 +28,10 @@ class AdminService extends StaffBaseService {
     return await this.request(`/admin/routes`, 'GET');
   }
 
+  async regenerateRouteGeometry(routeId) {
+    return await this.request(`/admin/routes/${routeId}/geometry/regenerate`, 'POST');
+  }
+
   async createRoute(routeData) {
     return await this.request(`/admin/routes`, 'POST', routeData);
   }
