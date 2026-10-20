@@ -115,6 +115,53 @@ describe('TrackBusPage refresh', () => {
     await act(async () => { await vi.advanceTimersByTimeAsync(60_000); });
     expect(getTracking.mock.calls.length).toBe(calls); // over: no more polling
   });
+
+  test('polls slowly before tracking opens, then uses the server interval', async () => {
+    getTracking
+      .mockResolvedValueOnce(view({
+        state: 'not_yet',
+        opens_at: '2026-10-04T08:05:00+08:00',
+        refresh: { poll_seconds: 10, generated_at: '2026-10-04T08:00:00+08:00' },
+      }))
+      .mockResolvedValue(view({ refresh: { poll_seconds: 10, generated_at: '2026-10-04T08:05:00+08:00' } }));
+    renderPage();
+    await screen.findByText('Tracking opens soon');
+    expect(getTracking).toHaveBeenCalledTimes(1);
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(59000); });
+    expect(getTracking).toHaveBeenCalledTimes(1);
+    await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+    expect(getTracking).toHaveBeenCalledTimes(2);
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(10000); });
+    expect(getTracking).toHaveBeenCalledTimes(3);
+  });
+
+  test('stops polling when the backend reports that the trip has arrived', async () => {
+    getTracking.mockResolvedValue(view({ state: 'arrived', message: 'The bus has completed this trip.', bus: null }));
+    renderPage();
+    expect(await screen.findByText('Trip completed')).toBeInTheDocument();
+    expect(getTracking).toHaveBeenCalledTimes(1);
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(60000); });
+    expect(getTracking).toHaveBeenCalledTimes(1);
+  });
+
+  test('checks waiting trips once a minute, then respects the live interval after departure', async () => {
+    getTracking
+      .mockResolvedValueOnce(view({ state: 'waiting', bus: null }))
+      .mockResolvedValueOnce(view({ state: 'tracking' }))
+      .mockResolvedValue(view({ state: 'tracking' }));
+    renderPage();
+    await screen.findByText('Not departed yet');
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(59_000); });
+    expect(getTracking).toHaveBeenCalledTimes(1);
+    await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+    expect(getTracking).toHaveBeenCalledTimes(2);
+    await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
+    expect(getTracking).toHaveBeenCalledTimes(3);
+  });
 });
 
 describe('TicketCard tracking link', () => {

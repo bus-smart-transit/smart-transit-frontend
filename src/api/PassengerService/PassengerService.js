@@ -25,12 +25,12 @@ class PassengerService extends RoleAuthServiceBase {
     return await this.request(`/${this.endpointBase}/reset-password`, "POST", payload);
   }
 
-  async getTickets() {
-    return await this.request(`/${this.endpointBase}/tickets`, "GET");
+  async getTickets(options = {}) {
+    return await this.request(`/${this.endpointBase}/tickets`, "GET", options);
   }
 
-  async getPaymentHistory() {
-    return await this.request(`/${this.endpointBase}/payments`, "GET");
+  async getPaymentHistory(options = {}) {
+    return await this.request(`/${this.endpointBase}/payments`, "GET", options);
   }
 
   async getTicketQR(ticketUuid) {
@@ -51,8 +51,8 @@ class PassengerService extends RoleAuthServiceBase {
     return await this.request(`/${this.endpointBase}/tickets/${ticketUuid}/resolution`, "POST", body);
   }
 
-  async getRewardsHistory() {
-    return await this.request(`/${this.endpointBase}/rewards/history`, "GET");
+  async getRewardsHistory(options = {}) {
+    return await this.request(`/${this.endpointBase}/rewards/history`, "GET", options);
   }
 
   async getDashboardSummary() {
@@ -63,10 +63,11 @@ class PassengerService extends RoleAuthServiceBase {
     return await this.request(`/trips`, "GET", options);
   }
 
-  async checkoutOnline(payload) {
+  async checkoutOnline(payload, idempotencyKey) {
     const hasToken = !!(localStorage.getItem('passenger_token') || sessionStorage.getItem('passenger_token'));
     const endpoint = hasToken ? `/${this.endpointBase}/checkout` : '/checkout';
-    return await this.request(endpoint, "POST", payload);
+    const headers = idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {};
+    return await this.request(endpoint, "POST", payload, headers);
   }
 
   // ── Public Quote Endpoints (no auth required) ──

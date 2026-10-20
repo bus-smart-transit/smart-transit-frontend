@@ -96,19 +96,19 @@ describe('mid-trip boarding picker', () => {
     expect(isMidTripBoardingAvailable(undefined)).toBe(false);
   });
 
-  test('a good fix offers the stops ahead and the pin; weak states offer nothing and say why', () => {
+  test('a good fix offers only the stops ahead; weak states offer nothing and say why', () => {
     const good = boardingPointView({
       state: 'good',
       boarding_point: { distance_from_origin_km: 15 },
       destinations: [{ stop_id: 4, stop_name: 'Stop D', distance_km: 15 }],
-      custom_dropoff: { available: true },
     });
-    expect(good).toMatchObject({ good: true, customDropoffAvailable: true, distanceFromOriginKm: 15 });
+    expect(good).toMatchObject({ good: true, distanceFromOriginKm: 15 });
+    expect(good).not.toHaveProperty('customDropoffAvailable');
     expect(good.destinations).toHaveLength(1);
 
     for (const state of ['none', 'stale', 'poor_accuracy', 'off_route', 'no_geometry']) {
       const weak = boardingPointView({ state, message: 'Why not', destinations: [{ stop_id: 4 }] });
-      expect(weak).toMatchObject({ good: false, state, message: 'Why not', destinations: [], customDropoffAvailable: false });
+      expect(weak).toMatchObject({ good: false, state, message: 'Why not', destinations: [] });
     }
     expect(boardingPointView(null)).toMatchObject({ good: false, state: 'none' });
   });
@@ -120,7 +120,7 @@ describe('mid-trip boarding picker', () => {
     expect(isOnsiteFormComplete({ boarding_mode: 'gps', destination_stop_id: '4' }, weak)).toBe(false);
     expect(isOnsiteFormComplete({ boarding_mode: 'stop', origin_stop_id: '2', destination_stop_id: '4' }, weak)).toBe(true);
     expect(isOnsiteFormComplete({ boarding_mode: 'stop', origin_stop_id: '', destination_stop_id: '4' }, weak)).toBe(false);
-    expect(isOnsiteFormComplete({ boarding_mode: 'stop', origin_stop_id: '2', dropoff: { lat: 1, lng: 2 } }, weak)).toBe(true);
+    expect(isOnsiteFormComplete({ boarding_mode: 'stop', origin_stop_id: '2', dropoff: { lat: 1, lng: 2 } }, weak)).toBe(false);
   });
 });
 
@@ -132,11 +132,12 @@ describe('buildOnsiteItem', () => {
     expect(item).not.toHaveProperty('origin_lat');
   });
 
-  test('stop boarding keeps the stop; a pinned drop-off sends only the pin', () => {
+  test('stop boarding and destination both use official stops', () => {
     expect(buildOnsiteItem({ tripId: 7, form: { boarding_mode: 'stop', seat_type: 'standing', origin_stop_id: '2', destination_stop_id: '4' } }))
       .toEqual({ trip_id: 7, seat_type: 'standing', origin_stop_id: 2, destination_stop_id: 4 });
-    const pinned = buildOnsiteItem({ tripId: 7, form: { boarding_mode: 'stop', seat_type: 'seated', origin_stop_id: '2', destination_stop_id: '', dropoff: { lat: 7.22, lng: 125.0003, label: 'Near the chapel' } } });
-    expect(pinned).toEqual({ trip_id: 7, seat_type: 'seated', origin_stop_id: 2, destination_lat: 7.22, destination_lng: 125.0003, destination_label: 'Near the chapel' });
-    expect(pinned).not.toHaveProperty('destination_stop_id');
+    const item = buildOnsiteItem({ tripId: 7, form: { boarding_mode: 'stop', seat_type: 'seated', origin_stop_id: '2', destination_stop_id: '4', dropoff: { lat: 7.22, lng: 125.0003 } } });
+    expect(item).toEqual({ trip_id: 7, seat_type: 'seated', origin_stop_id: 2, destination_stop_id: 4 });
+    expect(item).not.toHaveProperty('destination_lat');
+    expect(item).not.toHaveProperty('alighting_point_id');
   });
 });

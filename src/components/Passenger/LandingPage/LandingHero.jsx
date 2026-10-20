@@ -131,7 +131,7 @@ export default function LandingHero() {
         previewLimit={stops.previewLimit}
         live={{ date, fromCode, toCode, fromName, toName }}
         search={search}
-        onBook={(trip) => navigate(tripBookingPath(trip))}
+        onBook={(trip) => navigate(tripBookingPath(trip), { state: { returnTo: '/' } })}
       />
     </section>
   );

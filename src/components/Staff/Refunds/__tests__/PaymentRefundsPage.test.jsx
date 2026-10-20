@@ -20,13 +20,14 @@ const row = (over = {}) => ({
   ...over,
 });
 
-const reply = (rows, status = 'needs_refund', counts = { needs_refund: rows.length, refunded: 0 }) => ({
+const reply = (rows, status = 'needs_refund', counts = { needs_refund: rows.length, refunded: 0, outcome_unknown: 0 }) => ({
   data: { data: rows, meta: { page: 1, per_page: 20, total: rows.length, last_page: 1, status, counts } },
 });
 
 const makeService = (rows = [row()]) => ({
   getUnfulfilledPayments: vi.fn().mockResolvedValue(reply(rows)),
   recordPaymentRefund: vi.fn().mockResolvedValue({ data: row({ status: 'refunded' }) }),
+  reconcileCheckoutNotCharged: vi.fn().mockResolvedValue({ data: { status: 'failed' } }),
 });
 
 describe('PaymentRefundsPage', () => {
@@ -109,6 +110,32 @@ describe('PaymentRefundsPage', () => {
     expect(await screen.findByRole('button', { name: 'Needs refund (3)' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Refunded (5)' }));
     await waitFor(() => expect(service.getUnfulfilledPayments).toHaveBeenLastCalledWith({ status: 'refunded', page: 1 }));
+  });
+
+  it('requires verification before releasing an unknown checkout hold', async () => {
+    const service = makeService([]);
+    const unknown = row({ status: 'pending', reconciliation_status: 'outcome_unknown', gateway_reference: null });
+    service.getUnfulfilledPayments.mockResolvedValue(reply([unknown], 'outcome_unknown', { needs_refund: 0, refunded: 0, outcome_unknown: 1 }));
+    render(<PaymentRefundsPage service={service} embedded />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Unknown checkout (1)' }));
+    const card = await screen.findByTestId('refund-card');
+    expect(within(card).getByTestId('refund-status')).toHaveTextContent('Outcome unknown');
+    expect(within(card).getByTestId('checkout-outcome-warning')).toHaveTextContent('signed webhooks alone mark payments paid');
+
+    const submit = within(card).getByRole('button', { name: 'Confirm not charged and release hold' });
+    const note = within(card).getByPlaceholderText('What did you verify in PayMongo?');
+    const confirmation = within(card).getByLabelText('I verified this checkout was not charged and has no active session.');
+    expect(submit).toBeDisabled();
+
+    fireEvent.change(note, { target: { value: 'Verified no charge in PayMongo' } });
+    expect(submit).toBeDisabled();
+    fireEvent.click(confirmation);
+    expect(submit).toBeEnabled();
+    fireEvent.click(submit);
+
+    await waitFor(() => expect(service.reconcileCheckoutNotCharged).toHaveBeenCalledWith(31, { note: 'Verified no charge in PayMongo' }));
+    expect(service.recordPaymentRefund).not.toHaveBeenCalled();
   });
 
   it('says nothing needs a refund when the list is empty, and offers a retry when loading fails', async () => {

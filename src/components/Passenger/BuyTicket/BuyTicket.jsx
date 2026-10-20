@@ -6,9 +6,7 @@ import { busLabelText } from '../../../utils/busLabel';
 import TicketCard from '../Ticket/TicketCard';
 import QrImage from '../Ticket/QrImage';
 import TripTimeline from '../Timeline/TripTimeline';
-import CustomDropoffModal from '../Timeline/CustomDropoffModal';
 import JourneyFields from './JourneyFields';
-import RoundtripSection from './RoundtripSection';
 import SaveQrButton from '../Ticket/SaveQrButton';
 import Card from '../../ui/Card';
 import Button from '../../ui/Button';
@@ -52,7 +50,7 @@ function RadioPill({ name, checked, onChange, label, disabled = false }) {
     </label>
   );
 }
-export default function BuyTicket({ onTicketPurchased }) {
+export default function BuyTicket({ onTicketPurchased, returnTo = '/' }) {
   const [ticketPreview, setTicketPreview] = useState(null);
   const [qrModalDismissedFor, setQrModalDismissedFor] = useState(null);
   const {
@@ -63,14 +61,6 @@ export default function BuyTicket({ onTicketPurchased }) {
     departuresState,
     isToday,
     checkoutStatus,
-    applyDropoff,
-    clearDropoff,
-    closeDropoffModal,
-    dropoff,
-    dropoffDraft,
-    dropoffError,
-    dropoffOptions,
-    dropoffModalVisible,
     error,
     form,
     formErrors,
@@ -88,15 +78,12 @@ export default function BuyTicket({ onTicketPurchased }) {
     loadingRewards,
     maxRedeemableRewardPoints,
     netTotal,
-    openDropoffModal,
     printQrTicket,
     qrTickets,
     resolution,
-    roundtrip,
     rewardPointsToApply,
     selectAlightingStop,
     selectDeparture,
-    setDropoffDraft,
     stopsData,
     success,
     timelineState,
@@ -141,7 +128,7 @@ export default function BuyTicket({ onTicketPurchased }) {
     : null;
   const qrModalOpen = qrModalIdentity !== null && qrModalIdentity !== qrModalDismissedFor;
 
-  const canSubmit = !isSubmitting && (roundtrip.active ? roundtrip.canPay : canProceedToOnlinePayment) && !(roundtrip.active ? false : isRewardRequestInsufficient) && Boolean(form.ticket_quantity);
+  const canSubmit = !isSubmitting && canProceedToOnlinePayment && !isRewardRequestInsufficient && Boolean(form.ticket_quantity);
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 p-4 sm:p-6">
@@ -154,7 +141,7 @@ export default function BuyTicket({ onTicketPurchased }) {
       {bookingLink.status === 'error' && (
         <div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-amber-50 px-3.5 py-2.5 text-sm text-amber-800 ring-1 ring-inset ring-amber-200">
           <span className="flex items-center gap-2"><AlertCircle size={16} className="shrink-0" />{bookingLink.message}</span>
-          <Link to="/passenger#search-trips" className="font-semibold text-navy-800 underline">Search for a trip</Link>
+          <Link to={returnTo} className="font-semibold text-navy-800 underline">Search for a trip</Link>
         </div>
       )}
 
@@ -240,6 +227,11 @@ export default function BuyTicket({ onTicketPurchased }) {
             statusLabel="Valid"
             validLabel={formatDateTime(qrTickets[0]?.valid_from)}
             expiresLabel={formatDateTime(qrTickets[0]?.expires_at)}
+            discountLabel={qrTickets[0]?.discount_label || ''}
+            discountAmount={qrTickets[0]?.discount_amount}
+            originalFare={qrTickets[0]?.original_amount}
+            farePaid={qrTickets[0]?.amount}
+            discountVerified={Boolean(qrTickets[0]?.discount_id_checked_at)}
             trackingToken={qrTickets[0]?.tracking_token || ''}
           />
         )}
@@ -407,29 +399,18 @@ export default function BuyTicket({ onTicketPurchased }) {
                     {formErrors.trip && <p className="mt-2 text-xs text-red-600">{formErrors.trip}</p>}
                   </div>
 
-                  {trip && (
-                    <RoundtripSection
-                      roundtrip={roundtrip}
-                      outboundDate={trip.trip_date}
-                      today={stopsData.today}
-                      lastBookableDate={stopsData.lastBookableDate}
-                      quantity={totalTickets}
-                    />
-                  )}
                 </div>
               )}
             </Card>
 
             {trip && (
               <>
-                {/* Travel Advice: the timeline, the alighting choice and custom drop-off. */}
+                {/* Travel Advice and the official-stop alighting choice. */}
                 <TripTimeline
                   timeline={timeline}
                   loading={timelineState.loading}
-                  error={dropoffModalVisible ? null : timelineState.error}
+                  error={timelineState.error}
                   onSelectAlighting={selectAlightingStop}
-                  onOpenCustomDropoff={openDropoffModal}
-                  onClearCustomDropoff={clearDropoff}
                 />
 
                 {/* The shared route map, highlighting the boarding-to-alighting segment. */}
@@ -518,7 +499,7 @@ export default function BuyTicket({ onTicketPurchased }) {
                       </label>
                     )}
 
-                    {!isGuestCheckout && !roundtrip.active && (
+                    {!isGuestCheckout && (
                       <div className="mt-4 rounded-xl border border-slate-200 px-4 py-2">
                         <p className="pt-1.5 text-sm text-slate-500">
                           {loadingRewards ? 'Loading reward balance...' : <>Available Rewards: <strong className="text-navy-950">{Number(availableRewardPoints || 0).toFixed(0)} points</strong></>}
@@ -567,17 +548,14 @@ export default function BuyTicket({ onTicketPurchased }) {
             <h2 className="font-display text-lg font-semibold text-navy-950">Booking Summary</h2>
             <dl className="mt-4 divide-y divide-slate-100 text-sm">
               <SummaryRow label="Board at">{boardingRow?.name || summaryFrom || '-'}</SummaryRow>
-              <SummaryRow label="Get off at">{alightingRow ? (alightingRow.custom ? (dropoff?.label || 'Custom drop-off') : alightingRow.name) : (summaryTo || '-')}</SummaryRow>
-              <SummaryRow label={roundtrip.active ? 'Outbound' : 'Departure'}>{trip ? `${trip.trip_date} ${trip.boarding_time}` : '-'}</SummaryRow>
-              {roundtrip.active && (
-                <SummaryRow label="Return">{roundtrip.data?.return ? `${roundtrip.data.return.trip_date} ${roundtrip.data.return.boarding_time}` : '-'}</SummaryRow>
-              )}
+              <SummaryRow label="Get off at">{alightingRow?.name || summaryTo || '-'}</SummaryRow>
+              <SummaryRow label="Departure">{trip ? `${trip.trip_date} ${trip.boarding_time}` : '-'}</SummaryRow>
               <SummaryRow label="Seat Type">{form.seat_type === 'standing' ? 'Standing' : 'Seated'}</SummaryRow>
               <SummaryRow label="Payment">Online &middot; {form.payment_channel === 'maya' ? 'Maya' : 'GCash'}</SummaryRow>
-              <SummaryRow label={roundtrip.active ? 'Fare (both tickets)' : 'Unit Fare'}>
-                PHP {roundtrip.active ? (roundtrip.canPay ? Number(roundtrip.total).toFixed(2) : '0.00') : (hasFareQuote ? Number(unitFare).toFixed(2) : '0.00')}
+              <SummaryRow label="Unit Fare">
+                PHP {hasFareQuote ? Number(unitFare).toFixed(2) : '0.00'}
               </SummaryRow>
-              <SummaryRow label={roundtrip.active ? 'Passengers' : 'Quantity'}>{totalTickets}</SummaryRow>
+              <SummaryRow label="Quantity">{totalTickets}</SummaryRow>
               <SummaryRow label="Gross Total">PHP {Number(grossTotal || 0).toFixed(2)}</SummaryRow>
               <SummaryRow label="Rewards Applied">{Number(rewardPointsToApply || 0).toFixed(0)} points</SummaryRow>
             </dl>
@@ -603,30 +581,12 @@ export default function BuyTicket({ onTicketPurchased }) {
                   ? 'Choose where you board and where you get off.'
                   : !trip
                     ? 'Choose a departure to continue.'
-                    : roundtrip.active
-                      ? (roundtrip.blockedReason || 'Choose your return date and time.')
-                      : 'Choose where you get off to see your fare.'}
+                    : 'Choose where you get off to see your fare.'}
               </p>
             )}
           </Card>
         </div>
       </form>
-
-      {trip && timeline && (
-        <CustomDropoffModal
-          open={dropoffModalVisible}
-          routeId={timeline.trip.route_id}
-          direction={timeline.trip.leg_direction}
-          highlight={null}
-          pin={dropoffDraft}
-          options={dropoffOptions}
-          busy={Boolean(dropoff) && timelineState.loading}
-          error={dropoffError}
-          onPinChange={setDropoffDraft}
-          onClose={closeDropoffModal}
-          onConfirm={applyDropoff}
-        />
-      )}
 
       <Modal open={Boolean(ticketPreview?.ticket)} onClose={() => setTicketPreview(null)} title="Ticket Details">
         {ticketPreview?.ticket && (

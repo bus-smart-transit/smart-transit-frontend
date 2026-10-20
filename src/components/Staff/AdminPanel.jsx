@@ -2,8 +2,6 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import AdminService from '../../api/StaffService/AdminService';
 import FareRulesPanel from './FareRulesPanel';
 import { TicketResolutionQueue } from './TripCancellationsPanel';
-import DurationFactorsPanel from './DurationFactorsPanel';
-import DropoffRulesPanel from './DropoffRulesPanel';
 import useFareOptions from '../../api/hooks/Staff/useFareOptions';
 import { busLabelText } from '../../utils/busLabel';
 import { Plus, Edit, Trash2, AlertCircle, CheckCircle, Loader, ShieldCheck, MapPin, Route, Bus, Users, LogOut, Tag, RotateCw } from 'lucide-react';
@@ -18,8 +16,6 @@ const TAB_ITEMS = [
   { id: 'fleets', label: 'Fleets', icon: Bus },
   { id: 'fares', label: 'Fares', icon: Tag },
   { id: 'refunds', label: 'Cancelled Trips', icon: AlertCircle },
-  { id: 'durations', label: 'Peak Hours', icon: Route },
-  { id: 'dropoff', label: 'Drop-off Rules', icon: MapPin },
   { id: 'accounts', label: 'Accounts', icon: Users },
 ];
 
@@ -151,16 +147,6 @@ export default function AdminPanel() {
     }
   };
 
-  const handleToggleCustomDropoff = async (routeId, allow) => {
-    try {
-      await AdminService.setRouteCustomDropoff(routeId, allow);
-      setRoutes(routes.map(r => r.route_id === routeId ? { ...r, allow_custom_dropoff: allow } : r));
-      showMessage(allow ? 'Custom drop-off enabled for this route.' : 'Custom drop-off disabled for this route.', true);
-    } catch (err) {
-      showMessage(err.message || 'Failed to update custom drop-off', false);
-    }
-  };
-
   const handleRedrawRoute = async (route) => {
     if (!window.confirm(`Redraw the route line for ${route.route_name}? This uses routing-provider quota. The current line will be kept if the redraw fails.`)) return;
 
@@ -279,8 +265,6 @@ export default function AdminPanel() {
       else if (activeTab === 'routes') loadRoutes();
       else if (activeTab === 'fleets') loadFleets();
       else if (activeTab === 'fares') { loadFleets(); loadRoutes(); }
-      else if (activeTab === 'durations') loadRoutes();
-      else if (activeTab === 'dropoff') loadRoutes();
       else if (activeTab === 'accounts') loadAccounts();
     }, 0);
 
@@ -539,15 +523,6 @@ export default function AdminPanel() {
                           {route.geometry_stale ? <span className="font-semibold text-amber-300">Needs redraw</span> : 'Route line current'}
                           {route.geometry_regeneration_pending ? ' · Redraw in progress' : ''}
                         </p>
-                        <label className="mt-1 inline-flex items-center gap-2 text-xs text-slate-300">
-                          <input
-                            type="checkbox"
-                            checked={Boolean(route.allow_custom_dropoff)}
-                            onChange={e => handleToggleCustomDropoff(route.route_id, e.target.checked)}
-                            aria-label={`Allow custom drop-off pins on ${route.route_name}`}
-                          />
-                          Allow custom drop-off pins
-                        </label>
                       </div>
                       <div className="flex gap-2">
                         <button type="button" onClick={() => setSelectedRoute(route)} className="rounded-lg border border-slate-700 px-2 py-1 text-xs font-semibold text-slate-200 transition hover:bg-slate-700">Route details</button>
@@ -686,14 +661,6 @@ export default function AdminPanel() {
 
         {activeTab === 'refunds' && (
           <TicketResolutionQueue service={AdminService} tone="dark" />
-        )}
-
-        {activeTab === 'dropoff' && (
-          <DropoffRulesPanel service={AdminService} routes={routes} tone="dark" onRoutesChanged={loadRoutes} />
-        )}
-
-        {activeTab === 'durations' && (
-          <DurationFactorsPanel service={AdminService} routes={routes} tone="dark" />
         )}
 
         {activeTab === 'accounts' && (

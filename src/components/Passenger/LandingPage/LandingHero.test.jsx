@@ -41,7 +41,10 @@ import { buildBookingQuery, findStopCode, findStopId, parseBookingQuery, tripBoo
 
 function Where() {
   const location = useLocation();
-  return <p data-testid="where">{location.pathname}{location.search}</p>;
+  return <>
+    <p data-testid="where">{location.pathname}{location.search}</p>
+    <p data-testid="return-to">{location.state?.returnTo || ''}</p>
+  </>;
 }
 
 const renderHero = () => render(
@@ -161,6 +164,7 @@ describe('LandingHero available trips preview', () => {
     const where = await screen.findByTestId('where');
     expect(where.textContent).toBe('/passenger/book?from=alpha-stop&to=beta-stop&date=2026-10-01&time=07%3A15');
     expect(where.textContent).not.toMatch(/_id|mode=/);
+    expect(screen.getByTestId('return-to')).toHaveTextContent('/');
   });
 
   test('Search needs both From and To', async () => {
@@ -195,6 +199,7 @@ describe('LandingHero available trips preview', () => {
     expect(seeAll).toHaveAttribute('href', '/passenger/trips?from=alpha-stop&to=beta-stop&date=2026-10-05');
     fireEvent.click(seeAll);
     expect((await screen.findByTestId('where')).textContent).toBe('/passenger/trips?from=alpha-stop&to=beta-stop&date=2026-10-05');
+    expect(screen.getByTestId('return-to')).toHaveTextContent('/');
   });
 });
 

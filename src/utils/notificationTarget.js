@@ -7,7 +7,7 @@
 // since the notification was sent.
 //
 // Batch 27: "trip_assigned" is clickable. Batch 28: so is "shift_block_assigned", which opens the block's card.
-// Every other type returns null so nothing changes for them.
+// Other non-actionable types return null so nothing changes for them.
 
 import { canRespondToAssignment, getAssignmentRequestStatus } from './assignmentRequest';
 
@@ -22,7 +22,7 @@ const VALID_TABS = {
 
 const DEFAULT_TAB = { driver: 'dashboard', conductor: 'dashboard', operator: 'trips' };
 
-export const CLICKABLE_NOTIFICATION_TYPES = ['trip_assigned', 'shift_block_assigned'];
+export const CLICKABLE_NOTIFICATION_TYPES = ['trip_assigned', 'shift_block_assigned', 'dispatch_contact'];
 
 /** A same-site staff path only: never an external URL or a protocol-relative one. */
 export function isSafeStaffPath(path) {

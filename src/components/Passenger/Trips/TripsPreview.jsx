@@ -45,7 +45,7 @@ export default function TripsPreview({ today, previewLimit, live, search, onBook
             onBook={onBook}
             footer={state.total > 0 && (
               <div className="pt-1 text-center">
-                <Link to={allTripsLink(queryDate)} className="inline-flex items-center gap-1.5 text-sm font-semibold text-navy-800 hover:text-navy-950">
+                <Link to={allTripsLink(queryDate)} state={{ returnTo: '/' }} className="inline-flex items-center gap-1.5 text-sm font-semibold text-navy-800 hover:text-navy-950">
                   See all available trips{state.total > state.trips.length ? ` (${state.total})` : ''} <ArrowRight size={16} aria-hidden="true" />
                 </Link>
               </div>
@@ -54,12 +54,12 @@ export default function TripsPreview({ today, previewLimit, live, search, onBook
         ) : (
           <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-600 ring-1 ring-inset ring-slate-200">
             Trips on {formatManilaDate(live.date)}:{' '}
-            <Link to={allTripsLink(live.date)} className="font-semibold text-navy-800 underline">View</Link>
+            <Link to={allTripsLink(live.date)} state={{ returnTo: '/' }} className="font-semibold text-navy-800 underline">View</Link>
           </p>
         )}
         {listed && state.total === 0 && !state.loading && !state.error && (
           <p className="mt-3 text-center">
-            <Link to={allTripsLink(queryDate)} className="text-sm font-semibold text-navy-800 underline">See all available trips</Link>
+            <Link to={allTripsLink(queryDate)} state={{ returnTo: '/' }} className="text-sm font-semibold text-navy-800 underline">See all available trips</Link>
           </p>
         )}
       </div>

@@ -49,6 +49,28 @@ beforeEach(() => {
 });
 
 describe('FinancialsPage', () => {
+  it('shows discount totals by type and the snapshot in the transaction log', async () => {
+    const discountedSummary = summary({
+      discounts: { total: 7, tickets: 1, by_type: [{ type_key: 'student', label: 'Student', rate: 0.2, tickets: 1, amount: 7 }] },
+    });
+    const discountedLog = logRow({
+      discount_type_key: 'student', discount_label: 'Student', discount_rate: 0.2,
+      original_amount: 35, discount_amount: 7, amount: 28,
+    });
+    const service = makeService({
+      getFinancials: vi.fn().mockResolvedValue({ data: discountedSummary }),
+      getFinancialTransactions: vi.fn().mockResolvedValue(logPage([discountedLog])),
+    });
+    render(<FinancialsPage service={service} />);
+
+    expect(await screen.findByTestId('kpi-discounts')).toHaveTextContent('7.00');
+    expect(screen.getByRole('region', { name: 'Discounts by type' })).toHaveTextContent('Student');
+    expect(screen.getByTestId('transaction-row')).toHaveTextContent('Student');
+    expect(screen.getByTestId('transaction-row')).toHaveTextContent('35.00');
+    expect(screen.getByTestId('transaction-row')).toHaveTextContent('7.00');
+    expect(screen.getByTestId('transaction-row')).toHaveTextContent('28.00');
+  });
+
   it('shows the KPI cards, channels, breakdowns and the log from the server figures, with no raw JSON', async () => {
     const service = makeService();
     const { container } = render(<FinancialsPage service={service} />);
@@ -59,6 +81,7 @@ describe('FinancialsPage', () => {
     expect(screen.getByTestId('kpi-tickets')).toHaveTextContent('8');
     expect(screen.getByTestId('kpi-tickets')).toHaveTextContent('3 boarded');
     expect(screen.getByTestId('kpi-average')).toHaveTextContent('125.00');
+    expect(screen.getByTestId('kpi-discounts')).toHaveTextContent('0.00');
     expect(screen.getByTestId('kpi-split')).toHaveTextContent('25%');
     expect(screen.getByTestId('kpi-split')).toHaveTextContent('75%');
 
@@ -75,7 +98,7 @@ describe('FinancialsPage', () => {
     expect(screen.getByTestId('transaction-row')).toHaveTextContent('Paid');
 
     expect(container.textContent).not.toMatch(/[{}]|"[a-z_]+":|\[object/);
-    expect(container.textContent).not.toMatch(/discount|override|remittance/i); // nothing is built for these: no placeholder cards
+    expect(container.textContent).not.toMatch(/override|remittance/i); // unrelated panels are not shown as placeholders
   });
 
   it('says so, with the reason, when the range has no paid tickets', async () => {
@@ -127,9 +150,9 @@ describe('FinancialsPage', () => {
     render(<FinancialsPage service={service} />);
     await screen.findByTestId('transaction-row');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Fare' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Fare paid' }));
     await waitFor(() => expect(service.getFinancialTransactions).toHaveBeenLastCalledWith(expect.objectContaining({ sort: 'amount', dir: 'desc', page: 1 })));
-    fireEvent.click(screen.getByRole('button', { name: 'Fare' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Fare paid' }));
     await waitFor(() => expect(service.getFinancialTransactions).toHaveBeenLastCalledWith(expect.objectContaining({ sort: 'amount', dir: 'asc' })));
   });
 

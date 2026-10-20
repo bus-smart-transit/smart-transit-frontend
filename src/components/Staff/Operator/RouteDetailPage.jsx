@@ -6,8 +6,6 @@ import ViewTabs from '../../ui/ViewTabs';
 import Modal from '../../ui/Modal';
 import RouteMap from '../../Map/RouteMap';
 import FareRulesPanel from '../FareRulesPanel';
-import DropoffRulesPanel from '../DropoffRulesPanel';
-import DurationFactorsPanel from '../DurationFactorsPanel';
 import OperatorService from '../../../api/StaffService/OperatorService';
 import { routeActivity, upcomingTripsFor, assignmentsOnRoute, sortedRouteStops, formatDuration } from '../../../utils/operatorRouteView';
 import { departureLabel } from '../../../utils/operatorDashboardView';
@@ -24,7 +22,6 @@ const ROUTE_TABS = [
   { key: 'schedule', label: 'Schedule' },
   { key: 'fleets', label: 'Assigned fleets' },
   { key: 'fare', label: 'Fare' },
-  { key: 'dropoff', label: 'Drop-off rules' },
   { key: 'travel', label: 'Travel time' },
 ];
 
@@ -62,7 +59,7 @@ function AssignStopModal({ open, onClose, route, stops, form, setForm, saving, m
   );
 }
 
-function OverviewTab({ row, route, trips, routesTab, onChangeDropoff, onRedraw, redrawPending, redrawSaving, redrawError, routeMapVersion }) {
+function OverviewTab({ row, route, trips, onRedraw, redrawPending, redrawSaving, redrawError, routeMapVersion }) {
   const activity = routeActivity(route.route_id, trips);
   return (
     <div className={OP_SPACE.stack}>
@@ -108,19 +105,6 @@ function OverviewTab({ row, route, trips, routesTab, onChangeDropoff, onRedraw, 
               <Detail label="Average tickets sold per day">{activity.avgDailyTicketsSold ?? '-'}</Detail>
               <Detail label="Busiest departure hour">{activity.peakHour ? `${activity.peakHour.hour} (${activity.peakHour.trips} trips)` : '-'}</Detail>
             </dl>
-          </OpCard>
-          <OpCard title="Custom drop-off">
-            <label className="inline-flex items-center gap-2 text-sm font-medium text-slate-700">
-              <input
-                type="checkbox"
-                checked={Boolean(route.allow_custom_dropoff)}
-                disabled={routesTab.manageSaving}
-                onChange={(event) => onChangeDropoff(event.target.checked)}
-                aria-label={`Allow custom drop-off pins on ${route.route_name}`}
-              />
-              {route.allow_custom_dropoff ? 'On' : 'Off'}
-            </label>
-            <p className="mt-2 text-xs text-slate-500">Lets passengers pin a drop-off point on this route (off by default). The pin must be on the route line and ahead of where the passenger boards. Areas and points are set under Drop-off rules.</p>
           </OpCard>
         </div>
       </div>
@@ -232,21 +216,19 @@ function TravelTimeTab({ route }) {
   const stops = sortedRouteStops(route);
   return (
     <div className={OP_SPACE.stack}>
-      <OpCard title="Scheduled minutes from the origin" subtitle="Per stop, as saved on the route. Express minutes apply to express trips.">
+      <OpCard title="Expected time from the origin" subtitle="Estimated driving minutes to each stop, based on the current route. Bus dwell time and live traffic may change actual travel time.">
         <OpTable
-          caption="Scheduled travel time by stop"
+          caption="Expected travel time by stop"
           rows={stops}
           rowKey={(row) => row.id ?? `${row.stop_id}-${row.stop_order}`}
           empty="No stops on this route yet."
           columns={[
             { key: 'order', header: '#', render: (row) => row.stop_order },
             { key: 'name', header: 'Stop', render: (row) => row.stop?.stop_name || `Stop #${row.stop_id}` },
-            { key: 'regular', header: 'Regular', render: (row) => (row.scheduled_offset_min === null || row.scheduled_offset_min === undefined ? '-' : `${row.scheduled_offset_min} min`) },
-            { key: 'express', header: 'Express', render: (row) => (row.served_by_express && row.express_offset_min !== null && row.express_offset_min !== undefined ? `${row.express_offset_min} min` : '-') },
+            { key: 'expected', header: 'Expected time', render: (row) => (row.scheduled_offset_min === null || row.scheduled_offset_min === undefined ? '-' : `${row.scheduled_offset_min} min`) },
           ]}
         />
       </OpCard>
-      <DurationFactorsPanel service={OperatorService} routes={[route]} tone="light" />
     </div>
   );
 }
@@ -331,7 +313,7 @@ export default function RouteDetailPage({
       <ViewTabs label="Route sections" tabs={ROUTE_TABS} value={tab} onChange={setTab} />
 
       <div role="tabpanel" aria-label={ROUTE_TABS.find((item) => item.key === tab)?.label}>
-        {tab === 'overview' && <OverviewTab row={row} route={geometryRoute} trips={trips} routesTab={routesTab} onChangeDropoff={(allow) => { void routesTab.handleToggleCustomDropoff(route.route_id, allow); }} onRedraw={() => setRedrawConfirmOpen(true)} redrawPending={redrawPending} redrawSaving={redrawSaving} redrawError={redrawError} routeMapVersion={routeMapVersion} />}
+        {tab === 'overview' && <OverviewTab row={row} route={geometryRoute} trips={trips} onRedraw={() => setRedrawConfirmOpen(true)} redrawPending={redrawPending} redrawSaving={redrawSaving} redrawError={redrawError} routeMapVersion={routeMapVersion} />}
         {tab === 'stops' && <StopsTab route={route} routesTab={routesTab} onOpenAssign={openAssign} />}
         {tab === 'schedule' && <ScheduleTab row={row} fleets={fleets} trips={trips} onOpenSchedule={onOpenSchedule} />}
         {tab === 'fleets' && <FleetsTab row={row} fleets={fleets} onOpenFleets={onOpenFleets} />}
@@ -343,7 +325,6 @@ export default function RouteDetailPage({
             <FareRulesPanel service={OperatorService} fleets={fleets} routes={routes} canCreateGeneral={false} tone="light" />
           </OpCard>
         )}
-        {tab === 'dropoff' && <DropoffRulesPanel service={OperatorService} routes={[route]} tone="light" onRoutesChanged={onRefresh} />}
         {tab === 'travel' && <TravelTimeTab route={route} />}
       </div>
 

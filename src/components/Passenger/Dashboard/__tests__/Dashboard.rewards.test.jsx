@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, test, vi } from 'vitest';
+import { afterEach, describe, expect, test, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import Dashboard from '../Dashboard';
 
@@ -10,7 +10,7 @@ vi.mock('../../../../api/hooks/useAuth', () => ({
   useAuth: () => ({ user: { name: 'Test User', email: 'test@example.com' }, isAuthenticated: true, logout: vi.fn() }),
 }));
 
-const navigate = vi.fn();
+const mocks = vi.hoisted(() => ({ navigate: vi.fn(), visibleTab: 'rewards' }));
 
 vi.mock('../../../../api/hooks/Passenger/usePassengerDashboard', () => ({
   default: () => ({
@@ -22,11 +22,19 @@ vi.mock('../../../../api/hooks/Passenger/usePassengerDashboard', () => ({
     handleTabChange: vi.fn(),
     isAuthenticated: true,
     isLoadingPrivate: false,
+    dashboardFacts: null,
+    historyPagination: {
+      tickets: { page: 1, last_page: 1, total: 0 },
+      rewards: { page: 1, last_page: 1, total: 2 },
+      payments: { page: 1, last_page: 1, total: 0 },
+    },
+    loadMoreHistory: vi.fn(),
+    loadingMoreHistory: null,
     lastSync: null,
     loadPrivateData: vi.fn(),
     loadingTicketQr: false,
     menuOpen: false,
-    navigate,
+    navigate: mocks.navigate,
     paymentNotice: '',
     points: 120,
     privateError: '',
@@ -42,13 +50,17 @@ vi.mock('../../../../api/hooks/Passenger/usePassengerDashboard', () => ({
     tickets: [],
     transactions: [],
     user: { name: 'Test User' },
-    visibleTab: 'rewards',
+    visibleTab: mocks.visibleTab,
     openTicketModal: vi.fn(),
     printSelectedTicket: vi.fn(),
   }),
 }));
 
 const renderTab = () => render(<MemoryRouter><Dashboard /></MemoryRouter>);
+
+afterEach(() => {
+  mocks.visibleTab = 'rewards';
+});
 
 describe('Passenger dashboard Rewards tab', () => {
   test('shows the balance and what it is worth, at PHP 1 a point', () => {
@@ -76,12 +88,20 @@ describe('Passenger dashboard Rewards tab', () => {
     expect(screen.queryByRole('button', { name: /redeem/i })).not.toBeInTheDocument();
   });
 
-  test('sends the passenger to book a trip, where points are applied', () => {
+  test('sends the Quick Actions booking button to All Available Trips', () => {
+    mocks.visibleTab = 'dashboard';
+    renderTab();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Book a New Trip' }));
+    expect(mocks.navigate).toHaveBeenCalledWith('/passenger/trips', { state: { returnTo: '/passenger/dashboard' } });
+  });
+
+  test('sends the rewards booking button to All Available Trips', () => {
     renderTab();
 
     expect(screen.getByText(/There is nothing to redeem here/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Book a trip' }));
-    expect(navigate).toHaveBeenCalledWith('/passenger/book');
+    expect(mocks.navigate).toHaveBeenCalledWith('/passenger/trips', { state: { returnTo: '/passenger/dashboard' } });
   });
 
   test('still lists the points activity', () => {

@@ -2,7 +2,7 @@
 // formatting of what the server derived from stored data (run pattern from the schedule / shift block; service and the
 // stops an express serves from the route's stop data). Nothing is derived or invented on the client.
 
-/** "One-way run" / "Round-trip run" (never worded like a passenger's roundtrip booking), or '' when the server sent none. */
+/** The server's schedule label, or '' when no schedule information was sent. */
 export function runPatternLabel(runPattern) {
   return typeof runPattern?.label === 'string' ? runPattern.label : ''
 }

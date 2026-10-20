@@ -111,7 +111,7 @@ export default function ShiftBlockCard({ card, showState, audit = null, actions 
         <p className="text-sm font-semibold text-slate-800">{formatManilaDate(card.scheduled_date) || card.scheduled_date || '-'} · {timeRange(card)}</p>
         <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
           <span data-testid="shift-block-legs-count" className="rounded-full bg-slate-100 px-2 py-1 font-semibold">{card.legs_count} {card.legs_count === 1 ? 'leg' : 'legs'}</span>
-          <RunInfoChips runPattern={card.run_pattern} service={card.service} serviceType={card.service_type} showStops />
+          <RunInfoChips runPattern={card.run_pattern} service={card.service} serviceType={card.service_type} showRunPattern showStops />
           {card.plate_number && <span className="font-data">{card.plate_number}</span>}
         </div>
         {overdue && <p data-testid="overdue-note" className="text-xs font-semibold text-amber-700">{OVERDUE_NOTE}</p>}

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import QrScanner from 'qr-scanner';
 import ConductorService from '../../StaffService/ConductorService';
+import { checkoutIdempotencyKey, clearCheckoutIdempotencyKey } from '../../../utils/checkoutIdempotency';
 import usePassengersByTrip from './usePassengersByTrip';
 import useOnsiteReceiptPrinter from './useOnsiteReceiptPrinter';
 import { isSameBusinessDay, getBusinessToday, getBusinessNowMs, toBusinessScheduleMs, debugLogBusinessTime, formatManilaDateTime } from '../../../utils/dates';
@@ -163,8 +164,6 @@ export function useConductorDashboardData({ onLogout, pairing }) {
     boarding_mode: 'stop',
     origin_stop_id: '',
     destination_stop_id: '',
-    // A pinned custom drop-off { lat, lng, label } instead of a destination stop.
-    dropoff: null,
     seat_type: 'seated',
   });
   // Task 6: the server's answer to "where is the bus on this route?" (never computed here).
@@ -962,13 +961,19 @@ export function useConductorDashboardData({ onLogout, pairing }) {
     setConfirmCheckout(true);
   };
 
-  const handleConfirmedOnsiteCheckout = async () => {
+  const handleConfirmedOnsiteCheckout = async (discount = null) => {
     setConfirmCheckout(false);
     setCheckoutInFlight(true);
     try {
-      const res = await ConductorService.checkoutOnsite({
-        items: [buildOnsiteItem({ tripId: trip.trip_id, form: cashForm })],
-      });
+      const onsiteItem = buildOnsiteItem({ tripId: trip.trip_id, form: cashForm });
+      if (discount?.discount_type_key) {
+        onsiteItem.discount_type_key = discount.discount_type_key;
+        onsiteItem.discount_id_checked = Boolean(discount.discount_id_checked);
+      }
+      const onsitePayload = { items: [onsiteItem] };
+      const idempotencyKey = checkoutIdempotencyKey('conductor-cash', onsitePayload);
+      const res = await ConductorService.checkoutOnsite(onsitePayload, idempotencyKey);
+      clearCheckoutIdempotencyKey('conductor-cash');
 
       const checkoutData = res?.data ?? res ?? {};
       setOnsiteReceipt({
@@ -983,7 +988,6 @@ export function useConductorDashboardData({ onLogout, pairing }) {
         ...prev,
         origin_stop_id: '',
         destination_stop_id: '',
-        dropoff: null,
         seat_type: 'seated',
       }));
       void loadPassengers();
@@ -994,11 +998,13 @@ export function useConductorDashboardData({ onLogout, pairing }) {
       ConductorService.getConductorTrip().then((res) => {
         if (res?.data) setTrip(res.data);
       }).catch(() => {});
+      return true;
     } catch (err) {
       setOnsiteReceipt(null);
       setActionMsg(err.message || 'Failed to record onsite checkout.');
       // The server may have refused the bus position; show its current verdict so the picker can fall back.
       if (cashForm.boarding_mode === 'gps') void refreshBoardingPoint();
+      return false;
     } finally {
       setCheckoutInFlight(false);
     }

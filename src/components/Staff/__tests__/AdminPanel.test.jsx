@@ -13,8 +13,6 @@ vi.mock('../../../api/StaffService/AdminService', () => ({ default: mocks }));
 vi.mock('../../../api/hooks/Staff/useFareOptions', () => ({ default: () => ({ vehicle_classes: [] }) }));
 vi.mock('../FareRulesPanel', () => ({ default: () => <div>Fare rules</div> }));
 vi.mock('../TripCancellationsPanel', () => ({ TicketResolutionQueue: () => <div>Ticket resolutions</div> }));
-vi.mock('../DurationFactorsPanel', () => ({ default: () => <div>Duration factors</div> }));
-vi.mock('../DropoffRulesPanel', () => ({ default: () => <div>Drop-off rules</div> }));
 vi.mock('../../Map/RouteMap', () => ({ default: ({ routeId }) => <div>admin-route-map-{routeId}</div> }));
 
 describe('AdminPanel route geometry', () => {
@@ -52,5 +50,15 @@ describe('AdminPanel route geometry', () => {
     expect(confirm).toHaveBeenCalledWith(expect.stringContaining('Davao to Butuan'));
     await waitFor(() => expect(mocks.regenerateRouteGeometry).toHaveBeenCalledWith(12));
     confirm.mockRestore();
+  });
+
+  it('does not expose custom drop-off settings in the Admin interface', async () => {
+    render(<AdminPanel />);
+    expect(screen.queryByRole('button', { name: 'Drop-off Rules' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Peak Hours' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Routes' }));
+    await screen.findByRole('button', { name: 'Route details' });
+    expect(screen.queryByRole('checkbox', { name: /custom drop-off/i })).not.toBeInTheDocument();
   });
 });

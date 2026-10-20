@@ -9,6 +9,14 @@ const PROTECTED_TABS = new Set(['tickets', 'rewards', 'transactions', 'profile']
 const TICKET_QR_CACHE_KEY = 'smart_transit_ticket_qr_cache_v1';
 const QR_SUCCESS_TTL_MS = 5 * 60 * 1000;
 const QR_FAILURE_TTL_MS = 45 * 1000;
+const HISTORY_PAGE_SIZE = 50;
+
+const readHistoryPage = (response) => {
+  const payload = response?.data ?? response;
+  if (Array.isArray(payload)) return { items: payload, meta: null };
+  const meta = payload?.meta ?? (payload?.current_page ? payload : null);
+  return { items: Array.isArray(payload?.data) ? payload.data : [], meta };
+};
 
 const readSessionCache = (key) => {
   try {
@@ -65,6 +73,7 @@ export default function usePassengerDashboard({ preloadMapView }) {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [menuOpen, setMenuOpen] = useState(false);
   const [profile, setProfile] = useState(null);
+  const [dashboardFacts, setDashboardFacts] = useState(null);
   const [tickets, setTickets] = useState([]);
   const [transactions, setTransactions] = useState([]);
   const [rewards, setRewards] = useState([]);
@@ -76,9 +85,16 @@ export default function usePassengerDashboard({ preloadMapView }) {
   const [selectedTicket, setSelectedTicket] = useState(null);
   const [selectedTicketQr, setSelectedTicketQr] = useState(null);
   const [loadingTicketQr, setLoadingTicketQr] = useState(false);
+  const [loadingMoreHistory, setLoadingMoreHistory] = useState('');
+  const [historyPagination, setHistoryPagination] = useState({
+    tickets: { page: 1, last_page: 1, total: 0 },
+    rewards: { page: 1, last_page: 1, total: 0 },
+    payments: { page: 1, last_page: 1, total: 0 },
+  });
   const qrCacheRef = useRef(readSessionCache(TICKET_QR_CACHE_KEY));
   const privateLoadRequestRef = useRef(null);
   const lastPrivateLoadStartedAtRef = useRef(0);
+  const historyLoadInFlightRef = useRef(new Set());
 
   const formatDateTime = useCallback((value) => {
     const str = String(value ?? '');
@@ -128,9 +144,15 @@ export default function usePassengerDashboard({ preloadMapView }) {
     setIsLoadingPrivate(false);
     setPrivateError('');
     setProfile(null);
+    setDashboardFacts(null);
     setTickets([]);
     setTransactions([]);
     setRewards([]);
+    setHistoryPagination({
+      tickets: { page: 1, last_page: 1, total: 0 },
+      rewards: { page: 1, last_page: 1, total: 0 },
+      payments: { page: 1, last_page: 1, total: 0 },
+    });
     setLastSync(null);
     setTicketModalOpen(false);
     setSelectedTicket(null);
@@ -166,11 +188,18 @@ export default function usePassengerDashboard({ preloadMapView }) {
         const ticketList = payload?.tickets ?? [];
         const rewardList = payload?.rewards ?? [];
         const paymentList = payload?.payments ?? [];
+        setDashboardFacts(payload?.dashboard_facts ?? null);
 
         setProfile(profilePayload);
         setTickets(Array.isArray(ticketList) ? ticketList : []);
         setRewards(Array.isArray(rewardList) ? rewardList : []);
         setTransactions(Array.isArray(paymentList) ? paymentList : []);
+        const pageMeta = payload?.meta?.history_pagination ?? {};
+        setHistoryPagination({
+          tickets: pageMeta.tickets ?? { page: 1, last_page: 1, total: ticketList.length },
+          rewards: pageMeta.rewards ?? { page: 1, last_page: 1, total: rewardList.length },
+          payments: pageMeta.payments ?? { page: 1, last_page: 1, total: paymentList.length },
+        });
       } catch (summaryErr) {
         const summaryStatus = getStatus(summaryErr);
         if (summaryStatus === 401 || summaryStatus === 403 || summaryStatus === 404) {
@@ -180,9 +209,9 @@ export default function usePassengerDashboard({ preloadMapView }) {
         }
 
         const [ticketsRes, rewardsRes, paymentsRes] = await Promise.allSettled([
-          PassengerService.getTickets(),
-          PassengerService.getRewardsHistory(),
-          PassengerService.getPaymentHistory(),
+          PassengerService.getTickets({ page: 1, per_page: HISTORY_PAGE_SIZE }),
+          PassengerService.getRewardsHistory({ page: 1, per_page: HISTORY_PAGE_SIZE }),
+          PassengerService.getPaymentHistory({ page: 1, per_page: HISTORY_PAGE_SIZE }),
         ]);
 
         const authLikeFailure = [ticketsRes, rewardsRes, paymentsRes].some((result) => {
@@ -199,26 +228,36 @@ export default function usePassengerDashboard({ preloadMapView }) {
 
         const failures = [];
         setProfile(user ?? null);
+        setDashboardFacts(null);
 
         if (ticketsRes.status === 'fulfilled') {
-          const ticketList = ticketsRes.value?.data ?? ticketsRes.value ?? [];
-          setTickets(Array.isArray(ticketList) ? ticketList : []);
+          const ticketPage = readHistoryPage(ticketsRes.value);
+          setTickets(ticketPage.items);
+          setHistoryPagination((previous) => ({ ...previous, tickets: ticketPage.meta ? {
+            page: ticketPage.meta.current_page, last_page: ticketPage.meta.last_page, total: ticketPage.meta.total,
+          } : { page: 1, last_page: 1, total: ticketPage.items.length } }));
         } else {
           setTickets([]);
           failures.push('Tickets endpoint failed');
         }
 
         if (rewardsRes.status === 'fulfilled') {
-          const rewardList = rewardsRes.value?.data ?? rewardsRes.value ?? [];
-          setRewards(Array.isArray(rewardList) ? rewardList : []);
+          const rewardPage = readHistoryPage(rewardsRes.value);
+          setRewards(rewardPage.items);
+          setHistoryPagination((previous) => ({ ...previous, rewards: rewardPage.meta ? {
+            page: rewardPage.meta.current_page, last_page: rewardPage.meta.last_page, total: rewardPage.meta.total,
+          } : { page: 1, last_page: 1, total: rewardPage.items.length } }));
         } else {
           setRewards([]);
           failures.push('Rewards endpoint failed');
         }
 
         if (paymentsRes.status === 'fulfilled') {
-          const paymentList = paymentsRes.value?.data ?? paymentsRes.value ?? [];
-          setTransactions(Array.isArray(paymentList) ? paymentList : []);
+          const paymentPage = readHistoryPage(paymentsRes.value);
+          setTransactions(paymentPage.items);
+          setHistoryPagination((previous) => ({ ...previous, payments: paymentPage.meta ? {
+            page: paymentPage.meta.current_page, last_page: paymentPage.meta.last_page, total: paymentPage.meta.total,
+          } : { page: 1, last_page: 1, total: paymentPage.items.length } }));
         } else {
           setTransactions([]);
           failures.push('Payments endpoint failed');
@@ -236,6 +275,40 @@ export default function usePassengerDashboard({ preloadMapView }) {
 
     return privateLoadRequestRef.current;
   }, [clearPrivateData, isAuthenticated, logout, user]);
+
+  const loadMoreHistory = useCallback(async (kind) => {
+    const current = historyPagination[kind];
+    if (!current || current.page >= current.last_page || historyLoadInFlightRef.current.has(kind)) return;
+
+    historyLoadInFlightRef.current.add(kind);
+    setLoadingMoreHistory(kind);
+    const page = current.page + 1;
+    const options = { page, per_page: HISTORY_PAGE_SIZE };
+    const loaders = {
+      tickets: () => PassengerService.getTickets(options),
+      rewards: () => PassengerService.getRewardsHistory(options),
+      payments: () => PassengerService.getPaymentHistory(options),
+    };
+
+    try {
+      const result = readHistoryPage(await loaders[kind]());
+      const setters = { tickets: setTickets, rewards: setRewards, payments: setTransactions };
+      setters[kind]((previous) => [...previous, ...result.items]);
+      setHistoryPagination((previous) => ({
+        ...previous,
+        [kind]: {
+          page: Number(result.meta?.current_page ?? page),
+          last_page: Number(result.meta?.last_page ?? previous[kind].last_page),
+          total: Number(result.meta?.total ?? previous[kind].total),
+        },
+      }));
+    } catch (error) {
+      setPrivateError(error?.message || 'Could not load more history. Please try again.');
+    } finally {
+      historyLoadInFlightRef.current.delete(kind);
+      setLoadingMoreHistory('');
+    }
+  }, [historyPagination]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -486,10 +559,14 @@ export default function usePassengerDashboard({ preloadMapView }) {
     getOriginLabel,
     handleLogout,
     handleTabChange,
+    historyPagination,
     isAuthenticated,
     isLoadingPrivate,
+    dashboardFacts,
     lastSync,
+    loadMoreHistory,
     loadPrivateData,
+    loadingMoreHistory,
     loadingTicketQr,
     menuOpen,
     navigate,

@@ -222,6 +222,9 @@ export function useDriverDashboardData({ onLogout, pairing }) {
     label: 'Live traffic unavailable',
     etaMinutes: null,
     delayMinutes: null,
+    segmentLabel: 'Current position to next stop',
+    updatedAt: null,
+    dataSource: 'fallback',
     suggestion: 'Live provider traffic data is unavailable right now.',
   });
   const isPaired = pairing?.paired === true;

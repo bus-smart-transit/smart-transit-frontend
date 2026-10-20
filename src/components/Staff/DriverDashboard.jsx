@@ -120,6 +120,57 @@ const resolveDriverHeaderBadge = ({
   return { label: 'Ready', tone: 'border-emerald-200 bg-emerald-50 text-emerald-700' };
 };
 
+function ActiveTripTrafficCard({ trafficStatus, nextStop }) {
+  const unavailable = trafficStatus.dataSource === 'fallback';
+  const badgeLabel = unavailable
+    ? 'Unavailable'
+    : trafficStatus.level === 'unknown'
+      ? 'Travel time only'
+      : trafficStatus.label;
+  const badgeTone = unavailable || trafficStatus.level === 'unknown'
+    ? 'bg-slate-100 text-slate-700'
+    : trafficStatus.level === 'heavy'
+      ? 'bg-red-100 text-red-700'
+      : trafficStatus.level === 'moderate'
+        ? 'bg-amber-100 text-amber-700'
+        : 'bg-emerald-100 text-emerald-700';
+
+  return (
+    <article className="staff-card">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Route conditions</p>
+          <h4 className="text-base font-bold text-slate-900">Traffic to next stop</h4>
+        </div>
+        <span className={`rounded-full px-2.5 py-1 text-xs font-bold uppercase tracking-wide ${badgeTone}`}>{badgeLabel}</span>
+      </div>
+      <p className="mb-3 text-xs font-medium text-slate-500">
+        Measured segment: {trafficStatus.segmentLabel || `Current position to ${nextStop?.stop_name ?? nextStop?.name ?? 'next stop'}`}
+      </p>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">ETA</p>
+          <p className="mt-1 font-data text-lg font-bold text-slate-900">{trafficStatus.etaMinutes == null ? 'Unavailable' : `${trafficStatus.etaMinutes} min`}</p>
+        </div>
+        <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Extra time</p>
+          <p className="mt-1 font-data text-lg font-bold text-slate-900">{trafficStatus.delayMinutes == null ? 'Unavailable' : `${trafficStatus.delayMinutes} min`}</p>
+        </div>
+        <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Next stop</p>
+          <p className="mt-1 text-sm font-semibold text-slate-900">{nextStop?.stop_name ?? nextStop?.name ?? 'No pending stop'}</p>
+        </div>
+      </div>
+      <p className="mt-3 text-sm text-slate-700">{trafficStatus.suggestion}</p>
+      <p className="mt-2 text-xs text-slate-500">
+        {trafficStatus.updatedAt
+          ? `Provider updated ${new Date(trafficStatus.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} | ${String(trafficStatus.dataSource || 'provider').toUpperCase()}`
+          : 'No live provider timestamp'}
+      </p>
+    </article>
+  );
+}
+
 export default function DriverDashboard() {
   const { pairing, refreshPairingStatus, handleLogout } = useDriverPairing();
 
@@ -480,9 +531,18 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                 </span>
               </div>
 
+              <p className="mb-3 text-xs font-medium text-slate-500">
+                Measured segment: {trafficStatus.segmentLabel || `Current position to ${nextStop?.stop_name ?? nextStop?.name ?? 'next stop'}`}
+              </p>
+
               {trafficStatus.dataSource === 'fallback' && (
                 <p className="mb-3 rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-500">
-                  Live traffic is not available right now. Arrival time and delay are hidden until it is back.
+                  Live traffic is unavailable. No ETA or delay estimate is shown.
+                </p>
+              )}
+              {trafficStatus.level === 'unknown' && trafficStatus.dataSource !== 'fallback' && (
+                <p className="mb-3 rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-500">
+                  Travel time is available, but the provider did not return enough data to classify congestion.
                 </p>
               )}
 
@@ -506,25 +566,44 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                   <p className="mt-2 text-sm font-semibold text-slate-800 leading-5">{nextStop?.stop_name ?? nextStop?.name ?? 'No pending stop'}</p>
                 </div>
               </div>
+              <p className="mt-3 text-xs text-slate-500">
+                {trafficStatus.updatedAt
+                  ? `Provider updated ${new Date(trafficStatus.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} | ${String(trafficStatus.dataSource || 'provider').toUpperCase()}`
+                  : 'No live provider timestamp'}
+              </p>
             </article>
 
             <article className="staff-card md:col-span-2 xl:col-span-4">
               <div className="mb-3 flex items-center justify-between">
                 <h4 className="text-base font-bold text-slate-900">Traffic Alerts</h4>
-                <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-amber-700">{notifications.length} Active</span>
+                <span className={`rounded-full px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.16em] ${
+                  trafficStatus.dataSource === 'fallback' || trafficStatus.level === 'unknown'
+                    ? 'bg-slate-100 text-slate-700'
+                    : trafficStatus.level === 'heavy'
+                      ? 'bg-red-100 text-red-700'
+                      : trafficStatus.level === 'moderate'
+                        ? 'bg-amber-100 text-amber-700'
+                        : 'bg-emerald-100 text-emerald-700'
+                }`}>
+                  {trafficStatus.dataSource === 'fallback'
+                    ? 'Unavailable'
+                    : trafficStatus.level === 'unknown'
+                      ? 'Travel time only'
+                      : trafficStatus.label}
+                </span>
               </div>
-              <div className="space-y-2">
-                {notifications.slice(0, 3).map((notice, idx) => (
-                  <div key={idx} className={`flex items-start justify-between gap-3 rounded-lg border bg-slate-50 px-3 py-2 ${
-                    notice.tone === 'danger' ? 'border-red-200' : notice.tone === 'warn' ? 'border-amber-200' : 'border-teal-200'
-                  }`}>
-                    <div>
-                      <p className="text-sm font-semibold text-slate-900">{notice.title}</p>
-                      <p className="text-xs text-slate-500 mt-0.5">{notice.note}</p>
-                    </div>
-                    <small className="shrink-0 text-xs text-slate-400">{notice.time}</small>
-                  </div>
-                ))}
+              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
+                <p className="text-sm font-semibold text-slate-900">
+                  {trafficStatus.segmentLabel || `Current position to ${nextStop?.stop_name ?? nextStop?.name ?? 'next stop'}`}
+                </p>
+                <p className="mt-1 text-xs text-slate-600">{trafficStatus.suggestion}</p>
+                <p className="mt-2 text-xs font-medium text-slate-700">
+                  {trafficStatus.delayMinutes == null
+                    ? trafficStatus.etaMinutes == null
+                      ? 'ETA and delay unavailable'
+                      : `ETA ${trafficStatus.etaMinutes} min | Delay unavailable`
+                    : `${trafficStatus.delayMinutes} min above free-flow | ETA ${trafficStatus.etaMinutes} min`}
+                </p>
               </div>
             </article>
 
@@ -677,6 +756,10 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
               </div>
             </article>
           </section>
+        )}
+
+        {!loading && activeTab === 'activeTrip' && !showNoCurrentTripState && (
+          <ActiveTripTrafficCard trafficStatus={trafficStatus} nextStop={nextStop} />
         )}
 
         {!loading && activeTab === 'activeTrip' && !showNoCurrentTripState && (

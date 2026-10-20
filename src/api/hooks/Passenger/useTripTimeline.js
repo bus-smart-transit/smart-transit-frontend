@@ -6,11 +6,11 @@ import { pollIntervalMs } from '../../../utils/tripTimeline'
  * Loads the server-computed timeline for a trip and keeps it fresh: polling at
  * the server's suggested interval, paused while the tab is hidden and refreshed
  * once when it becomes visible again. Changing the boarding/alighting stop or
- * the custom drop-off pin recomputes on the server (never on the client).
+ * the selected alighting stop recomputes on the server (never on the client).
  */
-export default function useTripTimeline({ tripId, boardingStopId, alightingStopId, dropoff, seatType }) {
+export default function useTripTimeline({ tripId, boardingStopId, alightingStopId, seatType }) {
   const requestKey = tripId
-    ? [tripId, boardingStopId || '', alightingStopId || '', dropoff ? (dropoff.pointId != null ? `point-${dropoff.pointId}` : `${dropoff.lat},${dropoff.lng}`) : '', seatType || ''].join('|')
+    ? [tripId, boardingStopId || '', alightingStopId || '', seatType || ''].join('|')
     : null
 
   const [result, setResult] = useState({ key: null, data: null, error: null })
@@ -19,10 +19,6 @@ export default function useTripTimeline({ tripId, boardingStopId, alightingStopI
   const selection = {
     boarding_stop_id: boardingStopId,
     alighting_stop_id: alightingStopId,
-    // A designated drop-off point is named by id only; a pin sends its coordinates.
-    alighting_point_id: dropoff?.pointId ?? undefined,
-    dropoff_lat: dropoff?.pointId != null ? undefined : dropoff?.lat,
-    dropoff_lng: dropoff?.pointId != null ? undefined : dropoff?.lng,
     seat_type: seatType,
   }
   // Read inside the fetcher without making the effect depend on a new object each render.

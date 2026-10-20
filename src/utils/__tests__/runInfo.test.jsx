@@ -33,8 +33,8 @@ describe('run info wording (from the server, never invented)', () => {
 })
 
 describe('RunInfoChips', () => {
-  test('shows the round-trip run chip, the express chip and the served stops', () => {
-    render(<RunInfoChips runPattern={{ key: 'round_trip', label: 'Round-trip run' }} service={express} showStops />)
+  test('shows the run chip when explicitly enabled for an operational view', () => {
+    render(<RunInfoChips runPattern={{ key: 'round_trip', label: 'Round-trip run' }} service={express} showRunPattern showStops />)
     expect(screen.getByTestId('run-pattern-chip')).toHaveTextContent('Round-trip run')
     expect(screen.getByTestId('service-type-chip')).toHaveTextContent('Express')
     expect(screen.getByTestId('served-stops')).toHaveTextContent('Stops at: Alpha, Beta, Omega')
@@ -44,10 +44,20 @@ describe('RunInfoChips', () => {
     const { rerender } = render(<RunInfoChips service={nonStop} showStops />)
     expect(screen.getByTestId('service-type-chip')).toHaveTextContent('Express - Non-stop')
     expect(screen.getByTestId('served-stops')).toHaveTextContent('Serves only: Alpha, Omega')
-    rerender(<RunInfoChips service={regular} runPattern={{ key: 'one_way', label: 'One-way run' }} showStops />)
+    rerender(<RunInfoChips service={regular} runPattern={{ key: 'one_way', label: 'One-way run' }} showRunPattern showStops />)
     expect(screen.getByTestId('service-type-chip')).toHaveTextContent('Regular')
     expect(screen.getByTestId('run-pattern-chip')).toHaveTextContent('One-way run')
     expect(screen.queryByTestId('served-stops')).toBeNull()
+  })
+
+  test('hides run tags by default while preserving passenger service and stop information', () => {
+    const { rerender } = render(<RunInfoChips runPattern={{ key: 'round_trip', label: 'Round-trip run' }} service={express} showStops />)
+    expect(screen.queryByTestId('run-pattern-chip')).toBeNull()
+    expect(screen.getByTestId('service-type-chip')).toHaveTextContent('Express')
+    expect(screen.getByTestId('served-stops')).toHaveTextContent('Alpha, Beta, Omega')
+    rerender(<RunInfoChips runPattern={{ key: 'one_way', label: 'Single departure' }} service={regular} />)
+    expect(screen.queryByTestId('run-pattern-chip')).toBeNull()
+    expect(screen.getByTestId('service-type-chip')).toHaveTextContent('Regular')
   })
 
   test('renders nothing for a fact that is missing', () => {
@@ -62,11 +72,11 @@ describe('RunInfoChips', () => {
 describe('the saved QR image', () => {
   const ticket = { ticket_uuid: 'abcdef12-0000', qr_content: 'x', origin: 'Alpha', destination: 'Omega', service_type: 'express', trip_date: '2026-10-05', departure_time: '08:00' }
 
-  test('carries the run pattern, the service and the served stops when the data has them', () => {
+  test('omits operational run patterns from passenger ticket images but keeps service and served stops', () => {
     const model = buildTicketImageModel({ ...ticket, run_info: { run_pattern: { label: 'Round-trip run' }, service: express } })
     const lines = Object.fromEntries(model.lines.map((l) => [l.label, l.value]))
     expect(lines.Service).toBe('Express')
-    expect(lines.Run).toBe('Round-trip run')
+    expect(lines).not.toHaveProperty('Run')
     expect(lines.Stops).toBe('Alpha, Beta, Omega')
   })
 

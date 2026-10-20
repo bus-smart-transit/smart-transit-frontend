@@ -22,6 +22,11 @@ export default function TicketCard({
   statusLabel,
   validLabel,
   expiresLabel,
+  discountLabel = '',
+  discountAmount = null,
+  originalFare = null,
+  farePaid = null,
+  discountVerified = false,
   trackingToken = '',
   onRenewLink = null,
 }) {
@@ -90,6 +95,12 @@ export default function TicketCard({
           <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-1.5"><dt className="text-xs text-slate-500">Valid</dt><dd className="text-right text-sm font-bold text-navy-950">{validLabel || '-'}</dd></div>
           <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-1.5"><dt className="text-xs text-slate-500">Expires</dt><dd className="text-right text-sm font-bold text-navy-950">{expiresLabel || '-'}</dd></div>
           <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-1.5"><dt className="text-xs text-slate-500">Status</dt><dd className="text-right text-sm font-bold text-navy-950">{statusLabel || '-'}</dd></div>
+          {discountLabel && Number(discountAmount) > 0 && <>
+            <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-1.5"><dt className="text-xs text-slate-500">Original fare</dt><dd className="text-right text-sm font-bold text-navy-950">PHP {Number(originalFare).toFixed(2)}</dd></div>
+            <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-1.5"><dt className="text-xs text-slate-500">{discountLabel} discount</dt><dd className="text-right text-sm font-bold text-teal-700">- PHP {Number(discountAmount).toFixed(2)}</dd></div>
+            {discountVerified && <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-1.5"><dt className="text-xs text-slate-500">ID check</dt><dd className="text-right text-sm font-bold text-emerald-700">Verified by Chauffeur</dd></div>}
+            {farePaid != null && <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-1.5"><dt className="text-xs text-slate-500">Fare paid</dt><dd className="text-right text-sm font-bold text-navy-950">PHP {Number(farePaid).toFixed(2)}</dd></div>}
+          </>}
         </dl>
       </div>
 

@@ -73,18 +73,13 @@ class OperatorService extends StaffBaseService {
     return await this.request(`/operator/routes/${routeId}/stops/${routeStopId}/express`, 'PATCH', { served_by_express: Boolean(served) });
   }
 
-  // D5: per-route switch for passenger custom drop-offs (off by default).
-  async setOperatorRouteCustomDropoff(routeId, allow) {
-    return await this.request(`/operator/routes/${routeId}/custom-dropoff`, 'PATCH', { allow_custom_dropoff: Boolean(allow) });
-  }
-
   async getOperatorFleetRoutes() {
     return await this.request('/operator/fleet-routes', 'GET');
   }
 
   // ── Trips ──
-  async getOperatorTrips(statusFilter = 'all') {
-    return await this.request('/operator/trips', 'GET', { status_filter: statusFilter });
+  async getOperatorTrips(statusFilter = 'all', options = {}) {
+    return await this.request('/operator/trips', 'GET', { status_filter: statusFilter, ...options });
   }
 
   async scheduleTrip(tripData) {
@@ -93,6 +88,10 @@ class OperatorService extends StaffBaseService {
 
   async saveDispatchDecision(tripId, payload) {
     return await this.request(`/operator/trips/${tripId}/dispatch-decision`, 'PATCH', payload);
+  }
+
+  async getDispatchDecisionHistory(params = {}) {
+    return await this.request('/operator/dispatch-decisions', 'GET', params);
   }
 
   async getOperatorTripGpsHistory(tripId, params = {}) {
@@ -126,8 +125,8 @@ class OperatorService extends StaffBaseService {
   }
 
   // ── Staff directory ──
-  async getOperatorDrivers() {
-    return await this.request('/operator/drivers', 'GET');
+  async getOperatorDrivers(params = {}) {
+    return await this.request('/operator/drivers', 'GET', params);
   }
 
   async getOperatorConductors() {
@@ -163,6 +162,10 @@ class OperatorService extends StaffBaseService {
     return await this.request(`/operator/payments/${id}/refunded`, 'POST', payload);
   }
 
+  async reconcileCheckoutNotCharged(id, payload = {}) {
+    return await this.request(`/operator/payments/${id}/checkout-reconciled-not-paid`, 'POST', payload);
+  }
+
   // Batch 29, Stage 2: the financial page (the server computes everything; nothing is derived here).
   async getFinancials(params = {}) {
     return await this.request('/operator/financials', 'GET', params);
@@ -170,6 +173,14 @@ class OperatorService extends StaffBaseService {
 
   async getFinancialTransactions(params = {}) {
     return await this.request('/operator/financials/transactions', 'GET', params);
+  }
+
+  async getDiscountTypes() {
+    return await this.request('/operator/discount-types', 'GET');
+  }
+
+  async setDiscountTypeActive(key, active) {
+    return await this.request(`/operator/discount-types/${encodeURIComponent(key)}/active`, 'PATCH', { active: Boolean(active) });
   }
 
   // The CSV text built by the server from the same query as the screen. Listing JSON first keeps a validation error JSON.
@@ -266,54 +277,7 @@ class OperatorService extends StaffBaseService {
     return await this.request(`/operator/ticket-resolutions/${resolutionId}/review`, 'POST', { amount, note });
   }
 
-  // Batch 28 Stage 3, item 10: designated drop-off points, restricted areas and the route's drop-off mode.
-  async getDropoffPoints(params = {}) {
-    return await this.request('/operator/dropoff/points', 'GET', params);
-  }
-
-  async saveDropoffPoint(payload, id = null) {
-    return id
-      ? await this.request(`/operator/dropoff/points/${id}`, 'PUT', payload)
-      : await this.request('/operator/dropoff/points', 'POST', payload);
-  }
-
-  async getDropoffRestrictions(routeId = null) {
-    return await this.request('/operator/dropoff/restrictions', 'GET', routeId ? { route_id: routeId } : {});
-  }
-
-  async saveDropoffRestriction(payload, id = null) {
-    return id
-      ? await this.request(`/operator/dropoff/restrictions/${id}`, 'PUT', payload)
-      : await this.request('/operator/dropoff/restrictions', 'POST', payload);
-  }
-
-  async reviewDropoffRestriction(id) {
-    return await this.request(`/operator/dropoff/restrictions/${id}/review`, 'POST', {});
-  }
-
-  async setRouteDropoffMode(routeId, mode) {
-    return await this.request(`/operator/routes/${routeId}/custom-dropoff`, 'PATCH', { custom_dropoff_mode: mode });
-  }
-
-  // The stops of a route, in order (public endpoint), for choosing the two ends of a restricted area.
-  async getRouteStopsForDropoff(routeId) {
-    return await this.request(`/routes/${routeId}/stops`, 'GET');
-  }
-  // Batch 28 Stage 3, item 7: peak-hour duration windows ("configured", never measured), the read-only report and the leg-time suggestion.
-  async getDurationFactors(routeId = null) {
-    return await this.request('/operator/duration-factors', 'GET', routeId ? { route_id: routeId } : {});
-  }
-
-  async saveDurationFactor(payload, id = null) {
-    return id
-      ? await this.request(`/operator/duration-factors/${id}`, 'PUT', payload)
-      : await this.request('/operator/duration-factors', 'POST', payload);
-  }
-
-  async deleteDurationFactor(id) {
-    return await this.request(`/operator/duration-factors/${id}`, 'DELETE');
-  }
-
+  // Read-only completed-trip duration report; factors are applied automatically by the backend.
   async getDurationReport(routeId = null) {
     return await this.request('/operator/duration-report', 'GET', routeId ? { route_id: routeId } : {});
   }

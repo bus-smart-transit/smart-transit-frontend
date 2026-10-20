@@ -124,7 +124,6 @@ export default function RoutesPage({ routes, stops, trips, fleets, onRefresh, on
 
   const stopColumns = [
     { key: 'stop', header: 'Stop', render: (stop) => <span className="whitespace-nowrap"><strong className="text-slate-900">{stop.stop_name}</strong>{stop.stop_code && <span className="block text-xs text-slate-500">{stop.stop_code}</span>}</span> },
-    { key: 'municipality', header: 'Municipality', render: (stop) => stop.municipality || '-' },
     { key: 'lat', header: 'Latitude', render: (stop) => stop.latitude ?? '-' },
     { key: 'lng', header: 'Longitude', render: (stop) => stop.longitude ?? '-' },
     { key: 'actions', header: '', render: (stop) => (

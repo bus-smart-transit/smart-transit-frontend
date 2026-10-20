@@ -14,6 +14,24 @@ const renderCard = (props = {}) => render(
 );
 
 describe('TicketCard: replacing the tracking link', () => {
+  test('shows the original fare, onsite discount, ID verification, and paid fare when present', () => {
+    renderCard({
+      discountLabel: 'Student',
+      originalFare: 100,
+      discountAmount: 20,
+      discountVerified: true,
+      farePaid: 80,
+    });
+
+    expect(screen.getByText('Original fare')).toBeInTheDocument();
+    expect(screen.getByText('PHP 100.00')).toBeInTheDocument();
+    expect(screen.getByText('Student discount')).toBeInTheDocument();
+    expect(screen.getByText('- PHP 20.00')).toBeInTheDocument();
+    expect(screen.getByText('Verified by Chauffeur')).toBeInTheDocument();
+    expect(screen.getByText('Fare paid')).toBeInTheDocument();
+    expect(screen.getByText('PHP 80.00')).toBeInTheDocument();
+  });
+
   test('has no such button unless the owner can renew (for example, a ticket shown right after a guest purchase)', () => {
     renderCard();
     expect(screen.queryByRole('button', { name: 'New tracking link' })).toBeNull();

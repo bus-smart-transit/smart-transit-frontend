@@ -63,69 +63,18 @@ describe('TripTimeline', () => {
     expect(screen.queryByRole('button', { name: 'Get off at Stop 1' })).not.toBeInTheDocument();
   });
 
-  test('offers the custom drop-off pin only when the route allows it', () => {
-    const { rerender } = render(<TripTimeline timeline={timeline()} />);
-    expect(screen.queryByText(/drop off somewhere else/i)).not.toBeInTheDocument();
-
-    rerender(<TripTimeline timeline={timeline({ allow_custom_dropoff: true })} />);
-    expect(screen.getByText(/drop off somewhere else/i)).toBeInTheDocument();
-  });
-
-  test('on a listed-points route the control is worded for points, and a chosen point shows its kind', () => {
-    const onOpen = vi.fn();
-    render(
-      <TripTimeline
-        timeline={timeline({
-          allow_custom_dropoff: true,
-          dropoff_mode: 'designated_points',
-          custom_dropoff_availability: { available: true, reason: null },
-          journey: { boarding_stop_id: 1, alighting_stop_id: null, custom_dropoff: true },
-          stops: [row(1, { is_boarding: true, selectable: false }), row(null, { stop_id: null, name: 'Typed Point', type: 'custom', custom: true, point_kind: 'landmark', is_alighting: true }), row(5)],
-        })}
-        onOpenCustomDropoff={onOpen}
-      />,
-    );
-
-    expect(screen.queryByText(/drop off somewhere else/i)).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /get off at a listed drop-off point/i }));
-    expect(onOpen).toHaveBeenCalled();
-    expect(screen.getByText('Typed Point')).toBeInTheDocument();
-    expect(screen.getByText('landmark')).toBeInTheDocument();
-  });
-
-  test('when the route offers the pin but the selection cannot use it, the control shows disabled with the server reason', () => {
-    const reason = 'You board at the last stop of this trip, so there is nothing ahead to drop off at.';
-    const onOpen = vi.fn();
-    render(
-      <TripTimeline
-        timeline={timeline({ allow_custom_dropoff: true, custom_dropoff_availability: { available: false, reason } })}
-        onOpenCustomDropoff={onOpen}
-      />,
-    );
-
-    const button = screen.getByRole('button', { name: /drop off somewhere else/i });
-    expect(button).toBeDisabled();
-    expect(button).toHaveAccessibleDescription(reason);
-    expect(screen.getByText(reason)).toBeInTheDocument();
-    fireEvent.click(button);
-    expect(onOpen).not.toHaveBeenCalled();
-  });
-
-  test('the pin control is enabled when the server says it is available', () => {
-    const onOpen = vi.fn();
+  test('ignores legacy custom-drop-off flags while keeping official stop selection available', () => {
+    const onSelect = vi.fn();
     render(
       <TripTimeline
         timeline={timeline({ allow_custom_dropoff: true, custom_dropoff_availability: { available: true, reason: null } })}
-        onOpenCustomDropoff={onOpen}
+        onSelectAlighting={onSelect}
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /drop off somewhere else/i }));
-    expect(onOpen).toHaveBeenCalled();
-  });
-
-  test('the control is hidden, with no reason text, when the flag is off', () => {
-    render(<TripTimeline timeline={timeline({ custom_dropoff_availability: { available: false, reason: null } })} />);
     expect(screen.queryByText(/drop off somewhere else/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /listed drop-off point/i })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Get off at Stop 5' }));
+    expect(onSelect).toHaveBeenCalledWith(5);
   });
 });

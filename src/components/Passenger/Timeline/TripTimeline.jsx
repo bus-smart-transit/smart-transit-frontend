@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Bus, MapPin, Loader } from 'lucide-react'
+import { Bus, Loader } from 'lucide-react'
 import { etaLabel, formatDuration, groupTimelineRows, journeyFacts, nodeState } from '../../../utils/tripTimeline'
 import { busLabelText } from '../../../utils/busLabel'
 import RunInfoChips from '../../ui/RunInfoChips'
@@ -78,19 +78,13 @@ function TimelineRow({ row, canSelect, onSelect }) {
   return <li className={classes}>{body}</li>
 }
 
-/**
- * A2: the trip timeline. Rows, ETAs, journey flags and totals all come from the
- * server (GET /trips/{id}/timeline); choosing a stop or a drop-off pin asks the
- * server to recompute. Nothing is invented: a missing ETA reads "Arrival time not available".
- */
+/** The trip timeline and alighting-stop choices come from server-computed data. */
 export default function TripTimeline({
   timeline,
   loading = false,
   error = null,
   canSelect = true,
   onSelectAlighting,
-  onOpenCustomDropoff,
-  onClearCustomDropoff,
 }) {
   const [expanded, setExpanded] = useState({})
 
@@ -106,15 +100,6 @@ export default function TripTimeline({
   const items = groupTimelineRows(stops, timeline.collapse_min_stops)
   const facts = journeyFacts(timeline)
   const hasAlighting = Boolean(journey?.alighting_stop_id || journey?.custom_dropoff)
-
-  // Flag off = the route does not offer a pin, so the control is hidden. Flag on = the
-  // control shows; when the current selection cannot use it, the server says why.
-  const offersPin = Boolean(timeline.allow_custom_dropoff)
-  const availability = timeline.custom_dropoff_availability
-  const canPin = offersPin && (availability ? availability.available : Boolean(journey?.boarding_stop_id))
-  const pinReason = offersPin && !canPin
-    ? (availability?.reason || 'Choose where you board first, then choose where you want to get off.')
-    : null
 
   return (
     <section className="rounded-xl border border-slate-200 bg-white" aria-label="Trip timeline">
@@ -181,28 +166,9 @@ export default function TripTimeline({
         })}
       </ol>
 
-      {(offersPin || journey?.custom_dropoff) && (
-        <footer className="flex flex-wrap items-center gap-2 border-t border-slate-100 p-3">
-          {offersPin && (
-            <button
-              type="button"
-              onClick={onOpenCustomDropoff}
-              disabled={!canPin}
-              aria-describedby={pinReason ? 'custom-dropoff-reason' : undefined}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-navy-800 px-3 py-1.5 text-xs font-semibold text-navy-800 transition hover:bg-navy-50 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <MapPin size={14} /> {timeline.dropoff_mode === 'designated_points' ? 'Get off at a listed drop-off point' : 'Drop off somewhere else (choose on the map)'}
-            </button>
-          )}
-          {pinReason && <span id="custom-dropoff-reason" className="text-xs text-slate-500">{pinReason}</span>}
-          {journey?.custom_dropoff && (
-            <button type="button" onClick={onClearCustomDropoff} className="text-xs font-medium text-slate-500 underline">
-              Use a route stop instead
-            </button>
-          )}
-          {formatDuration(header.duration_minutes) == null && hasAlighting && (
-            <span className="text-xs text-slate-400">Journey time unavailable</span>
-          )}
+      {formatDuration(header.duration_minutes) == null && hasAlighting && (
+        <footer className="border-t border-slate-100 p-3">
+          <span className="text-xs text-slate-400">Journey time unavailable</span>
         </footer>
       )}
     </section>

@@ -29,18 +29,26 @@ export default function usePaymentRefunds({ service = OperatorService } = {}) {
   const setStatus = useCallback((next) => { setStatusState(next); setPage(1); }, []);
   const retry = useCallback(() => setReload((n) => n + 1), []);
 
-  const recordRefund = useCallback(async (id, { note }) => {
+  const runPaymentAction = useCallback(async (id, payload, action, fallbackMessage) => {
     setBusyId(id);
     setErrors((prev) => ({ ...prev, [id]: '' }));
     try {
-      await service.recordPaymentRefund(id, { note });
+      await action(id, payload);
       setReload((n) => n + 1);
     } catch (err) {
-      setErrors((prev) => ({ ...prev, [id]: err?.message || 'The refund could not be recorded.' }));
+      setErrors((prev) => ({ ...prev, [id]: err?.message || fallbackMessage }));
     } finally {
       setBusyId(null);
     }
   }, [service]);
+
+  const recordRefund = useCallback((id, payload) => runPaymentAction(
+    id, payload, (paymentId, body) => service.recordPaymentRefund(paymentId, body), 'The refund could not be recorded.',
+  ), [runPaymentAction, service]);
+
+  const reconcileNotCharged = useCallback((id, payload) => runPaymentAction(
+    id, payload, (paymentId, body) => service.reconcileCheckoutNotCharged(paymentId, body), 'The checkout could not be reconciled.',
+  ), [runPaymentAction, service]);
 
   const current = result.key === key;
   return {
@@ -50,6 +58,6 @@ export default function usePaymentRefunds({ service = OperatorService } = {}) {
     error: current ? result.error : '',
     loading: !current,
     hasData: current && Boolean(result.data),
-    retry, recordRefund, busyId, errors,
+    retry, recordRefund, reconcileNotCharged, busyId, errors,
   };
 }

@@ -6,7 +6,8 @@ import { computeVehicleState, formatAge } from './vehicleState';
  * fleets, fleet locations). Nothing here is simulated: a figure the data cannot support is not produced.
  *
  * "The system recommends. The operator decides." These rules only SUGGEST; the one write the Operator can make
- * from the dashboard is recording a decision (PATCH trips/{id}/dispatch-decision), which dispatches or reroutes nothing.
+ * from the dashboard is recording a decision (PATCH trips/{id}/dispatch-decision).
+ * An explicit contact decision sends a crew message; no bus assignment or route change is automated.
  */
 
 export const LIVE_STATUSES = ['boarding', 'departed', 'in-progress'];
@@ -83,15 +84,18 @@ export function tripsToday(trips = [], today = getBusinessToday()) {
     .sort((a, b) => departureLabel(a).localeCompare(departureLabel(b)) || Number(a.trip_id) - Number(b.trip_id));
 }
 
-const DECISION_LABEL = { accept: 'Advice acknowledged', keep: 'Kept current route' };
+const DECISION_LABEL = { accept: 'Advice acknowledged', keep: 'Kept current route', contact: 'Crew contacted' };
 export const decisionLabel = (decision) => DECISION_LABEL[decision] ?? null;
 
 /** The body saved with a decision: the route and a reason that says what the Operator was answering. */
-export const decisionPayload = (item, decision) => ({
+export const decisionPayload = (item, decision, note = '') => ({
   route: item.route,
   reason: decision === 'accept'
     ? `Operator acknowledged the advice: ${item.reasons.join(' and ')}.`
-    : `Operator kept the current route despite: ${item.reasons.join(' and ')}.`,
+    : decision === 'contact'
+      ? `Operator contacted the assigned crew regarding: ${item.reasons.join(' and ')}.`
+      : `Operator kept the current route despite: ${item.reasons.join(' and ')}.`,
+  note: note.trim() || null,
 });
 
 function alertsFor(todays, locations, nowMs) {
@@ -121,36 +125,37 @@ function alertsFor(todays, locations, nowMs) {
 }
 
 function adviceFor(todays, locations, nowMs) {
-  const byRoute = new Map();
+  const advice = [];
   for (const trip of todays) {
     const status = statusOf(trip);
     if (!OPEN_STATUSES.includes(status)) continue;
-    const entry = byRoute.get(routeNameOf(trip)) ?? { route: routeNameOf(trip), routeId: routeIdOf(trip), delayed: [], offRoute: [] };
-    if (status === 'delayed') entry.delayed.push(trip);
-    if (LIVE_STATUSES.includes(status) && gpsStatus(locationForTrip(trip, locations), nowMs).state === 'off_route') entry.offRoute.push(trip);
-    byRoute.set(entry.route, entry);
+    const location = locationForTrip(trip, locations);
+    const gps = gpsStatus(location, nowMs);
+    const offRoute = LIVE_STATUSES.includes(status) && gps.state === 'off_route';
+    if (status !== 'delayed' && !offRoute) continue;
+
+    const reasons = [];
+    if (status === 'delayed') reasons.push('departure time passed without departing');
+    if (offRoute) reasons.push('latest GPS position is away from the route');
+    const route = routeNameOf(trip);
+    advice.push({
+      key: `advice-${trip.trip_id}`,
+      route,
+      routeId: routeIdOf(trip),
+      tripId: trip.trip_id,
+      priority: offRoute ? 'high' : 'medium',
+      reasons,
+      tripStatus: status,
+      gpsLabel: gps.label,
+      gpsRecordedAt: location?.recorded_at || location?.updated_at || null,
+      hasAssignedCrew: Boolean(trip.driver_id || trip.driver || trip.conductor_id || trip.conductor),
+      text: `${route} · Trip #${trip.trip_id}: ${reasons.join(' and ')}. No alternate route is on file, so the response is your decision.`,
+      decision: trip.dispatch_decision || null,
+      decisionLabel: decisionLabel(trip.dispatch_decision),
+      decidedAt: trip.dispatch_decided_at || null,
+    });
   }
-  return [...byRoute.values()]
-    .filter((entry) => entry.delayed.length > 0 || entry.offRoute.length > 0)
-    .map((entry) => {
-      const reasons = [];
-      if (entry.delayed.length) reasons.push(`${entry.delayed.length} delayed trip${entry.delayed.length > 1 ? 's' : ''}`);
-      if (entry.offRoute.length) reasons.push(`${entry.offRoute.length} bus${entry.offRoute.length > 1 ? 'es' : ''} reporting a position away from the route`);
-      const trip = entry.offRoute[0] ?? entry.delayed[0];
-      return {
-        key: `advice-${entry.route}`,
-        route: entry.route,
-        routeId: entry.routeId,
-        tripId: trip.trip_id,
-        priority: entry.offRoute.length > 0 || entry.delayed.length > 1 ? 'high' : 'medium',
-        reasons,
-        text: `${entry.route}: ${reasons.join(' and ')}. No alternate route is on file, so whether to hold, reassign or keep the current route is your decision.`,
-        decision: trip.dispatch_decision || null,
-        decisionLabel: decisionLabel(trip.dispatch_decision),
-        decidedAt: trip.dispatch_decided_at || null,
-      };
-    })
-    .sort((a, b) => (a.priority === b.priority ? 0 : a.priority === 'high' ? -1 : 1));
+  return advice.sort((a, b) => (a.priority === b.priority ? Number(a.tripId) - Number(b.tripId) : a.priority === 'high' ? -1 : 1));
 }
 
 function deploymentFor(todays, fleets, loadByRoute, delayedRoutes) {

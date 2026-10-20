@@ -31,6 +31,11 @@ export default function useOnsiteReceiptPrinter() {
         const destinationStop = escapeHtml(ticket?.destination_label && !ticket?.destination_stop_id
           ? ticket.destination_label
           : resolveStopName(ticket, ticket?.destination_stop_id, stopLookup, 'destination_stop', 'Custom drop-off'));
+        const discount = Number(ticket?.discount_amount) > 0
+          ? `${escapeHtml(ticket?.discount_label || 'Onsite')} (${Math.round(Number(ticket.discount_rate) * 100)}%) - PHP ${Number(ticket.discount_amount).toFixed(2)}`
+          : '-';
+        const originalFare = Number(ticket?.discount_amount) > 0 ? `PHP ${Number(ticket.original_amount).toFixed(2)}` : '-';
+        const verification = ticket?.discount_id_checked_at ? 'ID checked' : '-';
 
         return `
           <tr>
@@ -39,6 +44,9 @@ export default function useOnsiteReceiptPrinter() {
             <td style="text-transform: capitalize;">${ticket.seat_type || '-'}</td>
             <td>${originStop}</td>
             <td>${destinationStop}</td>
+            <td>${discount}</td>
+            <td>${originalFare}</td>
+            <td>${verification}</td>
             <td>PHP ${Number(ticket.amount || 0).toFixed(2)}</td>
           </tr>
         `;
@@ -80,7 +88,10 @@ export default function useOnsiteReceiptPrinter() {
                 <th>Type</th>
                 <th>Origin</th>
                 <th>Destination</th>
-                <th>Amount</th>
+                <th>Discount</th>
+                <th>Original Fare</th>
+                <th>ID Check</th>
+                <th>Fare Paid</th>
               </tr>
             </thead>
             <tbody>

@@ -1,10 +1,10 @@
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react'
 import JourneyFields from '../BuyTicket/JourneyFields'
 import TripResults from './TripResults'
 import Button from '../../ui/Button'
 import { useAvailableTrips, useBookingStops } from '../../../api/hooks/Passenger/useBookingSearch'
-import { findStopCode, findStopId, tripBookingPath } from '../../../utils/bookingQuery'
+import { bookingReturnPath, findStopCode, findStopId, tripBookingPath } from '../../../utils/bookingQuery'
 import { formatManilaDate } from '../../../utils/dates'
 
 const read = (params, key) => String(params.get(key) || '').trim()
@@ -16,8 +16,10 @@ const read = (params, key) => String(params.get(key) || '').trim()
  * same list. Unknown stops, the same stop twice or a bad date come back from the server as a message.
  */
 export default function AvailableTripsPage() {
+  const location = useLocation()
   const navigate = useNavigate()
   const [params, setParams] = useSearchParams()
+  const returnTo = bookingReturnPath(location.state)
   const from = read(params, 'from').toLowerCase()
   const to = read(params, 'to').toLowerCase()
   const date = read(params, 'date')
@@ -42,7 +44,7 @@ export default function AvailableTripsPage() {
     const next = new URLSearchParams(params)
     Object.entries(changes).forEach(([key, value]) => (value ? next.set(key, value) : next.delete(key)))
     if (!keepPage) next.delete('page')
-    setParams(next, { replace: true })
+    setParams(next, { replace: true, state: { returnTo } })
   }
 
   const handleChange = (field, value) => {
@@ -59,8 +61,8 @@ export default function AvailableTripsPage() {
     <div className="min-h-screen bg-slate-50">
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
-          <Link to="/passenger#search-trips" className="inline-flex items-center gap-1.5 text-sm font-semibold text-navy-800 transition hover:text-navy-950">
-            <ArrowLeft size={16} aria-hidden="true" /> Back to Search
+          <Link to={returnTo} className="inline-flex items-center gap-1.5 text-sm font-semibold text-navy-800 transition hover:text-navy-950">
+            <ArrowLeft size={16} aria-hidden="true" /> Back
           </Link>
           <h1 className="font-display text-base font-bold text-navy-950 sm:text-lg">All Available Trips</h1>
           <span className="w-24" aria-hidden="true" />
@@ -85,7 +87,7 @@ export default function AvailableTripsPage() {
         {results.error && (
           <div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800 ring-1 ring-inset ring-amber-200">
             <span>{results.error}</span>
-            <Link to="/passenger/trips" className="font-semibold text-navy-800 underline">Clear search</Link>
+            <Link to="/passenger/trips" state={{ returnTo }} className="font-semibold text-navy-800 underline">Clear search</Link>
           </div>
         )}
 
@@ -110,7 +112,7 @@ export default function AvailableTripsPage() {
             state={{ ...results, loading, message: '' }}
             seatType="seated"
             searchedDate={shownDate}
-            onBook={(trip) => navigate(tripBookingPath(trip))}
+            onBook={(trip) => navigate(tripBookingPath(trip), { state: { returnTo } })}
             footer={results.lastPage > 1 && (
               <nav aria-label="Trip pages" className="flex items-center justify-center gap-3 pt-2">
                 <Button variant="outline" size="sm" icon={ChevronLeft} disabled={results.page <= 1} onClick={() => update({ page: String(results.page - 1) }, { keepPage: true })}>

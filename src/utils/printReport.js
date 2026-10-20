@@ -1,5 +1,4 @@
-// Shared "Print / Save PDF" window for Operator reports (Fleet Reports and the
-// Historical Forecast). Every value is HTML-escaped before it goes into the
+// Shared "Print / Save PDF" window for Operator fleet reports. Every value is HTML-escaped before it goes into the
 // document, since report cells come from server data and user-entered text.
 
 const escapeHtml = (value) => String(value ?? '')

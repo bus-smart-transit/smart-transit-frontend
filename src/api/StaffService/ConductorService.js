@@ -98,8 +98,13 @@ class ConductorService extends StaffBaseService {
     return await this.request('/conductor/pin/verify', 'POST', { pin_code: pin });
   }
 
-  async checkoutOnsite(payload) {
-    return await this.request('/conductor/checkout', 'POST', payload);
+  async checkoutOnsite(payload, idempotencyKey) {
+    const headers = idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {};
+    return await this.request('/conductor/checkout', 'POST', payload, headers);
+  }
+
+  async getOnsiteDiscountTypes() {
+    return await this.request('/conductor/discount-types', 'GET');
   }
 
   // Batch 18: Shift Block Hand-off System.

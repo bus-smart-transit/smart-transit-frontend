@@ -6,10 +6,11 @@ import { formatCount, formatPaidAt, formatPeso } from '../../../utils/financials
 
 const FIELD = 'w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500';
 
-const FILTERS = [['needs_refund', 'Needs refund'], ['refunded', 'Refunded'], ['all', 'All']];
+const FILTERS = [['needs_refund', 'Needs refund'], ['outcome_unknown', 'Unknown checkout'], ['refunded', 'Refunded'], ['all', 'All']];
 
 const STATUS_CHIP = {
   needs_refund: ['Needs refund', 'bg-red-100 text-red-700'],
+  outcome_unknown: ['Outcome unknown', 'bg-amber-100 text-amber-800'],
   refunded: ['Refunded', 'bg-emerald-100 text-emerald-700'],
 };
 
@@ -20,12 +21,15 @@ function tripLine(trip) {
   return `${trip.route_name || 'Route unavailable'}${when ? `, ${when}` : ''} (${formatCount(trip.tickets)} ticket${trip.tickets === 1 ? '' : 's'})`;
 }
 
-function RefundCard({ row, busy, error, onRecord }) {
+function RefundCard({ row, busy, error, onRecord, onReconcile }) {
   const [note, setNote] = useState('');
+  const [confirmedNotCharged, setConfirmedNotCharged] = useState(false);
   const waiting = row.status === 'needs_refund';
-  const [chipLabel, chipClass] = STATUS_CHIP[row.status] || [row.status, 'bg-slate-100 text-slate-600'];
+  const outcomeUnknown = row.reconciliation_status === 'outcome_unknown';
+  const displayStatus = outcomeUnknown ? 'outcome_unknown' : row.status;
+  const [chipLabel, chipClass] = STATUS_CHIP[displayStatus] || [displayStatus, 'bg-slate-100 text-slate-600'];
   const noteValue = note.trim();
-  const invalid = noteValue.length < 3;
+  const invalid = noteValue.length < (outcomeUnknown ? 12 : 3);
   const payer = row.payer || {};
 
   return (
@@ -49,7 +53,35 @@ function RefundCard({ row, busy, error, onRecord }) {
         {(row.trips || []).map((trip) => <li key={trip.trip_id}>{tripLine(trip)}</li>)}
       </ul>
 
-      {waiting ? (
+      {outcomeUnknown ? (
+        <>
+          <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900" data-testid="checkout-outcome-warning">
+            {row.reason} Check the PayMongo dashboard by transaction reference. Do not confirm if a session is active or payment may have succeeded; signed webhooks alone mark payments paid.
+          </p>
+          <dl className="grid gap-x-4 gap-y-1 text-xs text-slate-600 sm:grid-cols-2">
+            <div className="min-w-0"><dt className="inline text-slate-500">Transaction reference: </dt><dd className="inline font-data break-all">{row.transaction_reference}</dd></div>
+            <div className="min-w-0"><dt className="inline text-slate-500">Checkout session: </dt><dd className="inline font-data break-all">{row.gateway_reference || 'No session ID was returned'}</dd></div>
+          </dl>
+          <form
+            className="space-y-2 border-t border-slate-100 pt-3"
+            onSubmit={(event) => { event.preventDefault(); if (!invalid && confirmedNotCharged) onReconcile(row.payment_id, { note: noteValue }); }}
+          >
+            <label className="block text-xs font-medium text-slate-600">Verification note (required)
+              <input type="text" minLength={12} maxLength={255} value={note} onChange={(event) => setNote(event.target.value)} placeholder="What did you verify in PayMongo?" className={`${FIELD} mt-1`} />
+            </label>
+            <label className="flex items-start gap-2 text-xs text-slate-700">
+              <input type="checkbox" checked={confirmedNotCharged} onChange={(event) => setConfirmedNotCharged(event.target.checked)} className="mt-0.5" />
+              I verified this checkout was not charged and has no active session.
+            </label>
+            {error && <p role="alert" className="text-xs text-red-600">{error}</p>}
+            <div className="flex justify-end">
+              <button type="submit" disabled={invalid || !confirmedNotCharged || busy} className="rounded-lg bg-amber-700 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-800 disabled:opacity-60">
+                {busy ? 'Releasing hold...' : 'Confirm not charged and release hold'}
+              </button>
+            </div>
+          </form>
+        </>
+      ) : waiting ? (
         <>
           <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800" data-testid="refund-reason">
             {row.reason} The passenger was charged. Refund it in your PayMongo dashboard, then record it here. This screen does not move money.
@@ -97,7 +129,7 @@ export default function PaymentRefundsPage({ service, embedded = false }) {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           {!embedded && <h2 className="text-xl font-bold text-slate-900">Refunds</h2>}
-          <p className="text-xs text-slate-500">Payments that were charged but could not be turned into tickets. Refund them in PayMongo, then record it here.</p>
+          <p className="text-xs text-slate-500">Review charged payments for refunds and unknown checkout outcomes. Only signed webhooks confirm payment.</p>
         </div>
         <div className="inline-flex max-w-full flex-wrap rounded-lg border border-slate-200 bg-white p-0.5 text-sm font-semibold" role="group" aria-label="Status">
           {FILTERS.map(([key, label]) => (
@@ -117,12 +149,12 @@ export default function PaymentRefundsPage({ service, embedded = false }) {
         <p className="rounded-xl border border-slate-200 bg-slate-50 p-6 text-sm text-slate-500">Loading payments...</p>
       ) : r.rows.length === 0 ? (
         <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-6 text-sm text-slate-600" data-testid="refunds-empty">
-          {r.status === 'needs_refund' ? 'Nothing needs a refund. A payment appears here only when it was charged after its seats were released.' : 'No payments to show.'}
+          {r.status === 'needs_refund' ? 'Nothing needs a refund. A payment appears here only when it was charged after its seats were released.' : r.status === 'outcome_unknown' ? 'No checkout outcomes need reconciliation.' : 'No payments to show.'}
         </p>
       ) : (
         <div className={`space-y-3 ${r.loading ? 'opacity-60' : ''}`}>
           {r.rows.map((row) => (
-            <RefundCard key={row.payment_id} row={row} busy={r.busyId === row.payment_id} error={r.errors[row.payment_id]} onRecord={r.recordRefund} />
+            <RefundCard key={row.payment_id} row={row} busy={r.busyId === row.payment_id} error={r.errors[row.payment_id]} onRecord={r.recordRefund} onReconcile={r.reconcileNotCharged} />
           ))}
         </div>
       )}

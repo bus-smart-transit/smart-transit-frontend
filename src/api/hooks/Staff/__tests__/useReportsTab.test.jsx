@@ -60,7 +60,8 @@ describe('useReportsTab period', () => {
 
     await act(async () => { await result.current.fetchReport(); });
 
-    expect(OperatorService.getDailySummary).toHaveBeenCalledWith('7', { start_date: '2026-10-05' });
+    expect(OperatorService.getDailySummary).toHaveBeenCalledWith('7', { date: '2026-10-05' });
+    expect(result.current.ranRange).toEqual({ from: '2026-10-05', to: '2026-10-05' });
   });
 
   test('refuses an end date before the start date without asking the server', async () => {

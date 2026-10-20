@@ -33,23 +33,33 @@ const answer = (over = {}) => ({
 
 function Where() {
   const location = useLocation();
-  return <p data-testid="where">{location.pathname}{location.search}</p>;
+  return <>
+    <p data-testid="where">{location.pathname}{location.search}</p>
+    <p data-testid="return-to">{location.state?.returnTo || ''}</p>
+  </>;
 }
 
 function Current() {
   const location = useLocation();
-  return <p data-testid="current">{location.search}</p>;
+  return <>
+    <p data-testid="current">{location.search}</p>
+    <p data-testid="current-return-to">{location.state?.returnTo || ''}</p>
+  </>;
 }
 
-const renderAt = (url) => render(
-  <MemoryRouter initialEntries={[url]}>
+const renderAt = (url, state = null) => {
+  const [pathname, query] = url.split('?');
+  return render(
+  <MemoryRouter initialEntries={[{ pathname, search: query ? `?${query}` : '', state }]}>
     <Routes>
       <Route path="/passenger/trips" element={<><AvailableTripsPage /><Current /></>} />
       <Route path="/passenger/book" element={<Where />} />
-      <Route path="/passenger" element={<p>Search home</p>} />
+      <Route path="/" element={<p>Homepage</p>} />
+      <Route path="/passenger/dashboard" element={<p>Passenger dashboard</p>} />
     </Routes>
   </MemoryRouter>,
-);
+  );
+};
 
 describe('AvailableTripsPage', () => {
   beforeEach(() => vi.clearAllMocks());
@@ -106,12 +116,31 @@ describe('AvailableTripsPage', () => {
 
   test('Book Seat opens the booking page with the trip\'s own stop codes, date and time', async () => {
     getTrips.mockResolvedValue(answer({ trips: [trip(1, '2026-10-01', '06:15'), trip(3, '2026-10-02', '07:45')] }));
-    renderAt('/passenger/trips?from=alpha-stop&to=beta-stop&date=2026-10-01');
+    renderAt('/passenger/trips?from=alpha-stop&to=beta-stop&date=2026-10-01', { returnTo: '/passenger/dashboard' });
 
     const buttons = await screen.findAllByRole('button', { name: 'Book Seat' });
     fireEvent.click(buttons[1]);
 
     expect((await screen.findByTestId('where')).textContent).toBe('/passenger/book?from=alpha-stop&to=beta-stop&date=2026-10-02&time=07%3A45');
+    expect(screen.getByTestId('return-to')).toHaveTextContent('/passenger/dashboard');
+  });
+
+  test('Back returns homepage-origin trips to the homepage', async () => {
+    getTrips.mockResolvedValue(answer());
+    renderAt('/passenger/trips?from=alpha-stop&to=beta-stop&date=2026-10-01', { returnTo: '/' });
+
+    fireEvent.click(screen.getByRole('link', { name: 'Back' }));
+
+    expect(await screen.findByText('Homepage')).toBeInTheDocument();
+  });
+
+  test('Back returns dashboard-origin trips to the passenger dashboard', async () => {
+    getTrips.mockResolvedValue(answer());
+    renderAt('/passenger/trips?from=alpha-stop&to=beta-stop&date=2026-10-01', { returnTo: '/passenger/dashboard' });
+
+    fireEvent.click(screen.getByRole('link', { name: 'Back' }));
+
+    expect(await screen.findByText('Passenger dashboard')).toBeInTheDocument();
   });
 
   test('an empty day offers the next available date from the server, one tap away', async () => {

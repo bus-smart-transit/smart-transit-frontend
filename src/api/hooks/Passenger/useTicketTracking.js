@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { getTracking } from '../../../services/trackingService'
 
 // States after which nothing more will change; polling stops.
-const FINAL_STATES = new Set(['ended', 'cancelled', 'unavailable'])
+const FINAL_STATES = new Set(['arrived', 'ended', 'cancelled', 'unavailable'])
 
 /**
  * Follows one ticket's bus: loads the tracking view, then refreshes at the interval the server
@@ -25,6 +25,16 @@ export function useTicketTracking(token) {
         if (cancelled) return
         delay = Math.max(5, Number(view?.refresh?.poll_seconds) || 10) * 1000
         final = FINAL_STATES.has(view?.state)
+        if (view?.state === 'not_yet') {
+          const opensAt = Date.parse(view.opens_at)
+          const generatedAt = Date.parse(view.refresh?.generated_at)
+          const untilOpen = opensAt - generatedAt
+          delay = Number.isFinite(untilOpen) && untilOpen > 0
+            ? Math.max(5000, Math.min(60000, untilOpen))
+            : Math.max(delay, 60000)
+        } else if (view?.state === 'waiting') {
+          delay = Math.max(delay, 60000)
+        }
         setState({ token, view, status: 'ok', error: '', refreshFailed: false })
       } catch (err) {
         if (cancelled) return

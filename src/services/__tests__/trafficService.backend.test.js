@@ -32,6 +32,27 @@ describe('server-side traffic (TomTom through our API)', () => {
     expect(apiGet).toHaveBeenCalledWith('/traffic/segment', { params: { from_lat: 7.07, from_lng: 125.6, to_lat: 7.1, to_lng: 125.62 } });
   });
 
+  test('defaults to the backend and labels the measured next-stop segment', async () => {
+    vi.stubEnv('VITE_TRAFFIC_PROVIDER', '');
+    vi.stubEnv('MODE', 'development');
+    const fetchedAt = '2026-10-18T08:00:00Z';
+    apiGet.mockResolvedValue(available({ fetched_at: fetchedAt }));
+
+    const result = await fetchTrafficStatus({
+      currentLat: 7.07,
+      currentLng: 125.6,
+      nextStop: { latitude: 7.1, longitude: 125.62, stop_name: 'Bunawan' },
+      route,
+      stops: [],
+    });
+
+    expect(apiGet).toHaveBeenCalledTimes(1);
+    expect(result.segmentLabel).toBe('Current position to Bunawan');
+    expect(result.updatedAt).toBe(fetchedAt);
+    expect(result.alerts[0].road).toBe(result.segmentLabel);
+    expect(result.alerts[0].detail).toContain('ETA 14 min to Bunawan');
+  });
+
   test('labels congestion against the provider\'s own no-traffic time', async () => {
     apiGet.mockResolvedValue(available({ travel_time_s: 1200, no_traffic_s: 600 }));
 

@@ -6,8 +6,8 @@ import { runPatternLabel, servedStopsText } from '../../utils/runInfo';
  * Express, Express - Non-stop) and, when asked, the stops an express serves. Renders nothing for a fact the server
  * did not send, so a missing value is never invented. Built on the shared ServiceTypeChip.
  */
-export default function RunInfoChips({ runPattern = null, service = null, serviceType, showStops = false, className = '' }) {
-  const pattern = runPatternLabel(runPattern)
+export default function RunInfoChips({ runPattern = null, service = null, serviceType, showRunPattern = false, showStops = false, className = '' }) {
+  const pattern = showRunPattern ? runPatternLabel(runPattern) : ''
   const stops = showStops ? servedStopsText(service) : ''
   const type = service?.type ?? serviceType
 

@@ -29,6 +29,7 @@ export const OPERATOR_VIEWS = {
     { key: 'calendar', label: 'Calendar', roles: OPERATOR_ONLY },
     { key: 'blocks', label: 'Blocks', roles: OPERATOR_ONLY },
     { key: 'trips', label: 'Trips', roles: OPERATOR_ONLY },
+    { key: 'requests', label: 'Approvals', roles: OPERATOR_ONLY },
   ],
   finance: [
     { key: 'overview', label: 'Overview', roles: OPERATOR_ONLY },

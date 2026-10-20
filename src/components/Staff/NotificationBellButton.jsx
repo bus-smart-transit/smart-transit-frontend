@@ -15,8 +15,8 @@ import { resolveNotificationTarget } from '../../utils/notificationTarget';
  * Mount this once in each dashboard's persistent header/sidebar (not
  * inside a specific tab) so it's reachable from anywhere in the portal.
  *
- * Batch 27, Task 1: a notification that has a target (today only "New Trip
- * Assignment") is clickable: it is marked read and `onOpenNotification`
+ * Batch 27, Task 1: a notification that has a target (trip assignment or
+ * operator dispatch contact) is clickable: it is marked read and `onOpenNotification`
  * receives { path, tab, tripId } so the dashboard can open that trip. The
  * other types stay plain text.
  */

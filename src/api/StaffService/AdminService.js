@@ -44,10 +44,6 @@ class AdminService extends StaffBaseService {
     return await this.request(`/admin/routes/${routeId}`, 'DELETE');
   }
 
-  async setRouteCustomDropoff(routeId, allow) {
-    return await this.request(`/admin/routes/${routeId}/custom-dropoff`, 'PATCH', { allow_custom_dropoff: Boolean(allow) });
-  }
-
   async addStopToRoute(routeId, stopData) {
     return await this.request(`/admin/routes/${routeId}/stops`, 'POST', stopData);
   }
@@ -104,54 +100,7 @@ class AdminService extends StaffBaseService {
     return await this.request(`/admin/ticket-resolutions/${resolutionId}/review`, 'POST', { amount, note });
   }
 
-  // Batch 28 Stage 3, item 10: designated drop-off points, restricted areas and the route's drop-off mode.
-  async getDropoffPoints(params = {}) {
-    return await this.request('/admin/dropoff/points', 'GET', params);
-  }
-
-  async saveDropoffPoint(payload, id = null) {
-    return id
-      ? await this.request(`/admin/dropoff/points/${id}`, 'PUT', payload)
-      : await this.request('/admin/dropoff/points', 'POST', payload);
-  }
-
-  async getDropoffRestrictions(routeId = null) {
-    return await this.request('/admin/dropoff/restrictions', 'GET', routeId ? { route_id: routeId } : {});
-  }
-
-  async saveDropoffRestriction(payload, id = null) {
-    return id
-      ? await this.request(`/admin/dropoff/restrictions/${id}`, 'PUT', payload)
-      : await this.request('/admin/dropoff/restrictions', 'POST', payload);
-  }
-
-  async reviewDropoffRestriction(id) {
-    return await this.request(`/admin/dropoff/restrictions/${id}/review`, 'POST', {});
-  }
-
-  async setRouteDropoffMode(routeId, mode) {
-    return await this.request(`/admin/routes/${routeId}/custom-dropoff`, 'PATCH', { custom_dropoff_mode: mode });
-  }
-
-  // The stops of a route, in order (public endpoint), for choosing the two ends of a restricted area.
-  async getRouteStopsForDropoff(routeId) {
-    return await this.request(`/routes/${routeId}/stops`, 'GET');
-  }
-  // Batch 28 Stage 3, item 7: peak-hour duration windows ("configured", never measured), the read-only report and the leg-time suggestion.
-  async getDurationFactors(routeId = null) {
-    return await this.request('/admin/duration-factors', 'GET', routeId ? { route_id: routeId } : {});
-  }
-
-  async saveDurationFactor(payload, id = null) {
-    return id
-      ? await this.request(`/admin/duration-factors/${id}`, 'PUT', payload)
-      : await this.request('/admin/duration-factors', 'POST', payload);
-  }
-
-  async deleteDurationFactor(id) {
-    return await this.request(`/admin/duration-factors/${id}`, 'DELETE');
-  }
-
+  // Read-only completed-trip duration report; factors are applied automatically by the backend.
   async getDurationReport(routeId = null) {
     return await this.request('/admin/duration-report', 'GET', routeId ? { route_id: routeId } : {});
   }

@@ -73,6 +73,18 @@ describe('resolveNotificationTarget', () => {
     expect(resolveNotificationTarget(block({}), 'driver')).toBeNull();
   });
 
+  test('a dispatch contact notification opens the current trip view for its assigned role', () => {
+    expect(resolveNotificationTarget({
+      type: 'dispatch_contact',
+      data: { type: 'dispatch_contact', trip_id: 42, role: 'driver', link: '/employee/driver/dashboard?tab=activeTrip&trip=42' },
+    }, 'driver')).toEqual({ path: '/employee/driver/dashboard?tab=activeTrip&trip=42', tab: 'activeTrip', tripId: 42 });
+    expect(resolveNotificationTarget({
+      type: 'dispatch_contact',
+      data: { type: 'dispatch_contact', trip_id: 12, role: 'conductor', link: '/employee/conductor/dashboard?tab=activeShift&trip=12' },
+    }, 'conductor').tab).toBe('activeShift');
+    expect(resolveNotificationTarget({ type: 'dispatch_contact', data: { trip_id: 42, role: 'driver' } }, 'conductor')).toBeNull();
+  });
+
   test('returns null without a usable trip id or role', () => {
     expect(resolveNotificationTarget(assigned({}), 'driver')).toBeNull();
     expect(resolveNotificationTarget(assigned({ trip_id: 'abc' }), 'driver')).toBeNull();

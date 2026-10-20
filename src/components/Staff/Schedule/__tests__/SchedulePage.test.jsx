@@ -10,7 +10,7 @@ describe('SchedulePage', () => {
     render(<SchedulePage views={views} view="calendar" onViewChange={vi.fn()} onCreate={vi.fn()}>{(v) => <p>content: {v}</p>}</SchedulePage>);
 
     expect(screen.getByRole('heading', { name: 'Schedule' })).toBeInTheDocument();
-    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Calendar', 'Blocks', 'Trips']);
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Calendar', 'Blocks', 'Trips', 'Approvals']);
     expect(screen.getAllByRole('button', { name: '+ Schedule' })).toHaveLength(1);
     expect(screen.getByText('content: calendar')).toBeInTheDocument();
   });

@@ -61,6 +61,7 @@ const getFleetDisplayLabel = (ticket) => busLabelText(ticket?.bus_label);
 export default function Dashboard() {
   const {
     closeTicketModal,
+    dashboardFacts,
     formatDateTime,
     getDestinationLabel,
     getOriginLabel,
@@ -68,8 +69,11 @@ export default function Dashboard() {
     handleTabChange,
     isAuthenticated,
     isLoadingPrivate,
+    historyPagination,
     lastSync,
     loadingTicketQr,
+    loadingMoreHistory,
+    loadMoreHistory,
     loadPrivateData,
     menuOpen,
     navigate,
@@ -121,15 +125,17 @@ export default function Dashboard() {
   };
 
   const homeStats = {
-    upcomingTrips: tickets.filter((t) => ['valid', 'issued'].includes(String(t?.status || '').toLowerCase())).length,
-    tripsCompleted: tickets.filter((t) => String(t?.status || '').toLowerCase() === 'alighted').length,
-    nearbyRoutes: new Set(tickets
+    upcomingTrips: dashboardFacts?.upcoming_count ?? tickets.filter((t) => ['valid', 'issued'].includes(String(t?.status || '').toLowerCase())).length,
+    tripsCompleted: dashboardFacts?.completed_count ?? tickets.filter((t) => String(t?.status || '').toLowerCase() === 'alighted').length,
+    nearbyRoutes: dashboardFacts?.nearby_routes_count ?? new Set(tickets
       .map((t) => t?.trip?.fleet_route?.route?.route_name)
       .filter(Boolean)).size,
   };
 
   const recentBookings = transactions.slice(0, 4);
-  const upcomingTicket = tickets.find((t) => ['valid', 'issued', 'boarded'].includes(String(t?.status || '').toLowerCase())) || null;
+  const upcomingTicket = dashboardFacts?.featured_ticket
+    || tickets.find((t) => ['valid', 'issued', 'boarded'].includes(String(t?.status || '').toLowerCase()))
+    || null;
   const upcomingScheduleTickets = tickets
     .filter((ticket) => {
       const tripDateStr = toTripDateStr(ticket);
@@ -371,7 +377,7 @@ export default function Dashboard() {
               <Card className="p-6">
                 <h2 className="font-display text-lg font-semibold text-navy-950">Quick Actions</h2>
                 <div className="mt-4 flex flex-col gap-2.5">
-                  <Button variant="outline" size="sm" onClick={() => navigate('/passenger/book')}>Book a New Trip</Button>
+                  <Button variant="outline" size="sm" onClick={() => navigate('/passenger/trips', { state: { returnTo: '/passenger/dashboard' } })}>Book a New Trip</Button>
                   <Button variant="outline" size="sm" onClick={() => handleTabChange({ key: 'map', protected: false })}>Track My Bus</Button>
                   <Button variant="outline" size="sm" onClick={() => handleTabChange({ key: 'tickets', protected: true })}>View My Tickets</Button>
                 </div>
@@ -520,15 +526,19 @@ export default function Dashboard() {
               </Card>
             )}
           </div>
+          {historyPagination.tickets.page < historyPagination.tickets.last_page && (
+            <div className="mt-4 flex justify-center">
+              <Button variant="outline" size="sm" disabled={loadingMoreHistory === 'tickets'} onClick={() => void loadMoreHistory('tickets')}>
+                {loadingMoreHistory === 'tickets' ? 'Loading...' : `Load more tickets (${tickets.length} of ${historyPagination.tickets.total})`}
+              </Button>
+            </div>
+          )}
         </div>
       );
     }
 
     if (visibleTab === 'transactions') {
-      // Pure client-side filter over already-loaded trip data (no backend
-      // pagination/search yet) — filters as-you-type with no explicit submit.
-      // If server-side search/pagination is introduced later, this should
-      // become a debounced API call instead of a direct .filter().
+      // Search covers the pages already loaded; older transactions can be loaded below.
       const historyQuery = historySearch.trim().toLowerCase();
       const filteredTransactions = historyQuery
         ? transactions.filter((payment) => {
@@ -595,6 +605,13 @@ export default function Dashboard() {
               </table>
             </div>
           </Card>
+          {historyPagination.payments.page < historyPagination.payments.last_page && (
+            <div className="mt-4 flex justify-center">
+              <Button variant="outline" size="sm" disabled={loadingMoreHistory === 'payments'} onClick={() => void loadMoreHistory('payments')}>
+                {loadingMoreHistory === 'payments' ? 'Loading...' : `Load more transactions (${transactions.length} of ${historyPagination.payments.total})`}
+              </Button>
+            </div>
+          )}
         </div>
       );
     }
@@ -634,7 +651,7 @@ export default function Dashboard() {
               <h2 className="font-display text-lg font-semibold text-navy-950">Use your points</h2>
               <p className="mt-1 text-sm text-slate-500">Points are applied when you book. There is nothing to redeem here.</p>
             </div>
-            <Button variant="primary" size="sm" onClick={() => navigate('/passenger/book')}>Book a trip</Button>
+            <Button variant="primary" size="sm" onClick={() => navigate('/passenger/trips', { state: { returnTo: '/passenger/dashboard' } })}>Book a trip</Button>
           </Card>
 
           <Card className="p-6">
@@ -661,6 +678,13 @@ export default function Dashboard() {
                     </div>
                   );
                 })}
+              </div>
+            )}
+            {historyPagination.rewards.page < historyPagination.rewards.last_page && (
+              <div className="mt-4 flex justify-center">
+                <Button variant="outline" size="sm" disabled={loadingMoreHistory === 'rewards'} onClick={() => void loadMoreHistory('rewards')}>
+                  {loadingMoreHistory === 'rewards' ? 'Loading...' : `Load more activity (${rewards.length} of ${historyPagination.rewards.total})`}
+                </Button>
               </div>
             )}
           </Card>
@@ -853,6 +877,11 @@ export default function Dashboard() {
                 statusLabel={selectedTicket.status || '-'}
                 validLabel={formatDateTime(selectedTicket.valid_from ?? selectedTicketQr?.valid_from)}
                 expiresLabel={formatDateTime(selectedTicket.expires_at ?? selectedTicketQr?.expires_at)}
+                discountLabel={selectedTicket.discount_label || selectedTicketQr?.discount_label || ''}
+                discountAmount={selectedTicket.discount_amount ?? selectedTicketQr?.discount_amount}
+                originalFare={selectedTicket.original_amount ?? selectedTicketQr?.original_amount}
+                farePaid={selectedTicket.amount ?? selectedTicketQr?.amount}
+                discountVerified={Boolean(selectedTicket.discount_id_checked_at ?? selectedTicketQr?.discount_id_checked_at)}
                 trackingToken={renewedTokens[selectedTicket.ticket_uuid] || selectedTicket.tracking_token || ''}
                 onRenewLink={selectedTicket.ticket_uuid ? () => renewTrackingLink(selectedTicket.ticket_uuid) : null}
               />

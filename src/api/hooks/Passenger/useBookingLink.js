@@ -40,6 +40,7 @@ export default function useBookingLink(searchParams) {
             booking_date: link.date,
             // A trip chosen from the results (?time=HH:MM) opens Book Later with that departure.
             ...(parsed.time ? { booking_option: 'later', booking_time: parsed.time } : {}),
+            ...(parsed.tripId ? { booking_option: 'later', selected_trip_id: parsed.tripId } : {}),
           },
         })
       })

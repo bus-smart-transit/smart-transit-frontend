@@ -28,6 +28,22 @@ describe('buildTicketImageModel', () => {
     expect(byLabel.Transaction).toBe('TXN-1')
   })
 
+  it('shows the onsite discount snapshot and ID verification on a discounted ticket image', () => {
+    const model = buildTicketImageModel({
+      ...ticket,
+      original_amount: 100,
+      discount_label: 'Student',
+      discount_amount: 20,
+      discount_id_checked_at: '2026-10-18T08:00:00Z',
+      amount: 80,
+    })
+    const byLabel = Object.fromEntries(model.lines.map((line) => [line.label, line.value]))
+    expect(byLabel['Original fare']).toBe('PHP 100.00')
+    expect(byLabel['Student discount']).toBe('-PHP 20.00')
+    expect(byLabel['ID check']).toBe('Verified by Chauffeur')
+    expect(byLabel['Fare paid']).toBe('PHP 80.00')
+  })
+
   it('group image has the group id, passenger count and the group QR payload', () => {
     const model = buildTicketImageModel(ticket, { group: true, groupSize: 3 })
     const byLabel = Object.fromEntries(model.lines.map((l) => [l.label, l.value]))

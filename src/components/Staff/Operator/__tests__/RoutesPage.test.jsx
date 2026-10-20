@@ -12,15 +12,12 @@ const mocks = vi.hoisted(() => ({
   deleteOperatorStop: vi.fn(),
   addOperatorStopToRoute: vi.fn(),
   removeOperatorStopFromRoute: vi.fn(),
-  setOperatorRouteCustomDropoff: vi.fn(),
   setOperatorRouteStopExpress: vi.fn(),
 }));
 
 vi.mock('../../../../api/StaffService/OperatorService', () => ({ default: mocks }));
 vi.mock('../../../Map/RouteMap', () => ({ default: ({ routeId }) => <div>route-map-{routeId}</div> }));
 vi.mock('../../FareRulesPanel', () => ({ default: ({ tone }) => <div>fare-panel tone={tone}</div> }));
-vi.mock('../../DropoffRulesPanel', () => ({ default: ({ routes }) => <div>dropoff-panel routes={routes.length}</div> }));
-vi.mock('../../DurationFactorsPanel', () => ({ default: ({ routes }) => <div>duration-panel routes={routes.length}</div> }));
 
 const today = getBusinessToday();
 const rs = (id, order, municipality, km, offset, extra = {}) => ({ id: id * 10, stop_id: id, stop_order: order, distance_from_origin_km: km, scheduled_offset_min: offset, stop_type: 'stop', served_by_express: false, stop: { stop_id: id, stop_name: `Stop ${id}`, municipality }, ...extra });
@@ -126,6 +123,8 @@ describe('RoutesPage list', () => {
   it('adds, edits and deletes stops from the directory', async () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true);
     renderPage();
+    const directory = screen.getByRole('table', { name: 'Stops' });
+    expect(within(directory).queryByRole('columnheader', { name: 'Municipality' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Add stop/ }));
     let dialog = await screen.findByRole('dialog');
     fireEvent.change(within(dialog).getByLabelText('Stop name'), { target: { value: 'New stop' } });
@@ -158,7 +157,7 @@ describe('Route detail', () => {
   it('opens a route, shows the seven sections, and goes back to the list', async () => {
     renderPage();
     await openTagum();
-    expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['Overview', 'Stops', 'Schedule', 'Assigned fleets', 'Fare', 'Drop-off rules', 'Travel time']);
+    expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['Overview', 'Stops', 'Schedule', 'Assigned fleets', 'Fare', 'Travel time']);
     expect(screen.getByRole('heading', { name: 'Davao - Tagum' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /All routes/ }));
     expect(screen.getByRole('heading', { name: 'Routes' })).toBeInTheDocument();
@@ -201,13 +200,6 @@ describe('Route detail', () => {
 
     expect(screen.getByText('Needs redraw')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Redraw route line' })).not.toBeInTheDocument();
-  });
-
-  it('toggles custom drop-off from the overview', async () => {
-    renderPage();
-    await openTagum();
-    fireEvent.click(screen.getByRole('checkbox', { name: 'Allow custom drop-off pins on Davao - Tagum' }));
-    await waitFor(() => expect(mocks.setOperatorRouteCustomDropoff).toHaveBeenCalledWith(4, true));
   });
 
   it('stops tab lists the stops in order with no reordering control', async () => {
@@ -275,15 +267,17 @@ describe('Route detail', () => {
     expect(screen.getByText(/A rule either covers every route or one route/)).toBeInTheDocument();
   });
 
-  it('drop-off tab and travel time tab use this route only', async () => {
+  it('does not expose custom drop-off controls and keeps travel time scoped to this route', async () => {
     renderPage();
     await openTagum();
-    goToTab('Drop-off rules');
-    expect(screen.getByText('dropoff-panel routes=1')).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Drop-off rules' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('checkbox', { name: /custom drop-off/i })).not.toBeInTheDocument();
     goToTab('Travel time');
-    expect(screen.getByText('duration-panel routes=1')).toBeInTheDocument();
-    const table = screen.getByRole('table', { name: 'Scheduled travel time by stop' });
+    const table = screen.getByRole('table', { name: 'Expected travel time by stop' });
     expect(within(table).getByText('58 min')).toBeInTheDocument();
+    expect(within(table).getByRole('columnheader', { name: 'Expected time' })).toBeInTheDocument();
+    expect(within(table).queryByRole('columnheader', { name: 'Regular' })).not.toBeInTheDocument();
+    expect(within(table).queryByRole('columnheader', { name: 'Express' })).not.toBeInTheDocument();
   });
 
   it('shows an empty state for a route with no stops', async () => {

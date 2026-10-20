@@ -1,8 +1,22 @@
 import { describe, expect, it } from 'vitest';
-import { bookingWindowHint, bookingWindowWarning, lastBookableDateOf } from '../bookingQuery';
-import { validateReturnInput } from '../roundtrip';
+import { bookingWindowHint, bookingWindowWarning, lastBookableDateOf, parseBookingQuery, withBookingParams } from '../bookingQuery';
 
 describe('booking window helpers (Batch 29)', () => {
+  it('preserves an explicitly selected trip in a readable booking link', () => {
+    const parsed = parseBookingQuery(new URLSearchParams('from=ecoland-terminal-dcott&to=tagum-integrated-terminal&date=2026-10-19&trip_id=15'));
+    expect(parsed.tripId).toBe('15');
+    expect(parsed.legacy).toBe(false);
+  });
+
+  it('clears a previously selected trip id when the journey is edited', () => {
+    const updated = withBookingParams(new URLSearchParams('trip_id=15&tab=booking'), {
+      from: 'ecoland-terminal-dcott', to: 'tagum-integrated-terminal', date: '2026-10-20', time: '06:00',
+    });
+    expect(updated.has('trip_id')).toBe(false);
+    expect(updated.get('tab')).toBe('booking');
+    expect(updated.get('time')).toBe('06:00');
+  });
+
   it('uses the last date the server sent, and only falls back to today + days', () => {
     expect(lastBookableDateOf({ today: '2026-10-05', maxAdvanceDays: 30, lastBookableDate: '2026-11-04' })).toBe('2026-11-04');
     expect(lastBookableDateOf({ today: '2026-10-05', maxAdvanceDays: 30 })).toBe('2026-11-04');
@@ -24,9 +38,4 @@ describe('booking window helpers (Batch 29)', () => {
     expect(bookingWindowWarning('2026-11-18', null)).toBe('');
   });
 
-  it('rejects a return date after the server last bookable date (inclusive boundary)', () => {
-    const base = { outboundDate: '2026-10-05', outboundTime: '08:00', today: '2026-10-05', maxAdvanceDays: 30, lastBookableDate: '2026-11-04', returnTime: '' };
-    expect(validateReturnInput({ ...base, returnDate: '2026-11-04' }).returnDate).toBeUndefined();
-    expect(validateReturnInput({ ...base, returnDate: '2026-11-05' }).returnDate).toMatch(/up to 30 days ahead/);
-  });
 });

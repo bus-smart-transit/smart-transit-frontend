@@ -145,6 +145,7 @@ export default function FinancialsPage({ service, view = 'all', embedded = false
             <Kpi label="Net revenue" value={formatPeso(kpis.net)} hint="Gross minus refunds" tone="text-teal-700" testId="kpi-net" />
             <Kpi label="Paid tickets" value={formatCount(kpis.tickets)} hint={`${formatCount(kpis.boarded)} boarded`} testId="kpi-tickets" />
             <Kpi label="Average fare" value={formatPeso(kpis.average_fare)} hint="Gross per paid ticket" testId="kpi-average" />
+            <Kpi label="Discounts given" value={formatPeso(summary.discounts?.total ?? 0)} hint={`${formatCount(summary.discounts?.tickets ?? 0)} discounted tickets`} tone="text-sky-700" testId="kpi-discounts" />
             <Card padding="sm" className="col-span-2 min-w-0" data-testid="kpi-split">
               <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Cash vs online</p>
               <SplitBar cash={kpis.cash} online={kpis.online} />
@@ -175,6 +176,16 @@ export default function FinancialsPage({ service, view = 'all', embedded = false
               <BarList
                 rows={summary.by_bus.map((b) => ({ key: b.fleet_id, label: b.plate_number, value: b.gross, sublabel: b.bus_label || 'Bus label unavailable', detail: `${formatCount(b.tickets)} tickets${b.refunds > 0 ? ` · Net ${formatPeso(b.net)}` : ''}` }))}
               />
+            </Section>
+            <Section title="Discounts by type" hint="Onsite discounts from ticket snapshots; online tickets use rewards instead.">
+              {(summary.discounts?.by_type ?? []).length === 0
+                ? <p className="text-sm text-slate-500">No onsite discounts were given in this range.</p>
+                : <BarList rows={summary.discounts.by_type.map((discount) => ({
+                  key: discount.type_key,
+                  label: discount.label,
+                  value: discount.amount,
+                  sublabel: `${formatCount(discount.tickets)} ticket${discount.tickets === 1 ? '' : 's'} · ${Math.round(Number(discount.rate) * 100)}%`,
+                }))} />}
             </Section>
           </div>
 

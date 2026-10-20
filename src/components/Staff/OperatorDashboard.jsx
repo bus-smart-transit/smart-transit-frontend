@@ -5,15 +5,12 @@ import FleetsPage from './Operator/FleetsPage'
 import RoutesPage from './Operator/RoutesPage'
 import StaffCalendar from './StaffCalendar'
 import { ModalShell } from '../ui/Modal'
-import HistoricalForecastPanel from './HistoricalForecastPanel'
-import { openPrintReport } from '../../utils/printReport'
-import { reportFileName, reportToCsv } from '../../utils/reportCsv'
-import { saveCsv } from '../../utils/financials'
+import OperatorReportsPage from './OperatorReportsPage'
 import OperatorService from '../../api/StaffService/OperatorService'
 import { getBookingWindow } from '../../services/bookingService'
 import { bookingWindowWarning } from '../../utils/bookingQuery'
 import { parseAppDate, getBusinessToday, debugLogBusinessTime } from '../../utils/dates'
-import { useOperatorDashboardData, useNotificationBell, useTripRequests, useTripsTab, useReportsTab } from '../../api/hooks/Staff/useOperatorDashboard'
+import { useOperatorDashboardData, useNotificationBell, useTripRequests, useTripsTab } from '../../api/hooks/Staff/useOperatorDashboard'
 import RunInfoChips from '../ui/RunInfoChips'
 import { CancelTripModal, TicketResolutionQueue } from './TripCancellationsPanel'
 import LegTimeSuggestion from './LegTimeSuggestion'
@@ -24,10 +21,9 @@ import FinancePage from './Finance/FinancePage'
 import { OPERATOR_ROLE, navForRole, viewsForRole } from '../../utils/operatorNav'
 import {
   LayoutDashboard, Bus, MapPin, PieChart, Users, Settings, Wallet, CalendarDays,
-  Plus, Eye, RefreshCw, Download,
+  Plus, Eye, RefreshCw,
   X, Loader2, AlertTriangle, Bell,
 } from 'lucide-react'
-
 const fmt = (v) => {
   if (v == null) return '-'
   const n = Number(v)
@@ -49,9 +45,6 @@ const STATUS_CHIP = {
   cancelled:     'bg-red-100 text-red-700',
 }
 
-// Batch 30: Trips, Calendar and Shift Blocks are the three views of Schedule; Financials and Remittances are tabs of
-// Finance; Reports stays its own item (fleet reports and the forecast are not financial). The items, their views and
-// the roles that may see them are in utils/operatorNav.js; this only attaches the icons.
 const NAV_ICONS = {
   dashboard: LayoutDashboard, staffs: Users, fleets: Bus, routes: MapPin, schedule: CalendarDays, finance: Wallet, reports: PieChart, account: Settings,
 }
@@ -78,8 +71,6 @@ function Modal({ title, onClose, children }) {
   )
 }
 
-// S2 (Batch 12): Operator-facing notification bell/badge — currently only
-// populated by trip declines (Driver/Chauffeur declining an assignment).
 function NotificationBell() {
   const {
     open, setOpen,
@@ -121,10 +112,7 @@ function NotificationBell() {
               <p className="py-6 text-center text-sm text-slate-400">No notifications yet.</p>
             ) : (
               notifications.map((n) => (
-                <div
-                  key={n.id}
-                  className={`rounded-lg border px-3 py-2.5 text-sm ${n.read_at ? 'border-slate-100 bg-slate-50 text-slate-500' : 'border-amber-200 bg-amber-50 text-amber-900'}`}
-                >
+                <div key={n.id} className={`rounded-lg border px-3 py-2.5 text-sm ${n.read_at ? 'border-slate-100 bg-slate-50 text-slate-500' : 'border-amber-200 bg-amber-50 text-amber-900'}`}>
                   <div className="flex items-start justify-between gap-2">
                     <p className="font-semibold">{n.title}</p>
                     {!n.read_at && (
@@ -157,19 +145,19 @@ function Field({ label, type = 'text', value, onChange, required, placeholder, h
   )
 }
 
-
 const REQUEST_REASON_LABELS = { sick: 'Sick', vehicle_issue: 'Vehicle issue', schedule_conflict: 'Schedule conflict', other: 'Others' }
 
-// C6: staff decline requests waiting for the Operator ("For Approval").
-function TripRequestsPanel({ onDecided }) {
-  const { requests, busyId, error, decide } = useTripRequests(onDecided)
-  if (requests.length === 0 && !error) return null
+function TripRequestsPanel({ onDecided, showEmpty = false }) {
+  const { requests, busyId, error, loading, decide } = useTripRequests(onDecided)
+  if (!showEmpty && requests.length === 0 && !error) return null
 
   return (
     <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
       <h2 className="text-sm font-bold text-amber-800">For Approval ({requests.length})</h2>
       {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
-      <ul className="mt-3 space-y-2">
+      {loading && requests.length === 0 ? <p className="mt-3 text-sm text-slate-600">Loading approval requests...</p>
+        : requests.length === 0 ? <p className="mt-3 text-sm text-slate-600">No pending approval requests.</p>
+          : <ul className="mt-3 space-y-2">
         {requests.map((r) => {
           const route = r.trip?.fleet_route?.route
           const staffName = r.staff?.user?.name || r.staff?.name || 'Staff'
@@ -178,7 +166,7 @@ function TripRequestsPanel({ onDecided }) {
             <li key={r.id} className="flex flex-col gap-2 rounded-xl border border-amber-100 bg-white p-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="text-sm">
                 <p className="font-semibold text-slate-900">{staffName} <span className="font-normal text-slate-500">({r.role})</span></p>
-                <p className="text-xs text-slate-600">{route?.origin || '-'} → {route?.destination || '-'} · {r.trip?.trip_date}</p>
+                <p className="text-xs text-slate-600">{route?.origin || '-'} to {route?.destination || '-'} · {r.trip?.trip_date}</p>
                 {r.shift_block_id && (
                   <p className="text-xs font-semibold text-amber-800" data-testid="request-block-label">Shift block #{r.shift_block_id}: all {r.legs_count} legs. Approving releases {staffName} from the whole block.</p>
                 )}
@@ -188,10 +176,10 @@ function TripRequestsPanel({ onDecided }) {
                 <button type="button" disabled={busyId === r.id} onClick={() => decide(r.id, 'approve')} className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50">Approve</button>
                 <button type="button" disabled={busyId === r.id} onClick={() => decide(r.id, 'reject')} className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50">Reject</button>
               </div>
-          </li>
+            </li>
           )
         })}
-      </ul>
+          </ul>}
     </section>
   )
 }
@@ -238,11 +226,7 @@ function StaffDirectoryTab({ drivers, conductors, onRefresh, onCreateAccount }) 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-xl font-bold text-slate-900">Staff Directory</h2>
         <div className="flex items-center gap-2">
-          <select
-            value={roleFilter}
-            onChange={(event) => setRoleFilter(event.target.value)}
-            className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-teal-500"
-          >
+          <select value={roleFilter} onChange={(event) => setRoleFilter(event.target.value)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-teal-500">
             <option value="all">All roles</option>
             <option value="driver">Driver</option>
             <option value="conductor">Chauffeur</option>
@@ -250,11 +234,7 @@ function StaffDirectoryTab({ drivers, conductors, onRefresh, onCreateAccount }) 
           <button type="button" onClick={onRefresh} className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50">
             <RefreshCw className="h-4 w-4" /> Refresh
           </button>
-          <button
-            type="button"
-            onClick={() => { setShowModal(true); setMsg('') }}
-            className="flex items-center gap-1.5 rounded-lg bg-teal-600 px-3 py-2 text-sm font-semibold text-white hover:bg-teal-700"
-          >
+          <button type="button" onClick={() => { setShowModal(true); setMsg('') }} className="flex items-center gap-1.5 rounded-lg bg-teal-600 px-3 py-2 text-sm font-semibold text-white hover:bg-teal-700">
             <Plus className="h-4 w-4" /> Add Staff
           </button>
         </div>
@@ -342,12 +322,39 @@ function StaffDirectoryTab({ drivers, conductors, onRefresh, onCreateAccount }) 
 function ScheduleServiceModal({ state, drivers, conductors }) {
   const { showModal, setShowModal, form, setForm, saving, msg, fleetRoutes, handleSchedule } = state
   const [bookingWindow, setBookingWindow] = useState(null)
+  const [dateDrivers, setDateDrivers] = useState(drivers)
+  const [loadingDateDrivers, setLoadingDateDrivers] = useState(false)
+  const [dateDriversError, setDateDriversError] = useState('')
   useEffect(() => {
     if (!showModal) return undefined
     let cancelled = false
     getBookingWindow().then((w) => { if (!cancelled) setBookingWindow(w) }).catch(() => { if (!cancelled) setBookingWindow(null) })
     return () => { cancelled = true }
   }, [showModal])
+
+  useEffect(() => {
+    if (!showModal || !form.trip_date) {
+      setDateDrivers(drivers)
+      setDateDriversError('')
+      return undefined
+    }
+
+    let cancelled = false
+    setLoadingDateDrivers(true)
+    setDateDrivers([])
+    setDateDriversError('')
+    OperatorService.getOperatorDrivers({ trip_date: form.trip_date })
+      .then((response) => { if (!cancelled) setDateDrivers(Array.isArray(response?.data) ? response.data : []) })
+      .catch((error) => { if (!cancelled) { setDateDrivers([]); setDateDriversError(error?.message || 'Could not load available drivers for this date.') } })
+      .finally(() => { if (!cancelled) setLoadingDateDrivers(false) })
+    return () => { cancelled = true }
+  }, [drivers, form.trip_date, showModal])
+
+  useEffect(() => {
+    if (form.driver_id && !dateDrivers.some((driver) => String(getStaffCompanyUserId(driver)) === String(form.driver_id))) {
+      setForm((previous) => ({ ...previous, driver_id: '' }))
+    }
+  }, [dateDrivers, form.driver_id, setForm])
 
   const defaultLegTimesByBlock = {
     morning: ['06:00', '08:30', '11:00', '13:30'],
@@ -365,9 +372,6 @@ function ScheduleServiceModal({ state, drivers, conductors }) {
   if (!showModal) return null
 
   return (    <Modal title="Schedule Service" onClose={() => setShowModal(false)}>
-      <p className="-mt-2 mb-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-800">
-        One unified schedule form: choose <strong>One-way</strong> for ad hoc/charter trips, or <strong>Round trip</strong> for shift-block scheduling.
-      </p>
       <form className="space-y-4" onSubmit={handleSchedule}>
         <Field label="Fleet Route" required>
           <select value={form.fleet_route_id} onChange={e => setForm(p => ({...p, fleet_route_id: e.target.value}))} required className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500">
@@ -378,10 +382,10 @@ function ScheduleServiceModal({ state, drivers, conductors }) {
           </select>
         </Field>
         <Field label="Trip Date" type="date" value={form.trip_date} onChange={e => setForm(p => ({...p, trip_date: e.target.value}))} required hint={bookingWindowWarning(form.trip_date, bookingWindow)} />
-        <Field label="Trip Type" required>
+        <Field label="Schedule" required>
           <select value={form.trip_type} onChange={e => setForm(p => ({ ...p, trip_type: e.target.value }))} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500">
-            <option value="one_way">One-way (Ad hoc / Charter)</option>
-            <option value="round_trip">Round trip (Shift Block)</option>
+            <option value="one_way">Single Departure</option>
+            <option value="round_trip">Multi-Leg Schedule</option>
           </select>
         </Field>
         <Field label="Service Type" required>
@@ -435,15 +439,17 @@ function ScheduleServiceModal({ state, drivers, conductors }) {
           </>
         )}
         <Field label="Driver" required>
-          <select value={form.driver_id} onChange={e => setForm(p => ({ ...p, driver_id: e.target.value }))} required className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500">
+          <select value={form.driver_id} onChange={e => setForm(p => ({ ...p, driver_id: e.target.value }))} required disabled={loadingDateDrivers || Boolean(dateDriversError)} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500 disabled:opacity-60">
             <option value="">Select a driver...</option>
-            {drivers.map(d => (
+            {dateDrivers.map(d => (
               <option key={getStaffCompanyUserId(d)} value={getStaffCompanyUserId(d)}>
                 {getStaffFullName(d) || getStaffUsername(d)} ({getStaffEmail(d)})
               </option>
             ))}
           </select>
         </Field>
+        {loadingDateDrivers && <p role="status" className="text-xs text-slate-500">Checking driver availability...</p>}
+        {dateDriversError && <p role="alert" className="text-xs text-rose-700">{dateDriversError}</p>}
         <Field label="Chauffeur" required>
           <select value={form.conductor_id} onChange={e => setForm(p => ({ ...p, conductor_id: e.target.value }))} required className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500">
             <option value="">Select a chauffeur...</option>
@@ -457,7 +463,7 @@ function ScheduleServiceModal({ state, drivers, conductors }) {
         {msg && <p className="text-sm text-red-600">{msg}</p>}
         <div className="flex justify-end gap-2 pt-2">
           <button type="button" onClick={() => setShowModal(false)} className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50">Cancel</button>
-          <button type="submit" disabled={saving} className="flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-60">
+          <button type="submit" disabled={saving || loadingDateDrivers || Boolean(dateDriversError)} className="flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-60">
             {saving && <Loader2 className="h-4 w-4 animate-spin" />}Schedule
           </button>
         </div>
@@ -481,6 +487,9 @@ function TripsTab({ drivers, conductors, onRefresh, tripsState }) {
     actionInFlight,
     msg, setMsg,
     visibleTrips,
+    visibleTripsMeta,
+    loadingMoreTrips,
+    loadMoreTrips,
     handleAssign,
     handleAction,
     handleConfirmedComplete,
@@ -489,6 +498,34 @@ function TripsTab({ drivers, conductors, onRefresh, tripsState }) {
   } = tripsState
   const [cancelTarget, setCancelTarget] = useState(null)
   const [cancelNotice, setCancelNotice] = useState('')
+  const [dateDrivers, setDateDrivers] = useState(drivers)
+  const [loadingDateDrivers, setLoadingDateDrivers] = useState(false)
+  const [dateDriversError, setDateDriversError] = useState('')
+
+  useEffect(() => {
+    const tripDate = assignModal?.type === 'driver' ? String(assignModal.trip?.trip_date || '').slice(0, 10) : ''
+    if (!tripDate) {
+      setDateDrivers(drivers)
+      setDateDriversError('')
+      return undefined
+    }
+
+    let cancelled = false
+    setLoadingDateDrivers(true)
+    setDateDrivers([])
+    setDateDriversError('')
+    OperatorService.getOperatorDrivers({ trip_date: tripDate })
+      .then((response) => { if (!cancelled) setDateDrivers(Array.isArray(response?.data) ? response.data : []) })
+      .catch((error) => { if (!cancelled) { setDateDrivers([]); setDateDriversError(error?.message || 'Could not load available drivers for this date.') } })
+      .finally(() => { if (!cancelled) setLoadingDateDrivers(false) })
+    return () => { cancelled = true }
+  }, [assignModal, drivers])
+
+  useEffect(() => {
+    if (assignModal?.type === 'driver' && assignId && !dateDrivers.some((driver) => String(getStaffCompanyUserId(driver)) === String(assignId))) {
+      setAssignId('')
+    }
+  }, [assignId, assignModal?.type, dateDrivers, setAssignId])
 
   const driverMap = new Map(drivers.map(d => [Number(getStaffCompanyUserId(d)), d]))
   const conductorMap = new Map(conductors.map(c => [Number(getStaffCompanyUserId(c)), c]))
@@ -581,7 +618,7 @@ function TripsTab({ drivers, conductors, onRefresh, tripsState }) {
                             ? <span className="ml-1.5 rounded-full bg-indigo-100 px-1.5 py-0.5 text-xs font-semibold text-indigo-700" title="Auto-generated from a Shift Block">Block</span>
                             : <span className="ml-1.5 rounded-full bg-slate-100 px-1.5 py-0.5 text-xs font-semibold text-slate-500" title="Manually created ad hoc/charter trip">Ad hoc</span>}
                         </td>
-                        <td className="px-4 py-3 text-slate-700">{t.fleet_route?.fleet?.plate_number || '-'} <RunInfoChips runPattern={t.run_info?.run_pattern} service={t.run_info?.service} serviceType={t.service_type} /></td>
+                        <td className="px-4 py-3 text-slate-700">{t.fleet_route?.fleet?.plate_number || '-'} <RunInfoChips runPattern={t.run_info?.run_pattern} service={t.run_info?.service} serviceType={t.service_type} showRunPattern /></td>
                         <td className="px-4 py-3">
                           {driverName ? <span className="text-slate-700">{driverName}</span>
                             : <button type="button" onClick={() => { setAssignModal({ trip: t, type: 'driver' }); setAssignId(''); setMsg('') }} className="text-xs text-teal-600 hover:underline">Assign</button>}
@@ -621,6 +658,19 @@ function TripsTab({ drivers, conductors, onRefresh, tripsState }) {
         </div>
       ))}
 
+      {visibleTripsMeta.current_page < visibleTripsMeta.last_page && (
+        <div className="flex justify-center">
+          <button
+            type="button"
+            onClick={() => void loadMoreTrips()}
+            disabled={loadingMoreTrips}
+            className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+          >
+            {loadingMoreTrips ? 'Loading...' : `Load more trips (${visibleTrips.length} of ${visibleTripsMeta.total})`}
+          </button>
+        </div>
+      )}
+
 
       {cancelNotice && <p role="status" className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{cancelNotice}</p>}
       <TicketResolutionQueue service={OperatorService} />
@@ -632,17 +682,19 @@ function TripsTab({ drivers, conductors, onRefresh, tripsState }) {
         <Modal title={`Assign ${assignModal.type} to Trip #${assignModal.trip.trip_id}`} onClose={() => setAssignModal(null)}>
           <form className="space-y-4" onSubmit={handleAssign}>
             <Field label={`Select ${assignModal.type}`} required>
-              <select value={assignId} onChange={e => setAssignId(e.target.value)} required className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500">
+              <select value={assignId} onChange={e => setAssignId(e.target.value)} required disabled={assignModal.type === 'driver' && (loadingDateDrivers || Boolean(dateDriversError))} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500 disabled:opacity-60">
                 <option value="">Choose...</option>
-                {(assignModal.type === 'driver' ? drivers : conductors).map(p => (
+                {(assignModal.type === 'driver' ? dateDrivers : conductors).map(p => (
                   <option key={getStaffCompanyUserId(p)} value={getStaffCompanyUserId(p)}>{getStaffFullName(p) || getStaffUsername(p)} ({getStaffEmail(p)})</option>
                 ))}
               </select>
             </Field>
+            {assignModal.type === 'driver' && loadingDateDrivers && <p role="status" className="text-xs text-slate-500">Checking driver availability...</p>}
+            {assignModal.type === 'driver' && dateDriversError && <p role="alert" className="text-xs text-rose-700">{dateDriversError}</p>}
             {msg && <p className="text-sm text-red-600">{msg}</p>}
             <div className="flex justify-end gap-2 pt-2">
               <button type="button" onClick={() => setAssignModal(null)} className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50">Cancel</button>
-              <button type="submit" disabled={saving} className="flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-60">
+              <button type="submit" disabled={saving || (assignModal.type === 'driver' && (loadingDateDrivers || Boolean(dateDriversError)))} className="flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-60">
                 {saving && <Loader2 className="h-4 w-4 animate-spin" />}Assign
               </button>
             </div>
@@ -780,6 +832,7 @@ function ScheduleTab({ trips, drivers, conductors, onRefresh, view, onViewChange
             {active === 'calendar' && <StaffCalendar key={calendarFocus || 'today'} service={OperatorService} initialDate={calendarFocus} refreshKey={reloadToken} />}
             {active === 'blocks' && <ShiftBlocksView reloadToken={reloadToken} />}
             {active === 'trips' && <TripsTab drivers={drivers} conductors={conductors} onRefresh={refreshAll} tripsState={tripsState} />}
+            {active === 'requests' && <TripRequestsPanel onDecided={refreshAll} showEmpty />}
           </>
         )}
       </SchedulePage>
@@ -788,249 +841,8 @@ function ScheduleTab({ trips, drivers, conductors, onRefresh, view, onViewChange
   )
 }
 
-function ReportsTab({ fleets, trips, routes }) {
-  const [view, setView] = useState('fleet')
-  const {
-    selectedFleet, setSelectedFleet,
-    reportType, setReportType,
-    startDate, setStartDate,
-    endDate, setEndDate,
-    ranRange,
-    report,
-    loading,
-    msg, setMsg,
-    fetchReport,
-  } = useReportsTab()
-
-  // The period of the report on screen, in words (the server's default is this month so far).
-  const periodLabel = ranRange.from || ranRange.to
-    ? `${ranRange.from || 'start of month'} to ${ranRange.to || 'today'}`
-    : 'This month so far'
-
-  const renderValue = (value) => {
-    if (value == null || value === '') return '-'
-    if (typeof value === 'number') return Number.isFinite(value) ? value.toLocaleString('en-PH') : '-'
-    if (typeof value === 'boolean') return value ? 'Yes' : 'No'
-    if (Array.isArray(value)) {
-      return value
-        .map((entry) => {
-          if (entry == null) return '-'
-          if (typeof entry === 'object') {
-            return Object.entries(entry)
-              .map(([key, nestedValue]) => `${key.replace(/_/g, ' ')}: ${nestedValue ?? '-'}`)
-              .join(' | ')
-          }
-          return String(entry)
-        })
-        .join('; ')
-    }
-    if (typeof value === 'object') {
-      return Object.entries(value)
-        .map(([key, nestedValue]) => `${key.replace(/_/g, ' ')}: ${nestedValue ?? '-'}`)
-        .join(' | ')
-    }
-
-    if (typeof value === 'string') {
-      const trimmed = value.trim()
-      if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
-        try {
-          const parsed = JSON.parse(trimmed)
-          return renderValue(parsed)
-        } catch {
-          return value
-        }
-      }
-    }
-
-    return String(value)
-  }
-
-  const flattenRow = (row, prefix = '', output = {}) => {
-    if (!row || typeof row !== 'object' || Array.isArray(row)) return output
-
-    Object.entries(row).forEach(([key, raw]) => {
-      const column = prefix ? `${prefix}.${key}` : key
-
-      if (raw == null || typeof raw === 'number' || typeof raw === 'boolean' || typeof raw === 'string') {
-        output[column] = raw
-        return
-      }
-
-      if (Array.isArray(raw)) {
-        output[column] = raw.map((item) => {
-          if (item == null) return '-'
-          if (typeof item === 'object') {
-            return Object.entries(item)
-              .map(([nestedKey, nestedValue]) => `${nestedKey}: ${nestedValue ?? '-'}`)
-              .join(', ')
-          }
-          return String(item)
-        }).join(' | ')
-        return
-      }
-
-      flattenRow(raw, column, output)
-    })
-
-    return output
-  }
-
-  const rawRows = Array.isArray(report)
-    ? report
-    : Array.isArray(report?.items)
-      ? report.items
-      : Array.isArray(report?.rows)
-        ? report.rows
-        : report && typeof report === 'object'
-          ? [report]
-          : []
-
-  const reportRows = rawRows.map((row) => flattenRow(row))
-
-  const reportColumns = reportRows.length > 0
-    ? [...new Set(reportRows.flatMap(row => Object.keys(row || {})))].slice(0, 14)
-    : []
-
-  const handlePrintReport = () => {
-    if (!report || reportRows.length === 0 || reportColumns.length === 0) {
-      setMsg('Run a report first before printing.');
-      return;
-    }
-
-    const fleetLabel = fleets.find((fleet) => String(fleet.fleet_id) === String(selectedFleet))?.plate_number || `Fleet ${selectedFleet}`;
-    const reportLabel = reportType === 'financial'
-      ? 'Financial Audit'
-      : reportType === 'revenue'
-        ? 'Revenue by Route'
-        : reportType === 'adherence'
-          ? 'Route Adherence'
-          : reportType === 'occupancy'
-            ? 'Occupancy Trends'
-            : reportType === 'daily'
-              ? 'Daily Summary'
-              : 'Payment Channels';
-
-    const opened = openPrintReport({
-      title: `${reportLabel} - ${fleetLabel}`,
-      meta: [['Fleet', fleetLabel], ['Report', reportLabel], ['Period', periodLabel]],
-      columns: reportColumns,
-      rows: reportRows,
-      format: (value) => String(renderValue(value)),
-    });
-    if (!opened) setMsg('Unable to open print preview. Please allow pop-ups for this site.');
-  }
-
-  // The file has every column and the same text as the table (the screen shows only the first 14 columns).
-  const handleDownloadCsv = () => {
-    if (!report || reportRows.length === 0) {
-      setMsg('Run a report first before downloading.');
-      return;
-    }
-    const allColumns = [...new Set(reportRows.flatMap((row) => Object.keys(row || {})))];
-    const plate = fleets.find((fleet) => String(fleet.fleet_id) === String(selectedFleet))?.plate_number || selectedFleet;
-    saveCsv(
-      reportToCsv(allColumns, reportRows, (value) => String(renderValue(value))),
-      reportFileName({ type: reportType, fleet: plate, from: ranRange.from, to: ranRange.to }),
-    );
-  }
-  return (
-    <div className="space-y-5">
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="text-xl font-bold text-slate-900">{view === 'forecast' ? 'Historical Forecast' : 'Fleet Reports'}</h2>
-        <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 text-sm font-semibold">
-          {[['fleet', 'Fleet Reports'], ['forecast', 'Historical Forecast']].map(([key, label]) => (
-            <button key={key} type="button" onClick={() => setView(key)} className={`rounded-md px-3 py-1.5 ${view === key ? 'bg-teal-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`}>{label}</button>
-          ))}
-        </div>
-      </div>
-      {view === 'forecast' ? (<HistoricalForecastPanel trips={trips} routes={routes} fleets={fleets} />) : (<>
-      <div className="flex flex-wrap gap-3">
-        <div className="flex-1 min-w-40">
-          <label className="mb-1 block text-xs font-medium text-slate-600">Fleet</label>
-          <select value={selectedFleet} onChange={e => setSelectedFleet(e.target.value)} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-teal-500">
-            <option value="">Select fleet...</option>
-            {fleets.map(f => <option key={f.fleet_id} value={f.fleet_id}>{f.plate_number}</option>)}
-          </select>
-        </div>
-        <div className="flex-1 min-w-40">
-          <label className="mb-1 block text-xs font-medium text-slate-600">Report Type</label>
-          <select value={reportType} onChange={e => setReportType(e.target.value)} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-teal-500">
-            <option value="adherence">Route Adherence</option>
-            <option value="occupancy">Occupancy Trends</option>
-            <option value="daily">Daily Summary</option>
-          </select>
-        </div>
-        <div className="min-w-36">
-          <label htmlFor="report-from" className="mb-1 block text-xs font-medium text-slate-600">From</label>
-          <input id="report-from" type="date" value={startDate} max={endDate || undefined} onChange={e => setStartDate(e.target.value)} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-teal-500" />
-        </div>
-        <div className="min-w-36">
-          <label htmlFor="report-to" className="mb-1 block text-xs font-medium text-slate-600">To</label>
-          <input id="report-to" type="date" value={endDate} min={startDate || undefined} onChange={e => setEndDate(e.target.value)} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-teal-500" />
-        </div>
-        <div className="flex items-end">
-          <button type="button" onClick={fetchReport} disabled={loading} className="flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-60">
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eye className="h-4 w-4" />}
-            Run Report
-          </button>
-        </div>
-        <div className="flex items-end">
-          <button
-            type="button"
-            onClick={handlePrintReport}
-            disabled={!report || reportRows.length === 0 || reportColumns.length === 0}
-            className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-          >
-            <Download className="h-4 w-4" />
-            Print / Save PDF
-          </button>
-        </div>
-        <div className="flex items-end">
-          <button
-            type="button"
-            onClick={handleDownloadCsv}
-            disabled={!report || reportRows.length === 0}
-            className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-          >
-            <Download className="h-4 w-4" />
-            Download CSV
-          </button>
-        </div>
-      </div>
-      <p className="-mt-2 text-xs text-slate-500">Leave both dates empty for this month so far.</p>
-      {msg && <p className="rounded-lg bg-red-50 border border-red-200 px-4 py-2 text-sm text-red-700">{msg}</p>}
-      {report && (
-        <div className="staff-card">
-          <p className="mb-2 text-xs text-slate-500" data-testid="report-period">Period: {periodLabel}</p>
-          {reportColumns.length > 0 ? (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-slate-50">
-                  <tr className="border-b border-slate-200">
-                    {reportColumns.map(column => (
-                      <th key={column} className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{column.replace(/_/g, ' ')}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {reportRows.map((row, index) => (
-                    <tr key={`report-row-${index}`} className="border-b border-slate-100 hover:bg-slate-50">
-                      {reportColumns.map(column => (
-                        <td key={`${index}-${column}`} className="px-3 py-2 text-slate-700">{renderValue(row?.[column])}</td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <p className="text-sm text-slate-500">No tabular rows available for this report yet.</p>
-          )}
-        </div>
-      )}
-      </>)}
-    </div>
-  )
+function ReportsTab({ fleets }) {
+  return <OperatorReportsPage fleets={fleets} />
 }
 
 export default function OperatorDashboard() {
@@ -1106,7 +918,7 @@ export default function OperatorDashboard() {
         {activeTab === 'fleets'     && <FleetsPage fleets={fleets} routes={routes} trips={trips} onRefresh={loadFull} />}
         {activeTab === 'routes'     && <RoutesPage routes={routes} stops={stops} trips={trips} fleets={fleets} onRefresh={loadFull} onOpenSchedule={() => setActiveTab('schedule')} onOpenFleets={() => setActiveTab('fleets')} />}
         {activeTab === 'finance'    && <FinancePage views={viewsForRole('finance', OPERATOR_ROLE)} view={view} onViewChange={setView} />}
-        {activeTab === 'reports'    && <ReportsTab fleets={fleets} trips={trips} routes={routes} />}
+        {activeTab === 'reports'    && <ReportsTab fleets={fleets} />}
         {activeTab === 'account'    && <ProfilePage role="operator" profile={profile} loading={loading} onSignOut={handleLogout} />}
         </div>
     </StaffPortalLayout>

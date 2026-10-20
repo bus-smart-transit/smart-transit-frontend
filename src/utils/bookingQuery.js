@@ -26,6 +26,10 @@ export function tripBookingPath(trip) {
   return `/passenger/book?${buildBookingQuery({ from: trip.origin?.stop_code, to: trip.destination?.stop_code, date: trip.trip_date, time: trip.boarding_time })}`;
 }
 
+export function bookingReturnPath(state) {
+  return state?.returnTo === '/passenger/dashboard' ? '/passenger/dashboard' : '/';
+}
+
 /** What a page URL asks for. Shapes are pre-checked so odd input never reaches state; the server still has the last word. */
 export function parseBookingQuery(searchParams) {
   const read = (key) => String(searchParams.get(key) || '').trim();
@@ -33,6 +37,7 @@ export function parseBookingQuery(searchParams) {
   const to = read('to').toLowerCase();
   const date = read('date');
   const time = read('time');
+  const tripId = read('trip_id');
   const legacy = LEGACY_KEYS.some((key) => searchParams.has(key));
 
   return {
@@ -40,6 +45,7 @@ export function parseBookingQuery(searchParams) {
     to: CODE.test(to) ? to : (to ? '!' : ''),
     date: DATE.test(date) ? date : (date ? '!' : ''),
     time: TIME.test(time) ? time : '',
+    ...(/^[1-9]\d*$/.test(tripId) ? { tripId } : {}),
     legacy,
     present: Boolean(from || to || date || legacy),
   };
@@ -68,7 +74,7 @@ export function findStopCode(groups, stopId) {
 /** The page URL params with the booking keys replaced by the journey, other params (for example a tab) kept. */
 export function withBookingParams(current, journey) {
   const next = new URLSearchParams(current);
-  ['from', 'to', 'date', 'time'].forEach((key) => next.delete(key));
+  ['from', 'to', 'date', 'time', 'trip_id'].forEach((key) => next.delete(key));
   new URLSearchParams(buildBookingQuery(journey)).forEach((value, key) => next.set(key, value));
   return next;
 }

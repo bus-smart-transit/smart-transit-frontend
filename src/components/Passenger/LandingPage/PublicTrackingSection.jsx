@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Bus, Clock3, LocateFixed, MapPin, Navigation } from 'lucide-react';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import RouteMap from '../../Map/RouteMap';
-import PassengerService from '../../../api/PassengerService/PassengerService';
+import { fetchFleetLocationsForMap } from '../../../api/hooks/Passenger/useMapView';
 import { haversineM } from '../../../utils/geo';
 import { describeBusPlace } from '../../../utils/busPlace';
 import { fetchRouteMapData } from '../../../services/routeMapService';
@@ -188,7 +188,7 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
     if (!mapReady || !map || !maplibregl) return;
 
     try {
-      const res = await PassengerService.getFleetLocations();
+      const res = await fetchFleetLocationsForMap();
       const rows = (res?.data ?? []).filter(
         (row) => Number.isFinite(Number(row?.latitude)) && Number.isFinite(Number(row?.longitude)),
       );

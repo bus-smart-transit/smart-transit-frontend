@@ -77,7 +77,6 @@ export function boardingPointView(response) {
     state,
     message: good ? '' : (response?.message || 'The bus position is not available right now.'),
     destinations: good && Array.isArray(response?.destinations) ? response.destinations : [],
-    customDropoffAvailable: good && response?.custom_dropoff?.available === true,
     distanceFromOriginKm: good ? Number(response?.boarding_point?.distance_from_origin_km ?? 0) : null,
     alongLegM: good && Number.isFinite(Number(response?.boarding_point?.distance_along_leg_m)) ? Number(response.boarding_point.distance_along_leg_m) : null,
   };
@@ -86,29 +85,15 @@ export function boardingPointView(response) {
 /** Whether the cash form has everything the server needs. The fare is never part of it. */
 export function isOnsiteFormComplete(form, view) {
   const boardingOk = form?.boarding_mode === 'gps' ? Boolean(view?.good) : Boolean(form?.origin_stop_id);
-  const destinationOk = Boolean(form?.dropoff) || Boolean(form?.destination_stop_id);
+  const destinationOk = Boolean(form?.destination_stop_id);
   return boardingOk && destinationOk;
 }
 
-/**
- * The checkout item. In bus-position mode the client names no boarding point at all (no stop, no coordinates):
- * the server resolves it from the bus's own position. A pinned drop-off sends only the pin; the server
- * validates, snaps and prices it.
- */
+/** In bus-position mode the server resolves boarding, while the passenger still chooses an official destination stop. */
 export function buildOnsiteItem({ tripId, form }) {
   const item = { trip_id: Number(tripId), seat_type: form.seat_type };
   if (form.boarding_mode === 'gps') item.boarding_mode = 'gps';
   else item.origin_stop_id = Number(form.origin_stop_id);
-
-  if (form.dropoff && form.dropoff.pointId != null) {
-    // A designated drop-off point is named by id only; the server knows where it is.
-    item.alighting_point_id = Number(form.dropoff.pointId);
-  } else if (form.dropoff) {
-    item.destination_lat = Number(form.dropoff.lat);
-    item.destination_lng = Number(form.dropoff.lng);
-    if (form.dropoff.label) item.destination_label = String(form.dropoff.label).slice(0, 255);
-  } else {
-    item.destination_stop_id = Number(form.destination_stop_id);
-  }
+  item.destination_stop_id = Number(form.destination_stop_id);
   return item;
 }

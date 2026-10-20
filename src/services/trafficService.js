@@ -108,25 +108,30 @@ const buildOrsAlerts = (routeData = {}, routeName = '') => {
 export function buildFallbackTrafficStatus({
   route,
   stops,
+  nextStop,
   label = 'Live traffic unavailable',
   detail = 'Traffic provider data is unavailable; no ETA or delay estimate is shown.',
   dataSource = 'fallback',
 } = {}) {
   const routeName = route?.route_name || route?.name || route?.routeName || '';
   const corridorName = deriveCorridorName(stops);
+  const nextStopName = nextStop?.stop_name || nextStop?.name || nextStop?.stop?.stop_name;
+  const segmentLabel = nextStopName ? `Current position to ${nextStopName}` : 'Current position to next stop';
 
   return {
     level: 'unknown',
     label,
     etaMinutes: null,
     delayMinutes: null,
+    segmentLabel,
+    updatedAt: null,
     suggestion: routeName
-      ? `Live provider traffic data for ${routeName} is currently unavailable. Follow dispatcher guidance and on-road conditions.`
+      ? `Live provider traffic data for the next segment on ${routeName} is currently unavailable. Follow dispatcher guidance and on-road conditions.`
       : 'Live provider traffic data is currently unavailable. Follow dispatcher guidance and on-road conditions.',
     routeName,
     corridorName,
     alerts: [{
-      road: routeName || 'Assigned route',
+      road: segmentLabel,
       severity: 'info',
       etaMinutes: null,
       detail,
@@ -158,9 +163,12 @@ async function fetchMapboxFreeFlowSeconds(liveUrl) {
  * Turns a provider's travel time (and its own no-traffic time, when it has one) into the status the apps show.
  * Congestion is only claimed against a real baseline; without one the level is "unknown" and no delay is shown.
  */
-function composeTrafficStatus({ provider, durationSeconds, freeFlowSeconds, alerts, route, stops }) {
+function composeTrafficStatus({ provider, durationSeconds, freeFlowSeconds, alerts, route, stops, nextStop, fetchedAt }) {
   const routeName = route?.route_name || route?.name || route?.routeName || '';
   const corridorName = deriveCorridorName(stops);
+  const nextStopName = nextStop?.stop_name || nextStop?.name || nextStop?.stop?.stop_name || 'next stop';
+  const segmentLabel = `Current position to ${nextStopName}`;
+  const routeContext = routeName ? ` on ${routeName}${corridorName ? ` (${corridorName})` : ''}` : '';
   const etaMinutes = Math.max(2, Math.round(durationSeconds / 60));
 
   let level = 'unknown';
@@ -173,35 +181,33 @@ function composeTrafficStatus({ provider, durationSeconds, freeFlowSeconds, aler
     level = significant && ratio >= heavy ? 'heavy' : significant && ratio >= moderate ? 'moderate' : 'normal';
   }
   const label = level === 'heavy' ? 'Heavy traffic' : level === 'moderate' ? 'Moderate traffic' : level === 'normal' ? 'Normal flow' : 'Travel time only';
-  const where = routeName ? `Assigned route ${routeName}${corridorName ? ` (${corridorName})` : ''}` : null;
+  const where = `${segmentLabel}${routeContext}`;
 
   return {
     level,
     label,
     etaMinutes,
     delayMinutes,
+    segmentLabel,
+    updatedAt: fetchedAt || new Date().toISOString(),
     suggestion: level === 'unknown'
-      ? `${where ? `${where}: ` : ''}travel time to the next stop from the routing provider. Live congestion data is not available; follow dispatcher guidance and on-road conditions.`
+      ? `${where}: travel time is available, but live congestion data is not. Follow dispatcher guidance and on-road conditions.`
       : level === 'heavy'
-        ? where
-          ? `${where} is heavily congested. Follow dispatcher guidance and watch the next stop closely.`
-          : 'Traffic is heavy. Follow dispatcher guidance and adjust departure timing if instructed.'
+        ? `${where} is heavily congested. Follow dispatcher guidance and watch the next stop closely.`
         : level === 'moderate'
-          ? where
-            ? `${where} is building congestion. Monitor the next stop closely.`
-            : 'Traffic is building. Keep monitoring the route and next stop.'
-          : where
-            ? `${where} is stable. Proceed normally.`
-            : 'Proceed normally \u2014 road conditions are stable.',
+          ? `${where} is building congestion. Monitor the next stop closely.`
+          : `${where} is stable. Proceed normally.`,
     routeName,
     corridorName,
     alerts: alerts.length > 0
       ? alerts
       : [{
-        road: routeName || 'Assigned route',
+        road: segmentLabel,
         severity: level === 'heavy' ? 'danger' : level === 'moderate' ? 'warn' : 'info',
         etaMinutes,
-        detail: `No detailed incident segments were returned by ${provider.toUpperCase()}, using travel-time signal.`,
+        detail: level === 'unknown'
+          ? `ETA ${etaMinutes} min to ${nextStopName}; the provider did not return a no-traffic baseline.`
+          : `${delayMinutes} min above the no-traffic baseline; ETA ${etaMinutes} min to ${nextStopName}.`,
       }],
     dataSource: provider,
   };
@@ -259,8 +265,10 @@ async function fetchBackendTrafficStatus({ currentLat, currentLng, nextStop, rou
         alerts: [],
         route,
         stops,
+        nextStop,
+        fetchedAt: data.fetched_at,
       })
-      : buildFallbackTrafficStatus({ route, stops, detail: UNAVAILABLE_DETAIL[data?.reason] ?? UNAVAILABLE_DETAIL.provider_error });
+      : buildFallbackTrafficStatus({ route, stops, nextStop, detail: UNAVAILABLE_DETAIL[data?.reason] ?? UNAVAILABLE_DETAIL.provider_error });
 
     backendCache.key = key;
     backendCache.at = now;
@@ -271,7 +279,7 @@ async function fetchBackendTrafficStatus({ currentLat, currentLng, nextStop, rou
     if (trafficFailureCount >= 2) {
       trafficBackoffUntil = Date.now() + Math.min(60000, 15000 * trafficFailureCount);
     }
-    return buildFallbackTrafficStatus({ route, stops });
+    return buildFallbackTrafficStatus({ route, stops, nextStop });
   }
 }
 
@@ -283,15 +291,15 @@ export async function fetchTrafficStatus({
   stops,
 }) {
   if (!currentLat || !currentLng || !nextStop) {
-    return buildFallbackTrafficStatus({ route, stops });
+    return buildFallbackTrafficStatus({ route, stops, nextStop });
   }
 
-  const provider = getEnv('VITE_TRAFFIC_PROVIDER') || 'fallback';
+  const provider = getEnv('VITE_TRAFFIC_PROVIDER') || (getEnv('MODE') === 'test' ? 'fallback' : 'backend');
   const endpointBase = getEnv('VITE_TRAFFIC_API_BASE') || '';
   const apiKey = getEnv('VITE_TRAFFIC_API_KEY') || '';
 
   if (provider === 'fallback' || (provider !== 'backend' && !endpointBase)) {
-    return buildFallbackTrafficStatus({ route, stops });
+    return buildFallbackTrafficStatus({ route, stops, nextStop });
   }
 
   if (provider === 'backend') {
@@ -322,7 +330,7 @@ export async function fetchTrafficStatus({
       url.searchParams.set('end', `${payload.end[0]},${payload.end[1]}`);
       url.searchParams.set('instructions', 'true');
     } else {
-      return buildFallbackTrafficStatus({ route, stops });
+      return buildFallbackTrafficStatus({ route, stops, nextStop });
     }
 
     const response = await fetchWithRetry(url.toString(), {
@@ -354,6 +362,7 @@ export async function fetchTrafficStatus({
       return buildFallbackTrafficStatus({
         route,
         stops,
+        nextStop,
         label: 'ETA unavailable',
         detail: `${provider.toUpperCase()} returned no travel time for this trip; no ETA or delay estimate is shown.`,
         dataSource: provider,
@@ -366,8 +375,8 @@ export async function fetchTrafficStatus({
     // for this same trip. Without one (ORS has no traffic data, or the baseline request
     // failed) the level is unknown and no delay figure is shown.
     const freeFlowSeconds = provider === 'mapbox' ? await fetchMapboxFreeFlowSeconds(url) : null;
-    return composeTrafficStatus({ provider, durationSeconds, freeFlowSeconds, alerts, route, stops });
+    return composeTrafficStatus({ provider, durationSeconds, freeFlowSeconds, alerts, route, stops, nextStop });
   } catch {
-    return buildFallbackTrafficStatus({ route, stops });
+    return buildFallbackTrafficStatus({ route, stops, nextStop });
   }
 }

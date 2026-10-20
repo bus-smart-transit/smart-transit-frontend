@@ -56,7 +56,7 @@ export function useOperatorDashboardData() {
     try {
       const [profRes, tripsRes, driversRes, conductorsRes, fleetsRes, routesRes, stopsRes] = await Promise.allSettled([
         OperatorService.getProfile('operator'),
-        OperatorService.getOperatorTrips(),
+        OperatorService.getOperatorTrips('scheduled', { page: 1, per_page: 100 }),
         OperatorService.getOperatorDrivers(),
         OperatorService.getOperatorConductors(),
         OperatorService.getOperatorFleets(),
@@ -80,7 +80,7 @@ export function useOperatorDashboardData() {
     if (tripsPollInFlightRef.current) return;
     tripsPollInFlightRef.current = true;
     try {
-      const tripsRes = await OperatorService.getOperatorTrips();
+      const tripsRes = await OperatorService.getOperatorTrips('scheduled', { page: 1, per_page: 100 });
       setTrips(Array.isArray(tripsRes?.data) ? tripsRes.data : []);
     } catch {
       // Keep existing trip state on transient poll errors.
@@ -170,13 +170,17 @@ export function useTripRequests(onDecided) {
   const [requests, setRequests] = useState([]);
   const [busyId, setBusyId] = useState(null);
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
     try {
       const res = await OperatorService.getTripRequests();
       setRequests(Array.isArray(res?.data?.requests) ? res.data.requests : []);
-    } catch {
-      // Keep last-known list on transient errors.
+      setError('');
+    } catch (err) {
+      setError(err?.message || 'Could not load approval requests.');
+    } finally {
+      setLoading(false);
     }
   }, []);
 
@@ -202,7 +206,7 @@ export function useTripRequests(onDecided) {
     }
   }, [load, onDecided]);
 
-  return { requests, busyId, error, decide };
+  return { requests, busyId, error, loading, decide };
 }
 
 /**
@@ -506,20 +510,6 @@ export function useRoutesTab({ onRefresh }) {
     }
   };
 
-  const handleToggleCustomDropoff = async (routeId, allow) => {
-    setManageSaving(true);
-    setManageMsg('');
-    try {
-      await OperatorService.setOperatorRouteCustomDropoff(Number(routeId), allow);
-      setManageMsg(allow ? 'Custom drop-off enabled for this route.' : 'Custom drop-off disabled for this route.');
-      onRefresh();
-    } catch (err) {
-      setManageMsg(err?.message || 'Failed to update custom drop-off setting.');
-    } finally {
-      setManageSaving(false);
-    }
-  };
-
   const handleToggleStopExpress = async (routeId, routeStopId, served) => {
     setManageSaving(true);
     setManageMsg('');
@@ -631,7 +621,6 @@ export function useRoutesTab({ onRefresh }) {
     handleCreateStop,
     handleDeleteStop,
     handleRemoveStopFromRoute,
-    handleToggleCustomDropoff,
     handleToggleStopExpress,
     handleCreateRoute,
     handleAddStopToRoute,
@@ -676,6 +665,8 @@ export function useTripsTab({ trips, onRefresh }) {
   const [msg, setMsg] = useState('');
   const [fleetRoutes, setFleetRoutes] = useState([]);
   const [visibleTrips, setVisibleTrips] = useState(trips);
+  const [visibleTripsMeta, setVisibleTripsMeta] = useState({ current_page: 1, last_page: 1, total: 0 });
+  const [loadingMoreTrips, setLoadingMoreTrips] = useState(false);
 
   useEffect(() => {
     OperatorService.getOperatorFleetRoutes().then(r => setFleetRoutes(r?.data ?? [])).catch(() => {});
@@ -685,19 +676,16 @@ export function useTripsTab({ trips, onRefresh }) {
     let cancelled = false;
 
     const loadFilteredTrips = async () => {
-      if (tripFilter === 'all') {
-        setVisibleTrips(trips);
-        return;
-      }
-
       try {
-        const res = await OperatorService.getOperatorTrips(tripFilter);
+        const res = await OperatorService.getOperatorTrips(tripFilter, { page: 1, per_page: 100 });
         if (!cancelled) {
           setVisibleTrips(Array.isArray(res?.data) ? res.data : []);
+          setVisibleTripsMeta(res?.meta ?? { current_page: 1, last_page: 1, total: res?.data?.length ?? 0 });
         }
       } catch {
         if (!cancelled) {
           setVisibleTrips([]);
+          setVisibleTripsMeta({ current_page: 1, last_page: 1, total: 0 });
         }
       }
     };
@@ -708,6 +696,21 @@ export function useTripsTab({ trips, onRefresh }) {
       cancelled = true;
     };
   }, [tripFilter, trips]);
+
+  const loadMoreTrips = async () => {
+    if (loadingMoreTrips || visibleTripsMeta.current_page >= visibleTripsMeta.last_page) return;
+    setLoadingMoreTrips(true);
+    try {
+      const nextPage = visibleTripsMeta.current_page + 1;
+      const res = await OperatorService.getOperatorTrips(tripFilter, { page: nextPage, per_page: 100 });
+      setVisibleTrips((previous) => [...previous, ...(Array.isArray(res?.data) ? res.data : [])]);
+      setVisibleTripsMeta(res?.meta ?? visibleTripsMeta);
+    } catch (error) {
+      setMsg(error?.message || 'Could not load more trips. Please try again.');
+    } finally {
+      setLoadingMoreTrips(false);
+    }
+  };
 
   const handleSchedule = async (e) => {
     e.preventDefault(); setSaving(true); setMsg('');
@@ -848,6 +851,9 @@ export function useTripsTab({ trips, onRefresh }) {
     msg, setMsg,
     fleetRoutes,
     visibleTrips,
+    visibleTripsMeta,
+    loadingMoreTrips,
+    loadMoreTrips,
     handleSchedule,
     handleAssign,
     handleAction,
@@ -876,10 +882,15 @@ export function useReportsTab() {
 
   const fetchReport = async () => {
     if (!selectedFleet) { setMsg('Please select a fleet first.'); return; }
-    if (startDate && endDate && endDate < startDate) { setMsg('The end date cannot be before the start date.'); return; }
+    const isDailySummary = reportType === 'daily';
+    if (!isDailySummary && startDate && endDate && endDate < startDate) { setMsg('The end date cannot be before the start date.'); return; }
     const params = {};
-    if (startDate) params.start_date = startDate;
-    if (endDate) params.end_date = endDate;
+    if (isDailySummary) {
+      if (startDate) params.date = startDate;
+    } else {
+      if (startDate) params.start_date = startDate;
+      if (endDate) params.end_date = endDate;
+    }
     setLoading(true); setMsg(''); setReport(null);
     try {
       let res;
@@ -890,14 +901,20 @@ export function useReportsTab() {
       else if (reportType === 'daily')     res = await OperatorService.getDailySummary(selectedFleet, params);
       else if (reportType === 'channels')  res = await OperatorService.getPaymentChannels(selectedFleet, params);
       setReport(res?.data ?? res);
-      setRanRange({ from: startDate, to: endDate });
+      setRanRange({ from: startDate, to: isDailySummary ? startDate : endDate });
     } catch (err) { setMsg(err?.message || 'Failed to load report.'); }
     finally { setLoading(false); }
   };
 
+  const selectReportType = (type) => {
+    setReportType(type);
+    setReport(null);
+    setMsg('');
+  };
+
   return {
     selectedFleet, setSelectedFleet,
-    reportType, setReportType,
+    reportType, setReportType: selectReportType,
     startDate, setStartDate,
     endDate, setEndDate,
     ranRange,

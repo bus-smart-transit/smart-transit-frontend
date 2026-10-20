@@ -1,5 +1,7 @@
 import PassengerService from '../../PassengerService/PassengerService';
 
+let fleetLocationsRequest = null;
+
 // Architecture audit follow-up (CONF-03): MapView.web.jsx previously called
 // PassengerService directly with no hook/service-wrapper layer in between.
 // Unlike ordinary dashboard data, MapView's fleet-marker animation state
@@ -10,7 +12,12 @@ import PassengerService from '../../PassengerService/PassengerService';
 // logic itself stays in the component.
 
 export async function fetchFleetLocationsForMap() {
-  return await PassengerService.getFleetLocations();
+  if (!fleetLocationsRequest) {
+    fleetLocationsRequest = PassengerService.getFleetLocations()
+      .finally(() => { fleetLocationsRequest = null; });
+  }
+
+  return await fleetLocationsRequest;
 }
 
 export async function fetchNearestFleetForMap({ latitude, longitude }) {

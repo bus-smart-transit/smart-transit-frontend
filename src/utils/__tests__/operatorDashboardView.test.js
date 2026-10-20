@@ -123,15 +123,17 @@ describe('buildDashboardView', () => {
     expect(view.actions.filter((action) => action.key.endsWith('|delayed'))).toHaveLength(1);
   });
 
-  it('advises review of a route with delayed trips, carries the recorded decision, and never claims an alternate route', () => {
+  it('advises on each delayed trip, carries the recorded decision, and never claims an alternate route', () => {
     const view = buildDashboardView({
       trips: [trip(1, { status: 'delayed', dispatch_decision: 'keep', dispatch_decided_at: '2026-10-06T07:00:00Z' }), trip(2, { status: 'delayed' })],
       fleets: [fleet(1)], today: TODAY, nowMs: NOW,
     });
-    expect(view.advice).toHaveLength(1);
-    expect(view.advice[0].priority).toBe('high');
+    expect(view.advice).toHaveLength(2);
+    expect(view.advice.map((item) => item.tripId)).toEqual([1, 2]);
+    expect(view.advice[0].priority).toBe('medium');
     expect(view.advice[0].text).toMatch(/your decision/);
     expect(view.advice[0].text).toMatch(/No alternate route is on file/);
+    expect(view.advice[0].decisionLabel).toBe('Kept current route');
     expect(view.decisions).toEqual([expect.objectContaining({ tripId: 1, label: 'Kept current route' })]);
   });
 

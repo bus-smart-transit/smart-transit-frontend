@@ -11,7 +11,8 @@ const COLUMNS = [
   { key: 'method', label: 'Payment', sort: 'method' },
   { key: 'service', label: 'Service' },
   { key: 'seat', label: 'Ticket type' },
-  { key: 'amount', label: 'Fare', sort: 'amount', align: 'right' },
+  { key: 'discount', label: 'Discount' },
+  { key: 'amount', label: 'Fare paid', sort: 'amount', align: 'right' },
   { key: 'status', label: 'Status', sort: 'status' },
 ];
 
@@ -40,7 +41,7 @@ export default function TransactionsTable({ log, loading, error, table, onSort, 
         <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">No paid tickets match these filters.</p>
       ) : (
         <div className={`overflow-x-auto ${loading ? 'opacity-60' : ''}`}>
-          <table className="w-full min-w-[56rem] text-sm">
+          <table className="w-full min-w-[64rem] text-sm">
             <thead className="bg-slate-50">
               <tr className="border-b border-slate-200">
                 {COLUMNS.map((col) => {
@@ -77,8 +78,14 @@ export default function TransactionsTable({ log, loading, error, table, onSort, 
                   <td className="whitespace-nowrap px-3 py-2 text-slate-700">{row.method === 'cash' ? 'Cash' : row.channel_label}</td>
                   <td className="px-3 py-2 text-slate-700">{SERVICE_LABEL[row.service_type] || row.service_type || '-'}</td>
                   <td className="px-3 py-2 text-slate-700 capitalize">{row.seat_type || '-'}</td>
+                  <td className="px-3 py-2 text-slate-700">
+                    {row.discount_label
+                      ? <><span className="block">{row.discount_label}</span><span className="text-xs text-slate-500">-{formatPeso(row.discount_amount)} ({Math.round(Number(row.discount_rate) * 100)}%)</span></>
+                      : '-'}
+                  </td>
                   <td className="whitespace-nowrap px-3 py-2 text-right font-data font-semibold text-slate-900">
                     {formatPeso(row.amount)}
+                    {row.discount_amount > 0 && <span className="block text-xs font-normal text-slate-500">Regular {formatPeso(row.original_amount)}</span>}
                     {row.refunded > 0 && <span className="block text-xs font-normal text-rose-600">- {formatPeso(row.refunded)}</span>}
                   </td>
                   <td className="px-3 py-2">
