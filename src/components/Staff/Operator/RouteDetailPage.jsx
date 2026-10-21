@@ -5,6 +5,7 @@ import { OP_SPACE, TRIP_STATUS_TONE } from './operatorUiTokens';
 import ViewTabs from '../../ui/ViewTabs';
 import Modal from '../../ui/Modal';
 import RouteMap from '../../Map/RouteMap';
+import RedrawProgress from './RedrawProgress';
 import FareRulesPanel from '../FareRulesPanel';
 import OperatorService from '../../../api/StaffService/OperatorService';
 import { routeActivity, upcomingTripsFor, assignmentsOnRoute, sortedRouteStops, formatDuration } from '../../../utils/operatorRouteView';
@@ -59,8 +60,9 @@ function AssignStopModal({ open, onClose, route, stops, form, setForm, saving, m
   );
 }
 
-function OverviewTab({ row, route, trips, onRedraw, redrawPending, redrawSaving, redrawError, routeMapVersion }) {
+function OverviewTab({ row, route, trips, onRedraw, redrawPending, redrawSaving, redrawError, routeMapVersion, redrawOutcome, onDismissOutcome }) {
   const activity = routeActivity(route.route_id, trips);
+  const redrawRunning = Boolean(redrawPending || route.geometry_regeneration_pending);
   return (
     <div className={OP_SPACE.stack}>
       <div className={OP_SPACE.inline}>
@@ -89,8 +91,8 @@ function OverviewTab({ row, route, trips, onRedraw, redrawPending, redrawSaving,
           <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600">
             <span>Last drawn: {route.geometry_generated_at ? formatManilaDateTime(route.geometry_generated_at) : 'Not drawn yet'}</span>
             {route.geometry_stale && <span className="font-semibold text-amber-700" data-testid="geometry-stale">Needs redraw</span>}
-            {route.geometry_regeneration_pending && <span role="status">Redraw in progress</span>}
           </div>
+          <RedrawProgress pending={redrawRunning} redraw={route.redraw} outcome={redrawOutcome} onDismiss={onDismissOutcome} />
           {route.geometry_error && <p role="alert" className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">The previous route line was kept. {route.geometry_error}</p>}
           {redrawError && <p role="alert" className="mb-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{redrawError}</p>}
           <div className="overflow-hidden rounded-xl border border-slate-200">
@@ -244,8 +246,10 @@ export default function RouteDetailPage({
   const [assignOpen, setAssignOpen] = useState(false);
   const [redrawConfirmOpen, setRedrawConfirmOpen] = useState(false);
   const [redrawSaving, setRedrawSaving] = useState(false);
-  const [redrawPending, setRedrawPending] = useState(false);
+  // Opened while a redraw (started here or by someone else) is still running: keep watching it.
+  const [redrawPending, setRedrawPending] = useState(Boolean(row.route.geometry_regeneration_pending));
   const [redrawError, setRedrawError] = useState('');
+  const [redrawOutcome, setRedrawOutcome] = useState(null);
   const [geometryStatus, setGeometryStatus] = useState(null);
   const [routeMapVersion, setRouteMapVersion] = useState(0);
   const { route } = row;
@@ -263,6 +267,11 @@ export default function RouteDetailPage({
         setGeometryStatus(latest);
         if (!latest.geometry_regeneration_pending) {
           setRedrawPending(false);
+          setRedrawOutcome(latest.redraw?.last ?? {
+            ok: !latest.geometry_error,
+            message: latest.geometry_error || '',
+            duration_s: null,
+          });
           clearRouteMapCache();
           setRouteMapVersion((version) => version + 1);
           void onRefresh();
@@ -278,8 +287,11 @@ export default function RouteDetailPage({
   const handleRedraw = async () => {
     setRedrawSaving(true);
     setRedrawError('');
+    setRedrawOutcome(null);
     try {
-      await OperatorService.regenerateRouteGeometry(route.route_id);
+      const response = await OperatorService.regenerateRouteGeometry(route.route_id);
+      const queued = response?.data?.redraw ?? null;
+      setGeometryStatus({ route_id: route.route_id, geometry_regeneration_pending: true, ...(queued ? { redraw: queued } : {}) });
       setRedrawConfirmOpen(false);
       setRedrawPending(true);
       await onRefresh();
@@ -313,7 +325,7 @@ export default function RouteDetailPage({
       <ViewTabs label="Route sections" tabs={ROUTE_TABS} value={tab} onChange={setTab} />
 
       <div role="tabpanel" aria-label={ROUTE_TABS.find((item) => item.key === tab)?.label}>
-        {tab === 'overview' && <OverviewTab row={row} route={geometryRoute} trips={trips} onRedraw={() => setRedrawConfirmOpen(true)} redrawPending={redrawPending} redrawSaving={redrawSaving} redrawError={redrawError} routeMapVersion={routeMapVersion} />}
+        {tab === 'overview' && <OverviewTab row={row} route={geometryRoute} trips={trips} onRedraw={() => setRedrawConfirmOpen(true)} redrawPending={redrawPending} redrawSaving={redrawSaving} redrawError={redrawError} routeMapVersion={routeMapVersion} redrawOutcome={redrawOutcome} onDismissOutcome={() => setRedrawOutcome(null)} />}
         {tab === 'stops' && <StopsTab route={route} routesTab={routesTab} onOpenAssign={openAssign} />}
         {tab === 'schedule' && <ScheduleTab row={row} fleets={fleets} trips={trips} onOpenSchedule={onOpenSchedule} />}
         {tab === 'fleets' && <FleetsTab row={row} fleets={fleets} onOpenFleets={onOpenFleets} />}

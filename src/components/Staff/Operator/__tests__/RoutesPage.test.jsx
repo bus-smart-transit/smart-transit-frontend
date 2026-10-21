@@ -288,3 +288,102 @@ describe('Route detail', () => {
     expect(screen.getByText(/No stops on this route yet/)).toBeInTheDocument();
   });
 });
+
+describe('Stops directory search and paging', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    Object.values(mocks).forEach((fn) => fn.mockResolvedValue({ data: { route_stops: [] } }));
+  });
+
+  const manyStops = Array.from({ length: 23 }, (_, i) => ({ stop_id: 100 + i, stop_name: `Plaza ${String(i + 1).padStart(2, '0')}`, municipality: i < 3 ? 'Tagum City' : 'Panabo City', latitude: 7 + i / 100, longitude: 125.6, stop_code: i === 4 ? 'CODE-X' : undefined }));
+  const directory = () => screen.getByRole('table', { name: 'Stops' });
+
+  it('shows ten stops at a time and moves between pages', () => {
+    renderPage({ stops: manyStops });
+    expect(within(directory()).getAllByRole('row')).toHaveLength(11); // header + 10
+    expect(screen.getByText('Showing 1-10 of 23 stops')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Previous' })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    expect(screen.getByText('Showing 11-20 of 23 stops')).toBeInTheDocument();
+    expect(within(directory()).getByText('Plaza 11')).toBeInTheDocument();
+    expect(within(directory()).queryByText('Plaza 01')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    expect(screen.getByText('Showing 21-23 of 23 stops')).toBeInTheDocument();
+    expect(screen.getByText('Page 3 of 3')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled();
+  });
+
+  it('searches by name, code or municipality and goes back to the first page', () => {
+    renderPage({ stops: manyStops });
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+
+    fireEvent.change(screen.getByPlaceholderText(/Search stops/), { target: { value: 'plaza 07' } });
+    expect(within(directory()).getAllByRole('row')).toHaveLength(2);
+    expect(screen.getByText('Showing 1-1 of 1 stops')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Next' })).not.toBeInTheDocument(); // one page: no pager buttons
+
+    fireEvent.change(screen.getByPlaceholderText(/Search stops/), { target: { value: 'code-x' } });
+    expect(within(directory()).getByText('Plaza 05')).toBeInTheDocument();
+    fireEvent.change(screen.getByPlaceholderText(/Search stops/), { target: { value: 'tagum' } });
+    expect(screen.getByText('Showing 1-3 of 3 stops')).toBeInTheDocument();
+  });
+
+  it('says so when nothing matches, and keeps the "No stops yet" message for an empty directory', () => {
+    const { unmount } = renderPage({ stops: manyStops });
+    fireEvent.change(screen.getByPlaceholderText(/Search stops/), { target: { value: 'zzzz' } });
+    expect(screen.getByText('No stop matches this search.')).toBeInTheDocument();
+    unmount();
+
+    renderPage({ stops: [] });
+    expect(screen.getByText('No stops yet.')).toBeInTheDocument();
+  });
+});
+
+describe('Route line redraw progress', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    Object.values(mocks).forEach((fn) => fn.mockResolvedValue({ data: { route_stops: [] } }));
+  });
+  afterEach(() => { vi.restoreAllMocks(); });
+
+  const running = { ...routes[0], can_regenerate_geometry: true, geometry_regeneration_pending: true, redraw: { pending: true, stage: 'routing', stage_label: 'Drawing the route line', percent: 55, elapsed_s: 12, typical_s: 40, requested_at: '2026-10-21T08:00:00+08:00' } };
+
+  it('shows a progress bar with the stage, the time so far and the usual time when a redraw is running', async () => {
+    renderPage({ routes: [running, routes[1]] });
+    await openTagum();
+
+    const bar = screen.getByRole('progressbar', { name: 'Route line redraw progress' });
+    expect(bar).toHaveAttribute('aria-valuenow', '55');
+    expect(screen.getByText(/Drawing the route line/)).toBeInTheDocument();
+    expect(screen.getByText(/Running for 12 s/)).toHaveTextContent('usually about 40 s');
+    expect(screen.getByRole('button', { name: 'Redrawing...' })).toBeDisabled();
+  });
+
+  it('tells the Operator when the redraw has finished, how long it took, and lets them dismiss it', async () => {
+    mocks.getOperatorRoute.mockResolvedValue({ data: { ...running, geometry_regeneration_pending: false, redraw: { pending: false, percent: null, last: { ok: true, message: 'Geometry regenerated (120 points).', duration_s: 38 } } } });
+    renderPage({ routes: [running, routes[1]] });
+    await openTagum();
+
+    const done = await screen.findByTestId('redraw-outcome', {}, { timeout: 6000 });
+    expect(done).toHaveTextContent('Route line redrawn.');
+    expect(done).toHaveTextContent('It took 38 s.');
+    expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+
+    fireEvent.click(within(done).getByRole('button', { name: 'Dismiss' }));
+    expect(screen.queryByTestId('redraw-outcome')).not.toBeInTheDocument();
+  }, 15000);
+
+  it('says why when the redraw did not work and that the old line was kept', async () => {
+    mocks.getOperatorRoute.mockResolvedValue({ data: { ...running, geometry_regeneration_pending: false, geometry_error: 'ORS_API_KEY is not configured.', redraw: { pending: false, last: { ok: false, message: 'ORS_API_KEY is not configured.', duration_s: 3 } } } });
+    renderPage({ routes: [running, routes[1]] });
+    await openTagum();
+
+    const outcome = await screen.findByTestId('redraw-outcome', {}, { timeout: 6000 });
+    expect(outcome).toHaveAttribute('role', 'alert');
+    expect(outcome).toHaveTextContent('The route line was not redrawn.');
+    expect(outcome).toHaveTextContent('ORS_API_KEY is not configured.');
+    expect(outcome).toHaveTextContent('The previous line was kept.');
+  }, 15000);
+});

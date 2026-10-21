@@ -99,7 +99,7 @@ test('Chauffeur must confirm ID before sending an onsite discount to checkout', 
   await page.getByLabel('Select Destination').selectOption('2');
   await page.getByLabel('Onsite discount').selectOption('student');
 
-  const generate = page.getByRole('button', { name: 'Generate Ticket' });
+  const generate = page.getByRole('button', { name: 'Make sale' });
   await expect(generate).toBeDisabled();
   await page.getByLabel(/I checked the passenger's valid ID/).check();
   await expect(generate).toBeEnabled();

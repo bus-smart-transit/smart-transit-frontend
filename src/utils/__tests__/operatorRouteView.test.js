@@ -109,3 +109,38 @@ describe('assignmentsOnRoute', () => {
     expect(rows[1].active).toBe(false);
   });
 });
+
+describe('stops directory helpers', () => {
+  const stops = [
+    { stop_id: 1, stop_name: 'Ecoland Terminal', stop_code: 'ECO', municipality: 'Davao City' },
+    { stop_id: 2, stop_name: 'Panabo Plaza', location: 'Near the plaza', municipality: 'Panabo City' },
+    { stop_id: 3, stop_name: 'Tagum Terminal', municipality: 'Tagum City' },
+  ];
+
+  it('filterStops matches every typed word anywhere in the name, code, label or municipality', async () => {
+    const { filterStops } = await import('../operatorRouteView');
+    expect(filterStops(stops, '')).toBe(stops);
+    expect(filterStops(stops, '  terminal ').map((s) => s.stop_id)).toEqual([1, 3]);
+    expect(filterStops(stops, 'terminal tagum').map((s) => s.stop_id)).toEqual([3]);
+    expect(filterStops(stops, 'eco').map((s) => s.stop_id)).toEqual([1]);
+    expect(filterStops(stops, 'near plaza').map((s) => s.stop_id)).toEqual([2]);
+    expect(filterStops(stops, 'nowhere')).toEqual([]);
+  });
+
+  it('pageOf slices a page and clamps a page that no longer exists', async () => {
+    const { pageOf } = await import('../operatorRouteView');
+    const rows = Array.from({ length: 25 }, (_, i) => i + 1);
+    expect(pageOf(rows, 1, 10)).toMatchObject({ rows: rows.slice(0, 10), page: 1, pageCount: 3, total: 25, from: 1, to: 10 });
+    expect(pageOf(rows, 3, 10)).toMatchObject({ rows: [21, 22, 23, 24, 25], from: 21, to: 25 });
+    expect(pageOf(rows, 9, 10).page).toBe(3);
+    expect(pageOf([], 4, 10)).toMatchObject({ rows: [], page: 1, pageCount: 1, total: 0, from: 0, to: 0 });
+  });
+
+  it('formatElapsed reads as seconds, then minutes', async () => {
+    const { formatElapsed } = await import('../operatorRouteView');
+    expect(formatElapsed(0)).toBe('0 s');
+    expect(formatElapsed(38)).toBe('38 s');
+    expect(formatElapsed(60)).toBe('1 min');
+    expect(formatElapsed(125)).toBe('2 min 5 s');
+  });
+});

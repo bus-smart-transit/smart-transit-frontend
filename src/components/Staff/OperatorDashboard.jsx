@@ -7,6 +7,7 @@ import StaffCalendar from './StaffCalendar'
 import { ModalShell } from '../ui/Modal'
 import OperatorReportsPage from './OperatorReportsPage'
 import OperatorService from '../../api/StaffService/OperatorService'
+import useDateDrivers from '../../api/hooks/Staff/useDateDrivers'
 import { getBookingWindow } from '../../services/bookingService'
 import { bookingWindowWarning } from '../../utils/bookingQuery'
 import { parseAppDate, getBusinessToday, debugLogBusinessTime } from '../../utils/dates'
@@ -322,33 +323,13 @@ function StaffDirectoryTab({ drivers, conductors, onRefresh, onCreateAccount }) 
 function ScheduleServiceModal({ state, drivers, conductors }) {
   const { showModal, setShowModal, form, setForm, saving, msg, fleetRoutes, handleSchedule } = state
   const [bookingWindow, setBookingWindow] = useState(null)
-  const [dateDrivers, setDateDrivers] = useState(drivers)
-  const [loadingDateDrivers, setLoadingDateDrivers] = useState(false)
-  const [dateDriversError, setDateDriversError] = useState('')
+  const { drivers: dateDrivers, loading: loadingDateDrivers, error: dateDriversError } = useDateDrivers(showModal && form.trip_date ? form.trip_date : '', drivers)
   useEffect(() => {
     if (!showModal) return undefined
     let cancelled = false
     getBookingWindow().then((w) => { if (!cancelled) setBookingWindow(w) }).catch(() => { if (!cancelled) setBookingWindow(null) })
     return () => { cancelled = true }
   }, [showModal])
-
-  useEffect(() => {
-    if (!showModal || !form.trip_date) {
-      setDateDrivers(drivers)
-      setDateDriversError('')
-      return undefined
-    }
-
-    let cancelled = false
-    setLoadingDateDrivers(true)
-    setDateDrivers([])
-    setDateDriversError('')
-    OperatorService.getOperatorDrivers({ trip_date: form.trip_date })
-      .then((response) => { if (!cancelled) setDateDrivers(Array.isArray(response?.data) ? response.data : []) })
-      .catch((error) => { if (!cancelled) { setDateDrivers([]); setDateDriversError(error?.message || 'Could not load available drivers for this date.') } })
-      .finally(() => { if (!cancelled) setLoadingDateDrivers(false) })
-    return () => { cancelled = true }
-  }, [drivers, form.trip_date, showModal])
 
   useEffect(() => {
     if (form.driver_id && !dateDrivers.some((driver) => String(getStaffCompanyUserId(driver)) === String(form.driver_id))) {
@@ -498,28 +479,10 @@ function TripsTab({ drivers, conductors, onRefresh, tripsState }) {
   } = tripsState
   const [cancelTarget, setCancelTarget] = useState(null)
   const [cancelNotice, setCancelNotice] = useState('')
-  const [dateDrivers, setDateDrivers] = useState(drivers)
-  const [loadingDateDrivers, setLoadingDateDrivers] = useState(false)
-  const [dateDriversError, setDateDriversError] = useState('')
-
-  useEffect(() => {
-    const tripDate = assignModal?.type === 'driver' ? String(assignModal.trip?.trip_date || '').slice(0, 10) : ''
-    if (!tripDate) {
-      setDateDrivers(drivers)
-      setDateDriversError('')
-      return undefined
-    }
-
-    let cancelled = false
-    setLoadingDateDrivers(true)
-    setDateDrivers([])
-    setDateDriversError('')
-    OperatorService.getOperatorDrivers({ trip_date: tripDate })
-      .then((response) => { if (!cancelled) setDateDrivers(Array.isArray(response?.data) ? response.data : []) })
-      .catch((error) => { if (!cancelled) { setDateDrivers([]); setDateDriversError(error?.message || 'Could not load available drivers for this date.') } })
-      .finally(() => { if (!cancelled) setLoadingDateDrivers(false) })
-    return () => { cancelled = true }
-  }, [assignModal, drivers])
+  const { drivers: dateDrivers, loading: loadingDateDrivers, error: dateDriversError } = useDateDrivers(
+    assignModal?.type === 'driver' ? String(assignModal.trip?.trip_date || '').slice(0, 10) : '',
+    drivers,
+  )
 
   useEffect(() => {
     if (assignModal?.type === 'driver' && assignId && !dateDrivers.some((driver) => String(getStaffCompanyUserId(driver)) === String(assignId))) {

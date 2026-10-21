@@ -25,6 +25,7 @@ import { ModalShell } from '../ui/Modal';
 import StaffCalendar from './StaffCalendar';
 import NotificationBellButton from './NotificationBellButton';
 import { useConductorPairing, useConductorDashboardData } from '../../api/hooks/Staff/useConductorDashboard';
+import useOnsiteQuote from '../../api/hooks/Staff/useOnsiteQuote';
 import { getBusinessToday, getBusinessTodayLabel } from '../../utils/dates';
 import { todaySummary } from '../../utils/assignmentCards';
 import { shiftActionReason, ticketingReason } from '../../utils/actionReasons';
@@ -277,6 +278,9 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     : destinationsAhead(legStops, onsiteForm.origin_stop_id);
   const boardingReady = byBusPosition ? boardingView.good : Boolean(onsiteForm.origin_stop_id);
   const formReady = isOnsiteFormComplete(cashForm, boardingView);
+  // The exact fare, asked of the server as soon as the boarding point and destination are chosen; by bus position it is
+  // asked again whenever the position is refreshed.
+  const onsiteQuote = useOnsiteQuote({ tripId: trip?.trip_id, form: cashForm, ready: formReady, refreshKey: byBusPosition ? boardingView.distanceFromOriginKm : 0 });
 
   const headerBadge = resolveConductorHeaderBadge({
     pairingLoading: pairing.loading,
@@ -800,14 +804,21 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                       )}
                     </div>
 
-                    <div>
-                      <label className="mb-1 block text-sm font-semibold text-slate-700">Fare Amount (PHP)</label>
-                      <input
-                        type="text"
-                        readOnly
-                        value={formReady ? 'Auto-computed on Generate Ticket' : 'Select boarding point and destination first'}
-                        className="h-11 w-full rounded-lg border border-slate-300 bg-slate-100 px-3 text-sm text-slate-700 outline-none"
-                      />
+                    <div data-testid="onsite-fare">
+                      <label htmlFor="onsite-fare-amount" className="mb-1 block text-sm font-semibold text-slate-700">Fare Amount (PHP)</label>
+                      <output
+                        id="onsite-fare-amount"
+                        aria-live="polite"
+                        className={`flex min-h-14 w-full items-center rounded-lg border px-3 py-2 ${onsiteQuote.status === 'ready' ? 'border-emerald-300 bg-emerald-50' : onsiteQuote.status === 'error' ? 'border-red-200 bg-red-50' : 'border-slate-300 bg-slate-100'}`}
+                      >
+                        {onsiteQuote.status === 'ready' && <span className="font-data text-3xl font-bold text-emerald-800">&#8369;{onsiteQuote.amount.toFixed(2)}</span>}
+                        {onsiteQuote.status === 'loading' && <span className="text-sm text-slate-600">Working out the fare...</span>}
+                        {onsiteQuote.status === 'error' && <span role="alert" className="text-sm font-semibold text-red-700">{onsiteQuote.message}</span>}
+                        {onsiteQuote.status === 'idle' && <span className="text-sm text-slate-600">Select boarding point and destination first</span>}
+                      </output>
+                      {byBusPosition && onsiteQuote.status === 'ready' && (
+                        <p className="mt-1 text-xs text-slate-500">By bus position the fare follows the bus. Use Refresh position to update it just before you sell.</p>
+                      )}
                     </div>
 
                     <div className="grid grid-cols-2 gap-2">
@@ -815,9 +826,9 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                         type="button"
                         className="rounded-lg bg-cyan-700 px-3 py-2 text-sm font-semibold text-white transition hover:bg-cyan-800 disabled:cursor-not-allowed disabled:opacity-60"
                         onClick={requestOnsiteCheckout}
-                        disabled={checkoutInFlight || !hasActiveTrip || !isPaired || !hasOpenShift || cashCapacity.isFull || Boolean(onsiteDiscountTypeKey && !onsiteDiscountIdChecked)}
+                        disabled={checkoutInFlight || !hasActiveTrip || !isPaired || !hasOpenShift || cashCapacity.isFull || onsiteQuote.status !== 'ready' || Boolean(onsiteDiscountTypeKey && !onsiteDiscountIdChecked)}
                       >
-                        {checkoutInFlight ? 'Processing...' : 'Generate Ticket'}
+                        {checkoutInFlight ? 'Processing...' : 'Make sale'}
                       </button>
                       <button
                         type="button"
@@ -1032,20 +1043,17 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                             <th className="py-3">Name</th>
                             <th className="py-3">Passenger Type</th>
                             <th className="py-3">Destination</th>
-                            <th className="py-3">Status</th>
                             <th className="py-3">Action</th>
                           </tr>
                         </thead>
                         <tbody>
                           {group.passengers.map((p, i) => {
-                            const status = p.status ?? 'boarded';
                             return (
                               <tr key={p.ticket_id ?? `${group.key}-${i}`} className="border-b border-slate-100">
                                 <td className="py-3 font-data text-slate-500">{p.row_number}</td>
                                 <td className="py-3 text-slate-900">{p.passenger_name ?? p.passenger?.name ?? 'Guest'}</td>
                                 <td className="py-3"><span className="rounded-full border border-slate-200 px-2 py-1 text-xs capitalize text-slate-600">{p.seat_type}</span></td>
                                 <td className="py-3 text-slate-600">{p.destination_display}</td>
-                                <td className="py-3"><span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs capitalize text-emerald-700">{status}</span></td>
                                 <td className="py-3">
                                   {!p.alighted_at && (
                                     <button
@@ -1287,6 +1295,9 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
             <dl className="mb-4 grid grid-cols-2 gap-2 rounded-lg bg-slate-800 p-3 text-sm">
               <div><dt className="text-xs text-slate-500">Passenger Type</dt><dd className="font-semibold text-slate-100 capitalize">{onsiteForm.seat_type}</dd></div>
               <div><dt className="text-xs text-slate-500">Trip ID</dt><dd className="font-semibold text-slate-100">#{trip?.trip_id}</dd></div>
+              {onsiteQuote.status === 'ready' && (
+                <div className="col-span-2"><dt className="text-xs text-slate-500">Fare to collect</dt><dd className="font-data text-2xl font-bold text-emerald-300">&#8369;{onsiteQuote.amount.toFixed(2)}</dd></div>
+              )}
             </dl>
             <div className="flex gap-2">
               <button type="button" onClick={() => setConfirmCheckout(false)} className="flex-1 rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800">Cancel</button>

@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 
@@ -65,5 +65,26 @@ describe('CheckoutReturn (C4: the webhook decides, the return URL only refreshes
     await waitFor(() => expect(screen.getByText('Still Confirming')).toBeInTheDocument());
     expect(getPaymentStatus).not.toHaveBeenCalled();
     expect(storedEvent().status).toBe('pending');
+    expect(screen.queryByRole('button', { name: 'Check again' })).not.toBeInTheDocument();
+  });
+
+  test('after the polling window it offers Check again, which asks the server once more and can confirm', async () => {
+    vi.useFakeTimers();
+    try {
+      getPaymentStatus.mockResolvedValue({ status: 'pending' });
+      renderAt('/checkout/success?ref=TXN-4');
+
+      await act(async () => { await vi.advanceTimersByTimeAsync(70000); });
+      expect(screen.getByText('Still Confirming')).toBeInTheDocument();
+
+      getPaymentStatus.mockResolvedValue({ status: 'paid' });
+      fireEvent.click(screen.getByRole('button', { name: 'Check again' }));
+      await act(async () => { await vi.advanceTimersByTimeAsync(100); });
+
+      expect(screen.getByText('Payment Completed')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Check again' })).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

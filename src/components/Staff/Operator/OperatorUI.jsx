@@ -152,3 +152,21 @@ export function OpTable({ columns, rows, rowKey, empty = 'Nothing to show.', cap
 }
 
 export const OpStack = ({ children, className = '' }) => <div className={`${OP_SPACE.stack} ${className}`}>{children}</div>;
+
+/** Previous / Next under a table. `paging` is what pageOf() returns; nothing shows when everything fits on one page. */
+export function OpPager({ paging, onPage, label = 'Pagination', noun = 'items' }) {
+  if (!paging || paging.total === 0) return null;
+  const buttonClass = 'inline-flex items-center rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50';
+  return (
+    <nav aria-label={label} className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600">
+      <span role="status">Showing {paging.from}-{paging.to} of {paging.total} {noun}</span>
+      {paging.pageCount > 1 && (
+        <span className="inline-flex items-center gap-2">
+          <button type="button" className={buttonClass} disabled={paging.page <= 1} onClick={() => onPage(paging.page - 1)}>Previous</button>
+          <span>Page {paging.page} of {paging.pageCount}</span>
+          <button type="button" className={buttonClass} disabled={paging.page >= paging.pageCount} onClick={() => onPage(paging.page + 1)}>Next</button>
+        </span>
+      )}
+    </nav>
+  );
+}

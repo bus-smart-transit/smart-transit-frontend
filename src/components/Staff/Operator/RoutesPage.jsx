@@ -1,13 +1,15 @@
 import { useMemo, useState } from 'react';
 import { Plus, RefreshCw, Search } from 'lucide-react';
-import { OpPageHeader, OpCard, OpChip, OpStat, OpTable } from './OperatorUI';
+import { OpPageHeader, OpCard, OpChip, OpStat, OpTable, OpPager } from './OperatorUI';
 import { OP_SPACE } from './operatorUiTokens';
 import Modal from '../../ui/Modal';
 import RouteDetailPage from './RouteDetailPage';
 import { useRoutesTab } from '../../../api/hooks/Staff/useOperatorDashboard';
 import {
-  buildRouteRows, filterRouteRows, municipalityOptions, formatDuration,
+  buildRouteRows, filterRouteRows, municipalityOptions, formatDuration, filterStops, pageOf,
 } from '../../../utils/operatorRouteView';
+
+const STOPS_PAGE_SIZE = 10;
 
 const INPUT = 'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500';
 const PRIMARY = 'inline-flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-500 disabled:opacity-60';
@@ -73,12 +75,16 @@ export default function RoutesPage({ routes, stops, trips, fleets, onRefresh, on
 
   const [query, setQuery] = useState('');
   const [municipality, setMunicipality] = useState('');
+  const [stopQuery, setStopQuery] = useState('');
+  const [stopPage, setStopPage] = useState(1);
   const [modal, setModal] = useState(null); // 'route' | 'stop' | null
   const [selectedRouteId, setSelectedRouteId] = useState(null);
 
   const rows = useMemo(() => buildRouteRows({ routes, fleets }), [routes, fleets]);
   const shown = filterRouteRows(rows, { query, municipality });
   const municipalities = municipalityOptions(rows);
+  const matchingStops = useMemo(() => filterStops(stops, stopQuery), [stops, stopQuery]);
+  const stopPaging = pageOf(matchingStops, stopPage, STOPS_PAGE_SIZE);
   const selected = rows.find((row) => row.routeId === selectedRouteId) || null;
 
   const open = (which) => { clearManageMsg(); setModal(which); };
@@ -176,7 +182,21 @@ export default function RoutesPage({ routes, stops, trips, fleets, onRefresh, on
         subtitle="Stops you can place on routes."
         badge={<button type="button" onClick={openAddStop} className={PRIMARY}><Plus className="h-4 w-4" aria-hidden="true" /> Add stop</button>}
       >
-        <OpTable caption="Stops" columns={stopColumns} rows={stops} rowKey={(stop) => stop.stop_id} empty="No stops yet." />
+        <div className="mb-4">
+          <label className="relative block">
+            <span className="sr-only">Search stops</span>
+            <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-400" aria-hidden="true" />
+            <input
+              type="search"
+              value={stopQuery}
+              onChange={(event) => { setStopQuery(event.target.value); setStopPage(1); }}
+              placeholder="Search stops by name, code or location"
+              className={`${INPUT} pl-9`}
+            />
+          </label>
+        </div>
+        <OpTable caption="Stops" columns={stopColumns} rows={stopPaging.rows} rowKey={(stop) => stop.stop_id} empty={stops.length === 0 ? 'No stops yet.' : 'No stop matches this search.'} />
+        <OpPager paging={stopPaging} onPage={setStopPage} label="Stops pages" noun="stops" />
       </OpCard>
 
       <AddRouteModal open={modal === 'route'} onClose={closeModal} form={routeForm} setForm={setRouteForm} saving={manageSaving} message={manageMsg} onSubmit={submitRoute} />

@@ -40,7 +40,7 @@ export default function usePaymentRefunds({ service = OperatorService } = {}) {
     } finally {
       setBusyId(null);
     }
-  }, [service]);
+  }, []);
 
   const recordRefund = useCallback((id, payload) => runPaymentAction(
     id, payload, (paymentId, body) => service.recordPaymentRefund(paymentId, body), 'The refund could not be recorded.',

@@ -19,7 +19,7 @@ export function shiftActionReason({ label, disabled, inFlight = false, isPaired,
   return '';
 }
 
-/** The Chauffeur's Generate Ticket / Scan Ticket pair. */
+/** The Chauffeur's Make sale / Scan Ticket pair. */
 export function ticketingReason({ isPaired, hasOpenShift, hasActiveTrip, isFull = false }) {
   if (!isPaired) return PAIRING;
   if (!hasOpenShift) return 'Start your shift to issue or scan tickets.';

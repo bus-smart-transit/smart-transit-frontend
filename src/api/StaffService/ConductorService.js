@@ -103,6 +103,11 @@ class ConductorService extends StaffBaseService {
     return await this.request('/conductor/checkout', 'POST', payload, headers);
   }
 
+  // The exact fare of a cash sale before it is made; nothing is reserved or recorded.
+  async quoteOnsite(item) {
+    return await this.request('/conductor/checkout/quote', 'POST', item);
+  }
+
   async getOnsiteDiscountTypes() {
     return await this.request('/conductor/discount-types', 'GET');
   }

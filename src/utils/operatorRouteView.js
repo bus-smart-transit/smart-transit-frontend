@@ -72,6 +72,42 @@ export function filterRouteRows(rows, { query = '', municipality = '' } = {}) {
   });
 }
 
+/** Seconds as "45 s" or "2 min 5 s". */
+export function formatElapsed(seconds) {
+  const total = Math.max(0, Math.round(Number(seconds) || 0));
+  if (total < 60) return `${total} s`;
+  const minutes = Math.floor(total / 60);
+  const rest = total % 60;
+  return rest ? `${minutes} min ${rest} s` : `${minutes} min`;
+}
+
+/** Stops whose name, code, label or municipality contain the words typed (every word must match somewhere). */
+export function filterStops(stops, query = '') {
+  const words = String(query).trim().toLowerCase().split(/\s+/).filter(Boolean);
+  if (!words.length) return stops;
+  return stops.filter((stop) => {
+    const text = [stop.stop_name, stop.stop_code, stop.location, stop.municipality].map((part) => String(part || '').toLowerCase()).join(' ');
+    return words.every((word) => text.includes(word));
+  });
+}
+
+/** One page of a list. The page is clamped, so a list that shrank (a delete, a new search) never shows an empty page. */
+export function pageOf(rows, page = 1, pageSize = 10) {
+  const size = Math.max(1, Number(pageSize) || 10);
+  const total = rows.length;
+  const pageCount = Math.max(1, Math.ceil(total / size));
+  const current = Math.min(Math.max(1, Number(page) || 1), pageCount);
+  const start = (current - 1) * size;
+  return {
+    rows: rows.slice(start, start + size),
+    page: current,
+    pageCount,
+    total,
+    from: total ? start + 1 : 0,
+    to: Math.min(total, start + size),
+  };
+}
+
 /** What the route has carried so far. "Completion rate" is completed trips over all trips; it is NOT route adherence. */
 export function routeActivity(routeId, trips = []) {
   const mine = trips.filter((trip) => Number(trip?.fleet_route?.route?.route_id ?? trip?.fleet_route?.route_id) === Number(routeId));

@@ -49,6 +49,7 @@ export default function CheckoutReturn() {
     [location.pathname],
   );
   const [outcome, setOutcome] = useState('checking');
+  const [recheck, setRecheck] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -97,7 +98,7 @@ export default function CheckoutReturn() {
     return () => {
       cancelled = true;
     };
-  }, [reference, returnedAs]);
+  }, [reference, returnedAs, recheck]);
 
   const copy = COPY[outcome] || COPY.checking;
 
@@ -107,6 +108,15 @@ export default function CheckoutReturn() {
         <h1 className="text-base font-semibold text-slate-100 mb-2">{copy.title}</h1>
         <p className="mb-4">{copy.body}</p>
         <div className="flex items-center justify-center gap-3">
+          {outcome === 'pending' && reference && (
+            <button
+              type="button"
+              onClick={() => { setOutcome('checking'); setRecheck((n) => n + 1); }}
+              className="rounded-lg border border-sky-500 px-3 py-2 text-xs font-semibold text-sky-300 hover:bg-sky-500/10"
+            >
+              Check again
+            </button>
+          )}
           <button
             type="button"
             onClick={() => window.close()}
