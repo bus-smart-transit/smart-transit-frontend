@@ -8,7 +8,6 @@ import {
   Gauge,
   KeyRound,
   RefreshCw,
-  TrendingUp,
   User,
 } from 'lucide-react';
 import PairingScreen from './PairingScreen';
@@ -28,6 +27,9 @@ import { groupRequestedStops } from '../../utils/requestedStops';
 import NotificationBellButton from './NotificationBellButton';
 import { useDriverPairing, useDriverDashboardData } from '../../api/hooks/Staff/useDriverDashboard';
 import { getBusinessTodayLabel } from '../../utils/dates';
+import { isFinalStopAcknowledged, opensGate } from '../../utils/tripActionTiming';
+import { placesLeft } from '../../utils/cashTicket';
+import { useNow } from '../../api/hooks/useNow';
 import { deriveTripDurationLabel, deriveTripStatus } from '../../utils/tripStatus';
 import { FOR_APPROVAL_LABEL, isForApproval } from '../../utils/assignmentRequest';
 import DriverService from '../../api/StaffService/DriverService';
@@ -43,7 +45,6 @@ const NAV_ITEMS = [
   { key: 'dashboard', label: 'Dashboard', icon: Gauge },
   { key: 'activeTrip', label: 'Active Trip', icon: Bus },
   { key: 'schedule', label: 'Schedule', icon: CalendarDays },
-  { key: 'earnings', label: 'Earnings', icon: TrendingUp },
   { key: 'pin', label: 'Daily PIN', icon: KeyRound },
   { key: 'account', label: 'Account', icon: User },
 ];
@@ -200,7 +201,6 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     showTripPin, setShowTripPin,
     pinInput, setPinInput,
     pinStatus, setPinStatus,
-    earnings,
     shiftState,
     tripDetailsModal, setTripDetailsModal,
     loading,
@@ -236,7 +236,6 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     shiftBlockActionInFlight,
     handleAssignedTripFilterChange,
     loadData,
-    loadEarnings,
     handleVerifyPin,
     handleAcknowledgeStop,
     handleTripAction,
@@ -275,6 +274,11 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   // shift (Batch 27 Part 2, Task 1): between and after its legs the same button is End Shift, which the
   // server allows only once every leg is completed or cancelled (end_blocked_reason says why not).
   const tripIsLive = ['departed', 'in-progress'].includes(String(trip?.status || '').toLowerCase());
+  // Phase A (§4.11): the server's opening times for this leg, checked against the clock every 15 seconds.
+  const now = useNow(15000);
+  const boardingGate = opensGate(trip?.action_timing?.boarding_opens_at, now, 'Start Boarding opens');
+  const departGate = opensGate(trip?.action_timing?.departure_at, now, 'Depart opens');
+  const finalStopDone = isFinalStopAcknowledged(stops);
   // Batch 29: the shift (and the pairing key) unlock only after the assignment is accepted.
   const needsAcceptance = Boolean(todayAssignedTrip) && !todayAssignedTrip.driver_accepted_at;
   const showEndShift = hasOpenShift && shiftState?.isBlockShift === true && !tripIsLive;
@@ -290,7 +294,8 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     ? {
       label: 'End Trip',
       onClick: () => handleTripAction('complete'),
-      disabled: actionInFlight || !isPaired || !tripIsLive,
+      disabled: actionInFlight || !isPaired || !tripIsLive || !finalStopDone,
+      title: tripIsLive && !finalStopDone ? 'Acknowledge the final stop first.' : undefined,
       className: 'inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 transition hover:bg-rose-100 disabled:opacity-60',
     }
     : {
@@ -311,7 +316,14 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     tripIsLive,
     endBlockedReason: shiftState?.endBlockedReason,
   });
-  const tripActionReason = driverTripActionReason({ isPaired, hasOpenShift, status: trip?.status });
+  const tripActionReason = driverTripActionReason({
+    isPaired,
+    hasOpenShift,
+    status: trip?.status,
+    boardingLabel: boardingGate.label,
+    departLabel: departGate.label,
+    finalStopDone,
+  });
 
   return (
     <>
@@ -496,16 +508,16 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
             <article className="staff-card md:col-span-2 xl:col-span-2">
               <h4 className="mb-3 text-base font-bold text-slate-900">Quick Actions</h4>
               <div className="flex flex-col gap-2 sm:flex-row">
-                <button className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50" onClick={() => handleTripAction('boarding')} disabled={actionInFlight || !isPaired || !hasOpenShift || !['scheduled', 'delayed'].includes(String(trip?.status || '').toLowerCase())}>
+                <button className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50" onClick={() => handleTripAction('boarding')} disabled={actionInFlight || !isPaired || !hasOpenShift || !boardingGate.open || !['scheduled', 'delayed'].includes(String(trip?.status || '').toLowerCase())} title={boardingGate.label || undefined}>
                   ○ Start Boarding
                 </button>
-                <button className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-teal-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-teal-600 disabled:opacity-50" onClick={() => handleTripAction('depart')} disabled={actionInFlight || !isPaired || !hasOpenShift || !['boarding', 'scheduled', 'delayed'].includes(String(trip?.status || '').toLowerCase())}>
+                <button className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-teal-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-teal-600 disabled:opacity-50" onClick={() => handleTripAction('depart')} disabled={actionInFlight || !isPaired || !hasOpenShift || !departGate.open || !['boarding', 'scheduled', 'delayed'].includes(String(trip?.status || '').toLowerCase())} title={departGate.label || undefined}>
                   ▶ Depart
                 </button>
                 <button className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50" onClick={loadData}>
                   ↻ Receive Route Updates
                 </button>
-                <button className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50" onClick={() => handleTripAction('complete')} disabled={actionInFlight || !isPaired || !['departed', 'in-progress'].includes(trip?.status)}>
+                <button className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50" onClick={() => handleTripAction('complete')} disabled={actionInFlight || !isPaired || !finalStopDone || !['departed', 'in-progress'].includes(trip?.status)}>
                   ■ End Trip
                 </button>
               </div>
@@ -723,7 +735,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                 <button
                   className="rounded-lg bg-red-500 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-red-600 disabled:opacity-50"
                   onClick={() => handleTripAction('complete')}
-                  disabled={actionInFlight || !isPaired || !['departed', 'in-progress'].includes(trip?.status)}
+                  disabled={actionInFlight || !isPaired || !finalStopDone || !['departed', 'in-progress'].includes(trip?.status)}
                 >
                   End Trip
                 </button>
@@ -834,49 +846,6 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
           </section>
         )}
 
-        {!loading && activeTab === 'earnings' && !showNoCurrentTripState && (
-          <section className="staff-grid md:grid-cols-2 xl:grid-cols-3">
-            <article className="staff-card">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Total Fare Collected</p>
-              <h3 className="font-data mt-2 text-2xl font-bold text-slate-900">
-                ₱{earnings ? Number(earnings.total_fare).toFixed(2) : '0.00'}
-              </h3>
-              <p className="mt-1 text-sm text-slate-500">{earnings?.passenger_count ?? 0} passengers</p>
-            </article>
-            <article className="staff-card">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Cash Payments</p>
-              <h3 className="font-data mt-2 text-2xl font-bold text-teal-600">
-                ₱{earnings ? Number(earnings.onsite_amount).toFixed(2) : '0.00'}
-              </h3>
-            </article>
-            <article className="staff-card">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Digital Payments</p>
-              <h3 className="font-data mt-2 text-2xl font-bold text-blue-600">
-                ₱{earnings ? Number(earnings.online_amount).toFixed(2) : '0.00'}
-              </h3>
-            </article>
-            <article className="staff-card md:col-span-2 xl:col-span-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Average Fare</p>
-                  <p className="font-data mt-1 text-lg font-semibold text-slate-900">
-                    PHP {earnings ? Number(earnings.average_fare).toFixed(2) : '—'} per passenger
-                  </p>
-                </div>
-                <button
-                  className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
-                  onClick={loadEarnings}
-                >
-                  <RefreshCw className="inline h-3.5 w-3.5 mr-1" />Refresh
-                </button>
-              </div>
-              <p className="mt-2 text-xs text-slate-500">
-                Computed server-side from verified payment records. Only boarded/alighted passengers are counted.
-              </p>
-            </article>
-          </section>
-        )}
-
         {/* Batch 20 Item 3: pairing action moved to the Daily PIN page
             (pairing is driven by PIN/QR generation, so that's its
             semantically correct home) — Active Trip only shows a
@@ -906,6 +875,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                 role="driver"
                 paired={isPaired}
                 pairingReason={pairingReason}
+                pairingOpensAt={pairing?.opensAt}
                 onPaired={() => void refreshPairingStatus()}
               />
             )}
@@ -1027,8 +997,8 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                   ['Fleet', fleet.plate_number || '—'],
                   ['Fleet type', fleet.fleet_type || '—'],
                   ['Total capacity', fleet.capacity ?? '—'],
-                  ['Seated remaining', td.current_seated_capacity ?? '—'],
-                  ['Standing remaining', td.current_standing_capacity ?? '—'],
+                  ['Seats left', placesLeft(fleet, td, 'seated')],
+                  ['Standing places left', placesLeft(fleet, td, 'standing')],
                 ].map(([k, v]) => (
                   <div key={k} className="flex items-center justify-between gap-4 border-b border-slate-800 pb-2">
                     <span className="text-slate-500 capitalize">{k}</span>

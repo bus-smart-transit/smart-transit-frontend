@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import OperatorService from '../../StaffService/OperatorService';
 import { initFcmAndGetToken, stopForegroundListener } from '../../../services/fcmService';
 import { OPERATOR_ROLE, buildLocationSearch, defaultView, resolveOperatorLocation } from '../../../utils/operatorNav';
+import { isRangeSchedule, rangeKey, rangePayload } from '../../../utils/scheduleRange';
 
 // Architecture audit follow-up (CONF-03): OperatorDashboard.jsx's main
 // orchestrator component and its NotificationBell sub-component both called
@@ -649,6 +650,7 @@ export function useTripsTab({ trips, onRefresh }) {
   const [form, setForm] = useState({
     fleet_route_id: '',
     trip_date: '',
+    to_date: '',
     departure_time: '',
     trip_type: 'one_way',
     return_departure_time: '',
@@ -712,8 +714,70 @@ export function useTripsTab({ trips, onRefresh }) {
     }
   };
 
+  // Phase B (§4.13): a multi-leg schedule with a To date after its From date is previewed first (the server checks
+  // every day), then confirmed. A preview is only shown while the form still matches what was previewed.
+  const [rangePreview, setRangePreview] = useState(null); // { key, data }
+  const [rangeResult, setRangeResult] = useState(null);
+  const rangeBusyRef = useRef(false);
+  const currentRangePreview = rangePreview && rangePreview.key === rangeKey(form) ? rangePreview.data : null;
+
+  const blankScheduleForm = () => ({
+    fleet_route_id: '',
+    trip_date: '',
+    to_date: '',
+    departure_time: '',
+    trip_type: 'one_way',
+    return_departure_time: '',
+    driver_id: '',
+    conductor_id: '',
+    notes: '',
+    block_type: 'morning',
+    service_type: 'regular',
+    leg_departure_times: ['06:00', '08:30', '11:00', '13:30'],
+  });
+
+  const runRangeRequest = async (request) => {
+    if (rangeBusyRef.current) return; // a second tap while the first request is out does nothing
+    rangeBusyRef.current = true;
+    setSaving(true); setMsg('');
+    try {
+      await request();
+    } catch (err) {
+      setMsg(err?.message || 'Failed.');
+    } finally {
+      rangeBusyRef.current = false;
+      setSaving(false);
+    }
+  };
+
+  const previewRange = () => runRangeRequest(async () => {
+    const key = rangeKey(form);
+    const res = await OperatorService.previewShiftBlockRange(rangePayload(form));
+    setRangePreview({ key, data: res?.data ?? null });
+  });
+
+  const confirmRange = () => runRangeRequest(async () => {
+    const res = await OperatorService.createShiftBlockRange(rangePayload(form));
+    setRangeResult({ ...(res?.data ?? {}), message: res?.message || '' });
+    setRangePreview(null);
+    onRefresh();
+  });
+
+  const closeScheduleModal = () => {
+    if (rangeResult) setForm(blankScheduleForm());
+    setRangePreview(null);
+    setRangeResult(null);
+    setMsg('');
+    setShowModal(false);
+  };
+
   const handleSchedule = async (e) => {
-    e.preventDefault(); setSaving(true); setMsg('');
+    e.preventDefault();
+    if (isRangeSchedule(form)) {
+      await previewRange();
+      return;
+    }
+    setSaving(true); setMsg('');
     try {
       if (form.trip_type === 'round_trip') {
         await OperatorService.createShiftBlock({
@@ -743,19 +807,7 @@ export function useTripsTab({ trips, onRefresh }) {
         setMsg('Ad hoc trip scheduled.');
       }
 
-      setForm({
-        fleet_route_id: '',
-        trip_date: '',
-        departure_time: '',
-        trip_type: 'one_way',
-        return_departure_time: '',
-        driver_id: '',
-        conductor_id: '',
-        notes: '',
-        block_type: 'morning',
-        service_type: 'regular',
-        leg_departure_times: ['06:00', '08:30', '11:00', '13:30'],
-      });
+      setForm(blankScheduleForm());
       setShowModal(false);
       onRefresh();
     } catch (err) { setMsg(err?.message || 'Failed.'); }
@@ -855,6 +907,10 @@ export function useTripsTab({ trips, onRefresh }) {
     loadingMoreTrips,
     loadMoreTrips,
     handleSchedule,
+    rangePreview: currentRangePreview,
+    rangeResult,
+    confirmRange,
+    closeScheduleModal,
     handleAssign,
     handleAction,
     handleConfirmedComplete,

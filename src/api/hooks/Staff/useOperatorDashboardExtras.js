@@ -6,15 +6,7 @@ import { getBusinessToday } from '../../../utils/dates';
  * Batch 31: data hooks for the reworked Operator Dashboard and Fleets pages. The page components only render.
  */
 
-/** The current time in ms, refreshed on an interval, so "last seen" and stale-GPS states keep moving. */
-export function useNow(intervalMs = 30000) {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), intervalMs);
-    return () => clearInterval(timer);
-  }, [intervalMs]);
-  return now;
-}
+export { useNow } from '../useNow';
 
 /** Every fleet's last reported position (one row per fleet), refreshed on an interval while the tab is visible. */
 export function useFleetLocations({ intervalMs = 20000 } = {}) {
@@ -137,6 +129,21 @@ export function useRouteAdherence(fleets, { days = 7 } = {}) {
     return () => { cancelled = true; clearTimeout(timer); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fleetKey, days]);
+
+  return state;
+}
+
+/** §4.8: the crew's time in / time out on one Manila date (default today), read only. */
+export function useCrewShifts(date = getBusinessToday()) {
+  const [state, setState] = useState({ loading: true, error: '', shifts: [] });
+
+  useEffect(() => {
+    let cancelled = false;
+    OperatorService.getCrewShifts(date)
+      .then((res) => { if (!cancelled) setState({ loading: false, error: '', shifts: res?.data?.shifts ?? [] }); })
+      .catch((err) => { if (!cancelled) setState({ loading: false, error: err?.message || 'Could not load the crew times.', shifts: [] }); });
+    return () => { cancelled = true; };
+  }, [date]);
 
   return state;
 }

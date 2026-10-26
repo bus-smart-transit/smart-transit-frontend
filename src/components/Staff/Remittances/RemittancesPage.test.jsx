@@ -175,3 +175,15 @@ describe('RemittancesPage tolerance and resolution', () => {
     await waitFor(() => expect(service.getRemittances).toHaveBeenLastCalledWith({ status: 'resolved', page: 1 }));
   });
 });
+
+describe('Passenger In leakage check (2026-10-26)', () => {
+  it('warns about passengers checked in on the shift who never paid, and says nothing when there are none', async () => {
+    const { unmount } = render(<RemittancesPage service={makeService({ getRemittances: vi.fn().mockResolvedValue(page([row({ unpaid_check_ins: 2 })])) })} />);
+    expect(await screen.findByTestId('unpaid-check-ins')).toHaveTextContent('2 passengers were checked in on this shift but never paid');
+    unmount();
+
+    render(<RemittancesPage service={makeService()} />);
+    await screen.findByTestId('remittance-card');
+    expect(screen.queryByTestId('unpaid-check-ins')).toBeNull();
+  });
+});

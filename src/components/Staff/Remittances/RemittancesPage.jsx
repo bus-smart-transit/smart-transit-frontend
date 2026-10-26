@@ -68,6 +68,13 @@ function RemittanceCard({ row, busy, error, onConfirm, onResolve }) {
         <Figure label={pending ? 'Expected cash' : 'Expected when confirmed'} value={row.expected_cash} strong />
       </dl>
 
+      {Number(row.unpaid_check_ins) > 0 && (
+        // Passenger In leakage check (2026-10-26): checked in on this shift, no fare collected before the trip ended.
+        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800" data-testid="unpaid-check-ins">
+          {Number(row.unpaid_check_ins) === 1 ? '1 passenger was' : `${row.unpaid_check_ins} passengers were`} checked in on this shift but never paid. Ask the Chauffeur before confirming.
+        </p>
+      )}
+
       {row.no_declaration ? (
         <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800" data-testid="no-declaration">
           No count from the Chauffeur: the shift was {autoClosed ? 'closed automatically' : 'ended without one'}. Enter the amount you counted.

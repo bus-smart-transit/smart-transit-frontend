@@ -46,7 +46,29 @@ export function capacitySummary({ capacity, sold, onboard }) {
     onboard: onboardCount,
     isFull: cap > 0 && (soldCount >= cap || onboardCount >= cap),
     remaining: cap > 0 ? Math.max(0, cap - Math.max(soldCount, onboardCount)) : null,
+    standingOpen: false, // no per-seat-type count to go on, so standing is not offered
   };
+}
+
+/**
+ * Places left of one seat type on a trip: the bus's capacity for it minus the tickets sold (trips.current_*_capacity
+ * holds the SOLD count, as in the server's TripCapacity). "—" when the bus's capacity is unknown.
+ */
+export function placesLeft(fleet, trip, seatType) {
+  const key = seatType === 'standing' ? 'standing' : 'seated';
+  const raw = fleet?.[key + '_capacity'];
+  if (raw == null || !Number.isFinite(Number(raw))) return '—';
+  const sold = Number(trip?.['current_' + key + '_capacity']) || 0;
+  return Math.max(0, Number(raw) - sold);
+}
+
+/**
+ * Standing is sold only on the bus and only once every seat is sold; it is offered while standing places remain. The
+ * server enforces the same rule (TripCapacity::standingOpen), so this only decides whether the option is shown.
+ */
+export function isStandingOpen(summary) {
+  if (!summary?.capacity || !summary?.remaining) return false;
+  return Number(summary.remaining.seated) <= 0 && Number(summary.remaining.standing) > 0;
 }
 
 /**
@@ -62,6 +84,7 @@ export function capacityFromServer(summary, fallback = {}) {
     onboard: Math.max(0, Number(summary.onboard?.total) || 0),
     isFull: summary.is_full === true,
     remaining: cap > 0 ? Math.max(0, Number(summary.remaining?.total) || 0) : null,
+    standingOpen: isStandingOpen(summary),
   };
 }
 
@@ -84,16 +107,27 @@ export function boardingPointView(response) {
 
 /** Whether the cash form has everything the server needs. The fare is never part of it. */
 export function isOnsiteFormComplete(form, view) {
-  const boardingOk = form?.boarding_mode === 'gps' ? Boolean(view?.good) : Boolean(form?.origin_stop_id);
+  const mode = form?.boarding_mode;
+  const boardingOk = mode === 'gps' ? Boolean(view?.good) : mode === 'checkin' ? Boolean(form?.pending_boarding_id) : Boolean(form?.origin_stop_id);
   const destinationOk = Boolean(form?.destination_stop_id);
   return boardingOk && destinationOk;
 }
 
-/** In bus-position mode the server resolves boarding, while the passenger still chooses an official destination stop. */
+/**
+ * In bus-position mode the server resolves boarding (snapped back to the last stop passed); for a checked-in passenger
+ * (Passenger In, 2026-10-26) the server uses the stop kept at check-in. The client never sends a position.
+ */
 export function buildOnsiteItem({ tripId, form }) {
   const item = { trip_id: Number(tripId), seat_type: form.seat_type };
   if (form.boarding_mode === 'gps') item.boarding_mode = 'gps';
+  else if (form.boarding_mode === 'checkin') item.pending_boarding_id = Number(form.pending_boarding_id);
   else item.origin_stop_id = Number(form.origin_stop_id);
   item.destination_stop_id = Number(form.destination_stop_id);
   return item;
+}
+
+/** "10:42 · after Stop B" for a check-in waiting for its fare (Passenger In). */
+export function checkInLabel(checkIn) {
+  if (!checkIn) return '';
+  return `${checkIn.checked_in_at || '--:--'} · after ${checkIn.stop_name || 'Not provided'}`;
 }

@@ -10,12 +10,19 @@ import {
 } from 'lucide-react';
 import QrScanner from 'qr-scanner';
 import StaffService from '../../api/StaffService/StaffBaseService';
+import { useNow } from '../../api/hooks/useNow';
+import { opensGate } from '../../utils/tripActionTiming';
 import QrImage from '../Passenger/Ticket/QrImage';
 
 const isLikelyPin = (value) => /^\d{6}$/.test(String(value || '').trim());
 
-export default function PairingScreen({ role, onPaired, onLogout, paired = false, pairingReason = '' }) {
+export default function PairingScreen({ role, onPaired, onLogout, paired = false, pairingReason = '', pairingOpensAt = null }) {
   const partnerRole = role === 'driver' ? 'Chauffeur' : 'Driver';
+  // Phase A: pairing opens a set time before the departure (the server refuses earlier). Until then nothing is asked
+  // of the server; the code is fetched once the time comes.
+  const now = useNow(15000);
+  const pairingGate = opensGate(pairingOpensAt, now, 'Pairing opens');
+  const pairingNotOpen = !paired && !pairingGate.open;
 
   const [myToken, setMyToken] = useState(null);
   const [loadingToken, setLoadingToken] = useState(true);
@@ -67,10 +74,10 @@ export default function PairingScreen({ role, onPaired, onLogout, paired = false
   }, [role]);
 
   useEffect(() => {
-    if (didInitialTokenLoad.current) return;
+    if (didInitialTokenLoad.current || pairingNotOpen) return;
     didInitialTokenLoad.current = true;
     void loadMyToken();
-  }, [loadMyToken]);
+  }, [loadMyToken, pairingNotOpen]);
 
   const stopScanner = useCallback(() => {
     if (scannerRef.current) {
@@ -222,7 +229,11 @@ export default function PairingScreen({ role, onPaired, onLogout, paired = false
         <article className="rounded-xl border border-slate-200 bg-slate-50 p-4">
           <h4 className="mb-3 text-sm font-semibold text-slate-900">Your pairing QR (primary)</h4>
 
-          {loadingToken ? (
+          {pairingNotOpen ? (
+            <div data-testid="pairing-not-open" className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+              {pairingGate.label}. Your pairing QR and PIN appear then.
+            </div>
+          ) : loadingToken ? (
             <div className="flex flex-col items-center gap-3 py-8">
               <Loader className="h-7 w-7 animate-spin text-sky-500" />
               <p className="text-xs text-slate-500">Generating token...</p>
@@ -286,12 +297,15 @@ export default function PairingScreen({ role, onPaired, onLogout, paired = false
             </div>
           )}
 
+          {pairingNotOpen && <p className="mb-3 text-xs text-amber-700">{pairingGate.label}.</p>}
+
           {!paired && <div className="mb-3 flex gap-2">
             {!scannerRunning ? (
               <button
                 type="button"
                 onClick={() => void startScanner()}
-                className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100"
+                disabled={pairingNotOpen}
+                className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Camera className="h-4 w-4" />
                 Start Camera
@@ -349,7 +363,7 @@ export default function PairingScreen({ role, onPaired, onLogout, paired = false
               <button
                 type="button"
                 onClick={() => void submitPairing(manualToken)}
-                disabled={!manualToken.trim() || scannerBusy}
+                disabled={!manualToken.trim() || scannerBusy || pairingNotOpen}
                 className="rounded-xl bg-sky-500 px-3 py-2 text-xs font-semibold text-white transition hover:bg-sky-600 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <QrCode className="h-4 w-4" />

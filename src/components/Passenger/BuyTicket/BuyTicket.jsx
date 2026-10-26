@@ -430,20 +430,10 @@ export default function BuyTicket({ onTicketPurchased, returnTo = '/' }) {
                 <Card className="space-y-6 p-5 sm:p-6">
                   <h2 className="font-display text-lg font-semibold text-navy-950">Seat and Payment</h2>
 
-                  <fieldset>
-                    <legend className={LABEL}>Seat Type</legend>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {[['seated', 'Seated'], ['standing', 'Standing']].map(([type, label]) => (
-                        <RadioPill
-                          key={type}
-                          name="seat_type"
-                          checked={form.seat_type === type}
-                          onChange={() => handleChange('seat_type', type)}
-                          label={label}
-                        />
-                      ))}
-                    </div>
-                  </fieldset>
+                  <div>
+                    <p className={LABEL}>Seat Type</p>
+                    <p className="mt-1 text-sm text-slate-600">Seated. Online tickets reserve a seat. Standing places are sold on the bus.</p>
+                  </div>
 
                   <div>
                     <label htmlFor="ticket_quantity" className={LABEL}>Ticket Quantity</label>
@@ -460,6 +450,21 @@ export default function BuyTicket({ onTicketPurchased, returnTo = '/' }) {
                     <p className="mt-1.5 text-xs text-slate-500">Up to 20 tickets per booking.</p>
                     {formErrors.ticket_quantity && <span className="mt-1.5 block text-xs text-red-600">{formErrors.ticket_quantity}</span>}
                   </div>
+
+                  {(parseInt(form.ticket_quantity, 10) || 1) > 1 && (
+                    <label className="flex items-start gap-2 text-sm text-slate-700">
+                      <input
+                        type="checkbox"
+                        className="mt-0.5 h-4 w-4"
+                        checked={form.email_group_qr !== false}
+                        onChange={(e) => handleChange('email_group_qr', e.target.checked)}
+                      />
+                      <span>
+                        Send one group QR for all tickets
+                        <span className="block text-xs text-slate-500">One scan boards everyone, so travel together. Untick to get one QR per ticket if you will arrive separately.</span>
+                      </span>
+                    </label>
+                  )}
 
                   <fieldset>
                     <legend className={`flex items-center gap-2 ${LABEL}`}><CreditCard size={16} aria-hidden="true" /> Payment</legend>
@@ -550,7 +555,7 @@ export default function BuyTicket({ onTicketPurchased, returnTo = '/' }) {
               <SummaryRow label="Board at">{boardingRow?.name || summaryFrom || '-'}</SummaryRow>
               <SummaryRow label="Get off at">{alightingRow?.name || summaryTo || '-'}</SummaryRow>
               <SummaryRow label="Departure">{trip ? `${trip.trip_date} ${trip.boarding_time}` : '-'}</SummaryRow>
-              <SummaryRow label="Seat Type">{form.seat_type === 'standing' ? 'Standing' : 'Seated'}</SummaryRow>
+              <SummaryRow label="Seat Type">Seated</SummaryRow>
               <SummaryRow label="Payment">Online &middot; {form.payment_channel === 'maya' ? 'Maya' : 'GCash'}</SummaryRow>
               <SummaryRow label="Unit Fare">
                 PHP {hasFareQuote ? Number(unitFare).toFixed(2) : '0.00'}

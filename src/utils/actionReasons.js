@@ -29,13 +29,20 @@ export function ticketingReason({ isPaired, hasOpenShift, hasActiveTrip, isFull 
 }
 
 /** The Driver's Start Boarding / Depart / End Trip row. */
-export function driverTripActionReason({ isPaired, hasOpenShift, status }) {
+/**
+ * Phase A (§4.11) adds the clock: `boardingLabel` / `departLabel` are opensGate() labels while that action is not yet
+ * open ("Start Boarding opens at 7:30 AM"), and `finalStopDone` is false until the leg's last stop is acknowledged.
+ */
+export function driverTripActionReason({ isPaired, hasOpenShift, status, boardingLabel = '', departLabel = '', finalStopDone = true }) {
   const s = String(status || '').toLowerCase();
   if (!isPaired) return PAIRING;
   if (!hasOpenShift) return 'Start your shift first to board or depart.';
   if (!s) return 'There is no active trip right now.';
-  if (s === 'boarding') return 'Boarding is open. Depart when the bus is ready.';
-  if (s === 'departed' || s === 'in-progress') return 'The trip is under way. Use End Trip when you arrive.';
+  if ((s === 'scheduled' || s === 'delayed') && boardingLabel) return `${boardingLabel}.`;
+  if (s === 'boarding') return departLabel ? `Boarding is open. ${departLabel}.` : 'Boarding is open. Depart when the bus is ready.';
+  if (s === 'departed' || s === 'in-progress') {
+    return finalStopDone ? 'The trip is under way. Use End Trip when you arrive.' : 'The trip is under way. Acknowledge the final stop, then use End Trip.';
+  }
   if (s === 'completed' || s === 'cancelled') return 'This trip is already finished.';
   return '';
 }

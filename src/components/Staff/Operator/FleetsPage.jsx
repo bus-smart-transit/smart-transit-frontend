@@ -138,6 +138,8 @@ function TrackFleetModal({ row, advice, saving, error, onDecide, onClose, onOpen
             <div><dt className="text-xs text-slate-500">Driver</dt><dd className="font-semibold text-slate-900">{personName(trip.driver) ?? 'Not assigned'}</dd></div>
             <div><dt className="text-xs text-slate-500">Chauffeur</dt><dd className="font-semibold text-slate-900">{personName(trip.conductor) ?? 'Not assigned'}</dd></div>
             <div><dt className="text-xs text-slate-500">Tickets sold</dt><dd className="font-semibold text-slate-900">{ticketsSold(trip)} of {capacityOf(trip) || '-'}{pct === null ? '' : ` (${pct}%)`}</dd></div>
+            {/* §4.7: passengers on board now (scanned on or sold on the bus, not yet off), from the server. */}
+            <div><dt className="text-xs text-slate-500">On board now</dt><dd data-testid="onboard-now" className="font-semibold text-slate-900">{trip.onboard_count == null ? 'Not provided' : `${trip.onboard_count} of ${capacityOf(trip) || '-'}`}</dd></div>
             <div><dt className="text-xs text-slate-500">Trip status</dt><dd className="font-semibold capitalize text-slate-900">{String(trip.status).replace('-', ' ')}</dd></div>
           </dl>
           <section aria-label="Reroute advice">

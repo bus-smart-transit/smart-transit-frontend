@@ -36,4 +36,11 @@ describe('disabled action reasons (Batch 29)', () => {
     expect(driverTripActionReason({ isPaired: true, hasOpenShift: true, status: 'in-progress' })).toMatch(/End Trip/);
     expect(driverTripActionReason({ isPaired: true, hasOpenShift: true, status: 'completed' })).toMatch(/already finished/);
   });
+  it('says when Start Boarding and Depart open, and asks for the final stop (Phase A)', () => {
+    const base = { isPaired: true, hasOpenShift: true };
+    expect(driverTripActionReason({ ...base, status: 'scheduled', boardingLabel: 'Start Boarding opens at 7:30 AM' })).toBe('Start Boarding opens at 7:30 AM.');
+    expect(driverTripActionReason({ ...base, status: 'boarding', departLabel: 'Depart opens at 8:00 AM' })).toBe('Boarding is open. Depart opens at 8:00 AM.');
+    expect(driverTripActionReason({ ...base, status: 'departed', finalStopDone: false })).toMatch(/Acknowledge the final stop/);
+    expect(driverTripActionReason({ ...base, status: 'departed', finalStopDone: true })).toMatch(/Use End Trip/);
+  });
 });

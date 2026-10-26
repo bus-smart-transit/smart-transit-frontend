@@ -15,6 +15,9 @@ import { useOperatorDashboardData, useNotificationBell, useTripRequests, useTrip
 import RunInfoChips from '../ui/RunInfoChips'
 import { CancelTripModal, TicketResolutionQueue } from './TripCancellationsPanel'
 import LegTimeSuggestion from './LegTimeSuggestion'
+import ScheduleRangePreview from './Schedule/ScheduleRangePreview'
+import CrewShiftTimes from './Operator/CrewShiftTimes'
+import { isRangeSchedule, rangeDayCount } from '../../utils/scheduleRange'
 import ProfilePage from '../Account/ProfilePage'
 import SchedulePage from './Schedule/SchedulePage'
 import ShiftBlocksView from './Schedule/ShiftBlocksView'
@@ -321,7 +324,10 @@ function StaffDirectoryTab({ drivers, conductors, onRefresh, onCreateAccount }) 
 // Batch 30: the create form behind the one "+ Schedule" button of the Schedule page (it was inside the Trips view). It
 // is the same form and the same handler (useTripsTab); only its place changed, so it opens from any Schedule view.
 function ScheduleServiceModal({ state, drivers, conductors }) {
-  const { showModal, setShowModal, form, setForm, saving, msg, fleetRoutes, handleSchedule } = state
+  const { showModal, form, setForm, saving, msg, fleetRoutes, handleSchedule, rangePreview, rangeResult, confirmRange, closeScheduleModal } = state
+  const multiLeg = form.trip_type === 'round_trip'
+  const rangeMode = isRangeSchedule(form)
+  const rangeDays = rangeDayCount(form.trip_date, form.to_date)
   const [bookingWindow, setBookingWindow] = useState(null)
   const { drivers: dateDrivers, loading: loadingDateDrivers, error: dateDriversError } = useDateDrivers(showModal && form.trip_date ? form.trip_date : '', drivers)
   useEffect(() => {
@@ -352,7 +358,15 @@ function ScheduleServiceModal({ state, drivers, conductors }) {
 
   if (!showModal) return null
 
-  return (    <Modal title="Schedule Service" onClose={() => setShowModal(false)}>
+  if (rangeResult) {
+    return (
+      <Modal title="Schedule Service" onClose={closeScheduleModal}>
+        <ScheduleRangePreview result={rangeResult} onDone={closeScheduleModal} />
+      </Modal>
+    )
+  }
+
+  return (    <Modal title="Schedule Service" onClose={closeScheduleModal}>
       <form className="space-y-4" onSubmit={handleSchedule}>
         <Field label="Fleet Route" required>
           <select value={form.fleet_route_id} onChange={e => setForm(p => ({...p, fleet_route_id: e.target.value}))} required className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500">
@@ -362,7 +376,25 @@ function ScheduleServiceModal({ state, drivers, conductors }) {
             ))}
           </select>
         </Field>
-        <Field label="Trip Date" type="date" value={form.trip_date} onChange={e => setForm(p => ({...p, trip_date: e.target.value}))} required hint={bookingWindowWarning(form.trip_date, bookingWindow)} />
+        {multiLeg ? (
+          <div className="grid grid-cols-2 gap-2">
+            {/* Phase B (§4.13): the same block on every day From..To; a To date equal to From (or empty) is one day. */}
+            <Field label="From" type="date" value={form.trip_date} onChange={e => setForm(p => ({...p, trip_date: e.target.value}))} required hint={bookingWindowWarning(form.trip_date, bookingWindow)} />
+            <Field label="To (optional)">
+              <input
+                type="date"
+                aria-label="To"
+                value={form.to_date || ''}
+                min={form.trip_date || undefined}
+                onChange={e => setForm(p => ({ ...p, to_date: e.target.value }))}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500"
+              />
+              {rangeDays > 1 && <p className="mt-1 text-xs text-slate-500">{rangeDays} days. You will see each day before anything is saved.</p>}
+            </Field>
+          </div>
+        ) : (
+          <Field label="Trip Date" type="date" value={form.trip_date} onChange={e => setForm(p => ({...p, trip_date: e.target.value}))} required hint={bookingWindowWarning(form.trip_date, bookingWindow)} />
+        )}
         <Field label="Schedule" required>
           <select value={form.trip_type} onChange={e => setForm(p => ({ ...p, trip_type: e.target.value }))} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500">
             <option value="one_way">Single Departure</option>
@@ -442,10 +474,11 @@ function ScheduleServiceModal({ state, drivers, conductors }) {
           </select>
         </Field>
         {msg && <p className="text-sm text-red-600">{msg}</p>}
+        {rangeMode && <ScheduleRangePreview preview={rangePreview} saving={saving} onConfirm={confirmRange} />}
         <div className="flex justify-end gap-2 pt-2">
-          <button type="button" onClick={() => setShowModal(false)} className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50">Cancel</button>
+          <button type="button" onClick={closeScheduleModal} className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50">Cancel</button>
           <button type="submit" disabled={saving || loadingDateDrivers || Boolean(dateDriversError)} className="flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-60">
-            {saving && <Loader2 className="h-4 w-4 animate-spin" />}Schedule
+            {saving && <Loader2 className="h-4 w-4 animate-spin" />}{rangeMode ? (rangePreview ? 'Preview again' : 'Preview days') : 'Schedule'}
           </button>
         </div>
       </form>
@@ -876,7 +909,10 @@ export default function OperatorDashboard() {
           />
         )}
         {activeTab === 'staffs'     && (
-          <StaffDirectoryTab drivers={drivers} conductors={conductors} onRefresh={loadFull} onCreateAccount={handleCreateAccount} />
+          <div className="space-y-4">
+            <StaffDirectoryTab drivers={drivers} conductors={conductors} onRefresh={loadFull} onCreateAccount={handleCreateAccount} />
+            <CrewShiftTimes />
+          </div>
         )}
         {activeTab === 'fleets'     && <FleetsPage fleets={fleets} routes={routes} trips={trips} onRefresh={loadFull} />}
         {activeTab === 'routes'     && <RoutesPage routes={routes} stops={stops} trips={trips} fleets={fleets} onRefresh={loadFull} onOpenSchedule={() => setActiveTab('schedule')} onOpenFleets={() => setActiveTab('fleets')} />}

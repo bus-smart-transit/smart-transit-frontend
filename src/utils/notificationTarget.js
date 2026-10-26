@@ -15,7 +15,8 @@ export const STAFF_ROLES = ['driver', 'conductor', 'operator'];
 
 // Tabs a deep link may open, per role (must match each dashboard's nav keys).
 const VALID_TABS = {
-  driver: ['dashboard', 'activeTrip', 'schedule', 'earnings', 'pin', 'account'],
+  // §4.12: Drivers do not see revenue; Earnings is the Chauffeur's only. A ?tab=earnings link opens the Dashboard.
+  driver: ['dashboard', 'activeTrip', 'schedule', 'pin', 'account'],
   conductor: ['dashboard', 'occupancy', 'activeShift', 'schedule', 'pin', 'account'],
   operator: ['dashboard', 'staffs', 'fleets', 'routes', 'trips', 'calendar', 'shiftBlocks', 'reports', 'account'],
 };

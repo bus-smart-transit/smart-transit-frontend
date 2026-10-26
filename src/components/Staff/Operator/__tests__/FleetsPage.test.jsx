@@ -76,6 +76,23 @@ describe('FleetsPage', () => {
     expect(within(dialog).getByRole('button', { name: 'Open in Google Maps' })).toBeEnabled();
   });
 
+  it('shows how many are on board now next to the tickets sold (§4.7)', async () => {
+    renderPage({ trips: [trip(1, 1, 'departed', { onboard_count: 7 })] });
+    await waitFor(() => expect(within(rowFor('PLT-1')).getByText('On route')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: 'Track fleet PLT-1' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByTestId('onboard-now')).toHaveTextContent('7 of 40');
+    expect(within(dialog).getByText(/10 of 40/)).toBeInTheDocument(); // tickets sold is still shown
+  });
+
+  it('says "Not provided" when the trip carries no on-board count', async () => {
+    renderPage();
+    await waitFor(() => expect(within(rowFor('PLT-1')).getByText('On route')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: 'Track fleet PLT-1' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByTestId('onboard-now')).toHaveTextContent('Not provided');
+  });
+
   it('shows the stale state instead of calling an old position live', async () => {
     mocks.getFleetLocations.mockResolvedValue({ data: [fresh(1, { recorded_at: new Date(Date.now() - 20 * 60 * 1000).toISOString() })] });
     renderPage();

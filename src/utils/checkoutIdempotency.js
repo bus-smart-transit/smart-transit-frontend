@@ -54,3 +54,13 @@ export function clearCheckoutIdempotencyKey(scope) {
     sessionStorage.removeItem(STORAGE_KEY);
   }
 }
+
+/**
+ * §12: a failed checkout keeps its key so an identical retry replays it. When the server answers 409 with
+ * errors.checkout = ["retry_with_new_key"], the earlier attempt is over and its seats are free: drop the key (and on 422).
+ */
+export function shouldDropCheckoutKey(error) {
+  const response = error?.cause?.response ?? error?.response;
+  if (response?.status === 422) return true;
+  return response?.status === 409 && (response?.data?.errors?.checkout ?? []).includes('retry_with_new_key');
+}

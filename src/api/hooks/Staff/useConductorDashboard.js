@@ -6,7 +6,7 @@ import { checkoutIdempotencyKey, clearCheckoutIdempotencyKey } from '../../../ut
 import usePassengersByTrip from './usePassengersByTrip';
 import useOnsiteReceiptPrinter from './useOnsiteReceiptPrinter';
 import { isSameBusinessDay, getBusinessToday, getBusinessNowMs, toBusinessScheduleMs, debugLogBusinessTime, formatManilaDateTime } from '../../../utils/dates';
-import { boardingPointView, buildOnsiteItem, capacityFromServer, isMidTripBoardingAvailable, isOnsiteFormComplete } from '../../../utils/cashTicket';
+import { boardingPointView, buildOnsiteItem, capacityFromServer, isMidTripBoardingAvailable, isOnsiteFormComplete, isStandingOpen } from '../../../utils/cashTicket';
 import { readDeepLink } from '../../../utils/notificationTarget';
 import useAssignmentCards from './useAssignmentCards';
 
@@ -89,8 +89,9 @@ export function useConductorPairing() {
         const data = res?.data ?? {};
         const nextPaired = data?.paired === true;
         const nextReason = data?.reason || '';
+        const nextOpensAt = data?.pairing_opens_at || null;
         setPairing((prev) => {
-          if (!prev.loading && prev.paired === nextPaired && prev.reason === nextReason) {
+          if (!prev.loading && prev.paired === nextPaired && prev.reason === nextReason && prev.opensAt === nextOpensAt) {
             return prev;
           }
 
@@ -98,6 +99,7 @@ export function useConductorPairing() {
             loading: false,
             paired: nextPaired,
             reason: nextReason,
+            opensAt: nextOpensAt,
           };
         });
       } catch {
@@ -160,8 +162,10 @@ export function useConductorDashboardData({ onLogout, pairing }) {
   const [showScannerModal, setShowScannerModal] = useState(false);
   const [onsiteReceipt, setOnsiteReceipt] = useState(null);
   const [onsiteForm, setOnsiteForm] = useState({
-    // 'stop' = pick the boarding stop; 'gps' = the bus's own position (only while the bus is under way).
+    // 'stop' = pick the boarding stop; 'gps' = the bus's own position now; 'checkin' = a Passenger In check-in (both only
+    // while the bus is under way, and both counted from the last stop passed).
     boarding_mode: 'stop',
+    pending_boarding_id: '',
     origin_stop_id: '',
     destination_stop_id: '',
     seat_type: 'seated',
@@ -170,8 +174,19 @@ export function useConductorDashboardData({ onLogout, pairing }) {
   const [boardingPoint, setBoardingPoint] = useState({ loading: false, response: null, error: '' });
   // Bus-position boarding exists only while the bus is moving; otherwise the form is always stop-based.
   const midTripAvailable = isMidTripBoardingAvailable(trip?.status);
-  const cashForm = midTripAvailable ? onsiteForm : { ...onsiteForm, boarding_mode: 'stop' };
+  // Standing is offered only once every seat is sold; until then (or after a seat frees up) the sale is Regular.
+  const standingOpen = isStandingOpen(occupancy?.capacity_summary);
+  const cashForm = {
+    ...onsiteForm,
+    boarding_mode: midTripAvailable ? onsiteForm.boarding_mode : 'stop',
+    seat_type: standingOpen ? onsiteForm.seat_type : 'seated',
+  };
   const boardingView = boardingPointView(boardingPoint.response);
+  // Passenger In (2026-10-26): the check-ins of this trip still waiting for their fare, and a nonce that asks for a fresh
+  // quote after a refused sale (the fare may have changed).
+  const [checkIns, setCheckIns] = useState([]);
+  const [checkInBusy, setCheckInBusy] = useState(false);
+  const [quoteNonce, setQuoteNonce] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [actionMsg, setActionMsg] = useState('');
@@ -450,6 +465,39 @@ export function useConductorDashboardData({ onLogout, pairing }) {
 
     return () => clearTimeout(timer);
   }, [activeTab, hasActiveTrip, isPaired, loadOccupancy]);
+
+  const loadCheckIns = useCallback(async () => {
+    try {
+      const res = await ConductorService.getCheckIns();
+      setCheckIns(Array.isArray(res?.data) ? res.data : []);
+    } catch {
+      setCheckIns([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (activeTab === 'occupancy' && hasActiveTrip && isPaired && midTripAvailable) void loadCheckIns();
+    }, 0);
+
+    return () => clearTimeout(timer);
+  }, [activeTab, hasActiveTrip, isPaired, midTripAvailable, loadCheckIns]);
+
+  // Passenger In: one tap as someone boards between stops; the server keeps where the bus is, snapped back to a stop.
+  const handlePassengerIn = async () => {
+    if (checkInBusy) return;
+    setCheckInBusy(true);
+    try {
+      const res = await ConductorService.checkInPassenger();
+      const checkIn = res?.data;
+      setActionMsg(checkIn ? `Passenger checked in at ${checkIn.checked_in_at}, fare counted from ${checkIn.stop_name}.` : 'Passenger checked in.');
+      await loadCheckIns();
+    } catch (err) {
+      setActionMsg(err.message || 'Passenger In is not available right now.');
+    } finally {
+      setCheckInBusy(false);
+    }
+  };
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -952,7 +1000,9 @@ export function useConductorDashboardData({ onLogout, pairing }) {
     }
 
     if (!isOnsiteFormComplete(cashForm, boardingView)) {
-      setActionMsg(cashForm.boarding_mode === 'gps'
+      setActionMsg(cashForm.boarding_mode === 'checkin'
+        ? 'Select the checked-in passenger who is paying, then choose the destination.'
+        : cashForm.boarding_mode === 'gps'
         ? 'The bus position is not reliable right now. Pick the boarding stop instead, then choose the destination.'
         : 'Please select origin and destination stops for onsite checkout.');
       return;
@@ -961,11 +1011,13 @@ export function useConductorDashboardData({ onLogout, pairing }) {
     setConfirmCheckout(true);
   };
 
-  const handleConfirmedOnsiteCheckout = async (discount = null) => {
+  const handleConfirmedOnsiteCheckout = async (discount = null, quotedAmount = null) => {
     setConfirmCheckout(false);
     setCheckoutInFlight(true);
     try {
       const onsiteItem = buildOnsiteItem({ tripId: trip.trip_id, form: cashForm });
+      // The fare the Chauffeur was shown: if the server's fare is different now, nothing is sold and it says the new fare.
+      if (Number.isFinite(quotedAmount)) onsiteItem.quoted_amount = quotedAmount;
       if (discount?.discount_type_key) {
         onsiteItem.discount_type_key = discount.discount_type_key;
         onsiteItem.discount_id_checked = Boolean(discount.discount_id_checked);
@@ -986,10 +1038,12 @@ export function useConductorDashboardData({ onLogout, pairing }) {
       setActionMsg('Onsite checkout recorded successfully.');
       setOnsiteForm((prev) => ({
         ...prev,
+        pending_boarding_id: '',
         origin_stop_id: '',
         destination_stop_id: '',
         seat_type: 'seated',
       }));
+      void loadCheckIns();
       void loadPassengers();
       void loadOccupancy();
       void loadEarnings();
@@ -1004,6 +1058,9 @@ export function useConductorDashboardData({ onLogout, pairing }) {
       setActionMsg(err.message || 'Failed to record onsite checkout.');
       // The server may have refused the bus position; show its current verdict so the picker can fall back.
       if (cashForm.boarding_mode === 'gps') void refreshBoardingPoint();
+      // A changed fare, or a check-in already used: ask for a fresh quote and list.
+      setQuoteNonce((n) => n + 1);
+      if (cashForm.boarding_mode === 'checkin') void loadCheckIns();
       return false;
     } finally {
       setCheckoutInFlight(false);
@@ -1084,6 +1141,10 @@ export function useConductorDashboardData({ onLogout, pairing }) {
     boardingPoint,
     boardingView,
     refreshBoardingPoint,
+    checkIns,
+    checkInBusy,
+    handlePassengerIn,
+    quoteNonce,
     loading,
     error,
     actionMsg, setActionMsg,

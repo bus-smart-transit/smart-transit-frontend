@@ -67,3 +67,29 @@ describe('single-journey booking', () => {
     expect(screen.getByRole('button', { name: 'Continue to Payment' })).toBeDisabled();
   });
 });
+
+describe('group QR choice (§4.10)', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('offers one group QR for several tickets, ticked by default, and passes an untick to the form', () => {
+    const state = bookingState();
+    useBuyTicket.mockReturnValue(state);
+    render(<MemoryRouter><BuyTicket /></MemoryRouter>);
+
+    const box = screen.getByRole('checkbox', { name: /Send one group QR for all tickets/ });
+    expect(box).toBeChecked();
+    fireEvent.click(box);
+    expect(state.handleChange).toHaveBeenCalledWith('email_group_qr', false);
+  });
+
+  it('shows the choice unticked when the passenger unticked it, and not at all for one ticket', () => {
+    const state = bookingState();
+    useBuyTicket.mockReturnValue({ ...state, form: { ...state.form, email_group_qr: false } });
+    const { rerender } = render(<MemoryRouter><BuyTicket /></MemoryRouter>);
+    expect(screen.getByRole('checkbox', { name: /Send one group QR/ })).not.toBeChecked();
+
+    useBuyTicket.mockReturnValue({ ...state, form: { ...state.form, ticket_quantity: '1' } });
+    rerender(<MemoryRouter><BuyTicket /></MemoryRouter>);
+    expect(screen.queryByRole('checkbox', { name: /Send one group QR/ })).not.toBeInTheDocument();
+  });
+});

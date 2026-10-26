@@ -51,6 +51,16 @@ class ConductorService extends StaffBaseService {
     return await this.request('/conductor/trips/current/boarding-point', 'GET');
   }
 
+  // Passenger In (2026-10-26): the server keeps the bus position now, snapped back to the last stop passed.
+  async checkInPassenger() {
+    return await this.request('/conductor/trips/current/check-ins', 'POST', {});
+  }
+
+  // The check-ins of the current trip still waiting for their fare.
+  async getCheckIns() {
+    return await this.request('/conductor/trips/current/check-ins', 'GET');
+  }
+
   async getOccupancyByStop() {
     return await this.request('/conductor/trips/current/occupancy/by-stop', 'GET');
   }

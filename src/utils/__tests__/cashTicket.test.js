@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { boardingPointView, buildOnsiteItem, capacityFromServer, capacitySummary, destinationsAhead, isMidTripBoardingAvailable, isOnsiteFormComplete, orderedStopsForLeg, stopLabel } from '../cashTicket';
+import { boardingPointView, buildOnsiteItem, capacityFromServer, checkInLabel, capacitySummary, destinationsAhead, isMidTripBoardingAvailable, isOnsiteFormComplete, isStandingOpen, orderedStopsForLeg, placesLeft, stopLabel } from '../cashTicket';
 import { formatManilaDateTime } from '../dates';
 
 const rs = (id, order, type = 'stop', name = `Stop ${id}`) => ({ stop_id: id, stop_order: order, stop_type: type, stop: { stop_id: id, stop_name: name } });
@@ -76,7 +76,7 @@ describe('capacityFromServer (one definition of "occupied": tickets sold)', () =
   const server = { capacity: { total: 40 }, sold: { total: 12 }, onboard: { total: 3 }, remaining: { total: 28 }, is_full: false };
 
   test('uses the server numbers and its is_full verdict as they are', () => {
-    expect(capacityFromServer(server)).toEqual({ capacity: 40, sold: 12, onboard: 3, isFull: false, remaining: 28 });
+    expect(capacityFromServer(server)).toEqual({ capacity: 40, sold: 12, onboard: 3, isFull: false, remaining: 28, standingOpen: false });
     // Passengers onboard never decide "full": only what the server says.
     expect(capacityFromServer({ ...server, onboard: { total: 40 } }).isFull).toBe(false);
     expect(capacityFromServer({ ...server, is_full: true }).isFull).toBe(true);
@@ -84,7 +84,27 @@ describe('capacityFromServer (one definition of "occupied": tickets sold)', () =
 
   test('falls back to the local count only when the server summary is missing', () => {
     expect(capacityFromServer(null, { capacity: 30, sold: 30, onboard: 1 }).isFull).toBe(true);
-    expect(capacityFromServer(undefined, {})).toMatchObject({ capacity: 0, isFull: false });
+    expect(capacityFromServer(undefined, {})).toMatchObject({ capacity: 0, isFull: false, standingOpen: false });
+  });
+});
+
+describe('isStandingOpen (standing only once every seat is sold)', () => {
+  const summary = (seatedLeft, standingLeft) => ({ capacity: { total: 40, seated: 30, standing: 10 }, remaining: { seated: seatedLeft, standing: standingLeft } });
+
+  test('closed while any seat is left', () => {
+    expect(isStandingOpen(summary(1, 10))).toBe(false);
+    expect(capacityFromServer({ ...summary(5, 10), sold: { total: 25 }, onboard: { total: 0 }, is_full: false }).standingOpen).toBe(false);
+  });
+
+  test('open once the seats are sold and standing places remain', () => {
+    expect(isStandingOpen(summary(0, 3))).toBe(true);
+    expect(capacityFromServer({ ...summary(0, 3), sold: { total: 37 }, onboard: { total: 0 }, is_full: false }).standingOpen).toBe(true);
+  });
+
+  test('closed when standing is also full, or when there are no counts to go on', () => {
+    expect(isStandingOpen(summary(0, 0))).toBe(false);
+    expect(isStandingOpen(null)).toBe(false);
+    expect(isStandingOpen({ capacity: { total: 40 } })).toBe(false);
   });
 });
 
@@ -139,5 +159,35 @@ describe('buildOnsiteItem', () => {
     expect(item).toEqual({ trip_id: 7, seat_type: 'seated', origin_stop_id: 2, destination_stop_id: 4 });
     expect(item).not.toHaveProperty('destination_lat');
     expect(item).not.toHaveProperty('alighting_point_id');
+  });
+});
+describe('placesLeft (capacity minus tickets sold, not the sold count)', () => {
+  const fleet = { seated_capacity: 30, standing_capacity: 10 };
+  test('subtracts the sold counters from the bus capacity', () => {
+    expect(placesLeft(fleet, { current_seated_capacity: 12, current_standing_capacity: 0 }, 'seated')).toBe(18);
+    expect(placesLeft(fleet, { current_seated_capacity: 30, current_standing_capacity: 4 }, 'standing')).toBe(6);
+  });
+  test('never below zero, and unknown without the bus capacity', () => {
+    expect(placesLeft(fleet, { current_seated_capacity: 31 }, 'seated')).toBe(0);
+    expect(placesLeft({}, { current_seated_capacity: 3 }, 'seated')).toBe('—');
+    expect(placesLeft(fleet, null, 'standing')).toBe(10);
+  });
+});
+
+describe('Passenger In check-ins (2026-10-26)', () => {
+  test('a checked-in sale names only the check-in: never a position or a stop', () => {
+    expect(buildOnsiteItem({ tripId: 7, form: { boarding_mode: 'checkin', pending_boarding_id: '12', origin_stop_id: '3', seat_type: 'seated', destination_stop_id: '9' } }))
+      .toEqual({ trip_id: 7, seat_type: 'seated', pending_boarding_id: 12, destination_stop_id: 9 });
+  });
+
+  test('is ready once a check-in and a destination are chosen', () => {
+    expect(isOnsiteFormComplete({ boarding_mode: 'checkin', pending_boarding_id: '', destination_stop_id: '9' })).toBe(false);
+    expect(isOnsiteFormComplete({ boarding_mode: 'checkin', pending_boarding_id: '12', destination_stop_id: '' })).toBe(false);
+    expect(isOnsiteFormComplete({ boarding_mode: 'checkin', pending_boarding_id: '12', destination_stop_id: '9' })).toBe(true);
+  });
+
+  test('labels a check-in by its time and the stop the fare counts from', () => {
+    expect(checkInLabel({ checked_in_at: '10:42', stop_name: 'Stop B' })).toBe('10:42 · after Stop B');
+    expect(checkInLabel(null)).toBe('');
   });
 });

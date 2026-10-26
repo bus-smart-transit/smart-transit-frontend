@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import PassengerService from '../../PassengerService/PassengerService';
-import { checkoutIdempotencyKey, clearCheckoutIdempotencyKey } from '../../../utils/checkoutIdempotency';
+import { checkoutIdempotencyKey, clearCheckoutIdempotencyKey, shouldDropCheckoutKey } from '../../../utils/checkoutIdempotency';
 import { readApiError } from '../../../services/bookingService';
 import { useBookingStops, useDepartures, useTripResolution } from './useBookingSearch';
 import useBookingLink from './useBookingLink';
@@ -144,6 +144,8 @@ export default function useBuyTicket({ onTicketPurchased }) {
     seat_type: 'seated',
     payment_channel: 'gcash',
     ticket_quantity: '1',
+    // §4.10: several tickets get one group QR in the email by default; unticked, one QR per ticket.
+    email_group_qr: true,
     use_rewards: false,
     reward_points_to_use: '',
     guest_email: '',
@@ -743,6 +745,7 @@ export default function useBuyTicket({ onTicketPurchased }) {
         booking_date: trip.trip_date,
         return_base_url: window.location.origin,
         payment_channel: form.payment_channel,
+        email_group_qr: quantity > 1 ? form.email_group_qr !== false : true,
       };
       // Only a guest is asked for an email, and only so we can find their ticket again;
       // the payment page collects everything else.
@@ -784,8 +787,8 @@ export default function useBuyTicket({ onTicketPurchased }) {
 
       setSuccess('Secure checkout opened in a new tab. Finish paying there, then come back to this page.');
     } catch (err) {
-      const status = err?.cause?.response?.status ?? err?.response?.status;
-      if (status === 422) clearCheckoutIdempotencyKey('passenger-online');
+      // §12: on a 422, or when the server says the earlier attempt is over, the next tap starts a fresh checkout.
+      if (shouldDropCheckoutKey(err)) clearCheckoutIdempotencyKey('passenger-online');
       setError(err.response?.data?.errors ? readApiError(err).message : err.message);
     } finally {
       setIsSubmitting(false);
@@ -793,6 +796,7 @@ export default function useBuyTicket({ onTicketPurchased }) {
   }, [
     canProceedToOnlinePayment,
     effectiveAlightingStopId,
+    form.email_group_qr,
     form.guest_email,
     form.origin_stop_id,
     form.payment_channel,

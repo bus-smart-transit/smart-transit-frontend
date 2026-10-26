@@ -4,7 +4,7 @@ import FaqAccordionItem from '../../ui/FaqAccordionItem';
 const FAQ_ITEMS = [
   { q: 'How do I create a SmartTransit account?', a: 'Click "Sign Up" from the homepage navigation, fill in your details, and verify your email to activate your account.' },
   { q: 'How do I book a trip?', a: 'Use the Search Trips panel on the homepage to find a route and date, then select "Book Seat" on the trip you want.' },
-  { q: 'Can I choose my seat?', a: 'Yes — after selecting a trip, choose your preferred seat type (seated or standing) during checkout.' },
+  { q: 'Can I choose my seat?', a: 'Every online ticket reserves a seat. Standing places are sold only on the bus, by the Chauffeur, once all seats are taken.' },
   { q: 'How do I pay for my booking?', a: 'Payments are completed online through your chosen payment method (GCash, Maya, or Card) during checkout.' },
   { q: 'Where can I find my digital ticket?', a: 'Once payment is confirmed, your digital ticket is available under "My Tickets" in your account.' },
   { q: 'Where can I find my QR code?', a: 'Your QR code is shown on your digital ticket — open it from My Tickets and present it when boarding.' },

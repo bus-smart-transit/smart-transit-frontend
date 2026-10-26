@@ -307,6 +307,20 @@ class OperatorService extends StaffBaseService {
     return await this.request('/operator/shift-blocks', 'POST', payload);
   }
 
+  // §4.8: the crew's time in / time out (Start Shift / End Shift) on one Manila date, read only.
+  async getCrewShifts(date) {
+    return await this.request('/operator/crew-shifts', 'GET', date ? { date } : {});
+  }
+
+  // Phase B (§4.13): the same block on every day From..To. Preview saves nothing; create makes the clean days.
+  async previewShiftBlockRange(payload) {
+    return await this.request('/operator/shift-blocks/range/preview', 'POST', payload);
+  }
+
+  async createShiftBlockRange(payload) {
+    return await this.request('/operator/shift-blocks/range', 'POST', payload);
+  }
+
   async updateShiftBlockAssignment(shiftBlockId, payload) {
     return await this.request(`/operator/shift-blocks/${shiftBlockId}`, 'PATCH', payload);
   }

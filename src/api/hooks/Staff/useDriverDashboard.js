@@ -125,8 +125,9 @@ export function useDriverPairing() {
         const data = res?.data ?? {};
         const nextPaired = data?.paired === true;
         const nextReason = data?.reason || '';
+        const nextOpensAt = data?.pairing_opens_at || null;
         setPairing((prev) => {
-          if (!prev.loading && prev.paired === nextPaired && prev.reason === nextReason) {
+          if (!prev.loading && prev.paired === nextPaired && prev.reason === nextReason && prev.opensAt === nextOpensAt) {
             return prev;
           }
 
@@ -134,6 +135,7 @@ export function useDriverPairing() {
             loading: false,
             paired: nextPaired,
             reason: nextReason,
+            opensAt: nextOpensAt,
           };
         });
       } catch {

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { checkoutIdempotencyKey, clearCheckoutIdempotencyKey } from '../checkoutIdempotency';
+import { checkoutIdempotencyKey, clearCheckoutIdempotencyKey, shouldDropCheckoutKey } from '../checkoutIdempotency';
 
 describe('checkout idempotency keys', () => {
   beforeEach(() => sessionStorage.clear());
@@ -33,5 +33,18 @@ describe('checkout idempotency keys', () => {
 
     clearCheckoutIdempotencyKey('passenger');
     expect(checkoutIdempotencyKey('passenger', { trip_id: 7 })).not.toBe(key);
+  });
+});
+
+describe('shouldDropCheckoutKey (§12)', () => {
+  const withResponse = (status, data) => new Error('x', { cause: { response: { status, data } } });
+  it('drops the key when the server says the earlier attempt is over, or on a 422', () => {
+    expect(shouldDropCheckoutKey(withResponse(409, { errors: { checkout: ['retry_with_new_key'] } }))).toBe(true);
+    expect(shouldDropCheckoutKey(withResponse(422, { errors: { items: ['bad'] } }))).toBe(true);
+  });
+  it('keeps it while the earlier attempt may still be processing, and on other errors', () => {
+    expect(shouldDropCheckoutKey(withResponse(409, { errors: null }))).toBe(false);
+    expect(shouldDropCheckoutKey(withResponse(503, {}))).toBe(false);
+    expect(shouldDropCheckoutKey(new Error('network'))).toBe(false);
   });
 });

@@ -192,3 +192,7 @@ describe('describeBlockFocus (the shift block changed after the notification)', 
     expect(describeBlockFocus([card()], null)).toBeNull();
   });
 });
+test('§4.12: a Driver link to Earnings opens the Dashboard instead', () => {
+  expect(readDeepLink('?tab=earnings', 'driver').tab).toBeNull();
+  expect(readDeepLink('?tab=schedule', 'driver').tab).toBe('schedule');
+});

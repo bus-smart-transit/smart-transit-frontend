@@ -29,7 +29,7 @@ import useOnsiteQuote from '../../api/hooks/Staff/useOnsiteQuote';
 import { getBusinessToday, getBusinessTodayLabel } from '../../utils/dates';
 import { todaySummary } from '../../utils/assignmentCards';
 import { shiftActionReason, ticketingReason } from '../../utils/actionReasons';
-import { destinationsAhead, isOnsiteFormComplete, orderedStopsForLeg, stopLabel } from '../../utils/cashTicket';
+import { checkInLabel, destinationsAhead, isOnsiteFormComplete, orderedStopsForLeg, placesLeft, stopLabel } from '../../utils/cashTicket';
 import { isExpress } from '../../utils/serviceType';
 import ServiceTypeChip from '../ui/ServiceTypeChip';
 import { deriveTripStatus } from '../../utils/tripStatus';
@@ -177,6 +177,10 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     boardingPoint,
     boardingView,
     refreshBoardingPoint,
+    checkIns,
+    checkInBusy,
+    handlePassengerIn,
+    quoteNonce,
     loading,
     error,
     actionMsg, setActionMsg,
@@ -256,7 +260,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     const completed = await handleConfirmedOnsiteCheckout({
       discount_type_key: onsiteDiscountTypeKey,
       discount_id_checked: onsiteDiscountIdChecked,
-    });
+    }, onsiteQuote.status === 'ready' ? onsiteQuote.amount : null);
     if (completed) {
       setOnsiteDiscountTypeKey('');
       setOnsiteDiscountIdChecked(false);
@@ -273,14 +277,17 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   const tripIsExpress = isExpress(trip?.service_type);
   // Task 6: by bus position the server names the stops ahead of the bus; by stop, the stops after the boarding stop.
   const byBusPosition = cashForm.boarding_mode === 'gps';
+  // Passenger In (2026-10-26): a checked-in passenger's fare counts from the stop kept at check-in.
+  const byCheckIn = cashForm.boarding_mode === 'checkin';
+  const selectedCheckIn = byCheckIn ? checkIns.find((c) => String(c.id) === String(cashForm.pending_boarding_id)) ?? null : null;
   const destinationOptions = byBusPosition
     ? boardingView.destinations.map((d) => ({ stop_id: d.stop_id, stop_name: `${d.stop_name} (${d.distance_km} km)` }))
-    : destinationsAhead(legStops, onsiteForm.origin_stop_id);
-  const boardingReady = byBusPosition ? boardingView.good : Boolean(onsiteForm.origin_stop_id);
+    : destinationsAhead(legStops, byCheckIn ? selectedCheckIn?.stop_id : onsiteForm.origin_stop_id);
+  const boardingReady = byBusPosition ? boardingView.good : byCheckIn ? Boolean(selectedCheckIn) : Boolean(onsiteForm.origin_stop_id);
   const formReady = isOnsiteFormComplete(cashForm, boardingView);
   // The exact fare, asked of the server as soon as the boarding point and destination are chosen; by bus position it is
   // asked again whenever the position is refreshed.
-  const onsiteQuote = useOnsiteQuote({ tripId: trip?.trip_id, form: cashForm, ready: formReady, refreshKey: byBusPosition ? boardingView.distanceFromOriginKm : 0 });
+  const onsiteQuote = useOnsiteQuote({ tripId: trip?.trip_id, form: cashForm, ready: formReady, refreshKey: `${byBusPosition ? boardingView.distanceFromOriginKm : 0}-${quoteNonce}` });
 
   const headerBadge = resolveConductorHeaderBadge({
     pairingLoading: pairing.loading,
@@ -682,15 +689,30 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
 
                   <div className="space-y-3">
                     {midTripAvailable && (
+                      <div className="rounded-lg border border-teal-200 bg-teal-50 p-3" data-testid="passenger-in">
+                        <button
+                          type="button"
+                          onClick={handlePassengerIn}
+                          disabled={checkInBusy || !isPaired || !hasOpenShift}
+                          className="w-full rounded-lg bg-teal-600 px-3 py-2.5 text-sm font-bold text-white transition hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {checkInBusy ? 'Checking in...' : 'Passenger In'}
+                        </button>
+                        <p className="mt-1 text-xs text-teal-900">Tap as someone boards between stops. Their fare counts from the last stop passed, however late you collect it.</p>
+                        <p className="mt-1 text-xs font-semibold text-teal-900">{checkIns.length === 1 ? '1 passenger waiting to pay' : `${checkIns.length} passengers waiting to pay`}</p>
+                      </div>
+                    )}
+
+                    {midTripAvailable && (
                       <div>
                         <p className="mb-1 text-sm font-semibold text-slate-700">Where does the passenger board?</p>
-                        <div role="group" aria-label="Boarding point" data-testid="boarding-mode" className="grid grid-cols-2 gap-2">
-                          {[['stop', 'At a stop'], ['gps', 'Bus position']].map(([mode, label]) => (
+                        <div role="group" aria-label="Boarding point" data-testid="boarding-mode" className="grid grid-cols-3 gap-2">
+                          {[['checkin', 'Checked in'], ['stop', 'At a stop'], ['gps', 'Bus position now']].map(([mode, label]) => (
                             <button
                               key={mode}
                               type="button"
                               aria-pressed={cashForm.boarding_mode === mode}
-                              onClick={() => setOnsiteForm((prev) => ({ ...prev, boarding_mode: mode, destination_stop_id: '' }))}
+                              onClick={() => setOnsiteForm((prev) => ({ ...prev, boarding_mode: mode, pending_boarding_id: '', destination_stop_id: '' }))}
                               className={`rounded-lg border px-3 py-2 text-sm font-semibold transition ${cashForm.boarding_mode === mode ? 'border-teal-500 bg-teal-50 text-teal-800' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'}`}
                             >
                               {label}
@@ -705,7 +727,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                         {boardingPoint.loading && !boardingPoint.response ? (
                           <p>Reading the bus position...</p>
                         ) : boardingView.good ? (
-                          <p>Boarding at the bus's current position, {boardingView.distanceFromOriginKm} km from the start of the route. The server sets the fare from there.</p>
+                          <p>No check-in: the fare counts from the last stop the bus has passed now ({boardingView.distanceFromOriginKm} km along). Use Passenger In as people board so a late collection does not lower the fare.</p>
                         ) : (
                           <>
                             <p className="font-semibold">The bus position can't be used right now.</p>
@@ -730,7 +752,24 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                       </div>
                     )}
 
-                    {!byBusPosition && (
+                    {byCheckIn && (
+                    <div>
+                      <label htmlFor="onsite-checkin" className="mb-1 block text-sm font-semibold text-slate-700">Checked-in passenger</label>
+                      <select
+                        id="onsite-checkin"
+                        value={cashForm.pending_boarding_id}
+                        onChange={(e) => setOnsiteForm((prev) => ({ ...prev, pending_boarding_id: e.target.value, destination_stop_id: '' }))}
+                        className="h-11 w-full rounded-lg border border-slate-300 bg-slate-800 px-3 text-sm text-white outline-none focus:border-teal-500"
+                      >
+                        <option value="">{checkIns.length ? 'Select who is paying' : 'Nobody is waiting to pay'}</option>
+                        {checkIns.map((checkIn) => (
+                          <option key={`checkin-${checkIn.id}`} value={checkIn.id}>{checkInLabel(checkIn)}</option>
+                        ))}
+                      </select>
+                    </div>
+                    )}
+
+                    {!byBusPosition && !byCheckIn && (
                     <div>
                       <label htmlFor="onsite-origin" className="mb-1 block text-sm font-semibold text-slate-700">Boarding stop</label>
                       <select
@@ -770,13 +809,16 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                     <div>
                       <label className="mb-1 block text-sm font-semibold text-slate-700">Passenger Type</label>
                       <select
-                        value={onsiteForm.seat_type}
+                        value={cashForm.seat_type}
                         onChange={(e) => setOnsiteForm((prev) => ({ ...prev, seat_type: e.target.value }))}
                         className="h-11 w-full rounded-lg border border-slate-300 bg-slate-800 px-3 text-sm text-white outline-none focus:border-teal-500"
                       >
                         <option value="seated">Regular</option>
-                        <option value="standing">Standing</option>
+                        {cashCapacity.standingOpen && <option value="standing">Standing</option>}
                       </select>
+                      {!cashCapacity.standingOpen && (
+                        <p className="mt-1 text-xs text-slate-500">Standing is offered once every seat is sold.</p>
+                      )}
                     </div>
 
                     <div>
@@ -817,7 +859,10 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                         {onsiteQuote.status === 'idle' && <span className="text-sm text-slate-600">Select boarding point and destination first</span>}
                       </output>
                       {byBusPosition && onsiteQuote.status === 'ready' && (
-                        <p className="mt-1 text-xs text-slate-500">By bus position the fare follows the bus. Use Refresh position to update it just before you sell.</p>
+                        <p className="mt-1 text-xs text-slate-500">Without a check-in the fare follows the bus. Use Refresh position just before you sell.</p>
+                      )}
+                      {byCheckIn && onsiteQuote.status === 'ready' && (
+                        <p className="mt-1 text-xs text-slate-500">Counted from {selectedCheckIn?.stop_name}, where this passenger was checked in.</p>
                       )}
                     </div>
 
@@ -1138,6 +1183,15 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                 <p className="mt-1 text-xs text-slate-500">Opening ₱{Number(earnings.shift.opening_cash).toFixed(2)} + cash sales ₱{Number(earnings.shift.cash_sales).toFixed(2)} - cash refunds ₱{Number(earnings.shift.cash_refunds).toFixed(2)}</p>
               </div>
             )}
+            {Array.isArray(earnings?.unpaid_check_ins) && earnings.unpaid_check_ins.length > 0 && (
+              <div className="staff-card mb-4 border-amber-200 bg-amber-50" data-testid="unpaid-check-ins">
+                <p className="text-sm font-bold text-amber-900">Checked in but not paid ({earnings.unpaid_check_ins.length})</p>
+                <p className="mt-1 text-xs text-amber-800">These passengers were checked in on this shift and no fare was collected before the trip ended. Your Operator sees this list too.</p>
+                <ul className="mt-2 space-y-1 text-sm text-amber-900">
+                  {earnings.unpaid_check_ins.map((checkIn) => <li key={checkIn.id}>{checkInLabel(checkIn)}</li>)}
+                </ul>
+              </div>
+            )}
             {/* Trip breakdown */}
             <div className="staff-card staff-card-flush overflow-hidden">
               <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
@@ -1184,6 +1238,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
               role="conductor"
               paired={isPaired}
               pairingReason={pairingReason}
+              pairingOpensAt={pairing?.opensAt}
               onPaired={() => {
                 void refreshPairingStatus();
                 void loadData();
@@ -1293,7 +1348,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
             <h3 className="mb-2 text-base font-bold text-slate-100">Save this cash payment?</h3>
             <p className="mb-4 text-sm text-slate-400">This will create a payment record. <strong className="text-amber-300">This cannot be undone.</strong></p>
             <dl className="mb-4 grid grid-cols-2 gap-2 rounded-lg bg-slate-800 p-3 text-sm">
-              <div><dt className="text-xs text-slate-500">Passenger Type</dt><dd className="font-semibold text-slate-100 capitalize">{onsiteForm.seat_type}</dd></div>
+              <div><dt className="text-xs text-slate-500">Passenger Type</dt><dd className="font-semibold text-slate-100 capitalize">{cashForm.seat_type}</dd></div>
               <div><dt className="text-xs text-slate-500">Trip ID</dt><dd className="font-semibold text-slate-100">#{trip?.trip_id}</dd></div>
               {onsiteQuote.status === 'ready' && (
                 <div className="col-span-2"><dt className="text-xs text-slate-500">Fare to collect</dt><dd className="font-data text-2xl font-bold text-emerald-300">&#8369;{onsiteQuote.amount.toFixed(2)}</dd></div>
@@ -1333,8 +1388,8 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                   ['Fleet', fleet.plate_number || '—'],
                   ['Fleet type', fleet.fleet_type || '—'],
                   ['Total capacity', fleet.capacity ?? '—'],
-                  ['Seated remaining', td.current_seated_capacity ?? '—'],
-                  ['Standing remaining', td.current_standing_capacity ?? '—'],
+                  ['Seats left', placesLeft(fleet, td, 'seated')],
+                  ['Standing places left', placesLeft(fleet, td, 'standing')],
                 ].map(([k, v]) => (
                   <div key={k} className="flex items-center justify-between gap-4 border-b border-slate-800 pb-2">
                     <span className="text-slate-500 capitalize">{k}</span>
