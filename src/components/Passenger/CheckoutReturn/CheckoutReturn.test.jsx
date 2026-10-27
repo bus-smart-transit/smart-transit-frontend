@@ -6,6 +6,7 @@ vi.mock('../../../services/bookingService', () => ({ getPaymentStatus: vi.fn() }
 
 import { getPaymentStatus } from '../../../services/bookingService';
 import CheckoutReturn from './CheckoutReturn';
+import { nextCheckDelay } from '../../../utils/checkoutPolling';
 
 const renderAt = (path) => render(
   <MemoryRouter initialEntries={[path]}>
@@ -86,5 +87,18 @@ describe('CheckoutReturn (C4: the webhook decides, the return URL only refreshes
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+// 2026-10-27: after a 429 the page waits as long as the server asks before checking again.
+describe('nextCheckDelay', () => {
+  test('waits the usual 3 seconds after an ordinary error', () => {
+    expect(nextCheckDelay(new Error('offline'), 3000)).toBe(3000);
+  });
+
+  test('waits for Retry-After after "too many requests", at most a minute', () => {
+    expect(nextCheckDelay({ response: { status: 429, headers: { 'retry-after': '20' } } }, 3000)).toBe(20000);
+    expect(nextCheckDelay({ response: { status: 429, headers: { 'retry-after': '900' } } }, 3000)).toBe(60000);
+    expect(nextCheckDelay({ response: { status: 429, headers: {} } }, 3000)).toBe(60000);
   });
 });

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { getPaymentStatus } from '../../../services/bookingService';
+import { nextCheckDelay } from '../../../utils/checkoutPolling';
 
 const CHECKOUT_EVENT_KEY = 'smart_transit_checkout_event';
 const POLL_INTERVAL_MS = 3000;
@@ -60,16 +61,18 @@ export default function CheckoutReturn() {
 
       const attempts = returnedAs === 'success' ? POLL_MAX_ATTEMPTS : 1;
       for (let attempt = 1; attempt <= attempts; attempt += 1) {
+        let delay = POLL_INTERVAL_MS;
         try {
           const status = await getPaymentStatus(reference);
           if (status?.status === 'paid') return 'success';
           if (status?.status === 'failed') return 'failed';
           if (status?.status === 'expired') return 'expired';
-        } catch {
-          // Treat as not-yet-known and keep trying.
+        } catch (error) {
+          // Not yet known: keep trying, later when the server said "too many requests".
+          delay = nextCheckDelay(error, POLL_INTERVAL_MS);
         }
         if (cancelled) return null;
-        if (attempt < attempts) await wait(POLL_INTERVAL_MS);
+        if (attempt < attempts) await wait(delay);
         if (cancelled) return null;
       }
       return returnedAs === 'success' ? 'pending' : 'cancel';

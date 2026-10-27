@@ -199,7 +199,7 @@ function DispatchDecisionBoard({ advice, history, historyLoading, historyError, 
  * last GPS positions (utils/operatorDashboardView.js). There is no revenue here (it lives in Finance), no trend arrows,
  * and no map: those either have no real data behind them or belong to other pages.
  */
-export default function OperatorDashboardPage({ trips, drivers, conductors, fleets, topSlot = null, onRefresh, onOpenCalendar, onOpenSchedule }) {
+export default function OperatorDashboardPage({ trips, fleets, topSlot = null, onRefresh, onOpenCalendar, onOpenSchedule }) {
   const nowMs = useNow();
   const { locations, refresh: refreshLocations } = useFleetLocations();
   const { savingTripId, error, decide, history, historyLoading, historyError, setHistoryFilters } = useDispatchAdvice({ onSaved: onRefresh });
@@ -317,12 +317,7 @@ export default function OperatorDashboardPage({ trips, drivers, conductors, flee
         <DashboardCalendar service={OperatorService} onOpenFull={onOpenCalendar} />
         <CalendarSummaryStrip service={OperatorService} refreshKey={trips} stacked className="content-start" />
       </div>
-
-      <section aria-label="Roster" className="grid grid-cols-3 gap-4">
-        <OpStat label="Drivers" value={drivers.length} />
-        <OpStat label="Chauffeurs" value={conductors.length} />
-        <OpStat label="Fleets" value={fleets.length} />
-      </section>
+      {/* 2026-10-27: the roster counts moved to the top of the Staffs page (StaffRoster). */}
     </div>
   );
 }

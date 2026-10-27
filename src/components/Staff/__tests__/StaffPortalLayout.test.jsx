@@ -79,3 +79,19 @@ describe('mobile menu', () => {
     expect(aside.className).toMatch(/\bhidden\b/);
   });
 });
+
+// 2026-10-27: the Operator's notification bell sits in the sidebar, beside the profile.
+describe('profile action in the sidebar', () => {
+  it('shows the action beside the profile name', () => {
+    const { aside } = setup('dashboard', { profileAction: <button type="button">Notifications</button> });
+    const action = aside.querySelector('[data-testid="profile-action"]');
+    expect(action).not.toBeNull();
+    expect(action.parentElement.textContent).toContain('Olive Operator');
+    expect(action.textContent).toBe('Notifications');
+  });
+
+  it('shows nothing extra when no action is given', () => {
+    const { aside } = setup('dashboard');
+    expect(aside.querySelector('[data-testid="profile-action"]')).toBeNull();
+  });
+});

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import StaffPortalLayout from './StaffPortalLayout'
 import OperatorDashboardPage from './Operator/OperatorDashboardPage'
+import StaffRoster from './Operator/StaffRoster'
 import FleetsPage from './Operator/FleetsPage'
 import RoutesPage from './Operator/RoutesPage'
 import StaffCalendar from './StaffCalendar'
@@ -76,6 +77,7 @@ function Modal({ title, onClose, children }) {
   )
 }
 
+// 2026-10-27: in the sidebar beside the profile (dark background), so its button is styled for it.
 function NotificationBell() {
   const {
     open, setOpen,
@@ -91,8 +93,8 @@ function NotificationBell() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="relative flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:bg-slate-50"
-        aria-label="Notifications"
+        className="relative flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-white/10 text-slate-200 transition hover:bg-white/20 hover:text-white"
+        aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : 'Notifications'}
       >
         <Bell className="h-4.5 w-4.5" />
         {unreadCount > 0 && (
@@ -896,12 +898,10 @@ export default function OperatorDashboard() {
       profileRoleLabel="Operator"
       profileInitialFallback="O"
       onLogout={handleLogout}
+      profileAction={<NotificationBell />}
     >
         {/* w-0 min-w-full: a wide table inside a page must scroll in its card, not widen the whole portal column. */}
         <div className="w-0 min-w-full">
-        <div className="mb-4 flex justify-end">
-          <NotificationBell />
-        </div>
         {activeTab === 'dashboard'  && (
           <OperatorDashboardPage
             trips={trips}
@@ -927,6 +927,7 @@ export default function OperatorDashboard() {
         )}
         {activeTab === 'staffs'     && (
           <div className="space-y-4">
+            <StaffRoster drivers={drivers} conductors={conductors} fleets={fleets} />
             <StaffDirectoryTab drivers={drivers} conductors={conductors} onRefresh={loadFull} onCreateAccount={handleCreateAccount} />
             <CrewShiftTimes />
           </div>

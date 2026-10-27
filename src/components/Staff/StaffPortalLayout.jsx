@@ -20,6 +20,7 @@ export default function StaffPortalLayout({
   profileRoleLabel,
   profileInitialFallback = '?',
   onLogout,
+  profileAction = null,
   children,
 }) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -93,15 +94,21 @@ export default function StaffPortalLayout({
 
         {/* Bottom: profile + logout */}
         <div className="space-y-3">
-          {profile && (
+          {/* 2026-10-27: profileAction (the Operator's notification bell) sits beside the profile. */}
+          {(profile || profileAction) && (
             <div className="flex items-center gap-3 rounded-xl bg-white/10 px-3 py-2.5">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-teal-500 text-sm font-bold text-white">
-                {(profile.name || profileInitialFallback)[0].toUpperCase()}
-              </div>
-              <div className="min-w-0">
-                <p className="truncate text-sm font-semibold text-white">{profile.name}</p>
-                <p className="truncate text-xs text-slate-400">{profileRoleLabel}</p>
-              </div>
+              {profile && (
+                <>
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-teal-500 text-sm font-bold text-white">
+                    {(profile.name || profileInitialFallback)[0].toUpperCase()}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-white">{profile.name}</p>
+                    <p className="truncate text-xs text-slate-400">{profileRoleLabel}</p>
+                  </div>
+                </>
+              )}
+              {profileAction && <div className="ml-auto shrink-0" data-testid="profile-action">{profileAction}</div>}
             </div>
           )}
           <button
