@@ -28,6 +28,20 @@ export function destinationsAhead(orderedStops, originStopId) {
   return index < 0 ? [] : orderedStops.slice(index + 1);
 }
 
+/**
+ * 2026-10-27 (§6): on a bus already on the road, the destinations the Driver has not passed yet: the stops after the
+ * last acknowledged one, in leg order. Before any acknowledgement every stop is still ahead. The server refuses a
+ * passed destination as well; the boarding stop may be behind the bus (a passenger who got on there pays now).
+ */
+export function destinationsNotPassed(destinations, orderedStops, lastAcknowledgedStopId) {
+  const ack = Number(lastAcknowledgedStopId);
+  if (!ack) return destinations;
+  const ackIndex = orderedStops.findIndex((s) => stopId(s) === ack);
+  if (ackIndex < 0) return destinations;
+  const passed = new Set(orderedStops.slice(0, ackIndex + 1).map((s) => stopId(s)));
+  return destinations.filter((s) => !passed.has(stopId(s)));
+}
+
 export const stopLabel = (routeStop) =>
   routeStop?.stop?.stop_name || routeStop?.stop_name || `Stop ${stopId(routeStop)}`;
 

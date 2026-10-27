@@ -22,7 +22,7 @@ describe('useOnsiteQuote', () => {
     const { result } = renderHook(() => useOnsiteQuote({ tripId: 7, form, ready: true }));
 
     expect(result.current.status).toBe('loading');
-    await waitFor(() => expect(result.current).toEqual({ status: 'ready', amount: 35, message: '' }));
+    await waitFor(() => expect(result.current).toEqual({ status: 'ready', amount: 35, originalAmount: null, discountAmount: null, discountLabel: null, message: '' }));
     expect(quoteOnsite).toHaveBeenCalledWith({ trip_id: 7, seat_type: 'seated', origin_stop_id: 1, destination_stop_id: 3 });
   });
 
@@ -46,6 +46,34 @@ describe('useOnsiteQuote', () => {
     await waitFor(() => expect(result.current.status).toBe('error'));
     expect(result.current.message).toContain('destination must be ahead');
     expect(result.current.amount).toBeNull();
+  });
+
+  it('includes an onsite discount only once the ID check is ticked, and shows the regular fare beside it', async () => {
+    quoteOnsite.mockResolvedValueOnce({ data: { amount: 35 } })
+      .mockResolvedValueOnce({ data: { amount: 28, original_amount: 35, discount_amount: 7, discount_label: 'Student' } });
+    const { result, rerender } = renderHook(({ d }) => useOnsiteQuote({ tripId: 7, form, ready: true, discount: d }), {
+      initialProps: { d: { discount_type_key: 'student', discount_id_checked: false } },
+    });
+    await waitFor(() => expect(result.current.amount).toBe(35));
+    expect(quoteOnsite).toHaveBeenLastCalledWith({ trip_id: 7, seat_type: 'seated', origin_stop_id: 1, destination_stop_id: 3 });
+
+    rerender({ d: { discount_type_key: 'student', discount_id_checked: true } });
+
+    await waitFor(() => expect(result.current.amount).toBe(28));
+    expect(result.current).toMatchObject({ originalAmount: 35, discountAmount: 7, discountLabel: 'Student' });
+    expect(quoteOnsite).toHaveBeenLastCalledWith({ trip_id: 7, seat_type: 'seated', origin_stop_id: 1, destination_stop_id: 3, discount_type_key: 'student', discount_id_checked: true });
+  });
+
+  it('asks again when the Chauffeur picks a different check-in', async () => {
+    quoteOnsite.mockResolvedValueOnce({ data: { amount: 40 } }).mockResolvedValueOnce({ data: { amount: 50 } });
+    const checkin = { ...form, boarding_mode: 'checkin', origin_stop_id: '', pending_boarding_id: '4' };
+    const { result, rerender } = renderHook(({ f }) => useOnsiteQuote({ tripId: 7, form: f, ready: true }), { initialProps: { f: checkin } });
+    await waitFor(() => expect(result.current.amount).toBe(40));
+
+    rerender({ f: { ...checkin, pending_boarding_id: '5' } });
+
+    await waitFor(() => expect(result.current.amount).toBe(50));
+    expect(quoteOnsite).toHaveBeenLastCalledWith({ trip_id: 7, seat_type: 'seated', pending_boarding_id: 5, destination_stop_id: 3 });
   });
 
   it('asks again for the same form when the bus position is refreshed', async () => {

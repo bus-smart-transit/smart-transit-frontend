@@ -14,6 +14,7 @@ import {
   Ticket,
   UserCheck,
 } from 'lucide-react';
+import DropOffGroups from './DropOffGroups';
 import PairingScreen from './PairingScreen';
 import StaffPortalLayout from './StaffPortalLayout';
 import ProfilePage from '../Account/ProfilePage';
@@ -27,9 +28,10 @@ import NotificationBellButton from './NotificationBellButton';
 import { useConductorPairing, useConductorDashboardData } from '../../api/hooks/Staff/useConductorDashboard';
 import useOnsiteQuote from '../../api/hooks/Staff/useOnsiteQuote';
 import { getBusinessToday, getBusinessTodayLabel } from '../../utils/dates';
+import { downloadShiftSummary } from '../../utils/shiftSummaryReport';
 import { todaySummary } from '../../utils/assignmentCards';
 import { shiftActionReason, ticketingReason } from '../../utils/actionReasons';
-import { checkInLabel, destinationsAhead, isOnsiteFormComplete, orderedStopsForLeg, placesLeft, stopLabel } from '../../utils/cashTicket';
+import { checkInLabel, destinationsAhead, destinationsNotPassed, isOnsiteFormComplete, orderedStopsForLeg, placesLeft, stopLabel } from '../../utils/cashTicket';
 import { isExpress } from '../../utils/serviceType';
 import ServiceTypeChip from '../ui/ServiceTypeChip';
 import { deriveTripStatus } from '../../utils/tripStatus';
@@ -231,6 +233,8 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     handleScan,
     startScanner,
     handleAlight,
+    handleConfirmDropOff,
+    dropOffGroups,
     handleVerifyPin,
     handleOnsiteCheckout,
     handleConfirmedOnsiteCheckout,
@@ -282,12 +286,22 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   const selectedCheckIn = byCheckIn ? checkIns.find((c) => String(c.id) === String(cashForm.pending_boarding_id)) ?? null : null;
   const destinationOptions = byBusPosition
     ? boardingView.destinations.map((d) => ({ stop_id: d.stop_id, stop_name: `${d.stop_name} (${d.distance_km} km)` }))
-    : destinationsAhead(legStops, byCheckIn ? selectedCheckIn?.stop_id : onsiteForm.origin_stop_id);
+    : destinationsNotPassed(
+      destinationsAhead(legStops, byCheckIn ? selectedCheckIn?.stop_id : onsiteForm.origin_stop_id),
+      legStops,
+      ['departed', 'in-progress'].includes(trip?.status) ? trip?.last_acknowledged_stop_id : null,
+    );
   const boardingReady = byBusPosition ? boardingView.good : byCheckIn ? Boolean(selectedCheckIn) : Boolean(onsiteForm.origin_stop_id);
   const formReady = isOnsiteFormComplete(cashForm, boardingView);
   // The exact fare, asked of the server as soon as the boarding point and destination are chosen; by bus position it is
   // asked again whenever the position is refreshed.
-  const onsiteQuote = useOnsiteQuote({ tripId: trip?.trip_id, form: cashForm, ready: formReady, refreshKey: `${byBusPosition ? boardingView.distanceFromOriginKm : 0}-${quoteNonce}` });
+  const onsiteQuote = useOnsiteQuote({
+    tripId: trip?.trip_id,
+    form: cashForm,
+    ready: formReady,
+    refreshKey: `${byBusPosition ? boardingView.distanceFromOriginKm : 0}-${quoteNonce}`,
+    discount: { discount_type_key: onsiteDiscountTypeKey, discount_id_checked: onsiteDiscountIdChecked },
+  });
 
   const headerBadge = resolveConductorHeaderBadge({
     pairingLoading: pairing.loading,
@@ -858,6 +872,14 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                         {onsiteQuote.status === 'error' && <span role="alert" className="text-sm font-semibold text-red-700">{onsiteQuote.message}</span>}
                         {onsiteQuote.status === 'idle' && <span className="text-sm text-slate-600">Select boarding point and destination first</span>}
                       </output>
+                      {onsiteQuote.status === 'ready' && onsiteQuote.discountAmount > 0 && (
+                        <p className="mt-1 text-xs text-slate-600" data-testid="onsite-fare-discount">
+                          Regular fare &#8369;{onsiteQuote.originalAmount.toFixed(2)}, {onsiteQuote.discountLabel} discount -&#8369;{onsiteQuote.discountAmount.toFixed(2)}.
+                        </p>
+                      )}
+                      {onsiteQuote.status === 'ready' && onsiteDiscountTypeKey && !onsiteDiscountIdChecked && (
+                        <p className="mt-1 text-xs text-amber-700">Tick the ID check to see the discounted fare.</p>
+                      )}
                       {byBusPosition && onsiteQuote.status === 'ready' && (
                         <p className="mt-1 text-xs text-slate-500">Without a check-in the fare follows the bus. Use Refresh position just before you sell.</p>
                       )}
@@ -1068,6 +1090,17 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
               </div>
             ) : (
               <div className="space-y-4">
+                <DropOffGroups
+                  groups={dropOffGroups}
+                  passengers={passengers}
+                  disabled={!isPaired}
+                  disabledReason="You must be paired before you can confirm a drop-off."
+                  onConfirm={handleConfirmDropOff}
+                />
+                {/* §7: one at a time is the exception path; the groups above are the usual way. */}
+                <details className="rounded-xl border border-slate-200 bg-white p-3" open={!dropOffGroups.length}>
+                  <summary className="cursor-pointer text-sm font-semibold text-slate-700">Each passenger, one at a time</summary>
+                  <div className="mt-3 space-y-4">
                 {groupedPassengers.map((group) => (
                   <div key={`passenger-group-${group.key}`} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                     <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -1120,6 +1153,8 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                     </div>
                   </div>
                 ))}
+                  </div>
+                </details>
               </div>
             )}
           </section>
@@ -1139,7 +1174,12 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <h2 className="font-display text-lg font-bold text-slate-900">Shift Summary</h2>
               <div className="flex gap-2">
-                <button className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50">
+                <button
+                  type="button"
+                  onClick={() => downloadShiftSummary(earnings, { chauffeur: profile?.name ?? '', date: getBusinessToday() })}
+                  disabled={!earnings}
+                  className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                >
                   <Download className="h-3.5 w-3.5" />
                   Download Summary Report
                 </button>

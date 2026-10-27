@@ -325,6 +325,11 @@ class OperatorService extends StaffBaseService {
     return await this.request(`/operator/shift-blocks/${shiftBlockId}`, 'PATCH', payload);
   }
 
+  // 2026-10-27 (§4.2): move one leg that has not started to a new time.
+  async rescheduleShiftBlockLeg(shiftBlockId, tripId, departureTime) {
+    return await this.request(`/operator/shift-blocks/${shiftBlockId}/legs/${tripId}`, 'PATCH', { departure_time: departureTime });
+  }
+
   async cancelShiftBlock(shiftBlockId) {
     return await this.request(`/operator/shift-blocks/${shiftBlockId}/cancel`, 'PATCH');
   }

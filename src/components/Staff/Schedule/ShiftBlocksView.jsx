@@ -8,6 +8,7 @@ import {
 } from '../../../utils/shiftBlockView';
 import ShiftBlockCard from './ShiftBlockCard';
 import ShiftBlockFilterBar from './ShiftBlockFilterBar';
+import LegTimeEditor from './LegTimeEditor';
 
 const ACTION = 'rounded-lg px-3 py-1 text-xs font-semibold';
 
@@ -18,7 +19,7 @@ const ACTION = 'rounded-lg px-3 py-1 text-xs font-semibold';
  * lives on the Schedule page, not here.
  */
 export default function ShiftBlocksView({ reloadToken = 0 }) {
-  const { blocks, blockCards, loading, msg, handleCancel, handleOverrideHandoff, handleMarkReviewed } = useShiftBlocksTab(reloadToken);
+  const { blocks, blockCards, loading, msg, handleCancel, handleOverrideHandoff, handleMarkReviewed, handleRescheduleLeg } = useShiftBlocksTab(reloadToken);
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [view, setView] = useState('current');
   const today = getBusinessToday();
@@ -102,6 +103,9 @@ export default function ShiftBlocksView({ reloadToken = 0 }) {
                       showState={showsAssignmentState(card, today)}
                       audit={block && block.audit_status !== 'not_applicable' ? block.audit_status : null}
                       actions={actionsFor(card)}
+                      legEditor={block && block.status === 'scheduled' && Array.isArray(block.legs) && block.legs.some((leg) => ['scheduled', 'delayed'].includes(leg.status))
+                        ? <LegTimeEditor legs={block.legs} onSave={(tripId, time) => handleRescheduleLeg(block.shift_block_id, tripId, time)} />
+                        : null}
                     />
                   );
                 })}

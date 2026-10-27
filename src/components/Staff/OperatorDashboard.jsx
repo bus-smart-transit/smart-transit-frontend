@@ -15,6 +15,7 @@ import { useOperatorDashboardData, useNotificationBell, useTripRequests, useTrip
 import RunInfoChips from '../ui/RunInfoChips'
 import { CancelTripModal, TicketResolutionQueue } from './TripCancellationsPanel'
 import LegTimeSuggestion from './LegTimeSuggestion'
+import { addLeg, removeLastLeg } from '../../utils/legPlanning'
 import ScheduleRangePreview from './Schedule/ScheduleRangePreview'
 import CrewShiftTimes from './Operator/CrewShiftTimes'
 import { isRangeSchedule, rangeDayCount } from '../../utils/scheduleRange'
@@ -441,12 +442,28 @@ function ScheduleServiceModal({ state, drivers, conductors }) {
                 />
               ))}
             </div>
+            {/* 2026-10-27 (§4.2): no fixed number of legs; Suggest times works out how many fit. */}
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setForm((prev) => ({ ...prev, leg_departure_times: addLeg(Array.isArray(prev.leg_departure_times) ? prev.leg_departure_times : defaultLegTimesByBlock[prev.block_type] || defaultLegTimesByBlock.morning) }))}
+                className="rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 ring-1 ring-inset ring-slate-300 hover:bg-slate-100"
+              >
+                Add a leg
+              </button>
+              <button
+                type="button"
+                onClick={() => setForm((prev) => ({ ...prev, leg_departure_times: removeLastLeg(Array.isArray(prev.leg_departure_times) ? prev.leg_departure_times : defaultLegTimesByBlock[prev.block_type] || defaultLegTimesByBlock.morning) }))}
+                className="rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 ring-1 ring-inset ring-slate-300 hover:bg-slate-100"
+              >
+                Remove the last leg
+              </button>
+            </div>
             <LegTimeSuggestion
               fleetRouteId={form.fleet_route_id}
               date={form.trip_date}
               firstTime={(Array.isArray(form.leg_departure_times) ? form.leg_departure_times : defaultLegTimesByBlock[form.block_type] || defaultLegTimesByBlock.morning)[0]}
               serviceType={form.service_type || 'regular'}
-              expectedLegs={(Array.isArray(form.leg_departure_times) ? form.leg_departure_times : defaultLegTimesByBlock[form.block_type] || defaultLegTimesByBlock.morning).length}
               onApply={(times) => setForm((prev) => ({ ...prev, leg_departure_times: times }))}
             />
           </>

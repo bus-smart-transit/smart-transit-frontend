@@ -10,7 +10,7 @@ const plan = (legs) => ({ data: { buffer_minutes: 10, note: 'A suggestion only.'
 const leg = (i, dep, over = {}) => ({ leg_index: i, direction: i % 2 ? 'outbound' : 'reverse', suggested_departure: dep, spills_into_next_day: false, factor: 1, factor_label: null, expected_duration_minutes: 60, expected_end: '00:00', ...over })
 
 describe('LegTimeSuggestion', () => {
-  const props = { fleetRouteId: '5', date: '2026-10-06', firstTime: '06:00', serviceType: 'regular', expectedLegs: 2 }
+  const props = { fleetRouteId: '5', date: '2026-10-06', firstTime: '06:00', serviceType: 'regular' }
 
   test('suggests from the server and applies the times only when asked', async () => {
     OperatorService.planShiftBlockLegs.mockResolvedValue(plan([leg(1, '06:00'), leg(2, '07:10', { factor: 1.5, factor_label: 'configured' })]))
@@ -35,6 +35,24 @@ describe('LegTimeSuggestion', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Suggest times' }))
     await waitFor(() => expect(screen.getByRole('button', { name: 'Use these times' })).toBeDisabled())
     expect(screen.getByText(/no stop times/)).toBeInTheDocument()
+  })
+
+  test('applies however many legs the server planned, and shows its flags and the travel-time source', async () => {
+    OperatorService.planShiftBlockLegs.mockResolvedValue({ data: {
+      buffer_minutes: 30, note: 'A suggestion only.',
+      legs: [leg(1, '06:00', { duration_source_label: 'Measured from past trips' }), leg(2, '07:30'), leg(3, '09:00'), leg(4, '10:30'), leg(5, '12:00'), leg(6, '13:30')],
+      summary: { expected_finish: '14:30' },
+      flags: [{ code: 'overtime', message: 'The crew would work about 8 h 30 min.' }],
+    } })
+    const onApply = vi.fn()
+    render(<LegTimeSuggestion {...props} onApply={onApply} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Suggest times' }))
+
+    expect(await screen.findByTestId('plan-flags')).toHaveTextContent('8 h 30 min')
+    expect(screen.getByTestId('plan-summary')).toHaveTextContent('6 legs, finishing about 14:30')
+    expect(screen.getByTestId('suggested-legs')).toHaveTextContent('Measured from past trips')
+    fireEvent.click(screen.getByRole('button', { name: 'Use these times' }))
+    expect(onApply).toHaveBeenCalledWith(['06:00', '07:30', '09:00', '10:30', '12:00', '13:30'])
   })
 
   test('a server error is shown', async () => {

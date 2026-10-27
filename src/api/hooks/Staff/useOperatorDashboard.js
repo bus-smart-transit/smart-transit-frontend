@@ -4,6 +4,7 @@ import OperatorService from '../../StaffService/OperatorService';
 import { initFcmAndGetToken, stopForegroundListener } from '../../../services/fcmService';
 import { OPERATOR_ROLE, buildLocationSearch, defaultView, resolveOperatorLocation } from '../../../utils/operatorNav';
 import { isRangeSchedule, rangeKey, rangePayload } from '../../../utils/scheduleRange';
+import { planningMessage } from '../../../utils/legPlanning';
 
 // Architecture audit follow-up (CONF-03): OperatorDashboard.jsx's main
 // orchestrator component and its NotificationBell sub-component both called
@@ -780,7 +781,7 @@ export function useTripsTab({ trips, onRefresh }) {
     setSaving(true); setMsg('');
     try {
       if (form.trip_type === 'round_trip') {
-        await OperatorService.createShiftBlock({
+        const created = await OperatorService.createShiftBlock({
           fleet_route_id: Number(form.fleet_route_id),
           driver_id: Number(form.driver_id),
           conductor_id: Number(form.conductor_id),
@@ -791,7 +792,8 @@ export function useTripsTab({ trips, onRefresh }) {
             ? form.leg_departure_times
             : ['06:00', '08:30', '11:00', '13:30'],
         });
-        setMsg('Shift block scheduled.');
+        // 2026-10-27 (§4.2): the server's planning flags (overtime, driving limit, rest) for the saved times.
+        setMsg(planningMessage('Shift block scheduled.', created?.data?.planning?.flags));
       } else {
         await OperatorService.scheduleTrip({
           fleet_route_id: Number(form.fleet_route_id),
@@ -1062,6 +1064,17 @@ export function useShiftBlocksTab(reloadToken = 0) {
     }
   };
 
+  // 2026-10-27 (§4.2): move one leg; the answer (or the server's reason) is shown beside the leg.
+  const handleRescheduleLeg = async (shiftBlockId, tripId, departureTime) => {
+    try {
+      const res = await OperatorService.rescheduleShiftBlockLeg(shiftBlockId, tripId, departureTime);
+      void loadBlocks();
+      return { ok: true, message: planningMessage(`Leg moved to ${departureTime}. The crew was told.`, res?.data?.planning?.flags) };
+    } catch (err) {
+      return { ok: false, message: err?.message || 'The leg time could not be changed.' };
+    }
+  };
+
   const handleMarkReviewed = async (shiftBlockId) => {
     setMsg('');
     try {
@@ -1086,5 +1099,6 @@ export function useShiftBlocksTab(reloadToken = 0) {
     handleCancel,
     handleOverrideHandoff,
     handleMarkReviewed,
+    handleRescheduleLeg,
   };
 }

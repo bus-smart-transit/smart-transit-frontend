@@ -64,7 +64,7 @@ function crewSummary(card) {
  * be answered (`showState`); a finished, cancelled or past-dated block shows its status, or "Overdue - date has
  * passed", and nothing else about the answer.
  */
-export default function ShiftBlockCard({ card, showState, audit = null, actions = null }) {
+export default function ShiftBlockCard({ card, showState, audit = null, actions = null, legEditor = null }) {
   const [open, setOpen] = useState(false);
   const overdue = card.is_overdue === true || card.section === 'overdue';
   const auditChip = audit && AUDIT_CHIP[audit];
@@ -145,6 +145,8 @@ export default function ShiftBlockCard({ card, showState, audit = null, actions 
           <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">{card.legs_count === 1 ? 'Trip' : 'Trips in this block'}</h3>
           <AssignmentLegList card={card} />
         </section>
+
+        {legEditor}
 
         {card.reason_text && <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">Reason given: {card.reason_text}</p>}
 

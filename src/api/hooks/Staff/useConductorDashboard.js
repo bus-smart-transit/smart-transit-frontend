@@ -148,6 +148,7 @@ export function useConductorDashboardData({ onLogout, pairing }) {
   const [assignedTripsForView, setAssignedTripsForView] = useState([]);
   const [occupancy, setOccupancy] = useState(null);
   const [passengers, setPassengers] = useState([]);
+  const [dropOffGroups, setDropOffGroups] = useState([]);
   const [earnings, setEarnings] = useState(null);
   const [pinInput, setPinInput] = useState('');
   const [pinStatus, setPinStatus] = useState('');
@@ -420,8 +421,11 @@ export function useConductorDashboardData({ onLogout, pairing }) {
       const payload = res?.data;
       if (Array.isArray(payload)) {
         setPassengers(payload);
+        setDropOffGroups([]);
       } else {
         setPassengers(payload?.passengers ?? []);
+        // 2026-10-27 (§7): the server's destination groups.
+        setDropOffGroups(Array.isArray(payload?.destination_groups) ? payload.destination_groups : []);
       }
     } catch (err) {
       setError(err.message);
@@ -950,6 +954,25 @@ export function useConductorDashboardData({ onLogout, pairing }) {
     }
   }, [extractTicketUuid, handleGroupScan, handleScan, hasOpenShift, isPaired, pairingReason, stopScanner, trip?.trip_id]);
 
+  // 2026-10-27 (§7): one action for a whole destination group (minus anyone who stayed on).
+  const handleConfirmDropOff = async (group, ticketIds) => {
+    if (!isPaired) {
+      setActionMsg(pairingReason);
+      return false;
+    }
+    try {
+      const res = await ConductorService.confirmDropOffGroup(group.key, ticketIds);
+      const confirmed = res?.data?.confirmed ?? ticketIds.length;
+      setActionMsg(`${confirmed} ${confirmed === 1 ? 'passenger' : 'passengers'} got off at ${group.destination}.`);
+      void loadPassengers();
+      return true;
+    } catch (err) {
+      setActionMsg(err.message);
+      void loadPassengers();
+      return false;
+    }
+  };
+
   const handleAlight = async (ticketId) => {
     if (!isPaired) {
       setActionMsg(pairingReason);
@@ -1200,6 +1223,8 @@ export function useConductorDashboardData({ onLogout, pairing }) {
     handleGroupScan,
     startScanner,
     handleAlight,
+    handleConfirmDropOff,
+    dropOffGroups,
     handleVerifyPin,
     handleOnsiteCheckout,
     handleConfirmedOnsiteCheckout,

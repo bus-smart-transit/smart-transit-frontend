@@ -1,9 +1,21 @@
 import { describe, expect, test } from 'vitest';
-import { boardingPointView, buildOnsiteItem, capacityFromServer, checkInLabel, capacitySummary, destinationsAhead, isMidTripBoardingAvailable, isOnsiteFormComplete, isStandingOpen, orderedStopsForLeg, placesLeft, stopLabel } from '../cashTicket';
+import { boardingPointView, buildOnsiteItem, capacityFromServer, checkInLabel, capacitySummary, destinationsAhead, destinationsNotPassed, isMidTripBoardingAvailable, isOnsiteFormComplete, isStandingOpen, orderedStopsForLeg, placesLeft, stopLabel } from '../cashTicket';
 import { formatManilaDateTime } from '../dates';
 
 const rs = (id, order, type = 'stop', name = `Stop ${id}`) => ({ stop_id: id, stop_order: order, stop_type: type, stop: { stop_id: id, stop_name: name } });
 const stops = [rs(3, 3, 'stop'), rs(1, 1, 'terminal'), rs(2, 2, 'pass_through'), rs(4, 4, 'terminal')];
+
+describe('destinationsNotPassed (§6)', () => {
+  const stops = [1, 2, 3, 4].map((id) => ({ stop_id: id, stop: { stop_name: `S${id}` } }));
+
+  test('leaves out the stops the Driver has already passed', () => {
+    expect(destinationsNotPassed(stops.slice(1), stops, 2).map((s) => s.stop_id)).toEqual([3, 4]);
+  });
+
+  test('offers every destination before the first acknowledgement', () => {
+    expect(destinationsNotPassed(stops.slice(1), stops, null)).toHaveLength(3);
+  });
+});
 
 describe('orderedStopsForLeg', () => {
   test('outbound: ascending order, pass-through points are not choices', () => {

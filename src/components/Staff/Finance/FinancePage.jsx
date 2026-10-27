@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react';
+import OperatorService from '../../../api/StaffService/OperatorService';
 import ViewTabs from '../../ui/ViewTabs';
 import FinancialsPage from '../Financials/FinancialsPage';
 import RemittancesPage from '../Remittances/RemittancesPage';
 import PaymentRefundsPage from '../Refunds/PaymentRefundsPage';
 
-function DiscountTypesPanel({ service }) {
+// The Operator dashboard renders the Finance page without a service; like the other finance pages, the panel then
+// uses the Operator service.
+function DiscountTypesPanel({ service = OperatorService }) {
   const [types, setTypes] = useState([]);
   const [loading, setLoading] = useState(() => typeof service?.getDiscountTypes === 'function');
   const [savingKey, setSavingKey] = useState('');

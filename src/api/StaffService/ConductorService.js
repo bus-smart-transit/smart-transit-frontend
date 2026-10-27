@@ -65,6 +65,11 @@ class ConductorService extends StaffBaseService {
     return await this.request('/conductor/trips/current/occupancy/by-stop', 'GET');
   }
 
+  // 2026-10-27 (§7): a destination group got off (the server checks every ticket again).
+  async confirmDropOffGroup(destinationKey, ticketIds) {
+    return await this.request('/conductor/trips/current/drop-off-groups/confirm', 'POST', { destination_key: destinationKey, ticket_ids: ticketIds });
+  }
+
   async getCurrentPassengers() {
     return await this.request('/conductor/trips/current/passengers', 'GET');
   }
