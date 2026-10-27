@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from 'react'
 import StaffPortalLayout from './StaffPortalLayout'
 import OperatorDashboardPage from './Operator/OperatorDashboardPage'
 import StaffRoster from './Operator/StaffRoster'
+import NotificationGroupList from './NotificationGroupList'
+import { groupNotifications } from '../../utils/notificationGroups'
 import FleetsPage from './Operator/FleetsPage'
 import RoutesPage from './Operator/RoutesPage'
 import StaffCalendar from './StaffCalendar'
@@ -77,6 +79,8 @@ function Modal({ title, onClose, children }) {
   )
 }
 
+const OPERATOR_NOTIFICATION_FIELDS = { id: (n) => n.id, text: (n) => n.message }
+
 // 2026-10-27: in the sidebar beside the profile (dark background), so its button is styled for it.
 function NotificationBell() {
   const {
@@ -85,6 +89,7 @@ function NotificationBell() {
     unreadCount,
     loadingNotifications,
     handleMarkRead,
+    handleMarkGroupRead,
     handleMarkAllRead,
   } = useNotificationBell()
 
@@ -118,19 +123,12 @@ function NotificationBell() {
             ) : notifications.length === 0 ? (
               <p className="py-6 text-center text-sm text-slate-400">No notifications yet.</p>
             ) : (
-              notifications.map((n) => (
-                <div key={n.id} className={`rounded-lg border px-3 py-2.5 text-sm ${n.read_at ? 'border-slate-100 bg-slate-50 text-slate-500' : 'border-amber-200 bg-amber-50 text-amber-900'}`}>
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="font-semibold">{n.title}</p>
-                    {!n.read_at && (
-                      <button type="button" onClick={() => handleMarkRead(n.id)} className="shrink-0 text-xs font-semibold text-teal-600 hover:underline">
-                        Mark read
-                      </button>
-                    )}
-                  </div>
-                  <p className="mt-1 text-xs">{n.message}</p>
-                </div>
-              ))
+              // 2026-10-27: notifications of the same kind are one group (utils/notificationGroups).
+              <NotificationGroupList
+                groups={groupNotifications(notifications, OPERATOR_NOTIFICATION_FIELDS)}
+                fields={OPERATOR_NOTIFICATION_FIELDS}
+                onMarkRead={(ids) => (ids.length === 1 ? handleMarkRead(ids[0]) : handleMarkGroupRead(ids))}
+              />
             )}
           </div>
         </Modal>

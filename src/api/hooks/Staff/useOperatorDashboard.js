@@ -255,6 +255,14 @@ export function useNotificationBell() {  const [open, setOpen] = useState(false)
     } catch { /* no-op — bell state simply won't update this cycle */ }
   };
 
+  // 2026-10-27: a group of the same kind, marked read in one request.
+  const handleMarkGroupRead = async (ids) => {
+    try {
+      await OperatorService.markNotificationsRead(ids);
+      void loadNotifications();
+    } catch { /* no-op */ }
+  };
+
   const handleMarkAllRead = async () => {
     try {
       await OperatorService.markAllNotificationsRead();
@@ -268,6 +276,7 @@ export function useNotificationBell() {  const [open, setOpen] = useState(false)
     unreadCount,
     loadingNotifications,
     handleMarkRead,
+    handleMarkGroupRead,
     handleMarkAllRead,
   };
 }

@@ -221,6 +221,11 @@ class OperatorService extends StaffBaseService {
     return await this.request(`/operator/notifications/${id}/read`, 'PATCH');
   }
 
+  // 2026-10-27: one notification group in the bell, marked read at once.
+  async markNotificationsRead(ids) {
+    return await this.request('/operator/notifications/read-many', 'PATCH', { ids });
+  }
+
   async markAllNotificationsRead() {
     return await this.request('/operator/notifications/read-all', 'PATCH');
   }

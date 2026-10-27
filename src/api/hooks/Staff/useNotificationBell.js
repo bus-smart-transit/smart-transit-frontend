@@ -57,6 +57,16 @@ export function useNotificationBell(service, role) {
     }
   };
 
+  // 2026-10-27: a group of the same kind, marked read in one request.
+  const handleMarkGroupRead = async (ids) => {
+    try {
+      await service.markNotificationsRead(role, ids);
+      void loadNotifications();
+    } catch {
+      // no-op
+    }
+  };
+
   const handleMarkAllRead = async () => {
     try {
       await service.markAllNotificationsRead(role);
@@ -73,6 +83,7 @@ export function useNotificationBell(service, role) {
     unreadCount,
     loadingNotifications,
     handleMarkRead,
+    handleMarkGroupRead,
     handleMarkAllRead,
   };
 }

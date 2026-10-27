@@ -2,6 +2,10 @@ import { Bell } from 'lucide-react';
 import Modal from '../ui/Modal/Modal';
 import { useNotificationBell } from '../../api/hooks/Staff/useNotificationBell';
 import { resolveNotificationTarget } from '../../utils/notificationTarget';
+import { groupNotifications } from '../../utils/notificationGroups';
+import NotificationGroupList from './NotificationGroupList';
+
+const FIELDS = { id: (n) => n.notification_id, text: (n) => n.body };
 
 /**
  * S1 (Batch 17): persistent, always-accessible bell icon for Driver/
@@ -27,6 +31,7 @@ export default function NotificationBellButton({ service, role, onOpenNotificati
     unreadCount,
     loadingNotifications,
     handleMarkRead,
+    handleMarkGroupRead,
     handleMarkAllRead,
   } = useNotificationBell(service, role);
 
@@ -70,44 +75,27 @@ export default function NotificationBellButton({ service, role, onOpenNotificati
           ) : notifications.length === 0 ? (
             <p className="py-6 text-center text-sm text-slate-400">No notifications yet.</p>
           ) : (
-            notifications.map((n) => {
-              const target = onOpenNotification ? resolveNotificationTarget(n, role) : null;
-              const tone = n.read_at ? 'border-slate-100 bg-slate-50 text-slate-500' : 'border-amber-200 bg-amber-50 text-slate-800';
-              const clickProps = target
-                ? {
+            // 2026-10-27: notifications of the same kind are one group (utils/notificationGroups).
+            <NotificationGroupList
+              groups={groupNotifications(notifications, FIELDS)}
+              fields={FIELDS}
+              onMarkRead={(ids) => (ids.length === 1 ? handleMarkRead(ids[0]) : handleMarkGroupRead(ids))}
+              itemProps={(n) => {
+                const target = onOpenNotification ? resolveNotificationTarget(n, role) : null;
+                if (!target) return {};
+                return {
                   role: 'button',
                   tabIndex: 0,
                   onClick: () => openNotification(n, target),
                   onKeyDown: (e) => {
                     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openNotification(n, target); }
                   },
-                }
-                : {};
-              return (
-                <div
-                  key={n.notification_id}
-                  data-testid="notification-item"
-                  data-clickable={target ? 'true' : 'false'}
-                  className={`rounded-lg border px-3 py-2.5 text-sm ${tone} ${target ? 'cursor-pointer transition hover:border-teal-300 hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-teal-300' : ''}`}
-                  {...clickProps}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="font-semibold">{n.title}</p>
-                    {!n.read_at && (
-                      <button
-                        type="button"
-                        onClick={(e) => { e.stopPropagation(); handleMarkRead(n.notification_id); }}
-                        className="shrink-0 text-xs font-semibold text-teal-600 hover:underline"
-                      >
-                        Mark read
-                      </button>
-                    )}
-                  </div>
-                  <p className="mt-1 text-xs">{n.body}</p>
-                  {target && <p className="mt-1 text-xs font-semibold text-teal-700">Open trip →</p>}
-                </div>
-              );
-            })
+                };
+              }}
+              renderItemExtra={(n) => (onOpenNotification && resolveNotificationTarget(n, role)
+                ? <p className="mt-0.5 text-xs font-semibold text-teal-700">Open trip →</p>
+                : null)}
+            />
           )}
         </div>
       </Modal>

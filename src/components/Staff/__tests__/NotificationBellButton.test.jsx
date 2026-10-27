@@ -17,6 +17,7 @@ function makeService(notifications) {
   return {
     getNotifications: vi.fn().mockResolvedValue({ data: { notifications, unread_count: notifications.filter((n) => !n.read_at).length } }),
     markNotificationRead: vi.fn().mockResolvedValue({}),
+    markNotificationsRead: vi.fn().mockResolvedValue({}),
     markAllNotificationsRead: vi.fn().mockResolvedValue({}),
   };
 }
@@ -98,5 +99,25 @@ describe('TripFocusNotice', () => {
   test('renders nothing without a notice', () => {
     const { container } = render(<TripFocusNotice tripId={null} notice={null} onDismiss={() => {}} />);
     expect(container.firstChild).toBeNull();
+  });
+});
+
+// 2026-10-27: notifications of the same kind are one group in the bell.
+describe('NotificationBellButton groups', () => {
+  const block = (id) => note({ notification_id: id, type: 'block_assigned', title: 'New Shift Block Assignment', body: `Block on day ${id}.`, data: { type: 'block_assigned' } });
+
+  test('shows three shift block assignments as one group and marks them read together', async () => {
+    const service = makeService([block(7), block(6), block(5)]);
+    render(<NotificationBellButton service={service} role="driver" />);
+    await openBell();
+
+    const group = await screen.findByTestId('notification-group');
+    expect(group).toHaveTextContent('New Shift Block Assignment (3)');
+    expect(screen.getAllByTestId('notification-item')).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Show all 3' }));
+    expect(screen.getAllByTestId('notification-item')).toHaveLength(3);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mark 3 read' }));
+    await waitFor(() => expect(service.markNotificationsRead).toHaveBeenCalledWith('driver', [7, 6, 5]));
   });
 });

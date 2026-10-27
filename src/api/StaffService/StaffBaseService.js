@@ -142,6 +142,11 @@ export class StaffBaseService extends BaseService {
     return await this.request(`/${role}/notifications/${notificationId}/read`, 'PATCH');
   }
 
+  // 2026-10-27: one notification group in the bell, marked read at once.
+  async markNotificationsRead(role, ids) {
+    return await this.request(`/${role}/notifications/read-many`, 'PATCH', { ids });
+  }
+
   async markAllNotificationsRead(role) {
     return await this.request(`/${role}/notifications/read-all`, 'PATCH');
   }
