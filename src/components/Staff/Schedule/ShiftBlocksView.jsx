@@ -51,7 +51,7 @@ export default function ShiftBlocksView({ reloadToken = 0 }) {
           <button type="button" onClick={() => handleCancel(block.shift_block_id)} className={`${ACTION} bg-red-100 text-red-700 hover:bg-red-200`}>Cancel</button>
         )}
         {block.status === 'in_progress' && (
-          <button type="button" onClick={() => handleOverrideHandoff(block.shift_block_id)} className={`${ACTION} bg-indigo-100 text-indigo-700 hover:bg-indigo-200`} title="Dispatcher override: force the hand-off regardless of GPS state (exception handling)">Override Hand-off</button>
+          <button type="button" onClick={() => handleOverrideHandoff(block.shift_block_id)} className={`${ACTION} bg-indigo-100 text-indigo-700 hover:bg-indigo-200`} title="Operator override: close this shift now, for review (it normally closes by itself after its last trip)">Close shift</button>
         )}
         {block.status === 'completed' && block.audit_status === 'pending_review' && (
           <button type="button" onClick={() => handleMarkReviewed(block.shift_block_id)} className={`${ACTION} bg-emerald-100 text-emerald-700 hover:bg-emerald-200`}>Mark Reviewed</button>

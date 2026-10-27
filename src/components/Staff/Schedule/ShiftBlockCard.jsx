@@ -7,6 +7,7 @@ import { FOR_APPROVAL_LABEL } from '../../../utils/assignmentRequest';
 import { STATUS_CLASS, statusLabel, timeRange } from '../../../utils/assignmentCardView';
 import { roleLabel } from '../../../utils/shiftBlockView';
 import { formatManilaDate } from '../../../utils/dates';
+import { shiftLabel } from '../../../utils/shiftLabel';
 
 const OVERDUE_NOTE = 'Overdue - date has passed';
 
@@ -110,6 +111,7 @@ export default function ShiftBlockCard({ card, showState, audit = null, actions 
       <div className="space-y-1">
         <p className="text-sm font-semibold text-slate-800">{formatManilaDate(card.scheduled_date) || card.scheduled_date || '-'} · {timeRange(card)}</p>
         <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
+          {card.block_type && <span data-testid="shift-label" className="rounded-full bg-teal-50 px-2 py-1 font-semibold text-teal-800">{shiftLabel(card.block_type)}</span>}
           <span data-testid="shift-block-legs-count" className="rounded-full bg-slate-100 px-2 py-1 font-semibold">{card.legs_count} {card.legs_count === 1 ? 'leg' : 'legs'}</span>
           <RunInfoChips runPattern={card.run_pattern} service={card.service} serviceType={card.service_type} showRunPattern showStops />
           {card.plate_number && <span className="font-data">{card.plate_number}</span>}

@@ -233,7 +233,6 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     pageTitle,
     lastGpsRef,
     shiftBlocks,
-    shiftBlockActionInFlight,
     handleAssignedTripFilterChange,
     loadData,
     handleVerifyPin,
@@ -242,7 +241,6 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     handleStartShift,
     handleEndShift,
     handleConfirmedComplete,
-    handleConfirmShiftBlockTakeover,
     handleLogout,
     handleToggleTwoFactor,
     availabilitySaving,
@@ -699,19 +697,8 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
         {!loading && activeTab === 'activeTrip' && (
           <section className="staff-card">
             <h3 className="mb-4 text-base font-bold text-slate-900">My Schedule</h3>
-            <MyScheduleList
-              blocks={shiftBlocks}
-              renderActions={(block, section) => (block.status === 'scheduled' && section !== 'overdue' ? (
-                <button
-                  type="button"
-                  onClick={() => handleConfirmShiftBlockTakeover(block.shift_block_id)}
-                  disabled={shiftBlockActionInFlight}
-                  className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
-                >
-                  Confirm Takeover
-                </button>
-              ) : null)}
-            />
+            {/* 2026-10-27: no Confirm Takeover. A shift starts with its first trip and finishes with its last. */}
+            <MyScheduleList blocks={shiftBlocks} />
           </section>
         )}
 

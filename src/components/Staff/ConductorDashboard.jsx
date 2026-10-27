@@ -206,8 +206,6 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     groupedPassengers,
     tripDetailsModal, setTripDetailsModal,
     shiftBlocks,
-    shiftBlockEligibility,
-    shiftBlockActionInFlight,
     printOnsiteReceipt,
     occSeated,
     occStanding,
@@ -228,8 +226,6 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     handleStartShift,
   refreshEndBlockedReason,
     handleEndShift,
-    checkShiftBlockEligibility,
-    handleInitiateShiftBlockHandoff,
     handleScan,
     startScanner,
     handleAlight,
@@ -582,36 +578,8 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
         {!loading && activeTab === 'activeShift' && (
           <section className="staff-card">
             <h3 className="mb-4 text-base font-bold text-slate-900">My Schedule</h3>
-            <MyScheduleList
-              blocks={shiftBlocks}
-              renderActions={(block) => {
-                if (block.status !== 'in_progress') return null;
-                const eligibility = shiftBlockEligibility[block.shift_block_id];
-                const reason = !eligibility
-                  ? 'Press Check Eligibility first. Hand-off unlocks once the final leg arrives at the home terminal.'
-                  : (!eligibility.eligible ? eligibility.reason : '');
-                return (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => void checkShiftBlockEligibility(block.shift_block_id)}
-                      className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50"
-                    >
-                      Check Eligibility
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleInitiateShiftBlockHandoff(block.shift_block_id)}
-                      disabled={shiftBlockActionInFlight || !eligibility?.eligible}
-                      className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
-                    >
-                      End shift or hand over
-                    </button>
-                    {reason && <p className="basis-full text-xs text-amber-600" data-testid="handoff-reason">{reason}</p>}
-                  </>
-                );
-              }}
-            />
+            {/* 2026-10-27: no hand-off button. A shift finishes with its last trip; End Shift hands over the cash. */}
+            <MyScheduleList blocks={shiftBlocks} />
           </section>
         )}
 

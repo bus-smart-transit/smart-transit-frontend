@@ -1,4 +1,5 @@
 import { cardSection } from '../../utils/assignmentCards';
+import { shiftLabel } from '../../utils/shiftLabel';
 import { getBusinessToday, formatManilaDate } from '../../utils/dates';
 
 const CHIP = {
@@ -26,7 +27,7 @@ function Row({ block, section, actions }) {
     <div className="rounded-xl border border-slate-200 bg-slate-50 p-4" data-testid="schedule-row" data-section={section}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <p className="text-sm font-semibold capitalize text-slate-900">{block.block_type} block - {formatManilaDate(block.scheduled_date) || block.scheduled_date}</p>
+          <p className="text-sm font-semibold text-slate-900">{shiftLabel(block.block_type)} - {formatManilaDate(block.scheduled_date) || block.scheduled_date}</p>
           <p className="text-xs text-slate-500">{plate || 'Fleet unavailable'} · {block.legs?.length ?? 0} {(block.legs?.length ?? 0) === 1 ? 'leg' : 'legs'}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">

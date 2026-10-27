@@ -1066,7 +1066,7 @@ export function useShiftBlocksTab(reloadToken = 0) {
     setMsg('');
     try {
       await OperatorService.overrideShiftBlockHandoff(shiftBlockId);
-      setMsg('Hand-off forced.');
+      setMsg('Shift closed. It is waiting for your review.');
       void loadBlocks();
     } catch (err) {
       setMsg(err?.message || 'Failed to force hand-off.');

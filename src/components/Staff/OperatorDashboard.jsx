@@ -416,7 +416,7 @@ function ScheduleServiceModal({ state, drivers, conductors }) {
           </>
         ) : (
           <>
-            <Field label="Block Type" required>
+            <Field label="Shift" required>
               <select
                 value={form.block_type}
                 onChange={e => setForm(p => ({
@@ -426,8 +426,8 @@ function ScheduleServiceModal({ state, drivers, conductors }) {
                 }))}
                 className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500"
               >
-                <option value="morning">Morning</option>
-                <option value="afternoon">Afternoon</option>
+                <option value="morning">Morning shift</option>
+                <option value="afternoon">Afternoon shift</option>
               </select>
             </Field>
             <div className="grid grid-cols-2 gap-2">
