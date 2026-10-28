@@ -6,7 +6,13 @@ import { fetchFleetLocationsForMap } from '../../../api/hooks/Passenger/useMapVi
 import { haversineM } from '../../../utils/geo';
 import { describeBusPlace } from '../../../utils/busPlace';
 import { fetchRouteMapData } from '../../../services/routeMapService';
-import { fetchTrafficStatus } from '../../../services/trafficService';
+import { getTripTimeline } from '../../../services/bookingService';
+import { busEtaSummary, etaMinutesLabel } from '../../../utils/busEta';
+import { BUS_COLORS, createBusMarkerElement, createYouAreHereElement } from '../../Map/mapMarkers';
+
+// 2026-10-29: the bus icon's colour from the trip status (delayed in amber).
+const busColorFor = (row) => (String(row?.trip_status || '').toLowerCase() === 'delayed' ? BUS_COLORS.warning : BUS_COLORS.live);
+const headingOf = (row) => (Number.isFinite(Number(row?.heading)) && row?.heading !== null ? Number(row.heading) : null);
 import { busLabelText } from '../../../utils/busLabel';
 
 const POLL_MS = 12000;
@@ -121,7 +127,10 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
   const [userCoords, setUserCoords] = useState(null);
   const [isPinning, setIsPinning] = useState(false);
   const [pinError, setPinError] = useState('');
-  const [etaState, setEtaState] = useState({ label: 'Waiting for selected bus', etaMinutes: null });
+  // 2026-10-29: the ETA follows the bus (its trip timeline), not the passenger's pin.
+  const [timeline, setTimeline] = useState({ tripId: null, data: null, error: '' });
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  const busIconsRef = useRef(new Map());
   const [pollingEnabled, setPollingEnabled] = useState(true);
   const [selectedRouteStops, setSelectedRouteStops] = useState([]);
   const [stopsByRoute, setStopsByRoute] = useState({});
@@ -212,9 +221,9 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
         const title = busLabelText(row?.bus_label);
 
         if (!markersRef.current.has(fleetId)) {
-          const el = document.createElement('div');
-          el.className = 'public-fleet-marker';
-          el.textContent = '🚌';
+          const icon = createBusMarkerElement({ color: busColorFor(row), heading: headingOf(row), title });
+          const el = icon.element;
+          busIconsRef.current.set(fleetId, icon);
           el.addEventListener('click', () => {
             setSelectedFleetId(fleetId);
             flyToFleet(row);
@@ -232,6 +241,8 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
           markersRef.current.set(fleetId, marker);
         } else {
           markersRef.current.get(fleetId)?.setLngLat([lng, lat]);
+          busIconsRef.current.get(fleetId)?.setColor(busColorFor(row));
+          busIconsRef.current.get(fleetId)?.setHeading(headingOf(row));
         }
       });
 
@@ -239,6 +250,7 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
         if (!activeIds.has(fleetId)) {
           marker.remove();
           markersRef.current.delete(fleetId);
+          busIconsRef.current.delete(fleetId);
         }
       }
 
@@ -305,43 +317,42 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
   };
   const coordinatesTitle = (row) => `${Number(row?.latitude).toFixed(5)}, ${Number(row?.longitude).toFixed(5)}`;
 
+  const selectedTripId = Number(selectedFleet?.trip_id) > 0 ? Number(selectedFleet.trip_id) : null;
   useEffect(() => {
-    if (!userCoords || !selectedFleet) {
-      return undefined;
-    }
-
+    if (!selectedTripId) return undefined;
     let cancelled = false;
-    void (async () => {
-      const status = await fetchTrafficStatus({
-        currentLat: userCoords.lat,
-        currentLng: userCoords.lng,
-        nextStop: {
-          latitude: Number(selectedFleet.latitude),
-          longitude: Number(selectedFleet.longitude),
-        },
-        route: {
-          route_name: selectedFleet?.route_name,
-          origin: selectedFleet?.origin,
-          destination: selectedFleet?.destination,
-        },
-      });
-
-      if (!cancelled) {
-        setEtaState({ label: status.label, etaMinutes: status.etaMinutes });
+    const load = async () => {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+      try {
+        const data = await getTripTimeline(selectedTripId);
+        if (!cancelled) setTimeline({ tripId: selectedTripId, data, error: '' });
+      } catch {
+        if (!cancelled) setTimeline((prev) => ({ tripId: selectedTripId, data: prev.tripId === selectedTripId ? prev.data : null, error: 'Arrival times are not available right now.' }));
       }
-    })();
-
-    return () => {
-      cancelled = true;
+      if (!cancelled) setNowMs(Date.now());
     };
-  }, [selectedFleet, userCoords]);
+    void load();
+    const id = setInterval(load, 60000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [selectedTripId]);
 
-  const effectiveEtaState = useMemo(() => {
-    if (!userCoords || !selectedFleet) {
-      return { label: 'Pin your location to compute ETA', etaMinutes: null };
-    }
-    return etaState;
-  }, [etaState, selectedFleet, userCoords]);
+  // The stop nearest the passenger's pinned position, on the selected bus's route.
+  const nearStopId = useMemo(() => {
+    if (!userCoords || !selectedFleet) return null;
+    const stops = stopsByRoute[routeKeyOf(selectedFleet)] || [];
+    let best = null;
+    let bestM = Number.POSITIVE_INFINITY;
+    stops.forEach((stop) => {
+      const m = haversineM(userCoords.lat, userCoords.lng, Number(stop.latitude), Number(stop.longitude));
+      if (Number.isFinite(m) && m < bestM) { bestM = m; best = stop; }
+    });
+    return best?.stopId ?? best?.stop_id ?? null; // route map stops carry stopId
+  }, [userCoords, selectedFleet, stopsByRoute]);
+
+  const eta = useMemo(
+    () => (timeline.tripId === selectedTripId ? busEtaSummary(timeline.data, nowMs, nearStopId) : null),
+    [timeline, selectedTripId, nowMs, nearStopId],
+  );
 
   const routeProgress = useMemo(() => {
     if (!selectedFleet || selectedRouteStops.length < 2) return null;
@@ -381,11 +392,7 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
           userMarkerRef.current.remove();
         }
 
-        const markerEl = document.createElement('div');
-        markerEl.className = 'public-user-marker';
-        markerEl.innerHTML = '📍';
-
-        userMarkerRef.current = new maplibregl.Marker({ element: markerEl })
+        userMarkerRef.current = new maplibregl.Marker({ element: createYouAreHereElement(), anchor: 'bottom' })
           .setLngLat([lng, lat])
           .setPopup(
             new maplibregl.Popup({ offset: 14 }).setDOMContent(
@@ -470,8 +477,29 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
             <div className="mt-3 grid gap-2 sm:grid-cols-3">
               <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
                 <p className="text-[11px] uppercase tracking-widest text-slate-500">ETA</p>
-                <p className="mt-1 inline-flex items-center gap-1 text-sm font-semibold text-slate-900"><Clock3 className="h-3.5 w-3.5 text-teal-600" />{effectiveEtaState.etaMinutes == null ? 'N/A' : `${effectiveEtaState.etaMinutes} min`}</p>
-                <p className="text-[11px] text-slate-500">{effectiveEtaState.label}</p>
+                {!selectedFleet ? (
+                  <p className="mt-1 text-sm text-slate-500">No bus selected</p>
+                ) : !eta ? (
+                  <p className="mt-1 text-sm text-slate-500" data-testid="eta-unavailable">{timeline.error || (selectedTripId ? 'Working out arrival times...' : 'Not provided')}</p>
+                ) : eta.finished ? (
+                  <p className="mt-1 text-sm font-semibold text-slate-900">This trip has reached its last stop</p>
+                ) : (
+                  <div data-testid="eta-next">
+                    <p className="mt-1 inline-flex items-center gap-1 text-sm font-semibold text-slate-900">
+                      <Clock3 className="h-3.5 w-3.5 text-teal-600" />
+                      {eta.next.time ? `${eta.next.time} ${etaMinutesLabel(eta.next.minutes)}` : 'Not provided'}
+                    </p>
+                    <p className="text-[11px] text-slate-500">Next: {eta.next.name}{eta.next.time ? (eta.next.live ? ' · live estimate' : ' · scheduled') : ''}</p>
+                    {eta.destination.time && <p className="text-[11px] text-slate-500">Last stop {eta.destination.name} {eta.destination.time}</p>}
+                    {eta.nearYou && (
+                      <p className="mt-1 text-[11px] font-semibold text-teal-700" data-testid="eta-near-you">
+                        {eta.nearYou.passed
+                          ? `The bus has passed ${eta.nearYou.name}, the stop near you`
+                          : `Near you: ${eta.nearYou.name}${eta.nearYou.time ? ` ${eta.nearYou.time} ${etaMinutesLabel(eta.nearYou.minutes)}` : ''}`}
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
               <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
                 <p className="text-[11px] uppercase tracking-widest text-slate-500">Location</p>

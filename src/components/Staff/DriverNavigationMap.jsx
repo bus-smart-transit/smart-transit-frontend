@@ -1,5 +1,6 @@
 ﻿import { useCallback, useEffect, useMemo, useState } from 'react';
 import RouteMap from '../Map/RouteMap';
+import { BUS_COLORS, busIconSvg } from '../Map/mapMarkers';
 import { isCongestionLayerAvailable, showCongestionLayer } from '../Map/congestionLayer';
 
 const ROUTE_STATUS_TEXT = {
@@ -62,6 +63,7 @@ export default function DriverNavigationMap({ trip, stops = [], lastGpsRef }) {
           longitude: fix.longitude,
           accuracy: fix.accuracy,
           recordedAt: fix.recordedAt,
+          heading: fix.heading ?? null, // 2026-10-29: points the bus icon's arrow
         };
       });
     }, 1000);
@@ -130,7 +132,7 @@ export default function DriverNavigationMap({ trip, stops = [], lastGpsRef }) {
         </div>
       )}
       <div className="flex flex-wrap gap-4 border-t border-slate-800 px-4 py-2 text-xs text-slate-400">
-        <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded-full bg-teal-600" />Your position</span>
+        <span className="flex items-center gap-1.5"><span aria-hidden="true" className="inline-flex h-4 w-4" dangerouslySetInnerHTML={{ __html: busIconSvg(BUS_COLORS.live, 16) }} />Your bus</span>
         <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded-full bg-teal-400" />Completed stop</span>
         <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded-full bg-sky-600" />Upcoming stop</span>
         <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded-full bg-blue-900" />Terminal</span>

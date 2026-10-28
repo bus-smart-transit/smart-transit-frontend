@@ -6,14 +6,12 @@ import { computeVehicleState } from '../../utils/vehicleState'
 import { haversineM, lerp } from '../../utils/geo'
 import { getRegion, regionMapBounds } from '../../services/regionService'
 import { MAP_CONFIG } from '../../config/mapConfig'
-import { emptyCollection, fitToPoints, renderRouteLayers } from './routeLayers'
+import { fitToPoints, renderRouteLayers } from './routeLayers'
+import { createBusMarkerElement } from './mapMarkers'
 import { watchMapHealth } from './mapHealth'
 import { congestionTransformRequest } from './congestionLayer'
 import MapUnavailable from './MapUnavailable'
 
-const SRC_VEHICLE = 'rm-vehicle'
-const LYR_VEHICLE_HALO = 'rm-vehicle-halo'
-const LYR_VEHICLE = 'rm-vehicle-dot'
 
 const STATE_STYLE = {
   ok: { color: '#0d9488', chip: 'bg-emerald-600 text-white' },
@@ -73,6 +71,8 @@ function RouteMapInner({
   const onMapReadyRef = useRef(onMapReady)
   const fittedKeyRef = useRef(null)
   const currentCoordRef = useRef(null)
+  // 2026-10-29: the bus is the app's bus icon (components/Map/mapMarkers), a MapLibre marker, not a dot layer.
+  const busMarkerRef = useRef(null)
   const targetCoordRef = useRef(null)
   const animRef = useRef(null)
 
@@ -229,38 +229,23 @@ function RouteMapInner({
     const map = mapRef.current
     if (!mapReady || !map) return undefined
 
-    if (!map.getSource(SRC_VEHICLE)) {
-      map.addSource(SRC_VEHICLE, { type: 'geojson', data: emptyCollection })
-      map.addLayer({
-        id: LYR_VEHICLE_HALO,
-        type: 'circle',
-        source: SRC_VEHICLE,
-        paint: { 'circle-radius': 16, 'circle-color': ['get', 'color'], 'circle-opacity': 0.22 },
-      })
-      map.addLayer({
-        id: LYR_VEHICLE,
-        type: 'circle',
-        source: SRC_VEHICLE,
-        paint: {
-          'circle-radius': 7,
-          'circle-color': ['get', 'color'],
-          'circle-stroke-color': '#ffffff',
-          'circle-stroke-width': 3,
-        },
-      })
-    }
-
+    const maplibregl = libRef.current
     const color = (STATE_STYLE[vehicleState.state] || STATE_STYLE.no_gps).color
+    const heading = Number.isFinite(Number(vehicle?.heading)) && vehicle?.heading !== null ? Number(vehicle.heading) : null
     const paint = (coord) => {
-      const source = map.getSource(SRC_VEHICLE)
-      if (!source) return
-      source.setData(coord
-        ? {
-            type: 'Feature',
-            properties: { color },
-            geometry: { type: 'Point', coordinates: coord },
-          }
-        : emptyCollection)
+      if (!coord) {
+        busMarkerRef.current?.marker.remove()
+        busMarkerRef.current = null
+        return
+      }
+      if (!busMarkerRef.current && maplibregl) {
+        const icon = createBusMarkerElement({ color, heading, title: 'Bus position' })
+        busMarkerRef.current = { ...icon, marker: new maplibregl.Marker({ element: icon.element }).setLngLat(coord).addTo(map) }
+      }
+      if (!busMarkerRef.current) return
+      busMarkerRef.current.setColor(color)
+      busMarkerRef.current.setHeading(heading)
+      busMarkerRef.current.marker.setLngLat(coord)
     }
 
     if (animRef.current) cancelAnimationFrame(animRef.current)
@@ -297,7 +282,13 @@ function RouteMapInner({
       if (animRef.current) cancelAnimationFrame(animRef.current)
       animRef.current = null
     }
-  }, [mapReady, vehicleState])
+  }, [mapReady, vehicleState, vehicle?.heading])
+
+  // Remove the bus marker with the map.
+  useEffect(() => () => {
+    busMarkerRef.current?.marker.remove()
+    busMarkerRef.current = null
+  }, [])
 
   const geometryMissing = routeData && !routeData.geometry
   const style = STATE_STYLE[vehicleState.state] || STATE_STYLE.no_gps

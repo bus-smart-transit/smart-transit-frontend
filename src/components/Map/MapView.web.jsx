@@ -15,6 +15,7 @@ import { busLabelText } from '../../utils/busLabel';
 import { getRegion, regionMapBounds } from '../../services/regionService';
 import { watchMapHealth } from './mapHealth';
 import MapUnavailable from './MapUnavailable';
+import { createBusMarkerElement, createYouAreHereElement } from './mapMarkers';
 
 const IDLE_ETA = {
   level: 'idle',
@@ -222,24 +223,9 @@ function MapViewInner({ role = "passenger", trackedFleetId = null, onRetry }) {
           </div>`;
 
         if (!fleetMarkersMapRef.current.has(fleetId)) {
-          // Build the outer element (MapLibre positions this)
-          const outerEl = document.createElement('div');
-          outerEl.style.cssText = 'width:36px;height:36px;cursor:pointer;';
-
-          // Inner element rotates independently for heading.
-          // SVG points "up" (north); icon-rotate maps 0°=north, 90°=east, etc.
-          const innerEl = document.createElement('div');
-          innerEl.style.cssText = 'width:36px;height:36px;';
-          innerEl.innerHTML = `
-            <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 36 36">
-              <circle cx="18" cy="18" r="16" fill="${bg}" stroke="#fff" stroke-width="2.5"/>
-              <polygon points="18,5 12,14 24,14" fill="rgba(255,255,255,0.9)"/>
-              <rect x="10" y="14" width="16" height="11" rx="1.5"
-                fill="rgba(255,255,255,0.2)" stroke="rgba(255,255,255,0.65)" stroke-width="1"/>
-              <rect x="11" y="15.5" width="5" height="3.5" rx="0.5" fill="rgba(255,255,255,0.75)"/>
-              <rect x="20" y="15.5" width="5" height="3.5" rx="0.5" fill="rgba(255,255,255,0.75)"/>
-            </svg>`;
-          outerEl.appendChild(innerEl);
+          // 2026-10-29: the app's bus icon (components/Map/mapMarkers). Its arrow turns with the heading.
+          const icon = createBusMarkerElement({ color: bg, heading: newNext[fleetId]?.heading ?? null, title: busLabelText(row?.bus_label) });
+          const outerEl = icon.element;
 
           // Click handler reads from the live ref so it never captures stale data.
           outerEl.addEventListener('click', () => {
@@ -256,13 +242,12 @@ function MapViewInner({ role = "passenger", trackedFleetId = null, onRetry }) {
             .setPopup(new maplibregl.Popup({ offset: 20 }).setHTML(makePopupHtml(row)))
             .addTo(map.current);
 
-          fleetMarkersMapRef.current.set(fleetId, { marker, innerEl });
+          fleetMarkersMapRef.current.set(fleetId, { marker, icon });
         } else {
           // Update popup content and SVG color for existing marker.
-          const { marker, innerEl } = fleetMarkersMapRef.current.get(fleetId);
+          const { marker, icon } = fleetMarkersMapRef.current.get(fleetId);
           marker.getPopup()?.setHTML(makePopupHtml(row));
-          const circle = innerEl.querySelector('circle');
-          if (circle) circle.setAttribute('fill', bg);
+          icon.setColor(bg);
         }
       }
 
@@ -283,7 +268,7 @@ function MapViewInner({ role = "passenger", trackedFleetId = null, onRetry }) {
       const animate = () => {
         const t = Math.min(1, (Date.now() - interpStartRef.current) / POLL_MS);
 
-        for (const [fleetId, { marker, innerEl }] of fleetMarkersMapRef.current) {
+        for (const [fleetId, { marker, icon }] of fleetMarkersMapRef.current) {
           const p = fleetPrevRef.current[fleetId];
           const n = fleetNextRef.current[fleetId];
           if (!p || !n) continue;
@@ -292,7 +277,7 @@ function MapViewInner({ role = "passenger", trackedFleetId = null, onRetry }) {
 
           if (n.heading !== null) {
             const h = lerpAngle(p.heading ?? n.heading, n.heading, t);
-            innerEl.style.transform = `rotate(${h}deg)`;
+            icon.setHeading(h);
           }
         }
 
@@ -393,7 +378,7 @@ function MapViewInner({ role = "passenger", trackedFleetId = null, onRetry }) {
           currentMarker.current.remove();
         }
 
-        currentMarker.current = new maplibregl.Marker({ color: "#38bdf8" })
+        currentMarker.current = new maplibregl.Marker({ element: createYouAreHereElement(), anchor: 'bottom' })
           .setLngLat([longitude, latitude])
           .setPopup(
             new maplibregl.Popup({ offset: 25 }).setHTML(
