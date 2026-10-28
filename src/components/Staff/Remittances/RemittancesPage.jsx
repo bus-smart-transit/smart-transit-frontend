@@ -62,7 +62,8 @@ function RemittanceCard({ row, busy, error, onConfirm, onResolve }) {
       </div>
 
       <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Figure label="Opening cash" value={row.opening_cash} />
+        {/* 2026-10-28 (§4.5): shifts start at 0 now; opening cash shows only for an older shift that had one. */}
+        {Number(row.opening_cash) > 0 && <Figure label="Opening cash" value={row.opening_cash} />}
         <Figure label="Cash sales" value={row.cash_sales} />
         <Figure label="Cash refunds" value={row.cash_refunds} />
         <Figure label={pending ? 'Expected cash' : 'Expected when confirmed'} value={row.expected_cash} strong />

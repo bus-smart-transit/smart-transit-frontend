@@ -187,3 +187,15 @@ describe('Passenger In leakage check (2026-10-26)', () => {
     expect(screen.queryByTestId('unpaid-check-ins')).toBeNull();
   });
 });
+
+// 2026-10-28 (§4.5): Chauffeurs carry no opening cash; it shows only for an older shift that had one.
+describe('RemittancesPage opening cash', () => {
+  it('leaves out opening cash for a shift that started at 0, and keeps it for an older one', async () => {
+    const service = makeService({ getRemittances: vi.fn().mockResolvedValue(page([row({ id: 1, opening_cash: 0 }), row({ id: 2, opening_cash: 100 })])) });
+    render(<RemittancesPage service={service} />);
+
+    const cards = await screen.findAllByTestId('remittance-card');
+    expect(cards[0]).not.toHaveTextContent('Opening cash');
+    expect(cards[1]).toHaveTextContent('Opening cash');
+  });
+});

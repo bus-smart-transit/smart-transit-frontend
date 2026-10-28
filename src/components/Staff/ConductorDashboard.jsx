@@ -139,15 +139,12 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   const [onsiteDiscountTypeKey, setOnsiteDiscountTypeKey] = useState('');
   const [onsiteDiscountIdChecked, setOnsiteDiscountIdChecked] = useState(false);
   const [confirmStart, setConfirmStart] = useState(false);
-  // Batch 29: the opening cash declared at Start Shift (text so the field can be edited freely; default 0).
-  const [openingCash, setOpeningCash] = useState('0');
+  // 2026-10-28 (§4.5): no opening cash at Start Shift. Chauffeurs are not given petty cash, so a shift starts at 0.
   // Batch 29: End Shift asks for the cash counted and handed over; the Operator confirms it on the web dashboard.
   const [confirmEnd, setConfirmEnd] = useState(false);
   const [closingCash, setClosingCash] = useState('');
   const closingCashValue = Number(closingCash);
   const closingCashInvalid = closingCash === '' || !Number.isFinite(closingCashValue) || closingCashValue < 0;
-  const openingCashValue = Number(openingCash === '' ? 0 : openingCash);
-  const openingCashInvalid = !Number.isFinite(openingCashValue) || openingCashValue < 0;
   // The day the full calendar opens on when reached from the dashboard widget (null = today).
   const [calendarFocus, setCalendarFocus] = useState(null);
   const {
@@ -1188,7 +1185,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
               <div className="staff-card mb-4" data-testid="shift-cash">
                 <p className="text-xs text-slate-400">Expected cash on hand (this shift)</p>
                 <p className="font-data mt-1 text-xl font-bold text-slate-900">₱{Number(earnings.shift.expected_cash).toFixed(2)}</p>
-                <p className="mt-1 text-xs text-slate-500">Opening ₱{Number(earnings.shift.opening_cash).toFixed(2)} + cash sales ₱{Number(earnings.shift.cash_sales).toFixed(2)} - cash refunds ₱{Number(earnings.shift.cash_refunds).toFixed(2)}</p>
+                <p className="mt-1 text-xs text-slate-500">{Number(earnings.shift.opening_cash) > 0 ? `Opening ₱${Number(earnings.shift.opening_cash).toFixed(2)} + ` : ''}Cash sales ₱{Number(earnings.shift.cash_sales).toFixed(2)} - cash refunds ₱{Number(earnings.shift.cash_refunds).toFixed(2)}</p>
               </div>
             )}
             {Array.isArray(earnings?.unpaid_check_ins) && earnings.unpaid_check_ins.length > 0 && (
@@ -1310,7 +1307,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
             <p className="mb-4 text-sm text-slate-400">Count the cash you are handing over. The Operator will confirm it later.</p>
             {endCash && (
               <dl className="mb-4 space-y-2 rounded-lg bg-slate-800 p-3 text-sm" data-testid="end-shift-cash">
-                <div className="flex justify-between"><dt className="text-slate-500">Opening cash</dt><dd className="font-data text-slate-100">₱{Number(endCash.opening_cash).toFixed(2)}</dd></div>
+                {Number(endCash.opening_cash) > 0 && <div className="flex justify-between"><dt className="text-slate-500">Opening cash</dt><dd className="font-data text-slate-100">₱{Number(endCash.opening_cash).toFixed(2)}</dd></div>}
                 <div className="flex justify-between"><dt className="text-slate-500">Cash sales</dt><dd className="font-data text-slate-100">₱{Number(endCash.cash_sales).toFixed(2)}</dd></div>
                 <div className="flex justify-between"><dt className="text-slate-500">Cash refunds</dt><dd className="font-data text-slate-100">- ₱{Number(endCash.cash_refunds).toFixed(2)}</dd></div>
                 <div className="flex justify-between border-t border-slate-700 pt-2"><dt className="text-slate-400">Expected cash</dt><dd className="font-data font-semibold text-slate-100">₱{Number(endCash.expected_cash).toFixed(2)}</dd></div>
@@ -1338,12 +1335,9 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
               <div className="flex justify-between"><dt className="text-slate-500">Route</dt><dd className="font-semibold text-slate-100">{todayAssignedTrip?.fleet_route?.route?.route_name ?? '-'}</dd></div>
               <div className="flex justify-between"><dt className="text-slate-500">Schedule</dt><dd className="font-data text-slate-100">{formatTripSchedule(todayAssignedTrip)}</dd></div>
             </dl>
-            <label htmlFor="opening-cash" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">Opening cash (₱)</label>
-            <input id="opening-cash" type="number" inputMode="decimal" min="0" step="0.01" value={openingCash} onChange={(e) => setOpeningCash(e.target.value)} aria-invalid={openingCashInvalid} className="mb-1 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 outline-none focus:ring-2 focus:ring-teal-500" />
-            <p className={`mb-4 text-xs ${openingCashInvalid ? 'text-red-400' : 'text-slate-500'}`}>{openingCashInvalid ? 'Enter 0 or more.' : 'The cash you carry before the first sale. Your expected cash is this plus cash sales minus cash refunds.'}</p>
             <div className="flex gap-2">
               <button type="button" onClick={() => setConfirmStart(false)} className="flex-1 rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800">Cancel</button>
-              <button type="button" disabled={openingCashInvalid} onClick={() => { setConfirmStart(false); handleStartShift(openingCashValue); }} className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-teal-500 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-600 disabled:opacity-50">Start Shift <Play className="h-4 w-4" /></button>
+              <button type="button" onClick={() => { setConfirmStart(false); handleStartShift(); }} className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-teal-500 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-600 disabled:opacity-50">Start Shift <Play className="h-4 w-4" /></button>
             </div>
           </div>
         </ModalShell>
