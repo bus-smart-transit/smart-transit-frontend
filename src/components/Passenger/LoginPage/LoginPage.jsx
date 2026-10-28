@@ -25,6 +25,7 @@ export default function LoginPage() {
     handleSubmit,
     // OTP
     otpRequired,
+    verifyingEmail,
     otp,
     setOtp,
     otpError,
@@ -236,10 +237,15 @@ export default function LoginPage() {
             /* OTP Verification Screen */
             <div className="space-y-6">
               <div>
-                <h2 className="font-display text-2xl text-slate-950">Verify your identity</h2>
+                <h2 className="font-display text-2xl text-slate-950">{verifyingEmail ? 'Verify your email' : 'Verify your identity'}</h2>
                 <p className="text-slate-600 mt-2 text-sm">
                   We've sent a 6-digit code to <strong>{otpEmailMasked}</strong>
                 </p>
+                {verifyingEmail && (
+                  <p className="text-slate-600 mt-1 text-sm" data-testid="verify-email-note">
+                    Enter it to verify your email and finish creating your account. The code works for 10 minutes.
+                  </p>
+                )}
               </div>
 
               {otpError && (

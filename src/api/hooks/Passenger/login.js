@@ -13,7 +13,9 @@ export function useLogin() {
   const [error, setError] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
   const [goToDashboardAfterLogin, setGoToDashboardAfterLogin] = useState(false);
-  const [form, setForm] = useState({ email: "", password: "" });
+  // 2026-10-28: arriving from sign-up, the page opens on the code screen for the new account (email verification).
+  const pendingVerify = location?.state?.verifyEmail?.userId ? location.state.verifyEmail : null;
+  const [form, setForm] = useState({ email: pendingVerify?.email ?? "", password: "" });
   const [errors, setErrors] = useState({});
 
   const resolvePostLoginPath = () => {
@@ -29,11 +31,13 @@ export function useLogin() {
   };
 
   // OTP stage
-  const [otpRequired, setOtpRequired] = useState(false);
-  const [otpUserId, setOtpUserId] = useState(null);
-  const [otpEmailMasked, setOtpEmailMasked] = useState("");
+  const [otpRequired, setOtpRequired] = useState(Boolean(pendingVerify));
+  const [otpUserId, setOtpUserId] = useState(pendingVerify?.userId ?? null);
+  const [otpEmailMasked, setOtpEmailMasked] = useState(pendingVerify ? (pendingVerify.emailMasked ?? "your email") : "");
   const [otp, setOtp] = useState("");
   const [otpError, setOtpError] = useState("");
+  // 2026-10-28: true while the code also verifies the email (right after sign-up, or an account not verified yet).
+  const [verifyingEmail, setVerifyingEmail] = useState(Boolean(pendingVerify));
 
   const update = (field, value) => {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -72,6 +76,7 @@ export function useLogin() {
       if (data?.otp_required) {
         setOtpUserId(data.user_id);
         setOtpEmailMasked(data.email_masked ?? "your email");
+        setVerifyingEmail(Boolean(data.verification_required));
         setOtpRequired(true);
       } else {
         // Fallback: if server somehow returns a token directly
@@ -117,7 +122,9 @@ export function useLogin() {
     setOtp("");
     setIsLoading(true);
     try {
-      await PassengerService.login({ email: form.email, password: form.password });
+      // Right after sign-up the password is not at hand: ask for a new verification code instead.
+      if (verifyingEmail && !form.password) await PassengerService.resendVerification(otpUserId);
+      else await PassengerService.login({ email: form.email, password: form.password });
     } catch {
       // Silently ignore — the OTP screen stays open
     } finally {
@@ -129,6 +136,7 @@ export function useLogin() {
     setOtpRequired(false);
     setOtpUserId(null);
     setOtpEmailMasked("");
+    setVerifyingEmail(false);
     setOtp("");
     setOtpError("");
   };
@@ -148,6 +156,7 @@ export function useLogin() {
     handleSubmit,
     // OTP
     otpRequired,
+    verifyingEmail,
     otp,
     setOtp,
     otpError,

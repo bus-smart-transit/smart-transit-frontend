@@ -108,6 +108,11 @@ class PassengerService extends RoleAuthServiceBase {
 
   // Notifications audit follow-up: passenger-side FCM registration, so
   // trip cancellation / payment failure pushes can reach the passenger.
+  // 2026-10-28: a new email verification code (right after sign-up, before the passenger can sign in).
+  async resendVerification(userId) {
+    return await this.request(`/${this.endpointBase}/verify-email/resend`, "POST", { user_id: userId });
+  }
+
   async registerFcmToken(token) {
     return await this.request(`/${this.endpointBase}/fcm-token`, "POST", { token });
   }

@@ -106,7 +106,7 @@ export function useSignUp() {
     setError("");
     try {
       // FIX: Map your frontend state fields to match Laravel's specific database columns
-      await PassengerService.register({
+      const response = await PassengerService.register({
         name: `${form.firstName.trim()} ${form.lastName.trim()}`, // Combines into 'name'
         email: form.email,
         phone_num: form.phone, // Maps 'phone' to 'phone_num'
@@ -117,8 +117,14 @@ export function useSignUp() {
         password_confirmation: form.confirmPassword, // Always good practice for Laravel validation
       });
 
-      setSuccess("Account created! Redirecting to login…");
-      setTimeout(() => navigate("/passenger/login"), 2000);
+      // 2026-10-28: the account is verified by a code emailed now; the login page opens on the code screen.
+      const data = response?.data ?? {};
+      setSuccess("Account created! Check your email for the code to verify it.");
+      setTimeout(() => navigate("/passenger/login", {
+        state: data.verification_required
+          ? { verifyEmail: { userId: data.user_id, emailMasked: data.email_masked, email: form.email.trim().toLowerCase() } }
+          : undefined,
+      }), 1500);
     } catch (err) {
       setError(err?.message || "Registration failed. Please try again.");
     } finally {
