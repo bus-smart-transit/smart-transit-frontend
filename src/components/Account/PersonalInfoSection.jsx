@@ -10,6 +10,7 @@ export default function PersonalInfoSection({ view }) {
         <ReadOnlyField label="Name" value={view.name} testId="field-name" />
         <ReadOnlyField label="Email" value={view.email} testId="field-email" />
         <ReadOnlyField label="Phone" value={view.phone} mono testId="field-phone" />
+        <ReadOnlyField label="Gender" value={view.gender} testId="field-gender" />
         {view.role === 'passenger' && <ReadOnlyField label="Address" value={view.address} testId="field-address" />}
       </dl>
       {view.lockedNote && <p data-testid="locked-note" className="mt-3 text-xs text-slate-500">{view.lockedNote}</p>}

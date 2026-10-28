@@ -1,4 +1,5 @@
 import { formatManilaDate } from './dates';
+import { genderLabel } from './gender';
 
 // Batch 36: what the one shared Profile page shows, worked out from the profile each portal already loads. Nothing is
 // invented here: a value the server did not send is null, and the page says "Not provided". The role names are the
@@ -54,6 +55,7 @@ export function buildProfileView(role, raw) {
     name: clean(profile.name) ?? clean(user.name),
     email: clean(user.email) ?? clean(profile.email),
     phone: clean(profile.phone_num),
+    gender: genderLabel(profile.gender),
     // A passenger's own address is shown to them. A staff member's address and birth date are not shown.
     address: staff ? null : clean(profile.address),
     identification,

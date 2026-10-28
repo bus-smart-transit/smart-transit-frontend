@@ -1,4 +1,4 @@
-import { test, expect, request as pwRequest } from '@playwright/test';
+import { test, expect as baseExpect, request as pwRequest } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 
@@ -15,7 +15,8 @@ const SHOTS = path.resolve('playwright-report/batch44');
 test.describe.configure({ mode: 'serial' });
 test.use({ launchOptions: { slowMo: Number(process.env.E2E_SLOWMO ?? 300) } });
 // The local php artisan serve answers one request at a time, so a screen's later requests wait behind its first ones.
-expect.configure({ timeout: 30000 });
+// configure() returns a new expect with the longer wait (it does not change the shared one).
+const expect = baseExpect.configure({ timeout: 30000 });
 
 const manila = (date = new Date()) => Object.fromEntries(
   new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })

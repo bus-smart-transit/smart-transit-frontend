@@ -36,6 +36,7 @@ export function useSignUp() {
     email: "",
     phone: "",
     dateOfBirth: "",
+    gender: "",
     address: "",
     password: "",
     confirmPassword: "",
@@ -110,6 +111,7 @@ export function useSignUp() {
         email: form.email,
         phone_num: form.phone, // Maps 'phone' to 'phone_num'
         birthdate: form.dateOfBirth, // Maps 'dateOfBirth' to 'birthdate'
+        gender: form.gender || null, // 2026-10-28: optional
         address: form.address,
         password: form.password,
         password_confirmation: form.confirmPassword, // Always good practice for Laravel validation

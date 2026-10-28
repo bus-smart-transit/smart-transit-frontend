@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useId, isValidElement, cloneElement } from 'react'
 import StaffPortalLayout from './StaffPortalLayout'
 import OperatorDashboardPage from './Operator/OperatorDashboardPage'
 import StaffRoster from './Operator/StaffRoster'
+import { GENDER_OPTIONS } from '../../utils/gender'
 import NotificationGroupList from './NotificationGroupList'
 import { groupNotifications } from '../../utils/notificationGroups'
 import FleetsPage from './Operator/FleetsPage'
@@ -137,12 +138,17 @@ function NotificationBell() {
   )
 }
 
+// 2026-10-28: the label is linked to its input (htmlFor/id), so screen readers announce it and it can be found by name.
+// A single custom child (a select) gets the same id unless it already has one.
 function Field({ label, type = 'text', value, onChange, required, placeholder, hint, children }) {
+  const autoId = useId()
+  const single = isValidElement(children) ? children : null
+  const fieldId = single?.props?.id ?? autoId
   return (
     <div>
-      <label className="mb-1 block text-sm font-medium text-slate-700">{label}{required && <span className="text-red-500 ml-1">*</span>}</label>
-      {children ?? (
-        <input type={type} value={value} onChange={onChange} required={required} placeholder={placeholder}
+      <label htmlFor={children && !single ? undefined : fieldId} className="mb-1 block text-sm font-medium text-slate-700">{label}{required && <span className="text-red-500 ml-1">*</span>}</label>
+      {single ? cloneElement(single, { id: fieldId }) : children ?? (
+        <input id={fieldId} type={type} value={value} onChange={onChange} required={required} placeholder={placeholder}
           className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500" />
       )}
       {hint && <p role="status" className="mt-1 text-xs text-amber-700">{hint}</p>}
@@ -194,7 +200,7 @@ function StaffDirectoryTab({ drivers, conductors, onRefresh, onCreateAccount }) 
   const [showModal, setShowModal] = useState(false)
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState('')
-  const [form, setForm] = useState({ name: '', username: '', email: '', password: '', phone_num: '', address: '', birth_date: '', role: 'driver' })
+  const [form, setForm] = useState({ name: '', username: '', email: '', password: '', phone_num: '', address: '', birth_date: '', gender: '', role: 'driver' })
 
   const allStaff = [
     ...drivers.map((row) => ({ ...row, _resolvedRole: 'driver' })),
@@ -217,7 +223,7 @@ function StaffDirectoryTab({ drivers, conductors, onRefresh, onCreateAccount }) 
       await onCreateAccount(form)
       setMsg('Staff account created successfully.')
       setShowModal(false)
-      setForm({ name: '', username: '', email: '', password: '', phone_num: '', address: '', birth_date: '', role: roleFilter === 'all' ? 'driver' : roleFilter })
+      setForm({ name: '', username: '', email: '', password: '', phone_num: '', address: '', birth_date: '', gender: '', role: roleFilter === 'all' ? 'driver' : roleFilter })
       onRefresh()
     } catch (err) {
       setMsg(err?.message || 'Failed to create staff account.')
@@ -307,6 +313,12 @@ function StaffDirectoryTab({ drivers, conductors, onRefresh, onCreateAccount }) 
             <Field label="Phone Number" type="tel" value={form.phone_num} onChange={(event) => setForm((prev) => ({ ...prev, phone_num: event.target.value }))} required placeholder="09123456789" />
             <Field label="Address" value={form.address} onChange={(event) => setForm((prev) => ({ ...prev, address: event.target.value }))} required placeholder="Street, Barangay, City" />
             <Field label="Birth Date (optional)" type="date" value={form.birth_date} onChange={(event) => setForm((prev) => ({ ...prev, birth_date: event.target.value }))} />
+            <Field label="Gender (optional)">
+              <select aria-label="Gender" value={form.gender} onChange={(event) => setForm((prev) => ({ ...prev, gender: event.target.value }))} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500">
+                <option value="">Not given</option>
+                {GENDER_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </select>
+            </Field>
             <Field label="Password" type="password" value={form.password} onChange={(event) => setForm((prev) => ({ ...prev, password: event.target.value }))} required placeholder="Minimum 8 characters" />
             {msg && <p className="text-sm text-red-600">{msg}</p>}
             <div className="flex justify-end gap-2 pt-2">

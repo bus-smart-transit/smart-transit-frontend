@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { GENDER_OPTIONS } from '../../../utils/gender';
 import {
   ArrowLeft,
   ArrowRight,
@@ -184,6 +185,15 @@ export default function SignUpPage() {
                   </div>
                   {errors.dateOfBirth && <p className="mt-1 text-xs text-red-600">{errors.dateOfBirth}</p>}
                 </div>
+              </div>
+
+              <div>
+                {/* 2026-10-28: optional gender. */}
+                <label className="block text-sm font-medium text-slate-900 mb-1.5" htmlFor="signup-gender">Gender (optional)</label>
+                <select id="signup-gender" className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500" value={form.gender} onChange={e => update('gender', e.target.value)}>
+                  <option value="">Choose (optional)</option>
+                  {GENDER_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                </select>
               </div>
 
               <div>
