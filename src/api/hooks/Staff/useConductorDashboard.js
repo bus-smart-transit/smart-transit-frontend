@@ -334,8 +334,12 @@ export function useConductorDashboardData({ onLogout, pairing }) {
     return '';
   }, []);
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
+  // 2026-10-28: { silent: true } refreshes without the page-wide loading state. The scanner window sits inside the
+  // Ticketing section, which is not drawn while loading, so a normal reload after each scan removed the camera's video
+  // element and the camera went dark after one scan.
+  const loadData = useCallback(async (options = {}) => {
+    const silent = options?.silent === true;
+    if (!silent) setLoading(true);
     setError('');
     setShiftState((prev) => ({ ...prev, loading: true }));
     try {
@@ -717,7 +721,7 @@ export function useConductorDashboardData({ onLogout, pairing }) {
       void loadOccupancy();
       void loadPassengers();
       void loadEarnings();
-      void loadData();
+      void loadData({ silent: true }); // keep the camera running for the next ticket
     } catch (err) {
       setScanResult({ success: false, msg: err.message });
       setScannerPhase('failed');
@@ -785,7 +789,7 @@ export function useConductorDashboardData({ onLogout, pairing }) {
       void loadOccupancy();
       void loadPassengers();
       void loadEarnings();
-      void loadData();
+      void loadData({ silent: true }); // keep the camera running for the next ticket
     } catch (err) {
       setGroupScanResult({ success: false, msg: err.message });
       setScannerPhase('failed');
