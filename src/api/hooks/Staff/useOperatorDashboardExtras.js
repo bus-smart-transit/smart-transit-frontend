@@ -43,44 +43,21 @@ export function useFleetLocations({ intervalMs = 20000 } = {}) {
 export function useDispatchAdvice({ onSaved } = {}) {
   const [savingTripId, setSavingTripId] = useState(null);
   const [error, setError] = useState('');
-  const [history, setHistory] = useState([]);
-  const [historyLoading, setHistoryLoading] = useState(true);
-  const [historyError, setHistoryError] = useState('');
-  const [historyFilters, setHistoryFilters] = useState({});
-
-  const refreshHistory = useCallback(async () => {
-    setHistoryLoading(true);
-    try {
-      const response = await OperatorService.getDispatchDecisionHistory(historyFilters);
-      setHistory(Array.isArray(response?.data) ? response.data : []);
-      setHistoryError('');
-    } catch (err) {
-      setHistoryError(err?.message || 'Could not load dispatch decision history.');
-    } finally {
-      setHistoryLoading(false);
-    }
-  }, [historyFilters]);
-
-  useEffect(() => {
-    const timer = setTimeout(() => { void refreshHistory(); }, 0);
-    return () => clearTimeout(timer);
-  }, [refreshHistory]);
 
   const decide = useCallback(async (tripId, decision, payload) => {
     setSavingTripId(tripId);
     setError('');
     try {
       await OperatorService.saveDispatchDecision(tripId, { ...payload, decision });
-      await refreshHistory();
       onSaved?.();
     } catch (err) {
       setError(err?.message || 'Could not save the decision.');
     } finally {
       setSavingTripId(null);
     }
-  }, [onSaved, refreshHistory]);
+  }, [onSaved]);
 
-  return { savingTripId, error, decide, history, historyLoading, historyError, setHistoryFilters };
+  return { savingTripId, error, decide };
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;

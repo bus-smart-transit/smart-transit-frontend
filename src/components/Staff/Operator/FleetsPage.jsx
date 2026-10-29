@@ -261,7 +261,7 @@ export default function FleetsPage({ fleets, routes, trips, onRefresh }) {
         advice={dashboard.advice}
         saving={savingTripId}
         error={error}
-        onDecide={(item, decision) => decide(item.tripId, decision, decisionPayload(item, decision))}
+        onDecide={(item, decision, note) => decide(item.tripId, decision, decisionPayload(item, decision, note))}
         onClose={() => setTrackedFleetId(null)}
         onOpenGoogleMaps={() => openFleetMap(trackedFleetId)}
       />

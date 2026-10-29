@@ -7,7 +7,6 @@ const mocks = vi.hoisted(() => ({
   getFleetLocations: vi.fn(),
   getRouteAdherence: vi.fn(),
   saveDispatchDecision: vi.fn(),
-  getDispatchDecisionHistory: vi.fn(),
 }));
 
 vi.mock('../../../../api/StaffService/OperatorService', () => ({ default: mocks }));
@@ -33,7 +32,6 @@ describe('OperatorDashboardPage', () => {
     mocks.getFleetLocations.mockResolvedValue({ data: [] });
     mocks.getRouteAdherence.mockResolvedValue({ data: { summary: { trips_with_gps_data: 0, deviated_trips: 0, adherence_rate_pct: null } } });
     mocks.saveDispatchDecision.mockResolvedValue({});
-    mocks.getDispatchDecisionHistory.mockResolvedValue({ data: [] });
   });
 
   it('shows the real figures and never a revenue card or a peso amount of zero', async () => {
@@ -87,36 +85,6 @@ describe('OperatorDashboardPage', () => {
       note: 'Please check traffic before the next stop.',
       route: 'Davao - Tagum',
     })));
-  });
-
-  it('shows the actor, decision, message, and notification outcome in read-only history', async () => {
-    mocks.getDispatchDecisionHistory.mockResolvedValue({ data: [{
-      id: 42,
-      trip_id: 7,
-      actor: 'Maya Operator',
-      decision: 'contact',
-      route: 'Davao - Tagum',
-      reason: 'Trip delayed.',
-      note: 'Please check the next stop.',
-      notification_outcome: 'in_app_only',
-      recipient_roles: ['driver', 'conductor'],
-      created_at: new Date().toISOString(),
-    }] });
-    renderPage({ trips: [trip(7, { status: 'delayed' })] });
-    await waitFor(() => expect(mocks.getDispatchDecisionHistory).toHaveBeenCalled());
-    const historyHeading = screen.getByText('Decision history');
-    const historyCard = historyHeading.parentElement.parentElement;
-    await waitFor(() => expect(historyCard).toHaveTextContent('Maya Operator'));
-    expect(screen.getByText('Note: Please check the next stop.')).toBeInTheDocument();
-    expect(screen.getByText('Notification: In-app notification sent; push unavailable')).toBeInTheDocument();
-    expect(screen.getByText('Recipients: Driver, Chauffeur')).toBeInTheDocument();
-  });
-
-  it('loads history for the selected date range', async () => {
-    renderPage();
-    fireEvent.change(screen.getByLabelText('From'), { target: { value: '2026-10-01' } });
-    fireEvent.change(screen.getByLabelText('To'), { target: { value: '2026-10-02' } });
-    await waitFor(() => expect(mocks.getDispatchDecisionHistory).toHaveBeenLastCalledWith({ start_date: '2026-10-01', end_date: '2026-10-02' }));
   });
 
   it('shows a recorded decision instead of the buttons', async () => {

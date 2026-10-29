@@ -36,7 +36,7 @@ messaging.onBackgroundMessage((payload) => {
 // The server puts a relative `link` in the data (backend NotificationLink);
 // this mirrors src/utils/notificationTarget.js (a service worker cannot import
 // the app's modules). Only same-site /employee/ paths are ever opened.
-const CLICKABLE_TYPES = ['trip_assigned', 'shift_block_assigned'];
+const CLICKABLE_TYPES = ['trip_assigned', 'shift_block_assigned', 'dispatch_contact'];
 const STAFF_ROLES = ['driver', 'conductor', 'operator'];
 const DEFAULT_TAB = { driver: 'dashboard', conductor: 'dashboard', operator: 'trips' };
 

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { RefreshCw, Bus, Route as RouteIcon, AlertTriangle, Ticket, CalendarClock } from 'lucide-react';
 import { OpPageHeader, OpCard, OpChip, OpStat, OpBar, OpStackedBar, OpTable, OpEmpty } from './OperatorUI';
 import { OP_SPACE, TRIP_STATUS_TONE } from './operatorUiTokens';
@@ -12,7 +12,7 @@ import {
   locationForTrip, gpsStatus, decisionPayload, HIGH_LOAD_PCT,
 } from '../../../utils/operatorDashboardView';
 import RerouteAdviceItem from './RerouteAdviceItem';
-import { getBusinessTodayLabel, formatManilaDateTime } from '../../../utils/dates';
+import { getBusinessTodayLabel } from '../../../utils/dates';
 
 const STATUS_LABEL = {
   scheduled: 'Scheduled', delayed: 'Delayed', boarding: 'Boarding', departed: 'On the road', 'in-progress': 'On the road', completed: 'Completed', cancelled: 'Cancelled',
@@ -114,26 +114,8 @@ function RouteAdherenceCard({ fleets }) {
   );
 }
 
-const DECISION_LABEL = { accept: 'Advice acknowledged', keep: 'Kept current route', contact: 'Crew contacted' };
-const NOTIFICATION_LABEL = {
-  in_app_and_push: 'In-app notification and push sent',
-  partial_push: 'In-app notification sent; push reached some crew',
-  in_app_only: 'In-app notification sent; push unavailable',
-  no_assigned_crew: 'No assigned crew to notify',
-  not_requested: 'No notification requested',
-  not_recorded: 'Outcome not recorded',
-};
-
-function DispatchDecisionBoard({ advice, history, historyLoading, historyError, saving, error, onDecide, onHistoryFiltersChange }) {
+function DispatchDecisionBoard({ advice, saving, error, onDecide }) {
   const open = advice.filter((item) => !item.decision).length;
-  const [search, setSearch] = useState('');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
-  const normalizedSearch = search.trim().toLowerCase();
-  const filteredHistory = history.filter((item) => {
-    const text = `${item.route} ${item.trip_id} ${item.actor} ${item.decision} ${item.note}`.toLowerCase();
-    return !normalizedSearch || text.includes(normalizedSearch);
-  });
   return (
     <OpCard
       title="Dispatch decision board"
@@ -147,49 +129,7 @@ function DispatchDecisionBoard({ advice, history, historyLoading, historyError, 
         </ul>
       )}
       {error && <p role="alert" className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">{error}</p>}
-
-      <div className="mb-2 mt-6 flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Decision history</h3>
-        <span className="text-xs text-slate-500">Read only · latest 100 · last 7 days by default</span>
-      </div>
-      <div className="mb-3 grid gap-2 sm:grid-cols-3">
-        <label className="text-xs font-medium text-slate-600">From
-          <input type="date" value={startDate} onChange={(event) => {
-            const value = event.target.value;
-            setStartDate(value);
-            onHistoryFiltersChange({ start_date: value || undefined, end_date: endDate || undefined });
-          }} className="mt-1 block w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm" />
-        </label>
-        <label className="text-xs font-medium text-slate-600">To
-          <input type="date" value={endDate} onChange={(event) => {
-            const value = event.target.value;
-            setEndDate(value);
-            onHistoryFiltersChange({ start_date: startDate || undefined, end_date: value || undefined });
-          }} className="mt-1 block w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm" />
-        </label>
-        <label className="text-xs font-medium text-slate-600">Search route, trip, operator
-          <input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search decisions" className="mt-1 block w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm" />
-        </label>
-      </div>
-      {historyError && <p role="alert" className="mb-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">{historyError}</p>}
-      {historyLoading ? <p className="text-sm text-slate-500">Loading decision history...</p>
-        : filteredHistory.length === 0 ? <p className="text-sm text-slate-500">No matching dispatch decisions in this period.</p> : (
-          <ul className="max-h-80 space-y-2 overflow-y-auto">
-            {filteredHistory.map((item) => (
-              <li key={item.id} className="rounded-xl border border-slate-200 bg-white p-3 text-sm">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="font-semibold text-slate-900">{item.route} · Trip #{item.trip_id}</span>
-                  <OpChip tone={item.decision === 'contact' ? 'info' : item.decision === 'keep' ? 'neutral' : 'success'}>{DECISION_LABEL[item.decision] ?? item.decision}</OpChip>
-                </div>
-                <p className="mt-1 text-xs text-slate-500">By {item.actor} · {formatManilaDateTime(item.created_at)}</p>
-                {item.reason && <p className="mt-2 text-xs text-slate-600">Trigger: {item.reason}</p>}
-                {item.note && <p className="mt-1 text-xs text-slate-700">Note: {item.note}</p>}
-                <p className="mt-2 text-xs font-medium text-slate-600">Notification: {NOTIFICATION_LABEL[item.notification_outcome] ?? item.notification_outcome}</p>
-                {item.recipient_roles?.length > 0 && <p className="mt-1 text-xs text-slate-600">Recipients: {item.recipient_roles.map((role) => role === 'conductor' ? 'Chauffeur' : 'Driver').join(', ')}</p>}
-              </li>
-            ))}
-          </ul>
-        )}
+      {/* 2026-10-29: the decision history list was removed; every decision stays in the audit log. */}
     </OpCard>
   );
 }
@@ -202,7 +142,7 @@ function DispatchDecisionBoard({ advice, history, historyLoading, historyError, 
 export default function OperatorDashboardPage({ trips, fleets, topSlot = null, onRefresh, onOpenCalendar, onOpenSchedule }) {
   const nowMs = useNow();
   const { locations, refresh: refreshLocations } = useFleetLocations();
-  const { savingTripId, error, decide, history, historyLoading, historyError, setHistoryFilters } = useDispatchAdvice({ onSaved: onRefresh });
+  const { savingTripId, error, decide } = useDispatchAdvice({ onSaved: onRefresh });
   const view = useMemo(() => buildDashboardView({ trips, fleets, locations, nowMs }), [trips, fleets, locations, nowMs]);
   const { kpis } = view;
 
@@ -297,7 +237,7 @@ export default function OperatorDashboardPage({ trips, fleets, topSlot = null, o
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <DispatchDecisionBoard advice={view.advice} history={history} historyLoading={historyLoading} historyError={historyError} saving={savingTripId} error={error} onDecide={handleDecide} onHistoryFiltersChange={setHistoryFilters} />
+        <DispatchDecisionBoard advice={view.advice} saving={savingTripId} error={error} onDecide={handleDecide} />
         <OpCard
           title="Suggested bus assignments"
           subtitle="Idle fleets matched against routes under pressure (delays or near-full trips)."

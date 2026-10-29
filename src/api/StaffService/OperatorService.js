@@ -90,10 +90,6 @@ class OperatorService extends StaffBaseService {
     return await this.request(`/operator/trips/${tripId}/dispatch-decision`, 'PATCH', payload);
   }
 
-  async getDispatchDecisionHistory(params = {}) {
-    return await this.request('/operator/dispatch-decisions', 'GET', params);
-  }
-
   async getOperatorTripGpsHistory(tripId, params = {}) {
     return await this.request(`/operator/trips/${tripId}/gps-history`, 'GET', params);
   }
