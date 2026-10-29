@@ -34,9 +34,10 @@ export class StaffBaseService extends BaseService {
     return await this.request('/staff/login', 'POST', credentials);
   }
 
-  async verifyOtp(userId, otp) {
+  // 2026-10-29: the account is named by the uuid from step 1 (account_uuid), never the numeric user id.
+  async verifyOtp(accountUuid, otp) {
     return await this.request('/staff/verify-otp', 'POST', {
-      user_id: userId,
+      account_uuid: accountUuid,
       otp,
     });
   }

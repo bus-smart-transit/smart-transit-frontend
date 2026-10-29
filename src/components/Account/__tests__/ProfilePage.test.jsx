@@ -97,3 +97,54 @@ describe('ProfilePage', () => {
     expect(screen.getByRole('switch')).toBeDisabled();
   });
 });
+
+// 2026-10-29 (Batch 36 Phase 2): a passenger edits their own name, phone and gender.
+describe('ProfilePage passenger edit', () => {
+  it('opens a form, saves the trimmed name, phone and gender and shows the result', async () => {
+    const save = vi.fn().mockResolvedValue({ ok: true, message: 'Your profile was saved.' });
+    render(<ProfilePage role="passenger" profile={passenger({ gender: 'female' })} onSaveProfile={save} onSignOut={() => {}} />);
+
+    fireEvent.click(screen.getByTestId('profile-edit'));
+    const name = screen.getByLabelText(/Name/);
+    expect(name).toHaveValue('Pia Passenger');
+    expect(screen.getByLabelText('Gender')).toHaveValue('female');
+    fireEvent.change(name, { target: { value: '  Ana Reyes ' } });
+    fireEvent.change(screen.getByLabelText(/Phone/), { target: { value: '0917 123 4567' } });
+    fireEvent.change(screen.getByLabelText('Gender'), { target: { value: '' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(await screen.findByTestId('profile-edit-result')).toHaveTextContent('Your profile was saved.');
+    expect(save).toHaveBeenCalledWith({ name: 'Ana Reyes', phone_num: '0917 123 4567', gender: null });
+    expect(screen.queryByTestId('profile-edit-form')).not.toBeInTheDocument();
+  });
+
+  it('keeps the form open and shows the reason when saving fails', async () => {
+    const save = vi.fn().mockResolvedValue({ ok: false, message: 'Enter a valid phone number.' });
+    render(<ProfilePage role="passenger" profile={passenger()} onSaveProfile={save} onSignOut={() => {}} />);
+
+    fireEvent.click(screen.getByTestId('profile-edit'));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Enter a valid phone number.');
+    expect(screen.getByTestId('profile-edit-form')).toBeInTheDocument();
+  });
+
+  it('does not send an empty name, and Cancel goes back without saving', () => {
+    const save = vi.fn();
+    render(<ProfilePage role="passenger" profile={passenger()} onSaveProfile={save} onSignOut={() => {}} />);
+
+    fireEvent.click(screen.getByTestId('profile-edit'));
+    fireEvent.change(screen.getByLabelText(/Name/), { target: { value: ' ' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(screen.getByRole('alert')).toHaveTextContent('Enter your full name.');
+    expect(save).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.getByTestId('field-name')).toHaveTextContent('Pia Passenger');
+  });
+
+  it('shows no Edit button to staff, even if a save handler is passed', () => {
+    render(<ProfilePage role="driver" profile={staff()} onSaveProfile={vi.fn()} onSignOut={() => {}} />);
+    expect(screen.queryByTestId('profile-edit')).not.toBeInTheDocument();
+  });
+});

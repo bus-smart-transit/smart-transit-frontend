@@ -12,7 +12,8 @@ vi.mock('../../../api/hooks/useAuth', () => ({ useAuth: () => ({ login: vi.fn() 
 
 import LoginPage from './LoginPage';
 
-const fromSignup = { verifyEmail: { userId: 42, emailMasked: 'j***@gmail.com', email: 'juan@gmail.com' } };
+const UUID = '6f1c2d3e-4b5a-4c7d-8e9f-0a1b2c3d4e5f';
+const fromSignup = { verifyEmail: { accountUuid: UUID, emailMasked: 'j***@gmail.com', email: 'juan@gmail.com' } };
 const renderAt = (state) => render(
   <MemoryRouter initialEntries={[{ pathname: '/passenger/login', state }]}>
     <LoginPage />
@@ -36,7 +37,7 @@ describe('LoginPage email verification', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Resend/i }));
 
-    await waitFor(() => expect(service.resendVerification).toHaveBeenCalledWith(42));
+    await waitFor(() => expect(service.resendVerification).toHaveBeenCalledWith(UUID));
     expect(service.login).not.toHaveBeenCalled();
   });
 
@@ -45,5 +46,21 @@ describe('LoginPage email verification', () => {
 
     expect(screen.queryByText('Verify your email')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Sign In' })).toBeInTheDocument();
+  });
+});
+
+// 2026-10-29: the code is checked against the account's uuid, never the numeric user id.
+describe('LoginPage code check', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it('sends the uuid from step 1 with the code', async () => {
+    service.verifyOtp.mockResolvedValue({ data: { token: 't', user: { role: 'passenger' } } });
+    renderAt(fromSignup);
+
+    // One box per digit, then Verify.
+    screen.getAllByRole('textbox').slice(0, 6).forEach((box, i) => fireEvent.change(box, { target: { value: String(i + 1) } }));
+    fireEvent.click(screen.getByRole('button', { name: /^Verify/i }));
+
+    await waitFor(() => expect(service.verifyOtp).toHaveBeenCalledWith(UUID, '123456'));
   });
 });

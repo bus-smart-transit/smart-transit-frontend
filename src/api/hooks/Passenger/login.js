@@ -14,7 +14,7 @@ export function useLogin() {
   const [rememberMe, setRememberMe] = useState(false);
   const [goToDashboardAfterLogin, setGoToDashboardAfterLogin] = useState(false);
   // 2026-10-28: arriving from sign-up, the page opens on the code screen for the new account (email verification).
-  const pendingVerify = location?.state?.verifyEmail?.userId ? location.state.verifyEmail : null;
+  const pendingVerify = location?.state?.verifyEmail?.accountUuid ? location.state.verifyEmail : null;
   const [form, setForm] = useState({ email: pendingVerify?.email ?? "", password: "" });
   const [errors, setErrors] = useState({});
 
@@ -32,7 +32,8 @@ export function useLogin() {
 
   // OTP stage
   const [otpRequired, setOtpRequired] = useState(Boolean(pendingVerify));
-  const [otpUserId, setOtpUserId] = useState(pendingVerify?.userId ?? null);
+  // The account's uuid from step 1 (never the numeric user id).
+  const [otpUserId, setOtpUserId] = useState(pendingVerify?.accountUuid ?? null);
   const [otpEmailMasked, setOtpEmailMasked] = useState(pendingVerify ? (pendingVerify.emailMasked ?? "your email") : "");
   const [otp, setOtp] = useState("");
   const [otpError, setOtpError] = useState("");
@@ -74,7 +75,7 @@ export function useLogin() {
       const data = response?.data;
 
       if (data?.otp_required) {
-        setOtpUserId(data.user_id);
+        setOtpUserId(data.account_uuid);
         setOtpEmailMasked(data.email_masked ?? "your email");
         setVerifyingEmail(Boolean(data.verification_required));
         setOtpRequired(true);

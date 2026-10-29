@@ -85,7 +85,7 @@ export default function StaffLoginPage() {
       const data = res?.data;
 
       if (data?.otp_required) {
-        setOtpUserId(data.user_id);
+        setOtpUserId(data.account_uuid); // 2026-10-29: the uuid, never the numeric user id
         setOtpEmailMasked(data.email_masked ?? 'your email');
         setOtpExpiresIn(Number(data.otp_expires_in_seconds ?? 180));
         setResendCooldown(30);

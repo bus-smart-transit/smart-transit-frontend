@@ -95,9 +95,10 @@ class PassengerService extends RoleAuthServiceBase {
     return await this.request(`/tickets/lookup`, "GET", payload);
   }
 
-  async verifyOtp(userId, otp) {
+  // 2026-10-29: the account is named by the uuid from step 1 (account_uuid), never the numeric user id.
+  async verifyOtp(accountUuid, otp) {
     return await this.request(`/${this.endpointBase}/verify-otp`, "POST", {
-      user_id: userId,
+      account_uuid: accountUuid,
       otp,
     });
   }
@@ -109,8 +110,8 @@ class PassengerService extends RoleAuthServiceBase {
   // Notifications audit follow-up: passenger-side FCM registration, so
   // trip cancellation / payment failure pushes can reach the passenger.
   // 2026-10-28: a new email verification code (right after sign-up, before the passenger can sign in).
-  async resendVerification(userId) {
-    return await this.request(`/${this.endpointBase}/verify-email/resend`, "POST", { user_id: userId });
+  async resendVerification(accountUuid) {
+    return await this.request(`/${this.endpointBase}/verify-email/resend`, "POST", { account_uuid: accountUuid });
   }
 
   async registerFcmToken(token) {

@@ -21,7 +21,7 @@ import AccountActionsSection from './AccountActionsSection';
  *   assignment    { route, fleet } for today (Driver and Chauffeur)
  *   onSignOut     ends the session
  */
-export default function ProfilePage({ role, profile, loading = false, error = '', onRetry, twoFactor = null, availability = null, assignment = null, onSignOut }) {
+export default function ProfilePage({ role, profile, loading = false, error = '', onRetry, twoFactor = null, availability = null, assignment = null, onSignOut, onSaveProfile = null }) {
   if (loading && !profile) {
     return (
       <div role="status" aria-label="Loading your profile" data-testid="profile-loading" className="max-w-3xl space-y-4">
@@ -43,7 +43,8 @@ export default function ProfilePage({ role, profile, loading = false, error = ''
   return (
     <div className="max-w-3xl space-y-4" data-testid="profile-page">
       <ProfileOverview view={view} />
-      <PersonalInfoSection view={view} />
+      {/* 2026-10-29: passengers can edit their name, phone and gender (onSaveProfile); staff stay read-only. */}
+      <PersonalInfoSection view={view} profile={profile} onSave={role === 'passenger' ? onSaveProfile : null} />
       <RoleInfoSection view={view} assignment={assignment} />
       <SecuritySection view={view} twoFactor={twoFactor} />
       <PreferencesSection availability={availability} />

@@ -73,6 +73,10 @@ export default function usePassengerDashboard({ preloadMapView }) {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [menuOpen, setMenuOpen] = useState(false);
   const [profile, setProfile] = useState(null);
+  // 2026-10-29: the profile the server sent back after the passenger edited it (name, phone, gender).
+  const applyProfileUpdate = useCallback((updated) => {
+    if (updated && typeof updated === 'object') setProfile((prev) => ({ ...(prev ?? {}), ...updated }));
+  }, []);
   const [dashboardFacts, setDashboardFacts] = useState(null);
   const [tickets, setTickets] = useState([]);
   const [transactions, setTransactions] = useState([]);
@@ -574,6 +578,7 @@ export default function usePassengerDashboard({ preloadMapView }) {
     points,
     privateError,
     profile,
+    applyProfileUpdate,
     rewards,
     selectedTicket,
     selectedTicketQr,
