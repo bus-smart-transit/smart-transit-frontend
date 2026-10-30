@@ -8,26 +8,16 @@ import {
   IdCard,
   KeyRound,
   Shield,
-  Ticket,
   TriangleAlert,
-  Users,
 } from 'lucide-react';
 import StaffService from '../../api/StaffService/StaffBaseService';
 import { TokenManager } from '../../utils/TokenManager.js';
-
-const ROLES = [
-  { value: 'driver', label: 'Driver', icon: Bus, desc: 'Manage trips and route navigation' },
-  { value: 'conductor', label: 'Chauffeur', icon: Ticket, desc: 'Handle ticket validation and occupancy' },
-  { value: 'operator', label: 'Operator', icon: Users, desc: 'Monitor fleets, schedules, and reports' },
-  { value: 'admin', label: 'Admin', icon: Shield, desc: 'Manage system routes, stops, and accounts' },
-];
 
 export default function StaffLoginPage() {
   const navigate = useNavigate();
   // A page that sends the person here (for example after a password reset) can leave a one-line notice.
   const notice = useLocation().state?.notice || '';
   const otpRefs = useRef([]);
-  const [selectedRole, setSelectedRole] = useState('driver');
   const [showPassword, setShowPassword] = useState(false);
   const [form, setForm] = useState({ email: '', password: '' });
   const [errors, setErrors] = useState({});
@@ -97,7 +87,8 @@ export default function StaffLoginPage() {
         const role = data?.user?.role;
         if (!token) throw new Error('No token received');
 
-        const resolvedRole = role || selectedRole;
+        if (!role) throw new Error('Your account role could not be read. Please try again.');
+        const resolvedRole = role;
 
         TokenManager.clearStaffSession();
         TokenManager.setStaffSession(token, resolvedRole);
@@ -131,7 +122,8 @@ export default function StaffLoginPage() {
       const role = res?.data?.user?.role;
       if (!token) throw new Error('Token missing after OTP verification.');
 
-      const resolvedRole = role || selectedRole;
+      if (!role) throw new Error('Your account role could not be read. Please try again.');
+      const resolvedRole = role;
       TokenManager.setStaffSession(token, resolvedRole);
       navigate(`/employee/${resolvedRole}/dashboard`);
     } catch (err) {
@@ -215,8 +207,6 @@ export default function StaffLoginPage() {
     }
   };
 
-  const activeRole = ROLES.find((r) => r.value === selectedRole);
-
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col lg:grid lg:grid-cols-[1fr_1.2fr]">
       {/* Left panel - dark navy branding */}
@@ -228,7 +218,7 @@ export default function StaffLoginPage() {
           </div>
           <div>
             <h1 className="font-display text-3xl font-bold tracking-wide">SMARTTRANSIT</h1>
-            <p className="mt-1 text-base text-slate-400">{activeRole?.label ?? 'Staff'} Portal</p>
+            <p className="mt-1 text-base text-slate-400">Staff Portal</p>
           </div>
           <p className="text-sm text-slate-400 italic">Drive Smart. Ride Safe.</p>
         </div>
@@ -244,7 +234,7 @@ export default function StaffLoginPage() {
             </div>
             <div>
               <p className="font-display font-bold text-slate-900 leading-none">SMARTTRANSIT</p>
-              <p className="text-xs text-slate-500">{activeRole?.label ?? 'Staff'} Portal</p>
+              <p className="text-xs text-slate-500">Staff Portal</p>
             </div>
           </div>
 
@@ -253,29 +243,6 @@ export default function StaffLoginPage() {
               <div className="mb-8">
                 <h2 className="font-display text-3xl font-bold text-slate-900">Welcome Back!</h2>
                 <p className="mt-1.5 text-sm text-slate-500">Sign in to continue to your account</p>
-              </div>
-
-              {/* Role selector (compact) */}
-              <div className="mb-6 flex gap-2">
-                {ROLES.map((role) => {
-                  const Icon = role.icon;
-                  const active = role.value === selectedRole;
-                  return (
-                    <button
-                      key={role.value}
-                      type="button"
-                      onClick={() => setSelectedRole(role.value)}
-                      className={`flex-1 flex flex-col items-center gap-1 rounded-xl border py-2.5 text-xs font-semibold transition ${
-                        active
-                          ? 'border-teal-500 bg-teal-50 text-teal-700'
-                          : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'
-                      }`}
-                    >
-                      <Icon className="h-4 w-4" />
-                      {role.label}
-                    </button>
-                  );
-                })}
               </div>
 
               {notice && (
@@ -293,10 +260,10 @@ export default function StaffLoginPage() {
               )}
 
               <form onSubmit={handleSubmit} className="space-y-5" noValidate>
-                {/* Email / Driver ID */}
+                {/* Email */}
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1.5" htmlFor="staff-email">
-                    Email or Driver ID
+                    Email
                   </label>
                   <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 focus-within:ring-2 focus-within:ring-teal-500 focus-within:border-transparent transition pointer-events-auto">
                     <IdCard className="h-4 w-4 text-slate-400 shrink-0" />
@@ -304,7 +271,7 @@ export default function StaffLoginPage() {
                       id="staff-email"
                       type="email"
                       className="h-11 w-full bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400 cursor-text pointer-events-auto"
-                      placeholder="Enter your email or driver ID"
+                      placeholder="Enter your email"
                       value={form.email}
                       onChange={(e) => update('email', e.target.value)}
                       autoFocus
@@ -347,12 +314,6 @@ export default function StaffLoginPage() {
                     Remember me
                   </label>
                   <Link to="/employee/forgot-password" className="text-teal-600 hover:text-teal-700 font-medium">Forgot password?</Link>
-                </div>
-
-                {/* Test credentials hint */}
-                <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs text-slate-500">
-                  <span className="font-semibold text-slate-700">Test: </span>
-                  {selectedRole}@smarttransit.com / password123
                 </div>
 
                 <button

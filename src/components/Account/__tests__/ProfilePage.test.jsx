@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import ProfilePage from '../ProfilePage';
 
-const staff = (over = {}) => ({ company_user_id: 7, name: 'Dina Driver', phone_num: '09000000003', address: 'Some street', birth_date: '1990-01-01', is_available: true, user: { email: 'd@example.test', two_factor_enabled: false, created_at: '2026-10-10T03:12:52.000000Z' }, ...over });
+const staff = (over = {}) => ({ company_user_id: 7, company_user_uuid: '9f8e7d6c-5b4a-4321-8765-0123456789ab', name: 'Dina Driver', phone_num: '09000000003', address: 'Some street', birth_date: '1990-01-01', is_available: true, user: { email: 'd@example.test', two_factor_enabled: false, created_at: '2026-10-10T03:12:52.000000Z' }, ...over });
 const passenger = (over = {}) => ({ name: 'Pia Passenger', phone_num: '09100000001', address: 'Tagum City', reward_points: 12, passenger_uuid: '1a2b3c4d-1111-2222-3333-444455556666', user: { email: 'p@example.test' }, ...over });
 
 describe('ProfilePage', () => {

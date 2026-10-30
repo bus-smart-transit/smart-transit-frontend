@@ -18,12 +18,6 @@ export default function Footer() {
           © {new Date().getFullYear()}. All rights reserved.
         </p>
 
-        {/* Quick links */}
-        <nav className="flex items-center gap-5 text-xs text-slate-400" aria-label="Footer navigation">
-          <Link to="/passenger/login" className="transition hover:text-white">Passenger Login</Link>
-          <Link to="/passenger/signup" className="transition hover:text-white">Sign Up</Link>
-          <Link to="/employee/login" className="transition hover:text-white">Staff Login</Link>
-        </nav>
       </div>
     </footer>
   );

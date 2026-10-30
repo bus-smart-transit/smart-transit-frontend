@@ -84,7 +84,7 @@ export default function StaffForgotPasswordPage() {
               label="Staff Email"
               type="email"
               required
-              placeholder="staff@smarttransit.com"
+              placeholder="Enter your email"
               icon={Mail}
               value={email}
               onChange={(event) => setEmail(event.target.value)}

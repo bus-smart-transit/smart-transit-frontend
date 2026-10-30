@@ -197,7 +197,7 @@ describe('Bug 2 — Successful login does not display lockout/attempt message', 
       </MemoryRouter>
     );
 
-    fireEvent.change(screen.getByPlaceholderText(/enter your email or driver id/i), {
+    fireEvent.change(screen.getByPlaceholderText(/^enter your email$/i), {
       target: { value: 'driver@smarttransit.com' },
     });
     fireEvent.change(screen.getByPlaceholderText(/enter your password/i), {
@@ -230,7 +230,7 @@ describe('Bug 2 — Successful login does not display lockout/attempt message', 
       </MemoryRouter>
     );
 
-    const emailInput = screen.getByPlaceholderText(/enter your email or driver id/i);
+    const emailInput = screen.getByPlaceholderText(/^enter your email$/i);
     const passwordInput = screen.getByPlaceholderText(/enter your password/i);
     const submitBtn = screen.getByRole('button', { name: /sign in/i });
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildProfileView, NOT_PROVIDED, ROLE_LABELS } from '../accountProfile';
 
-const staff = (over = {}) => ({ company_user_id: 7, name: 'Dina Driver', phone_num: '09000000003', address: 'Some street', birth_date: '1990-01-01', is_available: true, user: { email: 'd@example.test', role: 'driver', two_factor_enabled: false, created_at: '2026-10-10T03:12:52.000000Z' }, ...over });
+const staff = (over = {}) => ({ company_user_id: 7, company_user_uuid: '9f8e7d6c-5b4a-4321-8765-0123456789ab', name: 'Dina Driver', phone_num: '09000000003', address: 'Some street', birth_date: '1990-01-01', is_available: true, user: { email: 'd@example.test', role: 'driver', two_factor_enabled: false, created_at: '2026-10-10T03:12:52.000000Z' }, ...over });
 const passenger = (over = {}) => ({ name: 'Pia Passenger', phone_num: '09100000001', address: 'Tagum City', reward_points: 12.5, passenger_uuid: '1a2b3c4d-1111-2222-3333-444455556666', two_factor_enabled: true, user: { email: 'p@example.test', created_at: '2026-10-09T00:00:00Z' }, ...over });
 
 describe('buildProfileView', () => {
@@ -29,7 +29,8 @@ describe('buildProfileView', () => {
     const driver = buildProfileView('driver', staff());
     expect(driver.address).toBeNull();
     expect(Object.values(driver)).not.toContain('1990-01-01');
-    expect(driver.identification).toEqual({ label: 'Staff ID', value: '7' });
+    // 2026-10-30: the uuid reference, never the numeric row id.
+    expect(driver.identification).toEqual({ label: 'Staff ID', value: '9F8E7D6C' });
     expect(driver.lockedNote).toMatch(/contact your operator/);
     expect(driver.available).toBe(true);
 

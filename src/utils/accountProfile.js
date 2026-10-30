@@ -28,8 +28,8 @@ const pointsLabel = (value) => {
   return `${number.toLocaleString('en-PH', { maximumFractionDigits: 2 })} ${number === 1 ? 'point' : 'points'}`;
 };
 
-/** The short reference a passenger can read out: the first 8 characters of their id. */
-const passengerReference = (uuid) => {
+/** The short reference a person can read out: the first 8 characters of their account uuid. */
+const accountReference = (uuid) => {
   const text = clean(uuid);
   return text ? text.replace(/-/g, '').slice(0, 8).toUpperCase() : null;
 };
@@ -44,7 +44,8 @@ export function buildProfileView(role, raw) {
   const staff = role !== 'passenger';
 
   const idLabel = role === 'passenger' ? 'Passenger ID' : role === 'operator' ? 'Company ID' : 'Staff ID';
-  const idValue = role === 'passenger' ? passengerReference(profile.passenger_uuid) : clean(profile.company_user_id);
+  // 2026-10-30: staff show their company_user_uuid reference too, never the numeric company_user_id.
+  const idValue = accountReference(role === 'passenger' ? profile.passenger_uuid : profile.company_user_uuid);
   const identification = { label: idLabel, value: idValue };
 
   const joined = clean(user.created_at) ?? clean(profile.created_at);
