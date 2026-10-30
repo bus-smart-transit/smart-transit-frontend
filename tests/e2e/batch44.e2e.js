@@ -33,7 +33,7 @@ let operatorToken;
 
 const as = (token) => ({ headers: { Authorization: `Bearer ${token}` } });
 const staffLogin = async (email, role) => {
-  const res = await api.post('staff/login', { data: { email, password: PASSWORD, role } });
+  const res = await api.post('auth/login', { data: { portal: 'staff', email, password: PASSWORD, role } });
   expect(res.ok(), `${email} can sign in`).toBeTruthy();
   return (await res.json()).data.token;
 };

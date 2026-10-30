@@ -30,8 +30,9 @@ export class StaffBaseService extends BaseService {
   }
 
   // ── Auth ──
+  // 2026-10-30: the same sign-in address as passengers, on the staff portal.
   async login(credentials) {
-    return await this.request('/staff/login', 'POST', credentials);
+    return await this.request('/auth/login', 'POST', { ...credentials, portal: 'staff' });
   }
 
   // 2026-10-29: the account is named by the uuid from step 1 (account_uuid), never the numeric user id.

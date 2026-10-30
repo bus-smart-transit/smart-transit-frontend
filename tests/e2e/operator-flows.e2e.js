@@ -14,7 +14,7 @@ const manilaDate = (offsetDays) => {
 
 let api;
 const login = async (email, role) => {
-  const res = await api.post('staff/login', { data: { email, password: PASSWORD, role } });
+  const res = await api.post('auth/login', { data: { portal: 'staff', email, password: PASSWORD, role } });
   expect(res.ok(), `${email} can sign in`).toBeTruthy();
   const body = await res.json();
   expect(body.data.otp_required).toBe(false);
@@ -33,15 +33,15 @@ test('every demo account can sign in', async () => {
     ['driver@smarttransit.com', 'driver'], ['driver2@smarttransit.com', 'driver'],
     ['conductor@smarttransit.com', 'conductor'], ['conductor2@smarttransit.com', 'conductor'],
   ]) await login(email, role);
-  const passenger = await api.post('passengers/login', { data: { email: 'passenger@smarttransit.com', password: PASSWORD } });
+  const passenger = await api.post('auth/login', { data: { portal: 'passenger', email: 'passenger@smarttransit.com', password: PASSWORD } });
   expect(passenger.ok()).toBeTruthy();
 });
 
 test('a wrong password is refused, and the role tab on the login page does not change the account role', async () => {
-  const wrong = await api.post('staff/login', { data: { email: 'operator@smarttransit.com', password: 'not-the-password', role: 'operator' } });
+  const wrong = await api.post('auth/login', { data: { portal: 'staff', email: 'operator@smarttransit.com', password: 'not-the-password', role: 'operator' } });
   expect(wrong.status()).toBeGreaterThanOrEqual(400);
   // The server signs in the account's own role; the page then opens that role's portal.
-  const tab = await api.post('staff/login', { data: { email: 'operator@smarttransit.com', password: PASSWORD, role: 'driver' } });
+  const tab = await api.post('auth/login', { data: { portal: 'staff', email: 'operator@smarttransit.com', password: PASSWORD, role: 'driver' } });
   expect((await tab.json()).data.user.role).toBe('operator');
 });
 

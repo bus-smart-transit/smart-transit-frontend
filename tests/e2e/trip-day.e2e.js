@@ -41,7 +41,7 @@ let simulator = null;
 
 const as = (token) => ({ headers: { Authorization: `Bearer ${token}` } });
 const staffLogin = async (email, role) => {
-  const body = await (await api.post('staff/login', { data: { email, password: PASSWORD, role } })).json();
+  const body = await (await api.post('auth/login', { data: { portal: 'staff', email, password: PASSWORD, role } })).json();
   expect(body?.data?.token, `${email} signs in without the emailed code (DISABLE_STAFF_OTP)`).toBeTruthy();
   return body.data.token;
 };

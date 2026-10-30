@@ -14,7 +14,7 @@ const OPERATOR_EMAIL = process.env.E2E_OPERATOR_EMAIL || 'operator@smarttransit.
 
 let api;
 const staffToken = async (email, role) => {
-  const res = await api.post('staff/login', { data: { email, password: PASSWORD, role } });
+  const res = await api.post('auth/login', { data: { portal: 'staff', email, password: PASSWORD, role } });
   expect(res.ok(), `${email} can sign in`).toBeTruthy();
   const body = await res.json();
   expect(body.data.otp_required).toBe(false);
@@ -147,7 +147,7 @@ test.describe('Long lists come back one page at a time', () => {
   });
 
   test('the passenger\'s tickets, payments and rewards are paged', async () => {
-    const login = await api.post('passengers/login', { data: { email: 'passenger@smarttransit.com', password: PASSWORD } });
+    const login = await api.post('auth/login', { data: { portal: 'passenger', email: 'passenger@smarttransit.com', password: PASSWORD } });
     expect(login.ok()).toBeTruthy();
     const token = (await login.json()).data.token;
     for (const path of ['passengers/tickets', 'passengers/payments', 'passengers/rewards/history']) {

@@ -16,12 +16,9 @@ export default class RoleAuthServiceBase extends BaseService {
     this.endpointBase = endpointBase;
   }
 
+  // 2026-10-30: one sign-in address for every account; `portal` says which page (passenger or staff) is used.
   async login(credentials) {
-    return await this.request(
-      `/${this.endpointBase}/login`,
-      "POST",
-      credentials,
-    );
+    return await this.request("/auth/login", "POST", { ...credentials, portal: this.role });
   }
 
   async register(payload) {

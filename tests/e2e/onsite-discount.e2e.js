@@ -118,7 +118,7 @@ test('live Conductor API returns active onsite discount types', async () => {
   const api = await playwrightRequest.newContext({ baseURL: API, extraHTTPHeaders: { Accept: 'application/json' } });
 
   try {
-    const login = await api.post('staff/login', { data: { email: 'conductor@smarttransit.com', password: 'password123', role: 'conductor' } });
+    const login = await api.post('auth/login', { data: { portal: 'staff', email: 'conductor@smarttransit.com', password: 'password123', role: 'conductor' } });
     expect(login.ok(), await login.text()).toBeTruthy();
     const loginData = (await login.json()).data;
     expect(loginData.otp_required).toBe(false);
