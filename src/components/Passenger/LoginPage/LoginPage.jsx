@@ -1,6 +1,7 @@
 import { useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Lock, Mail, Route, ShieldCheck, TrainFront, TriangleAlert, CheckCircle, Clock } from 'lucide-react';
+import BrandLogo from '../../ui/BrandLogo';
+import { Lock, Mail, Route, ShieldCheck, TriangleAlert, CheckCircle, Clock } from 'lucide-react';
 import { useLogin } from '../../../api/hooks/Passenger/login';
 import Button from '../../ui/Button';
 import FormInput from '../../ui/FormInput';
@@ -32,8 +33,7 @@ export default function LoginPage() {
     otpEmailMasked,
     handleVerifyOtp,
     handleResendOtp,
-    cancelOtp,
-  } = useLogin();
+    cancelOtp } = useLogin();
 
   // Derive individual digit slots from the single otp string.
   const otpDigits = Array.from({ length: 6 }, (_, i) => otp[i] ?? '');
@@ -77,9 +77,7 @@ export default function LoginPage() {
       <div className="hidden lg:flex flex-col justify-between bg-slate-900 px-8 py-12 text-white">
         <div>
           <Link to="/" className="inline-flex items-center gap-3 mb-12">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-teal-500">
-              <TrainFront className="h-6 w-6" />
-            </div>
+            <BrandLogo variant="icon" onDark alt="" className="h-8" />
             <span className="font-display text-xl">SmartTransit</span>
           </Link>
 
@@ -119,7 +117,7 @@ export default function LoginPage() {
           {/* Mobile Header */}
           <div className="mb-8 lg:hidden">
             <Link to="/" className="inline-flex items-center gap-2">
-              <TrainFront className="h-6 w-6 text-teal-600" />
+              <BrandLogo variant="icon" alt="" className="h-8" />
               <span className="font-display text-slate-900">SmartTransit</span>
             </Link>
           </div>

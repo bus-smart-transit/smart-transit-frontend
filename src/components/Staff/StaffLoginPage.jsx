@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
+import BrandLogo from '../ui/BrandLogo';
 import {
   BadgeCheck,
-  Bus,
   Eye,
   EyeOff,
   IdCard,
@@ -212,10 +212,8 @@ export default function StaffLoginPage() {
       {/* Left panel - dark navy branding */}
       <div className="hidden lg:flex flex-col items-center justify-center bg-[#0D1B2A] px-8 py-12 text-white">
         <div className="flex flex-col items-center text-center gap-5 max-w-xs">
-          {/* Bus icon */}
-          <div className="flex h-24 w-24 items-center justify-center rounded-2xl bg-[#142333] border border-white/10">
-            <Bus className="h-14 w-14 text-white" />
-          </div>
+          {/* Logo */}
+          <BrandLogo variant="icon" onDark alt="" className="h-20" />
           <div>
             <h1 className="font-display text-3xl font-bold tracking-wide">SMARTTRANSIT</h1>
             <p className="mt-1 text-base text-slate-400">Staff Portal</p>
@@ -229,9 +227,7 @@ export default function StaffLoginPage() {
         <div className="w-full max-w-sm">
           {/* Mobile logo */}
           <div className="mb-8 flex items-center gap-3 lg:hidden">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#0D1B2A]">
-              <Bus className="h-6 w-6 text-white" />
-            </div>
+            <BrandLogo variant="icon" alt="" className="h-10" />
             <div>
               <p className="font-display font-bold text-slate-900 leading-none">SMARTTRANSIT</p>
               <p className="text-xs text-slate-500">Staff Portal</p>

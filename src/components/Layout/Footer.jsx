@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Bus } from 'lucide-react';
+import BrandLogo from '../ui/BrandLogo';
 
 export default function Footer() {
   return (
@@ -7,10 +7,7 @@ export default function Footer() {
       <div className="mx-auto max-w-7xl flex flex-col items-center justify-between gap-4 sm:flex-row">
         {/* Brand */}
         <Link to="/" className="inline-flex items-center gap-2.5" aria-label="SmartTransit home">
-          <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-teal-500 text-white">
-            <Bus className="h-4 w-4" aria-hidden="true" />
-          </span>
-          <span className="text-sm font-bold text-white">SmartTransit</span>
+          <BrandLogo onDark className="h-8" />
         </Link>
 
         {/* Copyright */}

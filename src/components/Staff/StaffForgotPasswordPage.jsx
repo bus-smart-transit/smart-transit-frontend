@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Bus, Mail, Shield, TriangleAlert, CircleCheckBig } from 'lucide-react';
+import BrandLogo from '../ui/BrandLogo';
+import { Mail, TriangleAlert, CircleCheckBig } from 'lucide-react';
 import StaffService from '../../api/StaffService/StaffBaseService';
 import Button from '../ui/Button';
 import FormInput from '../ui/FormInput';
@@ -37,9 +38,7 @@ export default function StaffForgotPasswordPage() {
     <div className="min-h-screen bg-slate-100 flex flex-col lg:grid lg:grid-cols-[1fr_1.2fr]">
       <div className="hidden lg:flex flex-col items-center justify-center bg-[#0D1B2A] px-8 py-12 text-white">
         <div className="flex flex-col items-center text-center gap-5 max-w-xs">
-          <div className="flex h-24 w-24 items-center justify-center rounded-2xl bg-[#142333] border border-white/10">
-            <Shield className="h-12 w-12 text-teal-300" />
-          </div>
+          <BrandLogo variant="icon" onDark alt="" className="h-20" />
           <div>
             <h1 className="font-display text-3xl font-bold tracking-wide">SMARTTRANSIT</h1>
             <p className="mt-1 text-base text-slate-400">Staff Security</p>
@@ -51,9 +50,7 @@ export default function StaffForgotPasswordPage() {
       <div className="flex flex-col items-center justify-center min-h-screen px-6 py-10 bg-white lg:px-12">
         <div className="w-full max-w-sm">
           <div className="mb-8 flex items-center gap-3 lg:hidden">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#0D1B2A]">
-              <Bus className="h-6 w-6 text-white" />
-            </div>
+            <BrandLogo variant="icon" alt="" className="h-10" />
             <div>
               <p className="font-display font-bold text-slate-900 leading-none">SMARTTRANSIT</p>
               <p className="text-xs text-slate-500">Staff Security</p>

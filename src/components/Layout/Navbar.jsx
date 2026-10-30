@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Bus, Menu, X, LayoutGrid, Ticket, History, MapPin, Gift, User, LogOut } from 'lucide-react';
+import BrandLogo from '../ui/BrandLogo';
+import { Menu, X, LayoutGrid, Ticket, History, MapPin, Gift, User, LogOut } from 'lucide-react';
 import { useAuth } from '../../api/hooks/useAuth';
 import ProfileDropdown from './ProfileDropdown';
 
@@ -36,12 +37,7 @@ export default function Navbar() {
       <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6 lg:px-10">
         {/* Logo */}
         <Link to="/" className="inline-flex items-center gap-2.5" aria-label="SmartTransit home">
-          <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-teal-500 text-white">
-            <Bus className="h-5 w-5" aria-hidden="true" />
-          </span>
-          <span className="text-base font-bold tracking-tight text-white">
-            SmartTransit
-          </span>
+          <BrandLogo onDark className="h-9" />
         </Link>
 
         {/* Desktop nav */}

@@ -27,7 +27,7 @@ messaging.onBackgroundMessage((payload) => {
   const body = payload?.notification?.body || '';
   self.registration.showNotification(title, {
     body,
-    icon: '/favicon.ico',
+    icon: '/brand/icon-192.png',
     data: payload?.data || {},
   });
 });

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import BrandLogo from '../ui/BrandLogo';
 import { LogOut, Menu, X } from 'lucide-react';
 
 /**
@@ -56,14 +57,12 @@ export default function StaffPortalLayout({
               <X className="h-4 w-4" />
             </button>
           </div>
-          <div className="mb-6 flex items-center gap-3 px-2 pt-2">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-teal-500">
-              {BrandIcon && <BrandIcon className="h-5 w-5 text-white" />}
-            </div>
-            <div className="min-w-0">
-              <p className="truncate text-sm font-bold leading-none text-white">SMARTTRANSIT</p>
-              <p className="truncate text-xs text-slate-400">{brandLabel}</p>
-            </div>
+          <div className="mb-6 space-y-2 px-2 pt-2">
+            <BrandLogo onDark className="h-9" />
+            <p className="flex items-center gap-1.5 truncate text-xs text-slate-400">
+              {BrandIcon && <BrandIcon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />}
+              {brandLabel}
+            </p>
           </div>
 
           <nav className="flex flex-col gap-0.5">
@@ -128,8 +127,8 @@ export default function StaffPortalLayout({
       <main className="min-h-screen bg-white p-4 sm:p-6">
         <div className="mb-4 flex items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm lg:hidden">
           <div className="min-w-0">
+            <BrandLogo className="h-8" />
             <p className="truncate text-xs font-semibold uppercase tracking-wide text-slate-500">{brandLabel}</p>
-            <p className="truncate text-sm font-bold text-slate-900">SMARTTRANSIT</p>
           </div>
           <button
             type="button"

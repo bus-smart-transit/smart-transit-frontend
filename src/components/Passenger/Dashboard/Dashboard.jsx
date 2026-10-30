@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Bell, Bus, Map as MapIcon, Ticket, User, LogOut, Gift, History, LayoutGrid, Menu, House, X } from 'lucide-react';
+import BrandLogo from '../../ui/BrandLogo';
+import { Bell, Map as MapIcon, Ticket, User, LogOut, Gift, History, LayoutGrid, Menu, House, X } from 'lucide-react';
 import usePassengerDashboard from '../../../api/hooks/Passenger/usePassengerDashboard';
 import PassengerService from '../../../api/PassengerService/PassengerService';
 import TicketCard from '../Ticket/TicketCard';
@@ -725,12 +726,7 @@ export default function Dashboard() {
         }`}
       >
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 text-white">
-            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/10">
-              <Bus size={20} />
-            </span>
-            <span className="font-display text-base font-bold">SmartTransit</span>
-          </div>
+          <BrandLogo onDark className="h-9" />
           <button
             type="button"
             className="rounded-lg p-1.5 text-navy-200 hover:bg-white/10 lg:hidden"
@@ -805,7 +801,7 @@ export default function Dashboard() {
           <button type="button" className="rounded-lg p-2 text-navy-900" onClick={() => setMenuOpen(true)} aria-label="Open menu">
             <Menu size={24} />
           </button>
-          <span className="font-display text-sm font-bold text-navy-900">SmartTransit</span>
+          <BrandLogo className="h-8" />
           <span className="w-8" aria-hidden="true" />
         </div>
 

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Lock, Route, TrainFront, TriangleAlert } from 'lucide-react';
+import BrandLogo from '../../ui/BrandLogo';
+import { Lock, Route, TriangleAlert } from 'lucide-react';
 import PassengerService from '../../../api/PassengerService/PassengerService';
 import { useResetLink } from '../../../api/hooks/useResetLink';
 import Button from '../../ui/Button';
@@ -46,8 +47,7 @@ export default function ResetPasswordPage() {
         token,
         email,
         password: form.password,
-        password_confirmation: form.password_confirmation,
-      });
+        password_confirmation: form.password_confirmation });
       navigate('/passenger/login', {
         replace: true,
         state: { notice: 'Password updated. Sign in with your new password.' },
@@ -63,9 +63,7 @@ export default function ResetPasswordPage() {
       <div className="hidden lg:flex flex-col justify-between bg-slate-900 px-8 py-12 text-white">
         <div>
           <Link to="/" className="inline-flex items-center gap-3 mb-12">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-teal-500">
-              <TrainFront className="h-6 w-6" />
-            </div>
+            <BrandLogo variant="icon" onDark alt="" className="h-8" />
             <span className="font-display text-xl">SmartTransit</span>
           </Link>
 
@@ -88,7 +86,7 @@ export default function ResetPasswordPage() {
         <div className="w-full max-w-sm mx-auto lg:mx-0">
           <div className="mb-8 lg:hidden">
             <Link to="/" className="inline-flex items-center gap-2">
-              <TrainFront className="h-6 w-6 text-teal-600" />
+              <BrandLogo variant="icon" alt="" className="h-8" />
               <span className="font-display text-slate-900">SmartTransit</span>
             </Link>
           </div>
