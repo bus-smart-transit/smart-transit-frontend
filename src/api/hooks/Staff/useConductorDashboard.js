@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import QrScanner from 'qr-scanner';
 import ConductorService from '../../StaffService/ConductorService';
+import { initFcmAndGetToken } from '../../../services/fcmService';
 import { checkoutIdempotencyKey, clearCheckoutIdempotencyKey } from '../../../utils/checkoutIdempotency';
 import usePassengersByTrip from './usePassengersByTrip';
 import useOnsiteReceiptPrinter from './useOnsiteReceiptPrinter';
@@ -465,6 +466,23 @@ export function useConductorDashboardData({ onLogout, pairing }) {
     didBootstrap.current = true;
     void loadData();
   }, [loadData]);
+  // 2026-10-30: register this phone for push notifications (assignments, "Message from your operator", leg time
+  // changes) once on mount, as the Driver portal does. Fail-soft: initFcmAndGetToken() resolves to null when the
+  // browser cannot, permission is refused or Firebase is not configured, and nothing further happens.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const token = await initFcmAndGetToken();
+      if (!cancelled && token) {
+        try {
+          await ConductorService.registerFcmToken(token);
+        } catch {
+          // Non-critical: a failed registration only means no push on this phone.
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     const timer = setTimeout(() => {
