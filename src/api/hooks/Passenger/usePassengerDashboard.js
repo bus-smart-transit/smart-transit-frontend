@@ -73,9 +73,17 @@ export default function usePassengerDashboard({ preloadMapView }) {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [menuOpen, setMenuOpen] = useState(false);
   const [profile, setProfile] = useState(null);
-  // 2026-10-29: the profile the server sent back after the passenger edited it (name, phone, gender).
-  const applyProfileUpdate = useCallback((updated) => {
-    if (updated && typeof updated === 'object') setProfile((prev) => ({ ...(prev ?? {}), ...updated }));
+  // 2026-10-29 (Batch 36 Phase 2): the passenger saves their own name, phone and gender; the shown profile takes
+  // what the server sent back. Resolves to { ok, message } for the profile form.
+  const saveProfile = useCallback(async (changes) => {
+    try {
+      const response = await PassengerService.updateProfile(changes);
+      const updated = response?.data;
+      if (updated && typeof updated === 'object') setProfile((prev) => ({ ...(prev ?? {}), ...updated }));
+      return { ok: true, message: 'Your profile was saved.' };
+    } catch (err) {
+      return { ok: false, message: err?.message || 'Your profile could not be saved. Please try again.' };
+    }
   }, []);
   const [dashboardFacts, setDashboardFacts] = useState(null);
   const [tickets, setTickets] = useState([]);
@@ -578,7 +586,7 @@ export default function usePassengerDashboard({ preloadMapView }) {
     points,
     privateError,
     profile,
-    applyProfileUpdate,
+    saveProfile,
     rewards,
     selectedTicket,
     selectedTicketQr,

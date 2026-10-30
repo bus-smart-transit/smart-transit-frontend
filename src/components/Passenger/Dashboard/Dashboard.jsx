@@ -92,7 +92,7 @@ export default function Dashboard() {
     visibleTab,
     openTicketModal,
     printSelectedTicket,
-    applyProfileUpdate,
+    saveProfile,
   } = usePassengerDashboard({ preloadMapView });
 
 
@@ -108,17 +108,6 @@ export default function Dashboard() {
     ?? profile?.two_factor_enabled
     ?? user?.two_factor_enabled
     ?? false;
-
-  // 2026-10-29 (Batch 36 Phase 2): the passenger edits their own name, phone and gender.
-  const handleSaveProfile = async (changes) => {
-    try {
-      const response = await PassengerService.updateProfile(changes);
-      applyProfileUpdate(response?.data ?? null);
-      return { ok: true, message: 'Your profile was saved.' };
-    } catch (err) {
-      return { ok: false, message: err?.message || 'Your profile could not be saved. Please try again.' };
-    }
-  };
 
   const handleTwoFactorToggle = async (enabled) => {
     setTwoFactorOverride(enabled);
@@ -712,7 +701,7 @@ export default function Dashboard() {
           loading={isLoadingPrivate}
           error={privateError}
           twoFactor={{ enabled: twoFactorEnabled, saving: updating2fa, message: twoFactorMsg, onChange: handleTwoFactorToggle }}
-          onSaveProfile={handleSaveProfile}
+          onSaveProfile={saveProfile}
           onSignOut={handleLogout}
         />
       );
