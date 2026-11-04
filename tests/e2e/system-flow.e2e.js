@@ -43,7 +43,8 @@ const staffLogin = async (email, role) => {
   return body.data.token;
 };
 const getData = async (url, token) => (await (await api.get(url, as(token))).json()).data;
-const byEmail = (list, email) => list.find((row) => JSON.stringify(row).includes(email));
+// 2026-11-04: an Operator's staff list has no emails any more (Todo 3 finding 2); demo usernames are the part before the @.
+const byEmail = (list, email) => list.find((row) => (row.user?.username ?? row.username) === email.split('@')[0]) ?? list.find((row) => JSON.stringify(row).includes(email));
 
 /** Records everything that goes wrong on this page under `step`. */
 function watch(page, step) {
@@ -216,7 +217,8 @@ test('Operator: every page and view opens, and a new Driver account keeps its ge
   await expect(page.getByText('Staff account created successfully.')).toBeVisible({ timeout: 120000 });
 
   const drivers = await getData('operator/drivers', operatorToken);
-  expect(byEmail(drivers, newDriverEmail)?.gender ?? byEmail(drivers, newDriverEmail)?.profile?.gender).toBe('male');
+  const newDriver = drivers.find((row) => (row.user?.username ?? row.username) === `eto_driver_${stamp}`);
+  expect(newDriver?.gender).toBe('male');
 
   await page.locator('[data-testid="profile-action"] button').click();
   await expect(page.getByRole('dialog', { name: 'Notifications' })).toBeVisible();

@@ -34,7 +34,8 @@ const staffLogin = async (email, role) => {
   expect(res.ok(), `${email} can sign in`).toBeTruthy();
   return (await res.json()).data.token;
 };
-const byEmail = (list, email) => list.find((row) => JSON.stringify(row).includes(email));
+// 2026-11-04: an Operator's staff list has no emails any more (Todo 3 finding 2); demo usernames are the part before the @.
+const byEmail = (list, email) => list.find((row) => (row.user?.username ?? row.username) === email.split('@')[0]) ?? list.find((row) => JSON.stringify(row).includes(email));
 
 async function signIn(page, email, urlPart) {
   await page.goto('/employee/login');
@@ -171,8 +172,8 @@ test('Phase B: the Operator previews five days From..To, confirms, and a second 
     const value = await select.locator('option', { hasText: email }).getAttribute('value');
     await select.selectOption(value);
   };
-  await pick('Select a driver...', 'driver@smarttransit.com');
-  await pick('Select a chauffeur...', 'conductor@smarttransit.com');
+  await pick('Select a driver...', '(@driver)'); // options read "Name (@username)" since 2026-11-04
+  await pick('Select a chauffeur...', '(@conductor)');
 
   await dialog.getByRole('button', { name: 'Preview days' }).click();
   const preview = dialog.getByTestId('range-preview');
