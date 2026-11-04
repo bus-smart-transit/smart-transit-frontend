@@ -6,6 +6,7 @@ import RoleInfoSection from './RoleInfoSection';
 import SecuritySection from './SecuritySection';
 import PreferencesSection from './PreferencesSection';
 import AccountActionsSection from './AccountActionsSection';
+import DeleteAccountSection from './DeleteAccountSection';
 
 /**
  * Batch 36: the one Profile page for every portal. The role decides which fields and sections appear; the portal
@@ -20,8 +21,9 @@ import AccountActionsSection from './AccountActionsSection';
  *   availability  { value, saving, onChange(next) } (Driver and Chauffeur)
  *   assignment    { route, fleet } for today (Driver and Chauffeur)
  *   onSignOut     ends the session
+ *   onDeleteAccount  2026-11-05: passengers only; deletes their own account (DeleteAccountSection)
  */
-export default function ProfilePage({ role, profile, loading = false, error = '', onRetry, twoFactor = null, availability = null, assignment = null, onSignOut, onSaveProfile = null }) {
+export default function ProfilePage({ role, profile, loading = false, error = '', onRetry, twoFactor = null, availability = null, assignment = null, onSignOut, onSaveProfile = null, onDeleteAccount = null }) {
   if (loading && !profile) {
     return (
       <div role="status" aria-label="Loading your profile" data-testid="profile-loading" className="max-w-3xl space-y-4">
@@ -49,6 +51,7 @@ export default function ProfilePage({ role, profile, loading = false, error = ''
       <SecuritySection view={view} twoFactor={twoFactor} />
       <PreferencesSection availability={availability} />
       <AccountActionsSection onSignOut={onSignOut} />
+      {role === 'passenger' && onDeleteAccount && <DeleteAccountSection onDelete={onDeleteAccount} />}
     </div>
   );
 }

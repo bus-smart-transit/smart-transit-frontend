@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import PassengerService from "../../../api/PassengerService/PassengerService";
+import { leaveAccountDeletionNotice } from "../../../utils/accountDeletionNotice";
 import { useAuth } from "../../../api/hooks/useAuth"; // adjust path
 
 export function useLogin() {
@@ -84,6 +85,7 @@ export function useLogin() {
         const token = data?.token;
         if (!token) throw new Error("Authentication token missing from server response.");
         login(token, rememberMe);
+        if (data?.deletion_cancelled) leaveAccountDeletionNotice({ cancelled: true });
         navigate(resolvePostLoginPath(), { replace: true });
       }
     } catch (err) {
@@ -109,6 +111,7 @@ export function useLogin() {
       const token = response?.data?.token;
       if (!token) throw new Error("Token missing after OTP verification.");
       login(token, rememberMe);
+      if (response?.data?.deletion_cancelled) leaveAccountDeletionNotice({ cancelled: true });
       navigate(resolvePostLoginPath(), { replace: true });
     } catch (err) {
       setOtpError(err?.message || "Incorrect or expired code. Please try again.");

@@ -4,6 +4,7 @@ import { useAuth } from '../useAuth';
 import PassengerService from '../../PassengerService/PassengerService';
 import { initFcmAndGetToken } from '../../../services/fcmService';
 import { openPrintWindow } from '../../../utils/qr';
+import { leaveAccountDeletionNotice } from '../../../utils/accountDeletionNotice';
 
 const PROTECTED_TABS = new Set(['tickets', 'rewards', 'transactions', 'profile']);
 const URL_TABS = new Set(['dashboard', 'map', 'tickets', 'transactions', 'rewards', 'profile']);
@@ -399,6 +400,20 @@ export default function usePassengerDashboard({ preloadMapView }) {
     navigate('/', { replace: true });
   }, [logout, navigate]);
 
+  // 2026-11-05: the passenger deletes their own account. The server ends every session, so on success the saved
+  // sign-in is cleared and the home page says when the data will be erased. Resolves to { ok, message } on failure.
+  const deleteAccount = useCallback(async (password) => {
+    try {
+      const response = await PassengerService.deleteOwnAccount(password);
+      leaveAccountDeletionNotice({ deletesOn: response?.data?.deletes_on ?? null });
+      void logout();
+      navigate('/', { replace: true });
+      return { ok: true, message: '' };
+    } catch (err) {
+      return { ok: false, message: err?.message || 'Your account could not be deleted. Please try again.' };
+    }
+  }, [logout, navigate]);
+
   const closeTicketModal = useCallback(() => {
     setTicketModalOpen(false);
     setSelectedTicket(null);
@@ -575,6 +590,7 @@ export default function usePassengerDashboard({ preloadMapView }) {
     getDestinationLabel,
     getOriginLabel,
     handleLogout,
+    deleteAccount,
     handleTabChange,
     historyPagination,
     isAuthenticated,

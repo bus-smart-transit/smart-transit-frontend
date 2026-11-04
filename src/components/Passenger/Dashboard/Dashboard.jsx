@@ -24,6 +24,7 @@ import TripCancelledChoice from '../Ticket/TripCancelledChoice';
 import { CANCELLED_TRIP_STATUSES } from '../../../utils/ticketResolution';
 import { formatPeso } from '../../../utils/financials';
 import { REWARDS } from '../../../config/rewardsConfig';
+import AccountDeletionNotice from '../../Account/AccountDeletionNotice';
 
 const preloadMapView = () =>
   Promise.all([
@@ -67,6 +68,7 @@ export default function Dashboard() {
     getDestinationLabel,
     getOriginLabel,
     handleLogout,
+    deleteAccount,
     handleTabChange,
     isAuthenticated,
     isLoadingPrivate,
@@ -704,6 +706,7 @@ export default function Dashboard() {
           twoFactor={{ enabled: twoFactorEnabled, saving: updating2fa, message: twoFactorMsg, onChange: handleTwoFactorToggle }}
           onSaveProfile={saveProfile}
           onSignOut={handleLogout}
+          onDeleteAccount={deleteAccount}
         />
       );
     }
@@ -838,6 +841,7 @@ export default function Dashboard() {
         </header>
 
         <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+          <AccountDeletionNotice />
           {paymentNotice && (
             <div className="mb-4 rounded-xl bg-teal-50 px-4 py-3 text-sm font-medium text-teal-800 ring-1 ring-inset ring-teal-200">
               {paymentNotice}

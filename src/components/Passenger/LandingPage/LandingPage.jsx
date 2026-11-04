@@ -11,6 +11,7 @@ import DigitalTicketSection from './DigitalTicketSection';
 import BeforeYouTravelSection from './BeforeYouTravelSection';
 import HomeFaqSection from './HomeFaqSection';
 import NeedHelpSection from './NeedHelpSection';
+import AccountDeletionNotice from '../../Account/AccountDeletionNotice';
 
 export default function LandingPage() {
   const { hash } = useLocation();
@@ -23,6 +24,7 @@ export default function LandingPage() {
   return (
     <div className="flex min-h-screen flex-col bg-white">
       <Navbar />
+      <AccountDeletionNotice />
 
       <main className="flex-1">
         <LandingHero />

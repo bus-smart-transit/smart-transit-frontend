@@ -9,6 +9,11 @@ class PassengerService extends RoleAuthServiceBase {
     return await this.request(`/${this.endpointBase}/profile`, "PUT", updates);
   }
 
+  /** 2026-11-05: deletes the signed-in passenger's own account (no id is sent; the server uses the session). */
+  async deleteOwnAccount(password) {
+    return await this.request(`/${this.endpointBase}/account`, "DELETE", { password, confirm: true });
+  }
+
   async requestPasswordReset(payload) {
     return await this.request(
       `/${this.endpointBase}/forgot-password`,
