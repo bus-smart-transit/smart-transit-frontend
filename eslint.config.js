@@ -22,4 +22,14 @@ export default defineConfig([
     files: ['playwright.config.js', 'tests/e2e/**/*.js'],
     languageOptions: { globals: globals.node },
   },
+  {
+    // Firebase's background worker: a service worker that loads the Firebase compat scripts with importScripts.
+    files: ['public/firebase-messaging-sw.js'],
+    languageOptions: { globals: { ...globals.serviceworker, firebase: 'readonly' } },
+  },
+  {
+    // A prop taken out of ...rest on purpose so it is not passed on to the element (for example Button's "as").
+    files: ['**/*.{js,jsx}'],
+    rules: { 'no-unused-vars': ['error', { ignoreRestSiblings: true }] },
+  },
 ])

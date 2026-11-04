@@ -6,10 +6,21 @@ import { initFcmAndGetToken } from '../../../services/fcmService';
 import { openPrintWindow } from '../../../utils/qr';
 
 const PROTECTED_TABS = new Set(['tickets', 'rewards', 'transactions', 'profile']);
+const URL_TABS = new Set(['dashboard', 'map', 'tickets', 'transactions', 'rewards', 'profile']);
 const TICKET_QR_CACHE_KEY = 'smart_transit_ticket_qr_cache_v1';
 const QR_SUCCESS_TTL_MS = 5 * 60 * 1000;
 const QR_FAILURE_TTL_MS = 45 * 1000;
 const HISTORY_PAGE_SIZE = 50;
+
+/**
+ * The tab named by ?tab= in the address: "" when there is none or it is unknown, "buy" for the old booking link.
+ * Every portal calls this page "Account"; for a passenger the tab is still named "profile".
+ */
+const tabFromSearchParams = (searchParams) => {
+  const raw = String(searchParams.get('tab') || '').trim().toLowerCase();
+  const tab = raw === 'account' ? 'profile' : raw;
+  return tab === 'buy' || URL_TABS.has(tab) ? tab : '';
+};
 
 const readHistoryPage = (response) => {
   const payload = response?.data ?? response;
@@ -537,28 +548,22 @@ export default function usePassengerDashboard({ preloadMapView }) {
     setMenuOpen(false);
   }, [isAuthenticated, loadPrivateData, navigate, preloadMapView]);
 
+  // The ?tab= value picks the tab when it, or the sign-in state, changes. This is worked out while rendering
+  // (React's "storing information from previous renders"), not with setState in an effect.
+  const urlTab = tabFromSearchParams(searchParams);
+  const urlTabKey = `${urlTab}|${isAuthenticated}`;
+  const [appliedUrlTabKey, setAppliedUrlTabKey] = useState(null);
+  if (appliedUrlTabKey !== urlTabKey) {
+    setAppliedUrlTabKey(urlTabKey);
+    if (urlTab && urlTab !== 'buy') {
+      setActiveTab(PROTECTED_TABS.has(urlTab) && !isAuthenticated ? 'dashboard' : urlTab);
+    }
+  }
+
+  // There is one booking page; an old ?tab=buy link goes there.
   useEffect(() => {
-    const rawTab = String(searchParams.get('tab') || '').trim().toLowerCase();
-    // Every portal calls this page "Account"; for a passenger the tab is still named "profile" in the address.
-    const tabParam = rawTab === 'account' ? 'profile' : rawTab;
-    if (!tabParam) return;
-
-    // There is one booking page; an old ?tab=buy link goes there.
-    if (tabParam === 'buy') {
-      navigate('/passenger/book', { replace: true });
-      return;
-    }
-
-    const allowed = new Set(['dashboard', 'map', 'tickets', 'transactions', 'rewards', 'profile']);
-    if (!allowed.has(tabParam)) return;
-
-    if (PROTECTED_TABS.has(tabParam) && !isAuthenticated) {
-      setActiveTab('dashboard');
-      return;
-    }
-
-    setActiveTab(tabParam);
-  }, [isAuthenticated, navigate, searchParams]);
+    if (urlTab === 'buy') navigate('/passenger/book', { replace: true });
+  }, [navigate, urlTab]);
 
   const points = Number(profile?.reward_points ?? user?.reward_points ?? 0).toFixed(2);
   const visibleTab = !isAuthenticated && PROTECTED_TABS.has(activeTab) ? 'dashboard' : activeTab;
