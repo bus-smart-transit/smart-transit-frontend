@@ -61,7 +61,6 @@ const NAV = navForRole(OPERATOR_ROLE).map((item) => ({ ...item, icon: NAV_ICONS[
 
 const getStaffFullName = (row) => row?.name || row?.user?.name || row?.user?.username || row?.username || '-'
 const getStaffUsername = (row) => row?.user?.username || row?.username || row?.name || '-'
-const getStaffEmail = (row) => row?.user?.email || row?.email || '-'
 const getStaffRole = (row) => row?.user?.role || row?.role || '-'
 const getStaffJoinedAt = (row) => row?.user?.created_at || row?.created_at || null
 const getStaffCompanyUserId = (row) => row?.company_user_id || row?.user_id || row?.id
@@ -257,7 +256,7 @@ function StaffDirectoryTab({ drivers, conductors, onRefresh, onCreateAccount }) 
         <table className="w-full text-sm">
           <thead className="bg-slate-50">
             <tr className="border-b border-slate-200">
-              {['Username', 'Email', 'Role', 'Availability', 'Joined'].map((header) => (
+              {['Username', 'Name', 'Role', 'Availability', 'Joined'].map((header) => (
                 <th key={header} className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{header}</th>
               ))}
             </tr>
@@ -269,7 +268,7 @@ function StaffDirectoryTab({ drivers, conductors, onRefresh, onCreateAccount }) 
               filteredStaff.map((row) => (
                 <tr key={`${getStaffRole(row)}-${getStaffCompanyUserId(row)}`} className="border-b border-slate-100 hover:bg-slate-50">
                   <td className="px-5 py-3 font-medium text-slate-900">{getStaffUsername(row)}</td>
-                  <td className="px-5 py-3 text-slate-600">{getStaffEmail(row)}</td>
+                  <td className="px-5 py-3 text-slate-600">{getStaffFullName(row)}</td>
                   <td className="px-5 py-3">
                     <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-700 capitalize">{getStaffRole(row) || row._resolvedRole}</span>
                   </td>
@@ -485,7 +484,7 @@ function ScheduleServiceModal({ state, drivers, conductors }) {
             <option value="">Select a driver...</option>
             {dateDrivers.map(d => (
               <option key={getStaffCompanyUserId(d)} value={getStaffCompanyUserId(d)}>
-                {getStaffFullName(d) || getStaffUsername(d)} ({getStaffEmail(d)})
+                {getStaffFullName(d) || getStaffUsername(d)} (@{getStaffUsername(d)})
               </option>
             ))}
           </select>
@@ -497,7 +496,7 @@ function ScheduleServiceModal({ state, drivers, conductors }) {
             <option value="">Select a chauffeur...</option>
             {conductors.map(c => (
               <option key={getStaffCompanyUserId(c)} value={getStaffCompanyUserId(c)}>
-                {getStaffFullName(c) || getStaffUsername(c)} ({getStaffEmail(c)})
+                {getStaffFullName(c) || getStaffUsername(c)} (@{getStaffUsername(c)})
               </option>
             ))}
           </select>
@@ -710,7 +709,7 @@ function TripsTab({ drivers, conductors, onRefresh, tripsState }) {
               <select value={assignId} onChange={e => setAssignId(e.target.value)} required disabled={assignModal.type === 'driver' && (loadingDateDrivers || Boolean(dateDriversError))} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500 disabled:opacity-60">
                 <option value="">Choose...</option>
                 {(assignModal.type === 'driver' ? dateDrivers : conductors).map(p => (
-                  <option key={getStaffCompanyUserId(p)} value={getStaffCompanyUserId(p)}>{getStaffFullName(p) || getStaffUsername(p)} ({getStaffEmail(p)})</option>
+                  <option key={getStaffCompanyUserId(p)} value={getStaffCompanyUserId(p)}>{getStaffFullName(p) || getStaffUsername(p)} (@{getStaffUsername(p)})</option>
                 ))}
               </select>
             </Field>
