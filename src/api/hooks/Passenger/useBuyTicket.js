@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import PassengerService from '../../PassengerService/PassengerService';
 import { checkoutIdempotencyKey, clearCheckoutIdempotencyKey, shouldDropCheckoutKey } from '../../../utils/checkoutIdempotency';
-import { readApiError } from '../../../services/bookingService';
+import { getBookingWindow, readApiError } from '../../../services/bookingService';
 import { useBookingStops, useDepartures, useTripResolution } from './useBookingSearch';
 import useBookingLink from './useBookingLink';
 import useTripTimeline from './useTripTimeline';
@@ -117,6 +117,18 @@ export default function useBuyTicket({ onTicketPurchased }) {
   const bookingLink = useBookingLink(searchParams);
   const [error, setError] = useState('');
   const [formErrors, setFormErrors] = useState({});
+  const [bookingFee, setBookingFee] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    getBookingWindow()
+      .then((window) => {
+        const fee = Number(window?.online_booking_fee);
+        if (!cancelled) setBookingFee(Number.isFinite(fee) ? fee : null);
+      })
+      .catch(() => { if (!cancelled) setBookingFee(null); });
+    return () => { cancelled = true; };
+  }, []);
   const [success, setSuccess] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isGuestCheckout] = useState(() => !(localStorage.getItem('passenger_token') || sessionStorage.getItem('passenger_token')));
@@ -247,6 +259,9 @@ export default function useBuyTicket({ onTicketPurchased }) {
   const rewardPointsToApply = form.use_rewards ? Math.min(requestedRewardPoints, maxRedeemableRewardPoints) : 0;
   const isRewardRequestInsufficient = form.use_rewards && requestedRewardPoints > maxRedeemableRewardPoints;
   const netTotal = Number(Math.max(0, grossTotal - rewardPointsToApply).toFixed(2));
+  // Batch 45 Feature A: the online booking fee comes from the server (one per payment, whatever the number of tickets).
+  // null until it has loaded; the page then says it is not known yet instead of showing a made-up amount.
+  const totalDue = bookingFee === null ? null : Number((netTotal + bookingFee).toFixed(2));
   const hasRewardPoints = availableRewardPoints > 0;
 
   const handleChange = useCallback((field, value) => {
@@ -836,6 +851,8 @@ export default function useBuyTicket({ onTicketPurchased }) {
     loadingRewards,
     maxRedeemableRewardPoints,
     netTotal,
+    bookingFee,
+    totalDue,
     printQrTicket,
     qrTickets,
     resolution,

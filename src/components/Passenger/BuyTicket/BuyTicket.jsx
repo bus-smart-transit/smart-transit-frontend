@@ -78,6 +78,8 @@ export default function BuyTicket({ onTicketPurchased, returnTo = '/' }) {
     loadingRewards,
     maxRedeemableRewardPoints,
     netTotal,
+    bookingFee,
+    totalDue,
     printQrTicket,
     qrTickets,
     resolution,
@@ -563,11 +565,20 @@ export default function BuyTicket({ onTicketPurchased, returnTo = '/' }) {
               <SummaryRow label="Quantity">{totalTickets}</SummaryRow>
               <SummaryRow label="Gross Total">PHP {Number(grossTotal || 0).toFixed(2)}</SummaryRow>
               <SummaryRow label="Rewards Applied">{Number(rewardPointsToApply || 0).toFixed(0)} points</SummaryRow>
+              <SummaryRow label="Fare after rewards">PHP {Number(netTotal || 0).toFixed(2)}</SummaryRow>
+              <SummaryRow label="Booking fee">{bookingFee === null ? 'Not provided' : `PHP ${Number(bookingFee).toFixed(2)}`}</SummaryRow>
             </dl>
             <div className="mt-2 flex items-center justify-between border-t border-slate-200 pt-4">
-              <span className="text-sm font-semibold text-navy-950">Net Total</span>
-              <span className="font-display text-xl font-bold text-navy-950">PHP {Number(netTotal || 0).toFixed(2)}</span>
+              <span className="text-sm font-semibold text-navy-950">Total to pay</span>
+              <span className="font-display text-xl font-bold text-navy-950" data-testid="total-to-pay">
+                {totalDue === null ? 'Not provided' : `PHP ${Number(totalDue).toFixed(2)}`}
+              </span>
             </div>
+            {bookingFee > 0 && (
+              <p className="mt-1 text-xs text-slate-500">
+                Online bookings have a booking fee of PHP {Number(bookingFee).toFixed(2)} for each payment, however many tickets you buy. Tickets bought with cash on the bus have no fee.
+              </p>
+            )}
             {timeline?.fare?.error && <p className="mt-2 text-xs text-red-600">{timeline.fare.error}</p>}
             <button
               type="submit"

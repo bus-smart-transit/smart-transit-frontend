@@ -87,6 +87,7 @@ export default function TransactionsTable({ log, loading, error, table, onSort, 
                     {formatPeso(row.amount)}
                     {row.discount_amount > 0 && <span className="block text-xs font-normal text-slate-500">Regular {formatPeso(row.original_amount)}</span>}
                     {row.refunded > 0 && <span className="block text-xs font-normal text-rose-600">- {formatPeso(row.refunded)}</span>}
+                    {row.booking_fee > 0 && <span className="block text-xs font-normal text-slate-500">+ booking fee {formatPeso(row.booking_fee)}</span>}
                   </td>
                   <td className="px-3 py-2">
                     <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_STYLE[row.status] || 'bg-slate-100 text-slate-600'}`}>{row.status_label}</span>

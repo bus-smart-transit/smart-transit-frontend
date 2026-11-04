@@ -142,3 +142,21 @@ test('a guest reloads the booking page while a payment is open, and can still pa
   expect(two.url).toMatch(/paymongo/);
   expect(entry.pageErrors).toEqual([]);
 });
+
+// Batch 45 Feature A: the summary shows the PHP 10 online booking fee apart from the fare, and the total to pay
+// includes it, before the passenger leaves for PayMongo. Checked at desktop and phone width.
+for (const width of [1280, 390]) {
+  test(`the booking summary shows the booking fee and the total to pay (${width} px)`, async ({ page }) => {
+    test.skip(!trip, 'No trip is bookable online in the next 45 days.');
+    await page.setViewportSize({ width, height: 900 });
+    await openBooking(page);
+
+    const fee = page.locator('dt', { hasText: /^Booking fee$/ }).locator('xpath=following-sibling::dd[1]');
+    await expect(fee).toHaveText('PHP 10.00');
+    const fare = Number((await page.locator('dt', { hasText: /^Fare after rewards$/ }).locator('xpath=following-sibling::dd[1]').innerText()).replace(/[^0-9.]/g, ''));
+    await expect(page.getByTestId('total-to-pay')).toHaveText(`PHP ${(fare + 10).toFixed(2)}`);
+    await expect(page.getByText(/Tickets bought with cash on the bus have no fee\./)).toBeVisible();
+    await page.getByTestId('total-to-pay').scrollIntoViewIfNeeded();
+    await page.screenshot({ path: path.join(SHOTS, `4-fee-summary-${width}.png`) });
+  });
+}

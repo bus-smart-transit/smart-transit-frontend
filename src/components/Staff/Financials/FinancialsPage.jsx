@@ -146,6 +146,14 @@ export default function FinancialsPage({ service, view = 'all', embedded = false
             <Kpi label="Paid tickets" value={formatCount(kpis.tickets)} hint={`${formatCount(kpis.boarded)} boarded`} testId="kpi-tickets" />
             <Kpi label="Average fare" value={formatPeso(kpis.average_fare)} hint="Gross per paid ticket" testId="kpi-average" />
             <Kpi label="Discounts given" value={formatPeso(summary.discounts?.total ?? 0)} hint={`${formatCount(summary.discounts?.tickets ?? 0)} discounted tickets`} tone="text-sky-700" testId="kpi-discounts" />
+            <Kpi
+              label="Booking fees"
+              value={kpis.booking_fees ? formatPeso(kpis.booking_fees.net) : 'Not provided'}
+              hint={kpis.booking_fees
+                ? `${formatPeso(kpis.booking_fees.collected)} collected, ${formatPeso(kpis.booking_fees.refunded)} refunded. Online fee, not part of the fares.`
+                : 'Online fee, not part of the fares.'}
+              testId="kpi-booking-fees"
+            />
             <Card padding="sm" className="col-span-2 min-w-0" data-testid="kpi-split">
               <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Cash vs online</p>
               <SplitBar cash={kpis.cash} online={kpis.online} />

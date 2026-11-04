@@ -133,7 +133,12 @@ export function TicketResolutionQueue({ service, tone = 'light' }) {
                 <td className="px-2 py-1.5 font-mono">{String(row.ticket_uuid).slice(0, 8).toUpperCase()}</td>
                 <td className="px-2 py-1.5">#{row.trip_id} &middot; {row.route_name} &middot; {row.trip_date}</td>
                 <td className="px-2 py-1.5">{row.passenger_name || row.guest_email || 'Guest'}</td>
-                <td className="px-2 py-1.5">PHP {Number(row.fare_paid).toFixed(2)}</td>
+                <td className="px-2 py-1.5">
+                  PHP {Number(row.fare_paid).toFixed(2)}
+                  {Number(row.resolution?.fee_amount) > 0 && (
+                    <span className={`block text-xs ${t.muted}`}>+ booking fee PHP {Number(row.resolution.fee_amount).toFixed(2)} refunded</span>
+                  )}
+                </td>
                 <td className="px-2 py-1.5">{row.method === 'cash' ? 'Cash' : 'GCash / Maya / card'}</td>
                 <td className="px-2 py-1.5">{queueStateText(row)}</td>
                 <td className="px-2 py-1.5">

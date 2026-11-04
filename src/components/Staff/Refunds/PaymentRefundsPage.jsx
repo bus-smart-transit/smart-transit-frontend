@@ -44,7 +44,14 @@ function RefundCard({ row, busy, error, onRecord, onReconcile }) {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <span className="font-data text-base font-bold text-slate-900">{formatPeso(row.amount)}</span>
+          <span className="text-right">
+            <span className="block font-data text-base font-bold text-slate-900">{formatPeso(row.total_paid ?? row.amount)}</span>
+            {Number(row.fee_amount) > 0 && (
+              <span className="block text-xs text-slate-500" data-testid="refund-fee-split">
+                Fares {formatPeso(row.amount)} + booking fee {formatPeso(row.fee_amount)}
+              </span>
+            )}
+          </span>
           <span data-testid="refund-status" className={`rounded-full px-2.5 py-1 text-xs font-semibold ${chipClass}`}>{chipLabel}</span>
         </div>
       </div>
