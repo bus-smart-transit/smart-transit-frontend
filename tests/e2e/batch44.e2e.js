@@ -40,9 +40,8 @@ const staffLogin = async (email, role) => {
 const byEmail = (list, email) => list.find((row) => JSON.stringify(row).includes(email));
 const getData = async (url, token) => (await (await api.get(url, as(token))).json()).data;
 
-async function signIn(page, roleTab, email, urlPart) {
+async function signIn(page, email, urlPart) {
   await page.goto('/employee/login');
-  await page.getByRole('button', { name: roleTab }).click();
   await page.getByRole('textbox', { name: /Email/ }).fill(email);
   await page.getByRole('textbox', { name: 'Password' }).fill(PASSWORD);
   await page.getByRole('button', { name: 'Sign In' }).click();
@@ -59,7 +58,7 @@ test.beforeAll(async () => {
 test.afterAll(async () => { await api.dispose(); });
 
 test('Discounts: the Operator sees Student, Senior citizen and PWD at 20% and can turn one off and on', async ({ page }) => {
-  await signIn(page, 'Operator', 'operator@smarttransit.com', /operator\/dashboard/);
+  await signIn(page, 'operator@smarttransit.com', /operator\/dashboard/);
   await page.goto('/employee/operator/dashboard?tab=finance&view=overview');
   const panel = page.getByRole('region', { name: 'Onsite discounts' });
   await expect(panel).toBeVisible({ timeout: 30000 });
@@ -78,7 +77,7 @@ test('Discounts: the Operator sees Student, Senior citizen and PWD at 20% and ca
 });
 
 test('Leg planning: Suggest times works out how many legs fit, says where each time came from, and flags limits', async ({ page }) => {
-  await signIn(page, 'Operator', 'operator@smarttransit.com', /operator\/dashboard/);
+  await signIn(page, 'operator@smarttransit.com', /operator\/dashboard/);
   await page.goto('/employee/operator/dashboard?tab=schedule&view=blocks');
   await page.getByRole('button', { name: '+ Schedule' }).click();
   const dialog = page.getByRole('dialog');
@@ -143,7 +142,7 @@ test('Leg time: the Operator moves a leg that has not started, and the server re
   expect(refused.status()).toBe(422);
   expect((await refused.json()).message).toMatch(/needs a 30 minute turnaround|must stay in order/);
 
-  await signIn(page, 'Operator', 'operator@smarttransit.com', /operator\/dashboard/);
+  await signIn(page, 'operator@smarttransit.com', /operator\/dashboard/);
   await page.goto('/employee/operator/dashboard?tab=schedule&view=blocks');
   await page.getByRole('radio', { name: /^All/ }).or(page.getByRole('tab', { name: /^All/ })).or(page.getByRole('button', { name: /^All/ })).first().click().catch(() => {});
   const card = page.locator(`[data-card-key="block-${block.shift_block_id}"]`);
@@ -194,7 +193,7 @@ test('Chauffeur: a discounted cash sale shows the regular fare and the discount,
   const boarding = await api.patch(`operator/trips/${trip.trip_id}/boarding`, as(operatorToken));
   expect(boarding.ok() || trip.status === 'boarding', await boarding.text()).toBeTruthy();
 
-  await signIn(page, 'Chauffeur', 'conductor3@smarttransit.com', /conductor\/dashboard/);
+  await signIn(page, 'conductor3@smarttransit.com', /conductor\/dashboard/);
   await page.getByRole('button', { name: 'Ticketing & Fares' }).first().click();
 
   const origin = page.locator('#onsite-origin');

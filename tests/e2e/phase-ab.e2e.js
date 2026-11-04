@@ -36,9 +36,8 @@ const staffLogin = async (email, role) => {
 };
 const byEmail = (list, email) => list.find((row) => JSON.stringify(row).includes(email));
 
-async function signIn(page, roleTab, email, urlPart) {
+async function signIn(page, email, urlPart) {
   await page.goto('/employee/login');
-  await page.getByRole('button', { name: roleTab }).click();
   await page.getByRole('textbox', { name: /Email/ }).fill(email);
   await page.getByRole('textbox', { name: 'Password' }).fill(PASSWORD);
   await page.getByRole('button', { name: 'Sign In' }).click();
@@ -89,7 +88,7 @@ test('Phase A: a trip two hours ahead cannot board yet, and its Driver sees when
   }
 
   // The Driver's pairing screen says when pairing opens (60 minutes before) and asks the server for no code yet.
-  await signIn(page, 'Driver', 'driver4@smarttransit.com', /driver\/dashboard/);
+  await signIn(page, 'driver4@smarttransit.com', /driver\/dashboard/);
   await page.goto('/employee/driver/dashboard?tab=pin');
   const notice = page.getByTestId('pairing-not-open');
   await expect(notice).toBeVisible({ timeout: 30000 });
@@ -153,7 +152,7 @@ test('Phase B: the Operator previews five days From..To, confirms, and a second 
   const from = manilaDate(offset);
   const to = manilaDate(offset + 4);
 
-  await signIn(page, 'Operator', 'operator@smarttransit.com', /operator\/dashboard/);
+  await signIn(page, 'operator@smarttransit.com', /operator\/dashboard/);
   await page.goto('/employee/operator/dashboard?tab=schedule&view=blocks');
   await page.getByRole('button', { name: '+ Schedule' }).click();
   const dialog = page.getByRole('dialog');

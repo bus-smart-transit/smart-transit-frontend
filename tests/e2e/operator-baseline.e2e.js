@@ -30,7 +30,6 @@ const WIDTHS = [[1280, 900], [390, 844]];
 
 async function signIn(page) {
   await page.goto('/employee/login');
-  await page.getByRole('button', { name: 'Operator' }).click();
   await page.getByRole('textbox', { name: /Email/ }).fill(OPERATOR_EMAIL);
   await page.getByRole('textbox', { name: 'Password' }).fill(OPERATOR_PASSWORD);
   await page.getByRole('button', { name: 'Sign In' }).click();

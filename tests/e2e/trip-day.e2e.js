@@ -1,5 +1,5 @@
 import { test, expect as baseExpect, request as pwRequest } from '@playwright/test';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
@@ -7,22 +7,28 @@ import path from 'node:path';
 // Operator schedules -> crew accept, pair, start shifts -> boarding and a cash sale -> the Driver's map shows the bus
 // icon -> at the departure time the Driver departs and the simulator drives the route -> the homepage tracker shows
 // the moving bus and the next-stop ETA (and the stop near a pinned passenger) -> the Driver acknowledges the stops
-// and ends the trip -> the Chauffeur ends the shift with a cash count -> the Operator sees the remittance.
+// and ends the trip -> the Chauffeur's shift closes with the trip -> the Operator sees the remittance.
 //
-// Runs only between 05:30 and 20:30 Manila (the trip leaves about 10 minutes after it starts). Needs a backend with
+// Runs only between 05:30 and 20:30 Manila (the trip leaves about 10 minutes after it starts). Run it on its own, on a
+// database where driver3 has no trip today: batch44.e2e.js and system-flow.e2e.js also give driver3 / conductor3 a
+// trip today, and a driver gets one trip per day. Needs a backend with
 // DISABLE_STAFF_OTP=true (see system-flow.e2e.js) on E2E_API_URL, the frontend on E2E_BASE_URL pointed at it, and the
-// backend folder on this machine for the simulator (E2E_BACKEND_DIR, E2E_PHP). Errors per step go to
-// playwright-report/trip-day/errors.json.
+// backend for the simulator. The simulator runs in the local Docker backend by default (E2E_SIMULATOR=docker, from
+// the root folder E2E_COMPOSE_DIR; the backend needs GPS_SIMULATOR_ENABLED=true, set in the local
+// docker-compose.override.yml), or with PHP on this machine (E2E_SIMULATOR=php, E2E_BACKEND_DIR, E2E_PHP).
+// Errors per step go to playwright-report/trip-day/errors.json.
 
 const API = process.env.E2E_API_URL || 'http://localhost:8001/api/';
 const PASSWORD = process.env.E2E_PASSWORD || 'password123';
+const SIMULATOR = process.env.E2E_SIMULATOR || 'docker';
+const COMPOSE_DIR = process.env.E2E_COMPOSE_DIR || path.resolve('..');
 const BACKEND_DIR = process.env.E2E_BACKEND_DIR || path.resolve('../smart-transit-backend');
 const PHP = process.env.E2E_PHP || 'C:/php84/php.exe';
 const SHOTS = path.resolve('playwright-report/trip-day');
 const log = {};
 
 test.describe.configure({ mode: 'serial', timeout: 30 * 60 * 1000 });
-test.use({ launchOptions: { slowMo: Number(process.env.E2E_SLOWMO ?? 100) }, screenshot: 'only-on-failure' });
+test.use({ launchOptions: { slowMo: Number(process.env.E2E_SLOWMO ?? 100) }, screenshot: 'only-on-failure', actionTimeout: 60000 });
 const expect = baseExpect.configure({ timeout: 60000 });
 
 const manila = (date = new Date()) => Object.fromEntries(
@@ -38,6 +44,20 @@ let api;
 const tokens = {};
 const ctx = {};
 let simulator = null;
+const simulatorArgs = (tripId) => ['artisan', 'gps:simulate', String(tripId), '--interval=2', '--step=120', '--accuracy=8'];
+function startSimulator(tripId) {
+  if (SIMULATOR === 'php') {
+    return spawn(PHP, simulatorArgs(tripId), { cwd: BACKEND_DIR, env: { ...process.env, GPS_SIMULATOR_ENABLED: 'true' }, stdio: 'ignore' });
+  }
+  return spawn('docker', ['compose', 'exec', '-T', 'backend', 'php', ...simulatorArgs(tripId)], { cwd: COMPOSE_DIR, stdio: 'ignore' });
+}
+// Stopping the docker client does not always stop the command inside the container, so stop it there too.
+function stopSimulator() {
+  if (simulator && !simulator.killed) simulator.kill();
+  if (simulator && SIMULATOR !== 'php') {
+    spawnSync('docker', ['compose', 'exec', '-T', 'backend', 'pkill', '-f', 'artisan gps:simulate'], { cwd: COMPOSE_DIR, stdio: 'ignore' });
+  }
+}
 
 const as = (token) => ({ headers: { Authorization: `Bearer ${token}` } });
 const staffLogin = async (email, role) => {
@@ -70,9 +90,8 @@ const expectClean = (entry, step) => {
   expect(entry.apiErrors.filter((e) => e.status >= 500), `${step}: server errors`).toEqual([]);
 };
 
-async function staffSignIn(page, roleTab, email, urlPart) {
+async function staffSignIn(page, email, urlPart) {
   await page.goto('/employee/login');
-  await page.getByRole('button', { name: roleTab }).click();
   await page.getByRole('textbox', { name: /Email/ }).fill(email);
   await page.getByRole('textbox', { name: 'Password' }).fill(PASSWORD);
   await page.getByRole('button', { name: 'Sign In' }).click();
@@ -88,7 +107,7 @@ test.beforeAll(async () => {
   tokens.chauffeur = await staffLogin('conductor3@smarttransit.com', 'conductor');
 });
 test.afterAll(async () => {
-  if (simulator && !simulator.killed) simulator.kill();
+  stopSimulator();
   writeFileSync(path.join(SHOTS, 'errors.json'), JSON.stringify({ ...log, trip: ctx.trip?.trip_id ?? null }, null, 2));
   await api.dispose();
 });
@@ -139,7 +158,7 @@ test('2. Crew accept, pair and start their shifts; boarding opens; the Chauffeur
   const boarding = await call('patch', `driver/trips/${tripId}/boarding`, tokens.driver);
   expect(boarding.status, JSON.stringify(boarding.body)).toBeLessThan(300);
 
-  await staffSignIn(page, 'Chauffeur', 'conductor3@smarttransit.com', /conductor\/dashboard/);
+  await staffSignIn(page, 'conductor3@smarttransit.com', /conductor\/dashboard/);
   await clickSidebar(page, 'Ticketing & Fares');
   const origin = page.locator('#onsite-origin');
   await expect(origin).toBeVisible();
@@ -164,7 +183,7 @@ test('3. The Driver\'s map shows the bus icon at the phone\'s position', async (
   const page = await context.newPage();
   const entry = watch(page, 'driver-map');
 
-  await staffSignIn(page, 'Driver', 'driver3@smarttransit.com', /driver\/dashboard/);
+  await staffSignIn(page, 'driver3@smarttransit.com', /driver\/dashboard/);
   await clickSidebar(page, 'Active Trip');
   await expect(page.locator('.st-bus-marker').first()).toBeVisible({ timeout: 120000 });
   await shot(page, '2-driver-map-bus-icon');
@@ -182,9 +201,7 @@ test('4. At the departure time the Driver departs and the simulator drives the r
   // The Driver passes the first stop (the terminal), so the ETAs become live.
   if (ctx.stops?.[0]) await call('post', `driver/trips/current/stops/${ctx.stops[0].stop_id}/acknowledge`, tokens.driver);
 
-  simulator = spawn(PHP, ['artisan', 'gps:simulate', String(ctx.trip.trip_id), '--interval=2', '--step=120', '--accuracy=8'], {
-    cwd: BACKEND_DIR, env: { ...process.env, GPS_SIMULATOR_ENABLED: 'true' }, stdio: 'ignore',
-  });
+  simulator = startSimulator(ctx.trip.trip_id);
   await new Promise((resolve) => setTimeout(resolve, 8000));
   expect(simulator.exitCode, 'the simulator is still running (it refuses to start when disabled or in production)').toBeNull();
 });
@@ -215,32 +232,28 @@ test('5. The homepage tracker shows the moving bus, the next-stop ETA and the st
   await context.close();
 });
 
-test('6. The Driver acknowledges the stops and ends the trip; the Chauffeur ends the shift; the Operator sees the remittance', async ({ page }) => {
+test('6. The Driver acknowledges the stops and ends the trip; the Chauffeur\'s shift closes with it; the Operator sees the remittance', async ({ page }) => {
   test.skip(!ctx.trip, 'No trip.');
-  if (simulator && !simulator.killed) simulator.kill();
+  stopSimulator();
   for (const stop of ctx.stops ?? []) {
     await call('post', `driver/trips/current/stops/${stop.stop_id}/acknowledge`, tokens.driver);
   }
   const complete = await call('patch', `driver/trips/${ctx.trip.trip_id}/complete`, tokens.driver);
   expect(complete.status, JSON.stringify(complete.body)).toBeLessThan(300);
 
+  // A standalone trip (not part of a shift block) closes both crew shifts at End Trip
+  // (TripService::closeShiftLogsForTrip). The Chauffeur's remittance opens with no cash declared, for the Operator.
   const entry = watch(page, 'end-of-shift');
-  await staffSignIn(page, 'Chauffeur', 'conductor3@smarttransit.com', /conductor\/dashboard/);
+  await staffSignIn(page, 'conductor3@smarttransit.com', /conductor\/dashboard/);
   await clickSidebar(page, 'Active Shift');
-  const end = page.getByRole('button', { name: /End Shift/ }).first();
-  await expect(end).toBeEnabled({ timeout: 120000 });
-  await end.click();
-  await page.locator('#closing-cash').fill(String(ctx.cash ?? 0));
-  const expected = await page.getByTestId('end-shift-cash').textContent().catch(() => '');
-  const amount = (expected?.match(/Expected cash\s*₱([\d.,]+)/) ?? [])[1]?.replace(/,/g, '') ?? '0';
-  await page.locator('#closing-cash').fill(amount);
-  await shot(page, '5-end-shift-cash');
-  await page.getByRole('button', { name: 'End Shift' }).last().click();
-  await expect(page.getByText(/Shift ended|ended/).first()).toBeVisible({ timeout: 120000 });
+  await expect(page.getByText('No shift is open, so there is nothing to end.')).toBeVisible({ timeout: 60000 });
+  await expect(page.getByRole('button', { name: /End Shift/ }).first()).toBeDisabled();
+  await shot(page, '5-chauffeur-shift-closed');
 
   await page.context().clearCookies();
-  await page.evaluate(() => window.localStorage.clear());
-  await staffSignIn(page, 'Operator', 'operator@smarttransit.com', /operator\/dashboard/);
+  // Staff sessions live in sessionStorage (TokenManager); clear both so the Operator can sign in.
+  await page.evaluate(() => { window.localStorage.clear(); window.sessionStorage.clear(); });
+  await staffSignIn(page, 'operator@smarttransit.com', /operator\/dashboard/);
   await page.goto('/employee/operator/dashboard?tab=finance&view=remittances');
   await expect(page.getByTestId('remittance-card').first()).toBeVisible({ timeout: 120000 });
   await shot(page, '6-operator-remittance');

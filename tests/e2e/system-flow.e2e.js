@@ -70,9 +70,8 @@ function expectClean(entry, step) {
   expect(entry.apiErrors.filter((e) => e.status >= 500), `${step}: server errors`).toEqual([]);
 }
 
-async function staffSignIn(page, roleTab, email, urlPart) {
+async function staffSignIn(page, email, urlPart) {
   await page.goto('/employee/login');
-  await page.getByRole('button', { name: roleTab }).click();
   await page.getByRole('textbox', { name: /Email/ }).fill(email);
   await page.getByRole('textbox', { name: 'Password' }).fill(PASSWORD);
   await page.getByRole('button', { name: 'Sign In' }).click();
@@ -103,13 +102,29 @@ const stamp = Date.now().toString(36);
 const passengerEmail = `e2e.passenger.${stamp}@example.com`;
 const passengerPassword = 'Password123'; // the sign-up form needs upper, lower and a number
 
-// A new passenger signs in with an emailed code. The test backend writes mail to its log (MAIL_MAILER=log), so the
-// test reads the newest code there, as a person would read it in their inbox.
+// A new passenger verifies their email with the emailed code. Two ways to get it:
+// - E2E_CODE_FILE set: the test empties that file and waits (up to 8 min) for a person to write the 6-digit code in it.
+// - Otherwise: the test backend writes mail to its log (MAIL_MAILER=log) and the test reads the newest code there.
 const MAIL_LOG = process.env.E2E_MAIL_LOG || path.resolve('../smart-transit-backend/storage/logs/laravel.log');
+const CODE_FILE = process.env.E2E_CODE_FILE;
 const latestLoginCode = () => {
-  const codes = [...readFileSync(MAIL_LOG, 'utf8').matchAll(/letter-spacing:14px[^>]*>(\d{6})</g)];
+  let text;
+  try { text = readFileSync(MAIL_LOG, 'utf8'); } catch { return null; }
+  const codes = [...text.matchAll(/letter-spacing:14px[^>]*>(\d{6})</g)];
   return codes.length ? codes[codes.length - 1][1] : null;
 };
+const codeFromFile = () => {
+  try { const value = readFileSync(CODE_FILE, 'utf8').trim(); return /^\d{6}$/.test(value) ? value : null; } catch { return null; }
+};
+async function emailedCode(before) {
+  if (CODE_FILE) {
+    console.log(`Waiting for the emailed code in ${CODE_FILE}`);
+    await expect.poll(codeFromFile, { timeout: 8 * 60 * 1000, intervals: [2000] }).not.toBeNull();
+    return codeFromFile();
+  }
+  await expect.poll(latestLoginCode, { timeout: 30000 }).not.toBe(before);
+  return latestLoginCode();
+}
 
 test('Passenger: signs up with a gender, sees it on the profile, and opens booking and tracking', async ({ page }) => {
   const entry = watch(page, 'passenger');
@@ -127,24 +142,17 @@ test('Passenger: signs up with a gender, sees it on the profile, and opens booki
   await page.locator('#signup-password').fill(passengerPassword);
   await page.locator('#signup-confirm').fill(passengerPassword);
   await page.locator('#signup-terms').check();
+  const before = latestLoginCode();
+  if (CODE_FILE) writeFileSync(CODE_FILE, '');
   await page.locator('#signup-submit-btn').click();
   await page.waitForURL(/passenger\/login/, { timeout: 60000 });
 
-  await page.getByRole('textbox', { name: /Email/ }).fill(passengerEmail);
-  await page.locator('input[type="password"]').first().fill(passengerPassword);
-  const before = latestLoginCode();
-  await page.getByRole('button', { name: 'Sign In' }).click();
-  // Either the emailed-code screen opens, or (code switched off) the passenger is signed in straight away.
-  const codeScreen = page.getByText('Verify your identity');
-  await expect.poll(async () => (await codeScreen.isVisible()) || !page.url().includes('/login'), { timeout: 60000 }).toBe(true);
-  if (await codeScreen.isVisible()) {
-    await expect.poll(latestLoginCode, { timeout: 30000 }).not.toBe(before);
-    const code = latestLoginCode();
-    const boxes = page.locator('input[inputmode="numeric"][maxlength="1"]');
-    for (let i = 0; i < 6; i += 1) await boxes.nth(i).fill(code[i]);
-    const verify = page.getByRole('button', { name: 'Verify Code' });
-    if (await verify.isEnabled().catch(() => false)) await verify.click().catch(() => {});
-  }
+  // Since 2026-10-28 sign-up goes straight to "Verify your email"; the first right code verifies and signs in.
+  await expect(page.getByRole('heading', { name: 'Verify your email' })).toBeVisible();
+  const code = await emailedCode(before);
+  const boxes = page.locator('input[inputmode="numeric"][maxlength="1"]');
+  for (let i = 0; i < 6; i += 1) await boxes.nth(i).fill(code[i]);
+  await page.getByRole('button', { name: 'Verify Code' }).click();
   // A signed-in passenger lands on the home page.
   await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 60000 });
 
@@ -169,7 +177,7 @@ const newDriverEmail = `e2e.driver.${stamp}@example.com`;
 
 test('Operator: every page and view opens, and a new Driver account keeps its gender', async ({ page }) => {
   const entry = watch(page, 'operator');
-  await staffSignIn(page, 'Operator', 'operator@smarttransit.com', /operator\/dashboard/);
+  await staffSignIn(page, 'operator@smarttransit.com', /operator\/dashboard/);
 
   // Clicked through like a person (sidebar, then each view tab), not reloaded: the local test server answers one
   // request at a time, and a full reload of every page queues the whole dashboard again each time.
@@ -231,7 +239,7 @@ test('Driver: accepts today\'s trip, sees the pairing code, and opens every tab'
   // Outside bus hours no trip can be made for today: the Driver's pages are still opened and checked for errors.
   if (minutes > 20 * 60 + 55 || minutes < 5 * 60 + 30) {
     test.info().annotations.push({ type: 'outside bus hours', description: 'No trip made; pages opened only.' });
-    await staffSignIn(page, 'Driver', 'driver3@smarttransit.com', /driver\/dashboard/);
+    await staffSignIn(page, 'driver3@smarttransit.com', /driver\/dashboard/);
     for (const label of ['Dashboard', 'Active Trip', 'Schedule', 'Daily PIN', 'Account']) {
       await clickSidebar(page, label);
       await settle(page);
@@ -257,7 +265,7 @@ test('Driver: accepts today\'s trip, sees the pairing code, and opens every tab'
 
   await api.patch(`driver/trips/${trip.trip_id}/accept`, as(driverToken));
 
-  await staffSignIn(page, 'Driver', 'driver3@smarttransit.com', /driver\/dashboard/);
+  await staffSignIn(page, 'driver3@smarttransit.com', /driver\/dashboard/);
   for (const label of ['Dashboard', 'Active Trip', 'Schedule', 'Daily PIN', 'Account']) {
     await clickSidebar(page, label);
     await settle(page);
@@ -274,7 +282,7 @@ test('Chauffeur: pairs, starts a shift with no opening cash, sells, drops off by
   // Outside bus hours (no trip from the Driver step): the Chauffeur's pages are still opened and checked for errors.
   if (!trip) {
     test.info().annotations.push({ type: 'outside bus hours', description: 'No trip; pages opened only.' });
-    await staffSignIn(page, 'Chauffeur', 'conductor3@smarttransit.com', /conductor\/dashboard/);
+    await staffSignIn(page, 'conductor3@smarttransit.com', /conductor\/dashboard/);
     for (const label of ['Dashboard', 'Ticketing & Fares', 'Active Shift', 'Schedule', 'Daily PIN', 'Account']) {
       await clickSidebar(page, label);
       await settle(page);
@@ -288,7 +296,7 @@ test('Chauffeur: pairs, starts a shift with no opening cash, sells, drops off by
   const pairing = await (await api.get('driver/pairing-token', as(driverToken))).json();
   await api.post('conductor/pair', { ...as(chauffeurToken), data: { token: pairing.data?.token } });
 
-  await staffSignIn(page, 'Chauffeur', 'conductor3@smarttransit.com', /conductor\/dashboard/);
+  await staffSignIn(page, 'conductor3@smarttransit.com', /conductor\/dashboard/);
   const start = page.getByRole('button', { name: /^Start Shift/ }).first();
   if (await start.isVisible().catch(() => false)) {
     await start.click();
@@ -330,7 +338,7 @@ test('Chauffeur: pairs, starts a shift with no opening cash, sells, drops off by
 
 test('Operator: the remittances and the trip show up after the Chauffeur\'s work', async ({ page }) => {
   const entry = watch(page, 'operator-after');
-  await staffSignIn(page, 'Operator', 'operator@smarttransit.com', /operator\/dashboard/);
+  await staffSignIn(page, 'operator@smarttransit.com', /operator\/dashboard/);
   await page.goto('/employee/operator/dashboard?tab=finance&view=remittances');
   await settle(page);
   await page.goto('/employee/operator/dashboard?tab=schedule&view=trips');

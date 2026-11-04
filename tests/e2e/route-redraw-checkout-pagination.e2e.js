@@ -39,7 +39,6 @@ test.describe('Redraw route line is offered on every route', () => {
 
   test('every route page shows the button, so a route added later gets it too', async ({ page }) => {
     await page.goto('/employee/login');
-    await page.getByRole('button', { name: 'Operator' }).click();
     await page.getByRole('textbox', { name: /Email/ }).fill(OPERATOR_EMAIL);
     await page.getByRole('textbox', { name: 'Password' }).fill(PASSWORD);
     await page.getByRole('button', { name: 'Sign In' }).click();
@@ -164,7 +163,6 @@ test.describe('Long lists come back one page at a time', () => {
 test.describe('Operator portal: redraw status and the stops directory', () => {
   const signIn = async (page) => {
     await page.goto('/employee/login');
-    await page.getByRole('button', { name: 'Operator' }).click();
     await page.getByRole('textbox', { name: /Email/ }).fill(OPERATOR_EMAIL);
     await page.getByRole('textbox', { name: 'Password' }).fill(PASSWORD);
     await page.getByRole('button', { name: 'Sign In' }).click();
