@@ -612,6 +612,10 @@ export function useConductorDashboardData({ onLogout, pairing }) {
       void refreshEndBlockedReason();
       setActionMsg(res?.message || 'Chauffeur shift started');
       setActiveTab('occupancy');
+      // 2026-11-05: the current trip (conductor/trips/current) only answers once a shift is open, so it must be read
+      // again now; otherwise Ticketing & Fares kept saying "Ticketing isn't active yet" until Refresh was pressed.
+      // Same as the Driver's start (useDriverDashboard). Silent: no page-wide loading flash.
+      await loadData({ silent: true });
     } catch (err) {
       setActionMsg(err?.message || 'Unable to start shift right now.');
     }

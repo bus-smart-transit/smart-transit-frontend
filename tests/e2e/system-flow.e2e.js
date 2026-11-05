@@ -313,7 +313,11 @@ test('Chauffeur: pairs, starts a shift with no opening cash, sells, drops off by
 
   await staffSignIn(page, 'conductor3@smarttransit.com', /conductor\/dashboard/);
   const start = page.getByRole('button', { name: /^Start Shift/ }).first();
+  // 2026-11-05: the button appears about a second after sign-in, once the shift status has loaded. Checking at once
+  // skipped the shift, so ticketing never opened. Wait for it; it stays absent only when a shift is already open.
+  await start.waitFor({ state: 'visible', timeout: 15000 }).catch(() => {});
   if (await start.isVisible().catch(() => false)) {
+    await expect(start).toBeEnabled({ timeout: 15000 });
     await start.click();
     await expect(page.getByText('Start Shift?')).toBeVisible();
     await expect(page.locator('#opening-cash')).toHaveCount(0);
