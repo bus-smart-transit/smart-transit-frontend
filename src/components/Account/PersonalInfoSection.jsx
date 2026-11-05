@@ -86,6 +86,8 @@ export default function PersonalInfoSection({ view, profile = null, onSave = nul
         <dl className="mt-4 grid gap-4 sm:grid-cols-2">
           <ReadOnlyField label="Name" value={view.name} testId="field-name" />
           <ReadOnlyField label="Email" value={view.email} testId="field-email" />
+          {/* 2026-11-05: Drivers and Chauffeurs can sign in with this instead of their email. */}
+          {view.username && <ReadOnlyField label="Username (for signing in)" value={view.username} mono testId="field-username" />}
           <ReadOnlyField label="Phone" value={view.phone} mono testId="field-phone" />
           <ReadOnlyField label="Gender" value={view.gender} testId="field-gender" />
           {view.role === 'passenger' && <ReadOnlyField label="Address" value={view.address} testId="field-address" />}

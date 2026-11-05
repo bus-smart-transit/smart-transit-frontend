@@ -55,6 +55,8 @@ export function buildProfileView(role, raw) {
     roleLabel: ROLE_LABELS[role] ?? clean(role),
     name: clean(profile.name) ?? clean(user.name),
     email: clean(user.email) ?? clean(profile.email),
+    // 2026-11-05: crews can sign in with their username, so they are shown it; other roles sign in with email only.
+    username: ['driver', 'conductor'].includes(role) ? clean(user.username) : null,
     phone: clean(profile.phone_num),
     gender: genderLabel(profile.gender),
     // A passenger's own address is shown to them. A staff member's address and birth date are not shown.

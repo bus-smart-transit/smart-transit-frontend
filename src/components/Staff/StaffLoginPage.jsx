@@ -55,7 +55,7 @@ export default function StaffLoginPage() {
 
   const validate = () => {
     const e = {};
-    if (!form.email.trim()) e.email = 'Email is required';
+    if (!form.email.trim()) e.email = 'Enter your email or username';
     if (!form.password) e.password = 'Password is required';
     return e;
   };
@@ -259,15 +259,19 @@ export default function StaffLoginPage() {
                 {/* Email */}
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1.5" htmlFor="staff-email">
-                    Email
+                    Email or username
                   </label>
                   <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 focus-within:ring-2 focus-within:ring-teal-500 focus-within:border-transparent transition pointer-events-auto">
                     <IdCard className="h-4 w-4 text-slate-400 shrink-0" />
+                    {/* 2026-11-05: Drivers and Chauffeurs may type their username; Operators and Admins use their email. */}
                     <input
                       id="staff-email"
-                      type="email"
+                      type="text"
+                      autoComplete="username"
+                      autoCapitalize="none"
+                      spellCheck={false}
                       className="h-11 w-full bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400 cursor-text pointer-events-auto"
-                      placeholder="Enter your email"
+                      placeholder="Email (Drivers and Chauffeurs: email or username)"
                       value={form.email}
                       onChange={(e) => update('email', e.target.value)}
                       autoFocus

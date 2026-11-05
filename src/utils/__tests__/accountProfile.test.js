@@ -51,4 +51,12 @@ describe('buildProfileView', () => {
     expect(NOT_PROVIDED).toBe('Not provided');
     expect(buildProfileView('driver', null).identification.value).toBeNull();
   });
+
+  it('shows a Driver or Chauffeur the username they can sign in with, and no one else', () => {
+    const profile = { user: { username: 'juan_driver', email: 'j@example.test' } };
+    expect(buildProfileView('driver', profile).username).toBe('juan_driver');
+    expect(buildProfileView('conductor', profile).username).toBe('juan_driver');
+    expect(buildProfileView('operator', profile).username).toBeNull();
+    expect(buildProfileView('passenger', profile).username).toBeNull();
+  });
 });
