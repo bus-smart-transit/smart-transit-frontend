@@ -14,6 +14,9 @@ import { BUS_COLORS, createBusMarkerElement, createYouAreHereElement } from '../
 const busColorFor = (row) => (String(row?.trip_status || '').toLowerCase() === 'delayed' ? BUS_COLORS.warning : BUS_COLORS.live);
 const headingOf = (row) => (Number.isFinite(Number(row?.heading)) && row?.heading !== null ? Number(row.heading) : null);
 import { busLabelText } from '../../../utils/busLabel';
+import { useRegion } from '../../../api/hooks/useRegion';
+import { busArrival, busesNear, formatKm, passengersText } from '../../../utils/nearbyBuses';
+import TrackMyBusModal from '../Track/TrackMyBusModal';
 
 const POLL_MS = 12000;
 
@@ -135,6 +138,11 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
   const [selectedRouteStops, setSelectedRouteStops] = useState([]);
   const [stopsByRoute, setStopsByRoute] = useState({});
   const requestedRoutesRef = useRef(new Set());
+  // Batch 45 Feature C: "Buses near you" (radius from the server's region settings) and the "Track my bus" pop-up.
+  const region = useRegion();
+  const radiusKm = Number(region?.nearby_radius_km) > 0 ? Number(region.nearby_radius_km) : null;
+  const [trackOpen, setTrackOpen] = useState(false);
+  const [showAllBuses, setShowAllBuses] = useState(false);
 
   const selectedFleet = fleets.find((row) => Number(row?.fleet_id) === Number(selectedFleetId)) || fleets[0] || null;
 
@@ -433,6 +441,11 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
 
   const nextStopOrDestinationLabel = routeProgress?.nextStopName || selectedFleet?.destination || 'Route sync pending';
 
+  // Batch 45 Feature C: with the passenger's pinned location, the panel lists only buses within radiusKm (measured on
+  // this device); "Show all" or a missing radius falls back to every running bus.
+  const nearby = busesNear(fleets, userCoords, radiusKm);
+  const nearbyMode = Boolean(userCoords && radiusKm && !showAllBuses);
+
   return (
     <section className={compact ? 'bg-transparent px-0 py-0' : 'bg-white px-4 py-12 sm:px-6 lg:px-10'}>
       <div className="mx-auto max-w-7xl space-y-5">
@@ -530,17 +543,47 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
             {pinError && <p className="mt-2 text-xs font-medium text-red-600">{pinError}</p>}
           </article>
 
-          <article className="rounded-2xl border border-slate-200 bg-slate-50 p-3 sm:p-4">
-            <div className="mb-3 flex items-center justify-between gap-2">
+          <article className="rounded-2xl border border-slate-200 bg-slate-50 p-3 sm:p-4" data-testid="nearby-panel">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-widest text-teal-600">Active Buses</p>
-                <h3 className="text-lg font-semibold text-slate-900">Choose a bus to focus</h3>
+                <p className="text-xs font-semibold uppercase tracking-widest text-teal-600">{nearbyMode ? 'Buses near you' : 'Active Buses'}</p>
+                <h3 className="text-lg font-semibold text-slate-900">
+                  {nearbyMode ? `Within ${radiusKm} km of you` : 'Choose a bus to focus'}
+                </h3>
               </div>
-              <span className="rounded-full bg-teal-100 px-2.5 py-1 text-xs font-semibold text-teal-700">{fleets.length} live</span>
+              <div className="flex items-center gap-2">
+                <span className="rounded-full bg-teal-100 px-2.5 py-1 text-xs font-semibold text-teal-700">
+                  {nearbyMode ? `${nearby.length} near` : `${fleets.length} live`}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setTrackOpen(true)}
+                  className="rounded-lg bg-navy-800 px-3 py-1.5 text-xs font-semibold text-white hover:bg-navy-900"
+                  data-testid="open-track-my-bus"
+                >
+                  Track my bus
+                </button>
+              </div>
             </div>
 
+            {!userCoords && (
+              <p className="mb-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600" data-testid="nearby-needs-location">
+                Tap <span className="font-semibold">Pin My Location</span> to see the buses within {radiusKm ?? 5} km of you. Your location stays on this device.
+              </p>
+            )}
+            {nearbyMode && nearby.length === 0 && (
+              <div className="mb-2 rounded-lg border border-slate-200 bg-white px-3 py-4 text-center text-sm text-slate-500" data-testid="nearby-none">
+                <p>No running buses within {radiusKm} km of you right now.</p>
+                {fleets.length > 0 && (
+                  <button type="button" onClick={() => setShowAllBuses(true)} className="mt-2 text-xs font-semibold text-teal-700 underline">
+                    Show all {fleets.length} running buses
+                  </button>
+                )}
+              </div>
+            )}
+
             <div className="max-h-114.5 space-y-2 overflow-y-auto pr-1">
-              {fleetsWithDistance.length === 0 && (
+              {!nearbyMode && fleetsWithDistance.length === 0 && (
                 <div className="rounded-lg border border-slate-200 bg-white px-3 py-6 text-center text-sm text-slate-500">
                   <p>No active buses right now.</p>
                   {!pollingEnabled && (
@@ -554,8 +597,9 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
                   )}
                 </div>
               )}
-              {fleetsWithDistance.map((row) => {
+              {(nearbyMode ? nearby : fleetsWithDistance).map((row) => {
                 const isSelected = Number(selectedFleetId) === Number(row?.fleet_id);
+                const arrival = busArrival(row?.trip_progress);
                 return (
                   <button
                     key={row?.fleet_id}
@@ -573,8 +617,22 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
                         {row?.destination || row?.route_name || 'Destination pending'}
                       </span>
                     </div>
-                    <p className="mt-1 text-xs capitalize text-slate-600">{row?.trip_status || 'active'} • {formatDistance(row?._distanceM)}</p>
+                    <p className="mt-1 text-xs capitalize text-slate-600">{row?.trip_status || 'active'} • {nearbyMode ? formatKm(row?._distanceM) : formatDistance(row?._distanceM)}</p>
                     <p className="mt-1 text-xs text-slate-500" title={coordinatesTitle(row)}>{placeLabel(row)}</p>
+                    {/* Batch 45 Feature C: next stop, arrival (live or scheduled, the scheduled time and delay apart), passengers. */}
+                    <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs" data-testid="nearby-bus-details">
+                      <dt className="text-slate-500">Next stop</dt>
+                      <dd className="text-right font-semibold text-slate-800">{row?.trip_progress?.next_stop || 'Not provided'}</dd>
+                      <dt className="text-slate-500">Arrives</dt>
+                      <dd className="text-right font-semibold text-slate-800">
+                        {arrival.time ? `${arrival.time} · ${arrival.basis}` : 'Not provided'}
+                        {arrival.scheduled && <span className="block font-normal text-slate-500">{arrival.scheduled}{arrival.delay ? ` · ${arrival.delay}` : ''}</span>}
+                        {!arrival.scheduled && arrival.delay && <span className="block font-normal text-slate-500">{arrival.delay}</span>}
+                      </dd>
+                      <dt className="text-slate-500">Passengers</dt>
+                      <dd className="text-right font-semibold text-slate-800" data-testid="nearby-bus-passengers">{passengersText(row?.trip_progress)}</dd>
+                    </dl>
+                    {arrival.note && <p className="mt-1 text-[11px] text-amber-700">{arrival.note}</p>}
                   </button>
                 );
               })}
@@ -582,6 +640,7 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
           </article>
         </div>
       </div>
+      <TrackMyBusModal open={trackOpen} onClose={() => setTrackOpen(false)} />
     </section>
   );
 }
