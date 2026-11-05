@@ -140,7 +140,7 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
   const requestedRoutesRef = useRef(new Set());
   // Batch 45 Feature C: "Buses near you" (radius from the server's region settings) and the "Track my bus" pop-up.
   const region = useRegion();
-  const radiusKm = Number(region?.nearby_radius_km) > 0 ? Number(region.nearby_radius_km) : null;
+  const radiusKm = region?.nearbyRadiusKm ?? null;
   const [trackOpen, setTrackOpen] = useState(false);
   const [showAllBuses, setShowAllBuses] = useState(false);
 
@@ -379,13 +379,6 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
       return;
     }
 
-    const map = mapRef.current;
-    const maplibregl = mapLibRef.current;
-    if (!map || !maplibregl) {
-      setPinError('Map is still loading. Please try again.');
-      return;
-    }
-
     setPinError('');
     setIsPinning(true);
 
@@ -394,7 +387,15 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
         const lat = Number(position.coords.latitude);
         const lng = Number(position.coords.longitude);
 
+        // Batch 45 Feature C: the "Buses near you" list needs only the location, not the map, so a slow map (or a
+        // phone that is still drawing it) no longer blocks it. The "you are here" marker is added when the map is ready.
         setUserCoords({ lat, lng });
+        const map = mapRef.current;
+        const maplibregl = mapLibRef.current;
+        if (!map || !maplibregl) {
+          setIsPinning(false);
+          return;
+        }
 
         if (userMarkerRef.current) {
           userMarkerRef.current.remove();
@@ -617,7 +618,7 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
                         {row?.destination || row?.route_name || 'Destination pending'}
                       </span>
                     </div>
-                    <p className="mt-1 text-xs capitalize text-slate-600">{row?.trip_status || 'active'} • {nearbyMode ? formatKm(row?._distanceM) : formatDistance(row?._distanceM)}</p>
+                    <p className="mt-1 text-xs text-slate-600"><span className="capitalize">{row?.trip_status || 'active'}</span> • {nearbyMode ? formatKm(row?._distanceM) : formatDistance(row?._distanceM)}</p>
                     <p className="mt-1 text-xs text-slate-500" title={coordinatesTitle(row)}>{placeLabel(row)}</p>
                     {/* Batch 45 Feature C: next stop, arrival (live or scheduled, the scheduled time and delay apart), passengers. */}
                     <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs" data-testid="nearby-bus-details">

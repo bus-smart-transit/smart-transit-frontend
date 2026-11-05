@@ -15,6 +15,8 @@ describe('regionService', () => {
     expect(region.center).toEqual([125.7, 6.9])
     expect(region.bounds).toEqual({ minLat: 5.3, maxLat: 8.1, minLng: 124.9, maxLng: 126.7 })
     expect(region.provinces['Province A']).toEqual(['Town A', 'Town B'])
+    expect(region.nearbyRadiusKm).toBeNull() // Batch 45 Feature C: not guessed when the server sends none
+    expect(normalizeRegion({ ...payload, nearby_radius_km: 5 }).nearbyRadiusKm).toBe(5)
   })
 
   it('returns MapLibre bounds as [[minLng, minLat], [maxLng, maxLat]]', () => {

@@ -19,6 +19,8 @@ export function normalizeRegion(payload) {
     center: center.every(Number.isFinite) ? center : null,
     bounds: { minLat: nums[0], maxLat: nums[1], minLng: nums[2], maxLng: nums[3] },
     provinces: payload?.provinces && typeof payload.provinces === 'object' ? payload.provinces : {},
+    // Batch 45 Feature C: the "Buses near you" radius in km (config/tracking.php); null when the server gives none.
+    nearbyRadiusKm: Number(payload?.nearby_radius_km) > 0 ? Number(payload.nearby_radius_km) : null,
   }
 }
 
