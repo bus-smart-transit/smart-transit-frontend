@@ -6,7 +6,6 @@ import {
   CheckCircle2,
   Clock3,
   Gauge,
-  KeyRound,
   RefreshCw,
   User,
 } from 'lucide-react';
@@ -18,7 +17,8 @@ import MyScheduleList from './MyScheduleList';
 import { shiftActionReason, driverTripActionReason } from '../../utils/actionReasons';
 import CalendarSummaryStrip from './CalendarSummaryStrip';
 import DashboardCalendar from './DashboardCalendar';
-import { ModalShell } from '../ui/Modal';
+import Modal, { ModalShell } from '../ui/Modal';
+import PairWithCrewCard from './PairWithCrewCard';
 import StaffCalendar from './StaffCalendar';
 import DriverNavigationMap from './DriverNavigationMap';
 import QrImage from '../Passenger/Ticket/QrImage';
@@ -39,13 +39,13 @@ import DriverService from '../../api/StaffService/DriverService';
 // view per Part B); Calendar + Schedule merge into one Schedule view;
 // Journey/Navigation/Traffic Alerts/Trip Status/Shift Blocks merge into
 // Active Trip (Shift Blocks is live operational state, not a planning
-// view, so it groups here rather than with Schedule). Daily PIN gets its
-// own item under Preferences & Utilities, extracted out of Trip Status.
+// view, so it groups here rather than with Schedule). Daily PIN had its own
+// item until Batch 45 Feature B moved it into the Dashboard's "Pair with crew" pop-up.
 const NAV_ITEMS = [
   { key: 'dashboard', label: 'Dashboard', icon: Gauge },
   { key: 'activeTrip', label: 'Active Trip', icon: Bus },
   { key: 'schedule', label: 'Schedule', icon: CalendarDays },
-  { key: 'pin', label: 'Daily PIN', icon: KeyRound },
+  // Batch 45 Feature B: the Daily PIN tab is now the "Pair with crew" pop-up on the Dashboard.
   { key: 'account', label: 'Account', icon: User },
 ];
 
@@ -188,7 +188,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   // The day the full calendar opens on when reached from the dashboard widget (null = today).
   const [calendarFocus, setCalendarFocus] = useState(null);
   const {
-    activeTab, setActiveTab,
+    activeTab, setActiveTab, pairingOpen, setPairingOpen,
     focusTripId, openTripFromNotification, dismissTripFocus,
     focusBlockId, assignments,
     assignedTrips,
@@ -433,11 +433,9 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
             vehicle) always displays — pairing only gates specific live
             actions (each already disabled individually below with a
             tooltip), not the whole tab. */}
-        {!loading && activeTab === 'dashboard' && !isPaired && (
-          <section className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
-            <p className="text-sm font-semibold text-amber-800">Pairing required for live shift actions</p>
-            <p className="mt-1 text-xs text-amber-700">{pairingReason} Your assigned route, schedule, and vehicle info below stay visible — only shift/trip actions are disabled until paired.</p>
-          </section>
+        {/* Batch 45 Feature B: the "Pair with crew" card opens the pairing and Daily PIN pop-up. */}
+        {!loading && activeTab === 'dashboard' && (
+          <PairWithCrewCard paired={isPaired} reason={pairingReason} partner="Chauffeur" onOpen={() => setPairingOpen(true)} />
         )}
 
         {!loading && activeTab === 'dashboard' && !showNoCurrentTripState && (
@@ -844,18 +842,18 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
             <p className="mt-1 text-sm text-amber-700">Live actions (start boarding, depart, end trip, acknowledge stops) stay off until you are paired with your chauffeur. Trip data below stays visible.</p>
             <button
               type="button"
-              onClick={() => setActiveTab('pin')}
+              onClick={() => setPairingOpen(true)}
               className="mt-3 rounded-lg border border-amber-300 bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-800 transition hover:bg-amber-200"
             >
-              Go to Daily PIN to pair →
+              Pair with crew
             </button>
           </section>
         )}
 
-        {/* Batch 19 Part A: Daily PIN extracted out to its own nav item
-            (see 'pin' tab below), no longer bundled inside Trip Status. */}
-        {!loading && activeTab === 'pin' && (
-          <section className="max-w-xl space-y-4">
+        {/* Batch 45 Feature B: the former Daily PIN tab, unchanged inside the "Pair with crew" pop-up (opened from the
+            Dashboard card, the Active Trip reminder, or an old ?tab=pin link). */}
+        <Modal open={!loading && pairingOpen} onClose={() => setPairingOpen(false)} title="Pair with crew" fullScreenOnMobile>
+          <section className="space-y-4" data-testid="pair-with-crew-modal">
             {/* Batch 20 Item 3: pairing lives here now, not on Active Trip. */}
             {!isPaired && (
               <PairingScreen
@@ -924,7 +922,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
               {pinStatus && <p className={`mt-3 text-sm ${pinStatus === 'PIN verified successfully.' ? 'text-emerald-600' : 'text-red-600'}`}>{pinStatus}</p>}
             </article>
           </section>
-        )}
+        </Modal>
 
         {activeTab === 'account' && (
           <ProfilePage

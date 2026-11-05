@@ -89,6 +89,16 @@ async function clickSidebar(page, label) {
   await page.locator('aside nav button', { hasText: new RegExp(`^${label}$`) }).first().click();
 }
 
+// Batch 45 Feature B: the Daily PIN tab is now the "Pair with crew" pop-up, opened from the card on the Dashboard.
+async function openPairWithCrew(page) {
+  await clickSidebar(page, 'Dashboard');
+  await page.getByTestId('pair-with-crew-card').getByRole('button').click();
+  await expect(page.getByTestId('pair-with-crew-modal')).toBeVisible();
+  await settle(page);
+  await page.getByRole('dialog', { name: 'Pair with crew' }).getByRole('button', { name: 'Close' }).click();
+  await expect(page.getByTestId('pair-with-crew-modal')).toHaveCount(0);
+}
+
 test.beforeAll(async () => {
   mkdirSync(SHOTS, { recursive: true });
   api = await pwRequest.newContext({ baseURL: API, extraHTTPHeaders: { Accept: 'application/json' } });
@@ -242,10 +252,11 @@ test('Driver: accepts today\'s trip, sees the pairing code, and opens every tab'
   if (minutes > 20 * 60 + 55 || minutes < 5 * 60 + 30) {
     test.info().annotations.push({ type: 'outside bus hours', description: 'No trip made; pages opened only.' });
     await staffSignIn(page, 'driver3@smarttransit.com', /driver\/dashboard/);
-    for (const label of ['Dashboard', 'Active Trip', 'Schedule', 'Daily PIN', 'Account']) {
+    for (const label of ['Dashboard', 'Active Trip', 'Schedule', 'Account']) {
       await clickSidebar(page, label);
       await settle(page);
     }
+    await openPairWithCrew(page);
     await expect(page.getByText('Confirm Takeover')).toHaveCount(0);
     await shot(page, 'd1-driver-pages');
     expectClean(entry, 'driver');
@@ -268,10 +279,11 @@ test('Driver: accepts today\'s trip, sees the pairing code, and opens every tab'
   await api.patch(`driver/trips/${trip.trip_id}/accept`, as(driverToken));
 
   await staffSignIn(page, 'driver3@smarttransit.com', /driver\/dashboard/);
-  for (const label of ['Dashboard', 'Active Trip', 'Schedule', 'Daily PIN', 'Account']) {
+  for (const label of ['Dashboard', 'Active Trip', 'Schedule', 'Account']) {
     await clickSidebar(page, label);
     await settle(page);
   }
+  await openPairWithCrew(page);
   await expect(page.getByText('Confirm Takeover')).toHaveCount(0);
   await shot(page, 'd1-driver');
 
@@ -285,10 +297,11 @@ test('Chauffeur: pairs, starts a shift with no opening cash, sells, drops off by
   if (!trip) {
     test.info().annotations.push({ type: 'outside bus hours', description: 'No trip; pages opened only.' });
     await staffSignIn(page, 'conductor3@smarttransit.com', /conductor\/dashboard/);
-    for (const label of ['Dashboard', 'Ticketing & Fares', 'Active Shift', 'Schedule', 'Daily PIN', 'Account']) {
+    for (const label of ['Dashboard', 'Ticketing & Fares', 'Active Shift', 'Schedule', 'Account']) {
       await clickSidebar(page, label);
       await settle(page);
     }
+    await openPairWithCrew(page);
     await shot(page, 'c0-chauffeur-pages');
     expectClean(entry, 'chauffeur');
     return;
@@ -330,10 +343,11 @@ test('Chauffeur: pairs, starts a shift with no opening cash, sells, drops off by
   await expect(page.getByRole('button', { name: 'Verify & End Shift' })).toBeDisabled();
   await shot(page, 'c3-active-shift');
 
-  for (const label of ['Dashboard', 'Schedule', 'Daily PIN', 'Account']) {
+  for (const label of ['Dashboard', 'Schedule', 'Account']) {
     await clickSidebar(page, label);
     await settle(page);
   }
+  await openPairWithCrew(page);
 
   expectClean(entry, 'chauffeur');
 });

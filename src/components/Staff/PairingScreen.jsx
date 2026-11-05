@@ -225,7 +225,7 @@ export default function PairingScreen({ role, onPaired, onLogout, paired = false
         )}
       </div>
 
-      <div className="staff-grid md:grid-cols-2">
+      <div className="staff-grid grid-cols-1 md:grid-cols-2">
         <article className="rounded-xl border border-slate-200 bg-slate-50 p-4">
           <h4 className="mb-3 text-sm font-semibold text-slate-900">Your pairing QR (primary)</h4>
 

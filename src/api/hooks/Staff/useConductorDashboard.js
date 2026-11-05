@@ -139,7 +139,9 @@ export function useConductorDashboardData({ onLogout, pairing }) {
   // Batch 27, Task 1: a push tap or link may open straight onto a trip
   // (?tab=dashboard&trip=ID). Read once, as initial state.
   const [initialLink] = useState(() => readDeepLink(typeof window !== 'undefined' ? window.location.search : '', 'conductor'));
-  const [activeTab, setActiveTab] = useState(initialLink.tab || 'occupancy');
+  // Batch 45 Feature B: the Daily PIN tab is now the "Pair with crew" pop-up; an old ?tab=pin link opens it.
+  const [pairingOpen, setPairingOpen] = useState(initialLink.tab === 'pin');
+  const [activeTab, setActiveTab] = useState(initialLink.tab && initialLink.tab !== 'pin' ? initialLink.tab : 'occupancy');
   const [focusTripId, setFocusTripId] = useState(initialLink.tripId);
   const [focusBlockId, setFocusBlockId] = useState(initialLink.blockId);
   const [assignedTripFilter, setAssignedTripFilter] = useState('all');
@@ -538,11 +540,11 @@ export function useConductorDashboardData({ onLogout, pairing }) {
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (activeTab === 'pin' && hasActiveTrip && isPaired) void loadPin();
+      if (pairingOpen && hasActiveTrip && isPaired) void loadPin();
     }, 0);
 
     return () => clearTimeout(timer);
-  }, [activeTab, hasActiveTrip, isPaired, loadPin]);
+  }, [pairingOpen, hasActiveTrip, isPaired, loadPin]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -1137,8 +1139,6 @@ export function useConductorDashboardData({ onLogout, pairing }) {
             ? 'Active Shift'
             : activeTab === 'schedule'
               ? 'Schedule'
-              : activeTab === 'pin'
-                ? 'Daily PIN'
                 : 'Account';
 
   // Batch 27, Task 1: open a trip from a notification (bell click) and clear the focus.
@@ -1146,7 +1146,8 @@ export function useConductorDashboardData({ onLogout, pairing }) {
   const assignments = useAssignmentCards({ service: ConductorService, onChanged: loadData });
   const openTripFromNotification = (target) => {
     if (!target) return;
-    setActiveTab(target.tab);
+    if (target.tab === 'pin') setPairingOpen(true);
+    else setActiveTab(target.tab);
     setFocusTripId(target.tripId ?? null);
     setFocusBlockId(target.blockId ?? null);
   };
@@ -1159,7 +1160,7 @@ export function useConductorDashboardData({ onLogout, pairing }) {
   };
 
   return {
-    activeTab, setActiveTab,
+    activeTab, setActiveTab, pairingOpen, setPairingOpen,
     focusTripId, openTripFromNotification, dismissTripFocus,
     focusBlockId, assignments,
     assignedTripFilter,

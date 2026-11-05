@@ -7,7 +7,6 @@ import {
   CheckCircle2,
   Download,
   Gauge,
-  KeyRound,
   Play,
   QrCode,
   RefreshCw,
@@ -22,7 +21,8 @@ import AssignmentSection from './AssignmentSection';
 import MyScheduleList from './MyScheduleList';
 import CalendarSummaryStrip from './CalendarSummaryStrip';
 import DashboardCalendar from './DashboardCalendar';
-import { ModalShell } from '../ui/Modal';
+import Modal, { ModalShell } from '../ui/Modal';
+import PairWithCrewCard from './PairWithCrewCard';
 import StaffCalendar from './StaffCalendar';
 import NotificationBellButton from './NotificationBellButton';
 import { useConductorPairing, useConductorDashboardData } from '../../api/hooks/Staff/useConductorDashboard';
@@ -50,7 +50,7 @@ const NAV_ITEMS = [
   { key: 'occupancy', label: 'Ticketing & Fares', icon: Ticket },
   { key: 'activeShift', label: 'Active Shift', icon: Bus },
   { key: 'schedule', label: 'Schedule', icon: CalendarDays },
-  { key: 'pin', label: 'Daily PIN', icon: KeyRound },
+  // Batch 45 Feature B: the Daily PIN tab is now the "Pair with crew" pop-up on the Dashboard.
   { key: 'account', label: 'Account', icon: UserCheck },
 ];
 
@@ -148,7 +148,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   // The day the full calendar opens on when reached from the dashboard widget (null = today).
   const [calendarFocus, setCalendarFocus] = useState(null);
   const {
-    activeTab, setActiveTab,
+    activeTab, setActiveTab, pairingOpen, setPairingOpen,
     focusTripId, openTripFromNotification, dismissTripFocus,
     focusBlockId, assignments,
     assignedTrips,
@@ -435,11 +435,9 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
             schedule, vehicle) always displays — pairing only disables
             the specific live actions below (each individually gated with
             a tooltip), not the whole tab. */}
-        {!loading && ['dashboard', 'occupancy'].includes(activeTab) && !isPaired && (
-          <section className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
-            <p className="text-sm font-semibold text-amber-800">Pairing required for live shift actions</p>
-            <p className="mt-1 text-xs text-amber-700">{pairingReason} Your assignment info below stays visible — only shift/ticketing actions are disabled until paired.</p>
-          </section>
+        {/* Batch 45 Feature B: the "Pair with crew" card opens the pairing and Daily PIN pop-up. */}
+        {!loading && ['dashboard', 'occupancy'].includes(activeTab) && (
+          <PairWithCrewCard paired={isPaired} reason={pairingReason} partner="Driver" onOpen={() => setPairingOpen(true)} />
         )}
 
         {/* Batch 20 Item 2: this "pre-shift review" hero belongs to
@@ -621,9 +619,9 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Passengers Onboard</p>
                 <p className="font-data mt-1 text-lg font-bold text-slate-900">{passengers?.length ?? earnings?.passenger_count ?? 0}</p>
               </button>
-              <button type="button" onClick={() => setActiveTab('pin')} className="staff-card staff-card-compact text-left transition hover:bg-slate-50">
+              <button type="button" onClick={() => setPairingOpen(true)} className="staff-card staff-card-compact text-left transition hover:bg-slate-50">
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Daily PIN</p>
-                <p className="mt-1 text-sm font-semibold text-teal-600">View / Verify →</p>
+                <p className="mt-1 text-sm font-semibold text-teal-600">Pair with crew →</p>
               </button>
             </div>
             {!occupancy ? (
@@ -1237,8 +1235,10 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
           </section>
         )}
 
-        {!loading && activeTab === 'pin' && (
-          <section className="space-y-4">
+        {/* Batch 45 Feature B: the former Daily PIN tab, unchanged inside the "Pair with crew" pop-up (opened from the
+            Dashboard card, the Ticketing & Fares tile, or an old ?tab=pin link). */}
+        <Modal open={!loading && pairingOpen} onClose={() => setPairingOpen(false)} title="Pair with crew" fullScreenOnMobile>
+          <section className="space-y-4" data-testid="pair-with-crew-modal">
             <PairingScreen
               role="conductor"
               paired={isPaired}
@@ -1281,7 +1281,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
               </article>
             )}
           </section>
-        )}
+        </Modal>
 
         {activeTab === 'account' && (
           <ProfilePage
