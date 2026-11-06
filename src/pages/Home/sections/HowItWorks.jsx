@@ -16,8 +16,8 @@ const STEPS = [
   {
     number: "03",
     icon: GridIcon,
-    title: "Reserve Your Seat",
-    description: "Choose an available seat and review your trip details.",
+    title: "Enter Your Trip Details",
+    description: "Set your number of tickets and review your trip details.",
   },
   {
     number: "04",
@@ -38,7 +38,7 @@ const STEPS = [
 // Simpler and less error-prone than one layout trying to do both.
 export default function HowItWorks() {
   return (
-    <section className="bg-white pb-16 pt-8 sm:pb-20 sm:pt-10">
+    <section className="bg-white py-16 sm:py-20">
       <div className="container-page">
         <div className="max-w-2xl">
           <p className="text-sm font-semibold uppercase tracking-wide text-teal-600">
@@ -48,7 +48,7 @@ export default function HowItWorks() {
             Your trip, made simple.
           </h2>
           <p className="mt-3 text-base leading-relaxed text-slate-500">
-            New to SmartTransit? Follow these simple steps to find a trip, reserve your seat,
+            New to SmartTransit? Follow these simple steps to find a trip,
             complete your booking, and board with your digital ticket.
           </p>
         </div>

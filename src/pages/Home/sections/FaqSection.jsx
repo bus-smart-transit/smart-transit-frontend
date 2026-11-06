@@ -10,12 +10,7 @@ const FAQ_ITEMS = [
   {
     question: "How do I book a trip?",
     answer:
-      "Search for your origin, destination, and travel date in the Search Trips section, then choose a schedule, pick a seat, and complete payment.",
-  },
-  {
-    question: "Can I choose my seat?",
-    answer:
-      "Yes. After selecting a schedule, you'll see a seat map where you can pick any available seat before paying.",
+      "Search for your origin, destination, and travel date in the Search Trips section, then choose a schedule, enter your trip details, and complete payment.",
   },
   {
     question: "How do I pay for my booking?",

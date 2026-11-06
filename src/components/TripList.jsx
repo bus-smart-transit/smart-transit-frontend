@@ -59,7 +59,7 @@ export default function TripList({ trips, origin, destination, date, onBookSeat,
                     Track Live
                   </Button>
                   <Button variant="primary" size="sm" onClick={() => onBookSeat(trip)}>
-                    Book Seat
+                    Book Trip
                   </Button>
                 </div>
               </div>

@@ -4,6 +4,8 @@ export const TERMINALS = [
   "Panabo Terminal, Panabo City",
   "Digos Terminal, Digos City",
   "Mati Terminal, Mati City",
+  "Nabunturan Terminal, Nabunturan",
+  "Malita Terminal, Malita",
 ];
 
 export const SAMPLE_TRIPS = [
@@ -72,7 +74,6 @@ export const UPCOMING_TRIPS = [
     route: "Ecoland Terminal → Tagum Terminal",
     date: "June 10, 2026",
     time: "9:00 AM",
-    seat: "13",
     status: "Confirmed",
   },
 ];
@@ -148,7 +149,6 @@ export const SAMPLE_TICKETS = [
     origin: "Ecoland Terminal",
     destination: "Tagum Terminal",
     departure: "June 10, 2026 · 7:00 AM",
-    seat: "13",
     status: "Confirmed",
     fare: 50,
   },
@@ -158,7 +158,6 @@ export const SAMPLE_TICKETS = [
     origin: "Ecoland Terminal",
     destination: "Digos Terminal",
     departure: "May 28, 2026 · 8:30 AM",
-    seat: "7",
     status: "Completed",
     fare: 45,
   },
@@ -168,7 +167,6 @@ export const SAMPLE_TICKETS = [
     origin: "Ecoland Terminal",
     destination: "Panabo Terminal",
     departure: "May 20, 2026 · 1:00 PM",
-    seat: "22",
     status: "Completed",
     fare: 40,
   },
@@ -178,7 +176,6 @@ export const SAMPLE_TICKETS = [
     origin: "Ecoland Terminal",
     destination: "Mati Terminal",
     departure: "May 4, 2026 · 6:00 AM",
-    seat: "5",
     status: "Cancelled",
     fare: 90,
   },
@@ -191,7 +188,6 @@ export const TRIP_HISTORY = [
     date: "May 28, 2026",
     route: "Ecoland Terminal → Digos Terminal",
     operator: "SmartTransit Express",
-    seat: "7",
     paymentStatus: "Paid",
     tripStatus: "Completed",
     fare: 45,
@@ -202,7 +198,6 @@ export const TRIP_HISTORY = [
     date: "May 20, 2026",
     route: "Ecoland Terminal → Panabo Terminal",
     operator: "SmartTransit Express",
-    seat: "22",
     paymentStatus: "Paid",
     tripStatus: "Completed",
     fare: 40,
@@ -213,7 +208,6 @@ export const TRIP_HISTORY = [
     date: "May 4, 2026",
     route: "Ecoland Terminal → Mati Terminal",
     operator: "SmartTransit Express",
-    seat: "5",
     paymentStatus: "Refunded",
     tripStatus: "Cancelled",
     fare: 90,
@@ -224,7 +218,6 @@ export const TRIP_HISTORY = [
     date: "April 22, 2026",
     route: "Ecoland Terminal → Tagum Terminal",
     operator: "SmartTransit Express",
-    seat: "18",
     paymentStatus: "Paid",
     tripStatus: "Completed",
     fare: 50,
@@ -237,7 +230,7 @@ export const NOTIFICATIONS = [
   {
     id: "notif-1",
     title: "Booking confirmed — Ecoland to Tagum",
-    detail: "Seat 13 · June 10, 2026 · 7:00 AM",
+    detail: "June 10, 2026 · 7:00 AM",
     time: "2h ago",
     read: false,
   },
@@ -313,7 +306,7 @@ export const NEWS_ITEMS = [
       "An earlier departure has been added on weekdays to help commuters beat rush hour traffic.",
     body: [
       "Starting this month, SmartTransit is adding a new 5:30 AM express trip on the Ecoland–Tagum route, running Monday through Friday.",
-      "The express service makes limited stops and is designed for commuters who need to be in Tagum before the morning rush. Seats can be reserved in advance through the app just like any other trip.",
+      "The express service makes limited stops and is designed for commuters who need to be in Tagum before the morning rush. Trips can be booked in advance through the app just like any other trip.",
       "This is the third schedule expansion this year as ridership on the northern routes continues to grow.",
     ],
   },
@@ -341,7 +334,7 @@ export const NEWS_ITEMS = [
       "Expect fewer trips and higher demand on routes to Mati and Digos during the holiday weekend.",
     body: [
       "In observance of the Davao Fiesta holiday weekend, SmartTransit will run a reduced weekend schedule on the Mati and Digos routes.",
-      "Because demand is traditionally higher during this weekend, we recommend booking your seat at least two days in advance through My Tickets.",
+      "Because demand is traditionally higher during this weekend, we recommend booking your trip at least two days in advance through My Tickets.",
       "Regular weekday schedules resume the following Monday.",
     ],
   },
@@ -395,7 +388,7 @@ export const FAQ_CATEGORIES = [
       {
         question: "What is SmartTransit?",
         answer:
-          "SmartTransit is a bus transportation platform for commuters travelling across Davao Region XI. It lets you check live schedules, reserve a seat, pay online, and track your bus, all from your browser.",
+          "SmartTransit is a bus transportation platform for commuters travelling across Davao Region XI. It lets you check live schedules, book a trip, pay online, and track your bus, all from your browser.",
       },
       {
         question: "Which routes does SmartTransit currently cover?",
@@ -405,7 +398,7 @@ export const FAQ_CATEGORIES = [
       {
         question: "Do I need to create an account to use SmartTransit?",
         answer:
-          "You can search trips and preview bus tracking as a guest. Booking a seat, viewing tickets, and earning rewards requires a free account.",
+          "You can search trips and preview bus tracking as a guest. Booking a trip, viewing tickets, and earning rewards requires a free account.",
       },
     ],
   },
@@ -428,7 +421,7 @@ export const FAQ_CATEGORIES = [
     category: "Tickets & Payments",
     items: [
       {
-        question: "How do I pay for my seat?",
+        question: "How do I pay for my booking?",
         answer:
           "Bookings are paid online through GCash. Once payment is confirmed, your e-ticket and QR code appear in My Tickets right away.",
       },

@@ -11,7 +11,7 @@ export default function CtaSection() {
           Ready for a smarter commute across Davao Region XI?
         </h2>
         <p className="max-w-lg text-base text-navy-200">
-          Search a trip, reserve your seat, and track your bus, all from one account.
+          Search a trip, book your trip, and track your bus, all from one account.
         </p>
         <div className="flex flex-wrap justify-center gap-3">
           {isAuthenticated ? (

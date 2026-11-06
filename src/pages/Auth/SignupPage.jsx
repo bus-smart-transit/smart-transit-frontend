@@ -84,7 +84,7 @@ export default function SignupPage() {
     <AuthCard
       photoSide="left"
       title={<>Join thousands of<br />daily commuters.</>}
-      text="Create your free SmartTransit account to reserve seats, pay online, and follow your bus in real time."
+      text="Create your free SmartTransit account to book trips, pay online, and follow your bus in real time."
       tagline="Your journey starts here."
     >
       <span className="inline-flex items-center gap-1.5 rounded-full bg-navy-50 px-3 py-1 text-xs font-semibold text-navy-700">

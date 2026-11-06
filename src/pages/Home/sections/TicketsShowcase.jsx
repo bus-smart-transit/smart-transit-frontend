@@ -7,7 +7,6 @@ const TICKET_FIELDS = [
   { label: "Destination", value: "Tagum Terminal" },
   { label: "Date", value: "June 10, 2026" },
   { label: "Departure", value: "7:00 AM" },
-  { label: "Seat", value: "13" },
   { label: "Booking ID", value: "ST-20260610-0142" },
 ];
 
@@ -17,7 +16,7 @@ const BOARDING_STEPS = [
   {
     step: "3",
     title: "Check your details",
-    description: "Make sure your route, schedule, and seat are correct.",
+    description: "Make sure your route and schedule are correct.",
   },
   { step: "4", title: "Show your QR code", description: "Present the QR code when boarding." },
 ];

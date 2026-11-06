@@ -5,7 +5,7 @@ const NOTES = [
   {
     icon: CheckCircleIcon,
     title: "Check your booking",
-    description: "Make sure your destination, date, schedule, and seat are correct before confirming.",
+    description: "Make sure your destination, date, and schedule are correct before confirming.",
   },
   {
     icon: TicketIcon,

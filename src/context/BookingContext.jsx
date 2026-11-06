@@ -6,7 +6,7 @@ const initialState = {
   origin: "",
   destination: "",
   date: "",
-  selectedTrip: null, // the trip card the passenger clicked "Book Seat" on
+  selectedTrip: null, // the trip card the passenger clicked "Book Trip" on
   // Filled in on the trip details page: { seatType, quantity, bookingOption, travelDate,
   // paymentMethod, useSmartPoints, dropOffMode, originStop, destinationStop, unitFare, grossTotal }
   details: null,

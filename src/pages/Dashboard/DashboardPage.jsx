@@ -86,7 +86,7 @@ export default function DashboardPage() {
                       <div>
                         <p className="text-sm font-semibold text-navy-950">{trip.route}</p>
                         <p className="text-xs text-slate-500">
-                          {trip.date} · {trip.time} · Seat {trip.seat}
+                          {trip.date} · {trip.time}
                         </p>
                       </div>
                       <StatusBadge status={trip.status} />

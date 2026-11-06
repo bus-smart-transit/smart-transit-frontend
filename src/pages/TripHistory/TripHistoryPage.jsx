@@ -57,7 +57,6 @@ export default function TripHistoryPage() {
                 <th className="px-5 py-3">Date</th>
                 <th className="px-5 py-3">Route</th>
                 <th className="px-5 py-3">Bus Operator</th>
-                <th className="px-5 py-3">Seat</th>
                 <th className="px-5 py-3">Payment</th>
                 <th className="px-5 py-3">Status</th>
                 <th className="px-5 py-3">Fare</th>
@@ -69,7 +68,6 @@ export default function TripHistoryPage() {
                   <td className="px-5 py-3.5 text-slate-500">{trip.date}</td>
                   <td className="px-5 py-3.5 font-medium text-navy-950">{trip.route}</td>
                   <td className="px-5 py-3.5 text-slate-500">{trip.operator}</td>
-                  <td className="px-5 py-3.5 text-slate-500">Seat {trip.seat}</td>
                   <td className="px-5 py-3.5 text-slate-500">{trip.paymentStatus}</td>
                   <td className="px-5 py-3.5">
                     <StatusBadge status={trip.tripStatus} />
@@ -94,7 +92,6 @@ export default function TripHistoryPage() {
               </div>
               <div className="mt-3 grid grid-cols-2 gap-y-2 text-xs text-slate-500">
                 <span>Operator: {trip.operator}</span>
-                <span>Seat {trip.seat}</span>
                 <span>{trip.paymentStatus} · {trip.paymentMethod}</span>
                 <span className="text-right font-semibold text-navy-950">₱{trip.fare.toFixed(2)}</span>
               </div>

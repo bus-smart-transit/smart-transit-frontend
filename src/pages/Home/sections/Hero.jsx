@@ -18,7 +18,7 @@ export default function Hero({ onSearch }) {
             Ride Smarter
           </h1>
           <p className="mt-5 text-sm font-medium text-white/85 sm:text-base">
-            Book your seat, track your bus, and arrive on time.
+            Book your trip, track your bus, and arrive on time.
           </p>
         </div>
       </div>

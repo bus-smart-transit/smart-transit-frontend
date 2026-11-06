@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { LocationIcon, SwapIcon, CalendarIcon, SearchIcon } from "./Icons.jsx";
+import { LocationIcon, CalendarIcon, SearchIcon } from "./Icons.jsx";
 import { TERMINALS } from "../data/sampleData.js";
 import Button from "./ui/Button.jsx";
 
@@ -7,11 +7,6 @@ export default function BookingWidget({ onSearch }) {
   const [origin, setOrigin] = useState("");
   const [destination, setDestination] = useState("");
   const [date, setDate] = useState("");
-
-  const swapLocations = () => {
-    setOrigin(destination);
-    setDestination(origin);
-  };
 
   const handleOriginChange = (value) => {
     setOrigin(value);
@@ -38,7 +33,7 @@ export default function BookingWidget({ onSearch }) {
         <p className="text-sm text-slate-500">Sign in required to complete a booking</p>
       </div>
 
-      <div className="grid gap-3 lg:grid-cols-[1fr_auto_1fr_auto_auto] lg:items-end">
+      <div className="grid gap-3 lg:grid-cols-[1fr_1fr_auto_auto] lg:items-end">
         <label className="block">
           <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
             From
@@ -59,15 +54,6 @@ export default function BookingWidget({ onSearch }) {
             </select>
           </span>
         </label>
-
-        <button
-          type="button"
-          onClick={swapLocations}
-          aria-label="Swap origin and destination"
-          className="mx-auto flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-300 text-slate-500 hover:bg-slate-50 lg:mb-0.5"
-        >
-          <SwapIcon size={18} />
-        </button>
 
         <label className="block">
           <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">

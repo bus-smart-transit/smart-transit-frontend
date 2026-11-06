@@ -65,7 +65,6 @@ export default function MyTicketsPage() {
                   </div>
                   <div className="flex flex-col text-xs text-slate-500 sm:text-sm">
                     <span>{ticket.departure}</span>
-                    <span>Seat {ticket.seat}</span>
                   </div>
                   <StatusBadge status={ticket.status} />
                   <ChevronDownIcon
@@ -92,10 +91,6 @@ export default function MyTicketsPage() {
                       <div>
                         <p className="text-xs text-slate-400">Departure</p>
                         <p className="font-semibold text-navy-950">{ticket.departure}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-slate-400">Seat Number</p>
-                        <p className="font-semibold text-navy-950">{ticket.seat}</p>
                       </div>
                       <div>
                         <p className="text-xs text-slate-400">Fare Paid</p>
