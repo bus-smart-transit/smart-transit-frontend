@@ -13,10 +13,13 @@ const mocks = vi.hoisted(() => ({
   addOperatorStopToRoute: vi.fn(),
   removeOperatorStopFromRoute: vi.fn(),
   setOperatorRouteStopExpress: vi.fn(),
+  searchPlaces: vi.fn(),
 }));
 
 vi.mock('../../../../api/StaffService/OperatorService', () => ({ default: mocks }));
 vi.mock('../../../Map/RouteMap', () => ({ default: ({ routeId }) => <div>route-map-{routeId}</div> }));
+// The map itself is tested in StopPinPicker.test.jsx; here a button stands in for a tap on the map.
+vi.mock('../StopPinPicker', () => ({ default: ({ latitude, longitude, onChange }) => <div><span>pin {latitude},{longitude}</span><button type="button" onClick={() => onChange({ latitude: '7.0712', longitude: '125.6101' })}>Tap map</button></div> }));
 vi.mock('../../FareRulesPanel', () => ({ default: ({ tone }) => <div>fare-panel tone={tone}</div> }));
 
 const today = getBusinessToday();
@@ -128,22 +131,60 @@ describe('RoutesPage list', () => {
     fireEvent.click(screen.getByRole('button', { name: /Add stop/ }));
     let dialog = await screen.findByRole('dialog');
     fireEvent.change(within(dialog).getByLabelText('Stop name'), { target: { value: 'New stop' } });
-    fireEvent.change(within(dialog).getByLabelText('Location label'), { target: { value: 'Near the plaza' } });
+    fireEvent.change(within(dialog).getByLabelText('Area or landmark (optional)'), { target: { value: 'Near the plaza' } });
+    expect(within(dialog).getByText('New stop (Near the plaza)')).toBeInTheDocument();
+    // No pin yet: the form says so and sends nothing.
     fireEvent.click(within(dialog).getByRole('button', { name: 'Create stop' }));
-    await waitFor(() => expect(mocks.createOperatorStop).toHaveBeenCalledWith({ stop_name: 'New stop', location: 'Near the plaza' }));
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('Place the pin on the map first.');
+    expect(mocks.createOperatorStop).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Tap map' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Create stop' }));
+    await waitFor(() => expect(mocks.createOperatorStop).toHaveBeenCalledWith({ stop_name: 'New stop', location_label: 'Near the plaza', latitude: 7.0712, longitude: 125.6101 }));
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
 
     fireEvent.click(screen.getByRole('button', { name: 'Edit stop Stop 2' }));
     dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByLabelText('Stop name')).toHaveValue('Stop 2');
+    expect(within(dialog).getByText('pin 7.2,125.7')).toBeInTheDocument();
     fireEvent.change(within(dialog).getByLabelText('Stop name'), { target: { value: 'Stop two' } });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Update stop' }));
-    await waitFor(() => expect(mocks.updateOperatorStop).toHaveBeenCalledWith(2, expect.objectContaining({ stop_name: 'Stop two' })));
+    await waitFor(() => expect(mocks.updateOperatorStop).toHaveBeenCalledWith(2, { stop_name: 'Stop two', location_label: null, latitude: 7.2, longitude: 125.7 }));
 
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: 'Delete stop Spare stop' }));
     await waitFor(() => expect(mocks.deleteOperatorStop).toHaveBeenCalledWith(9));
     window.confirm.mockRestore();
+  });
+
+  it('flags stops placed from their name and opens them for a re-pin', async () => {
+    const withOld = [...stops.slice(0, 3), { ...stops[3], location_source: 'name' }];
+    renderPage({ stops: withOld });
+    const row = screen.getByText('Spare stop').closest('tr');
+    expect(within(row).getByText('Placed from name')).toBeInTheDocument();
+    expect(within(screen.getByText('Stop 1').closest('tr')).getByText('Pinned')).toBeInTheDocument();
+    expect(screen.getByRole('note')).toHaveTextContent('1 stop was placed from the name only');
+    fireEvent.click(screen.getByRole('button', { name: 'Re-pin Spare stop' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText(/This stop was placed from its name/)).toBeInTheDocument();
+  });
+
+  it('shows the near-duplicate warning after saving, and a refused move as a failure', async () => {
+    mocks.createOperatorStop.mockResolvedValueOnce({ data: { stop_id: 20, warnings: ['"Stop 1" is only 12 m away. Is this the same stop?'] } });
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: /Add stop/ }));
+    let dialog = await screen.findByRole('dialog');
+    fireEvent.change(within(dialog).getByLabelText('Stop name'), { target: { value: 'Close one' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Tap map' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Create stop' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(screen.getByText('Stop created successfully. "Stop 1" is only 12 m away. Is this the same stop?')).toBeInTheDocument();
+
+    mocks.updateOperatorStop.mockRejectedValueOnce(new Error('A trip on a route with this stop is running now. Move the stop after the trip ends.'));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit stop Stop 2' }));
+    dialog = await screen.findByRole('dialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Tap map' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Update stop' }));
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('Could not save the stop. A trip on a route with this stop is running now.');
   });
 });
 

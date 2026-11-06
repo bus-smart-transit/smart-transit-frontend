@@ -56,6 +56,11 @@ class OperatorService extends StaffBaseService {
     return await this.request(`/operator/stops/${stopId}`, 'PUT', stopData);
   }
 
+  /** 2026-11-06 (Batch 47 part A): places for "Add stop". mode "suggest" while typing, "search" for the Search button. */
+  async searchPlaces(q, mode = 'suggest') {
+    return await this.request('/operator/places', 'GET', { q, mode });
+  }
+
   async deleteOperatorStop(stopId) {
     return await this.request(`/operator/stops/${stopId}`, 'DELETE');
   }

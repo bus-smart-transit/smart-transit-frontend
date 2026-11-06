@@ -86,7 +86,7 @@ export function filterStops(stops, query = '') {
   const words = String(query).trim().toLowerCase().split(/\s+/).filter(Boolean);
   if (!words.length) return stops;
   return stops.filter((stop) => {
-    const text = [stop.stop_name, stop.stop_code, stop.location, stop.municipality].map((part) => String(part || '').toLowerCase()).join(' ');
+    const text = [stop.stop_name, stop.stop_code, stop.location_label, stop.location, stop.municipality].map((part) => String(part || '').toLowerCase()).join(' ');
     return words.every((word) => text.includes(word));
   });
 }

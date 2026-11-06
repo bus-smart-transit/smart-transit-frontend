@@ -4,6 +4,9 @@ import { OpPageHeader, OpCard, OpChip, OpStat, OpTable, OpPager } from './Operat
 import { OP_SPACE } from './operatorUiTokens';
 import Modal from '../../ui/Modal';
 import RouteDetailPage from './RouteDetailPage';
+import PlaceSearch from './PlaceSearch';
+import StopPinPicker from './StopPinPicker';
+import { isPinned, roundCoord, stopDisplayName } from '../../../utils/stopPin';
 import { useCanManageCompany } from './companyAdmin';
 import { useRoutesTab } from '../../../api/hooks/Staff/useOperatorDashboard';
 import {
@@ -16,9 +19,13 @@ const INPUT = 'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text
 const PRIMARY = 'inline-flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-500 disabled:opacity-60';
 const SECONDARY = 'inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50';
 
+const EMPTY_STOP = { stop_name: '', location_label: '', latitude: '', longitude: '' };
+
+const isFailure = (text) => /failed|could not/i.test(text);
+
 function Message({ text }) {
   if (!text) return null;
-  const failed = text.toLowerCase().includes('failed');
+  const failed = isFailure(text);
   return <p role={failed ? 'alert' : 'status'} className={`mt-3 rounded-lg border px-3 py-2 text-sm ${failed ? 'border-rose-200 bg-rose-50 text-rose-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}>{text}</p>;
 }
 
@@ -42,15 +49,29 @@ function AddRouteModal({ open, onClose, form, setForm, saving, message, onSubmit
   );
 }
 
-function StopModal({ open, onClose, editing, form, setForm, saving, message, onSubmit }) {
+/**
+ * 2026-11-06 (Batch 47 part A): a stop is a name, an optional area label ("Downtown / Poblacion") and a pin on the
+ * map. Finding a place moves the map and the pin; the stop is saved where the pin is.
+ */
+function StopModal({ open, onClose, editing, needsPin, form, setForm, saving, message, onSubmit, otherStops }) {
+  const [focusKey, setFocusKey] = useState(0);
   const set = (key) => (event) => setForm((prev) => ({ ...prev, [key]: event.target.value }));
+  const setPin = (pin) => setForm((prev) => ({ ...prev, latitude: pin.latitude, longitude: pin.longitude }));
+  const pickPlace = (place) => {
+    setForm((prev) => ({ ...prev, latitude: String(roundCoord(place.latitude)), longitude: String(roundCoord(place.longitude)) }));
+    setFocusKey((n) => n + 1);
+  };
+  const preview = stopDisplayName(form);
   return (
     <Modal open={open} onClose={onClose} title={editing ? 'Edit stop' : 'Add stop'} fullScreenOnMobile>
       <form onSubmit={onSubmit}>
         <div className="grid gap-4">
-          <label className="block text-xs font-medium text-slate-600">Stop name<input value={form.stop_name} onChange={set('stop_name')} required className={`${INPUT} mt-1`} /></label>
-          <label className="block text-xs font-medium text-slate-600">Location label<input value={form.location} onChange={set('location')} className={`${INPUT} mt-1`} /></label>
-          <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500">Coordinates are worked out from the location label and the stop name.</p>
+          {needsPin && <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">This stop was placed from its name, so it may be in the wrong spot. Check the pin and save.</p>}
+          <label className="block text-xs font-medium text-slate-600">Stop name<input value={form.stop_name} onChange={set('stop_name')} required maxLength={255} className={`${INPUT} mt-1`} /></label>
+          <label className="block text-xs font-medium text-slate-600">Area or landmark (optional)<input value={form.location_label} onChange={set('location_label')} maxLength={80} placeholder="For example: Downtown / Poblacion" className={`${INPUT} mt-1`} /></label>
+          {form.stop_name.trim() && <p className="text-xs text-slate-500">Full name: <strong className="text-slate-800">{preview}</strong></p>}
+          <PlaceSearch onPick={pickPlace} />
+          {open && <StopPinPicker latitude={form.latitude} longitude={form.longitude} onChange={setPin} otherStops={otherStops} focusKey={focusKey} />}
         </div>
         <Message text={message} />
         <div className="mt-6 flex justify-end gap-2">
@@ -90,11 +111,24 @@ export default function RoutesPage({ routes, stops, trips, fleets, onRefresh, on
   const selected = rows.find((row) => row.routeId === selectedRouteId) || null;
 
   const open = (which) => { clearManageMsg(); setModal(which); };
-  const closeModal = () => { setModal(null); if (modal === 'stop') { setEditingStopId(null); setStopForm({ stop_name: '', location: '' }); } };
+  const closeModal = () => { setModal(null); if (modal === 'stop') { setEditingStopId(null); setStopForm(EMPTY_STOP); } };
   const submitRoute = async (event) => { if (await handleCreateRoute(event)) setModal(null); };
   const submitStop = async (event) => { if (await handleCreateStop(event)) setModal(null); };
-  const openEditStop = (stop) => { clearManageMsg(); setEditingStopId(stop.stop_id); setStopForm({ stop_name: stop.stop_name || '', location: stop.location || '' }); setModal('stop'); };
-  const openAddStop = () => { setEditingStopId(null); setStopForm({ stop_name: '', location: '' }); open('stop'); };
+  const openEditStop = (stop) => {
+    clearManageMsg();
+    setEditingStopId(stop.stop_id);
+    setStopForm({
+      stop_name: stop.stop_name || '',
+      location_label: stop.location_label || '',
+      latitude: stop.latitude === null || stop.latitude === undefined ? '' : String(stop.latitude),
+      longitude: stop.longitude === null || stop.longitude === undefined ? '' : String(stop.longitude),
+    });
+    setModal('stop');
+  };
+  const openAddStop = () => { setEditingStopId(null); setStopForm(EMPTY_STOP); open('stop'); };
+  const editingStop = stops.find((stop) => Number(stop.stop_id) === Number(editingStopId)) || null;
+  const otherStops = useMemo(() => stops.filter((stop) => Number(stop.stop_id) !== Number(editingStopId)), [stops, editingStopId]);
+  const unpinned = stops.filter((stop) => !isPinned(stop));
 
   if (selected) {
     return (
@@ -132,11 +166,16 @@ export default function RoutesPage({ routes, stops, trips, fleets, onRefresh, on
 
   const stopColumns = [
     { key: 'stop', header: 'Stop', render: (stop) => <span className="whitespace-nowrap"><strong className="text-slate-900">{stop.stop_name}</strong>{stop.stop_code && <span className="block text-xs text-slate-500">{stop.stop_code}</span>}</span> },
-    { key: 'lat', header: 'Latitude', render: (stop) => stop.latitude ?? '-' },
-    { key: 'lng', header: 'Longitude', render: (stop) => stop.longitude ?? '-' },
+    { key: 'label', header: 'Area or landmark', render: (stop) => (stop.location_label ? <span className="text-xs">{stop.location_label}</span> : <span className="text-xs text-slate-400">Not provided</span>) },
+    { key: 'place', header: 'Place on map', render: (stop) => (
+      <span className="whitespace-nowrap text-xs">
+        {isPinned(stop) ? <OpChip tone="success">Pinned</OpChip> : <OpChip tone="warning">Placed from name</OpChip>}
+        <span className="mt-1 block text-slate-500">{stop.latitude ?? '-'}, {stop.longitude ?? '-'}</span>
+      </span>
+    ) },
     { key: 'actions', header: '', render: (stop) => (canManage && (
       <span className="inline-flex gap-2">
-        <button type="button" aria-label={`Edit stop ${stop.stop_name}`} onClick={() => openEditStop(stop)} className={SECONDARY}>Edit</button>
+        <button type="button" aria-label={`${isPinned(stop) ? 'Edit' : 'Re-pin'} stop ${stop.stop_name}`} onClick={() => openEditStop(stop)} className={SECONDARY}>{isPinned(stop) ? 'Edit' : 'Re-pin'}</button>
         <button type="button" aria-label={`Delete stop ${stop.stop_name}`} disabled={manageSaving} onClick={() => { void handleDeleteStop(stop.stop_id); }} className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-50">Delete</button>
       </span>
     )) },
@@ -151,7 +190,7 @@ export default function RoutesPage({ routes, stops, trips, fleets, onRefresh, on
       />
 
       {manageMsg && !modal && (
-        <p role="status" className={`rounded-lg border px-3 py-2 text-sm ${manageMsg.toLowerCase().includes('failed') ? 'border-rose-200 bg-rose-50 text-rose-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}>{manageMsg}</p>
+        <p role="status" className={`rounded-lg border px-3 py-2 text-sm ${isFailure(manageMsg) ?'border-rose-200 bg-rose-50 text-rose-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}>{manageMsg}</p>
       )}
 
       <section aria-label="Route summary" className="grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -184,6 +223,16 @@ export default function RoutesPage({ routes, stops, trips, fleets, onRefresh, on
         subtitle="Stops you can place on routes."
         badge={canManage ? <button type="button" onClick={openAddStop} className={PRIMARY}><Plus className="h-4 w-4" aria-hidden="true" /> Add stop</button> : null}
       >
+        {canManage && unpinned.length > 0 && (
+          <div role="note" className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            <p>{unpinned.length === 1 ? '1 stop was' : `${unpinned.length} stops were`} placed from the name only and may be in the wrong spot. Open each one and check its pin:</p>
+            <span className="mt-2 flex flex-wrap gap-2">
+              {unpinned.map((stop) => (
+                <button key={stop.stop_id} type="button" onClick={() => openEditStop(stop)} className="rounded-full border border-amber-300 bg-white px-3 py-1 text-xs font-semibold text-amber-800 hover:bg-amber-100">Re-pin {stop.stop_name}</button>
+              ))}
+            </span>
+          </div>
+        )}
         <div className="mb-4">
           <label className="relative block">
             <span className="sr-only">Search stops</span>
@@ -202,7 +251,7 @@ export default function RoutesPage({ routes, stops, trips, fleets, onRefresh, on
       </OpCard>
 
       <AddRouteModal open={modal === 'route'} onClose={closeModal} form={routeForm} setForm={setRouteForm} saving={manageSaving} message={manageMsg} onSubmit={submitRoute} />
-      <StopModal open={modal === 'stop'} onClose={closeModal} editing={Boolean(editingStopId)} form={stopForm} setForm={setStopForm} saving={manageSaving} message={manageMsg} onSubmit={submitStop} />
+      <StopModal open={modal === 'stop'} onClose={closeModal} editing={Boolean(editingStopId)} needsPin={Boolean(editingStop && !isPinned(editingStop))} otherStops={otherStops} form={stopForm} setForm={setStopForm} saving={manageSaving} message={manageMsg} onSubmit={submitStop} />
     </div>
   );
 }

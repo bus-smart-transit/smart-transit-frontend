@@ -456,7 +456,8 @@ export function useRoutesTab({ onRefresh }) {
   const [manageMsg, setManageMsg] = useState('');
   const [manageSaving, setManageSaving] = useState(false);
   const [editingStopId, setEditingStopId] = useState(null);
-  const [stopForm, setStopForm] = useState({ stop_name: '', location: '' });
+  // 2026-11-06 (Batch 47 part A): the stop's name, a typed area label, and its map pin.
+  const [stopForm, setStopForm] = useState({ stop_name: '', location_label: '', latitude: '', longitude: '' });
   const [routeForm, setRouteForm] = useState({ route_name: '', origin: '', destination: '' });
   const [routeStopForm, setRouteStopForm] = useState({ route_id: '', stop_id: '', stop_order: '' });
   const [assignedStopIds, setAssignedStopIds] = useState([]);
@@ -467,24 +468,31 @@ export function useRoutesTab({ onRefresh }) {
     setManageSaving(true);
     setManageMsg('');
     try {
+      const latitude = Number(stopForm.latitude);
+      const longitude = Number(stopForm.longitude);
+      if (stopForm.latitude === '' || stopForm.longitude === '' || !Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+        setManageMsg('Could not save the stop. Place the pin on the map first.');
+        return false;
+      }
       const payload = {
-        stop_name: stopForm.stop_name,
-        location: stopForm.location,
+        stop_name: stopForm.stop_name.trim(),
+        location_label: stopForm.location_label.trim() || null,
+        latitude,
+        longitude,
       };
 
-      if (editingStopId) {
-        await OperatorService.updateOperatorStop(editingStopId, payload);
-      } else {
-        await OperatorService.createOperatorStop(payload);
-      }
+      const saved = editingStopId
+        ? await OperatorService.updateOperatorStop(editingStopId, payload)
+        : await OperatorService.createOperatorStop(payload);
+      const warnings = saved?.data?.warnings ?? [];
 
-      setStopForm({ stop_name: '', location: '' });
+      setStopForm({ stop_name: '', location_label: '', latitude: '', longitude: '' });
       setEditingStopId(null);
-      setManageMsg(editingStopId ? 'Stop updated successfully.' : 'Stop created successfully.');
+      setManageMsg([editingStopId ? 'Stop updated successfully.' : 'Stop created successfully.', ...warnings].join(' '));
       onRefresh();
       return true;
     } catch (err) {
-      setManageMsg(err?.message || 'Failed to save stop.');
+      setManageMsg(err?.message ? `Could not save the stop. ${err.message}` : 'Failed to save stop.');
       return false;
     } finally {
       setManageSaving(false);
@@ -499,7 +507,7 @@ export function useRoutesTab({ onRefresh }) {
       await OperatorService.deleteOperatorStop(stopId);
       if (Number(editingStopId) === Number(stopId)) {
         setEditingStopId(null);
-        setStopForm({ stop_name: '', location: '' });
+        setStopForm({ stop_name: '', location_label: '', latitude: '', longitude: '' });
       }
       setManageMsg('Stop deleted successfully.');
       onRefresh();
