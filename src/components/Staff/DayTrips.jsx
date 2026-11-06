@@ -13,7 +13,7 @@ const statusStyle = (status) => {
  * modal and by the day panel of the full calendar page, so both always show the same thing. Each row:
  * time, the leg's own origin to destination, status and the caller's role in it.
  */
-export default function DayTrips({ service, date, refreshKey = 0, onOpenFull = null, heading = true }) {
+export default function DayTrips({ service, date, refreshKey = 0, onOpenFull = null, heading = true, onOpenTrip = null }) {
   const [page, setPage] = useState(1);
   const day = useCalendarDay(service, date, page, refreshKey);
 
@@ -37,25 +37,44 @@ export default function DayTrips({ service, date, refreshKey = 0, onOpenFull = n
 
       {!day.loading && day.items.length > 0 && (
         <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white">
-          {day.items.map((item) => (
-            <li key={item.trip_id} className="flex items-start justify-between gap-3 px-3 py-3">
-              <div className="min-w-0">
-                <p className="text-sm font-semibold text-slate-900">
-                  <span className="font-data mr-2 text-teal-700">{formatTime(item.departure_time) || '--:--'}</span>
-                  {item.origin || '-'} &rarr; {item.destination || '-'}
-                </p>
-                <p className="mt-0.5 text-xs text-slate-500">
-                  {item.type === 'shift' ? 'Shift leg' : 'Trip'}
-                  {item.route_name ? ` \u00b7 ${item.route_name}` : ''}
-                  {item.plate_number ? ` \u00b7 ${item.plate_number}` : ''}
-                  {` \u00b7 ${ROLE_LABEL[item.role] || item.role}`}
-                </p>
-              </div>
-              <span className="shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold" style={statusStyle(item.status)}>
-                {(item.status || 'pending').toUpperCase()}
-              </span>
-            </li>
-          ))}
+          {day.items.map((item) => {
+            const body = (
+              <>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-slate-900">
+                    <span className="font-data mr-2 text-teal-700">{formatTime(item.departure_time) || '--:--'}</span>
+                    {item.origin || '-'} &rarr; {item.destination || '-'}
+                  </p>
+                  <p className="mt-0.5 text-xs text-slate-500">
+                    {item.type === 'shift' ? 'Shift leg' : 'Trip'}
+                    {item.route_name ? ` \u00b7 ${item.route_name}` : ''}
+                    {item.plate_number ? ` \u00b7 ${item.plate_number}` : ''}
+                    {` \u00b7 ${ROLE_LABEL[item.role] || item.role}`}
+                  </p>
+                </div>
+                <span className="shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold" style={statusStyle(item.status)}>
+                  {(item.status || 'pending').toUpperCase()}
+                </span>
+              </>
+            );
+            // Batch 46: in the Operator's calendar pop-up a trip opens the Trips view with that trip shown.
+            return (
+              <li key={item.trip_id}>
+                {onOpenTrip ? (
+                  <button
+                    type="button"
+                    onClick={() => onOpenTrip(item)}
+                    aria-label={`Open trip #${item.trip_id} in Trips`}
+                    className="flex min-h-11 w-full items-start justify-between gap-3 px-3 py-3 text-left hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+                  >
+                    {body}
+                  </button>
+                ) : (
+                  <div className="flex items-start justify-between gap-3 px-3 py-3">{body}</div>
+                )}
+              </li>
+            );
+          })}
         </ul>
       )}
 

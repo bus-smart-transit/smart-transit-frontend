@@ -111,16 +111,24 @@ export function useRouteAdherence(fleets, { days = 7 } = {}) {
 }
 
 /** §4.8: the crew's time in / time out on one Manila date (default today), read only. */
-export function useCrewShifts(date = getBusinessToday()) {
-  const [state, setState] = useState({ loading: true, error: '', shifts: [] });
+/**
+ * Batch 46: the time in / out table over a range (From..To, at most 31 days), one staff member or all, one page.
+ * The server makes the rows, the hours and the totals per person; nothing is worked out here.
+ */
+export function useCrewShiftRange({ from, to, staffId, page }) {
+  const [state, setState] = useState({ loading: true, error: '', shifts: [], totals: [], pagination: { page: 1, per_page: 20, total: 0, last_page: 1 } });
 
   useEffect(() => {
     let cancelled = false;
-    OperatorService.getCrewShifts(date)
-      .then((res) => { if (!cancelled) setState({ loading: false, error: '', shifts: res?.data?.shifts ?? [] }); })
-      .catch((err) => { if (!cancelled) setState({ loading: false, error: err?.message || 'Could not load the crew times.', shifts: [] }); });
+    OperatorService.getCrewShiftRange({ from, to, staffId, page })
+      .then((res) => {
+        if (cancelled) return;
+        const data = res?.data ?? {};
+        setState({ loading: false, error: '', shifts: data.shifts ?? [], totals: data.totals ?? [], pagination: data.pagination ?? { page: 1, per_page: 20, total: 0, last_page: 1 } });
+      })
+      .catch((err) => { if (!cancelled) setState((prev) => ({ ...prev, loading: false, error: err?.message || 'Could not load the crew times.' })); });
     return () => { cancelled = true; };
-  }, [date]);
+  }, [from, to, staffId, page]);
 
   return state;
 }

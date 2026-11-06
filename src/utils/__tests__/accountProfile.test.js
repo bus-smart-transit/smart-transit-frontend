@@ -35,7 +35,7 @@ describe('buildProfileView', () => {
     expect(driver.available).toBe(true);
 
     const operator = buildProfileView('operator', staff({ user: { email: 'o@example.test', two_factor_enabled: true } }));
-    expect(operator.identification.label).toBe('Company ID');
+    expect(operator.identification.label).toBe('Staff ID');
     expect(operator.twoFactorRequired).toBe(true);
     expect(operator.lockedNote).toMatch(/administrator/);
     expect(operator.available).toBeNull();

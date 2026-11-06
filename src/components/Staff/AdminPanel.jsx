@@ -47,7 +47,7 @@ export default function AdminPanel() {
   // Accounts
   const [allDrivers, setAllDrivers] = useState([]);
   const [allConductors, setAllConductors] = useState([]);
-  const [accountForm, setAccountForm] = useState({ name: '', email: '', password: '', phone_num: '', address: '', birth_date: '', role: 'driver' });
+  const [accountForm, setAccountForm] = useState({ name: '', email: '', password: '', phone_num: '', address: '', birth_date: '', company_name: '', role: 'driver' });
 
   const showMessage = useCallback((msg, isSuccess) => {
     if (isSuccess) setSuccess(msg);
@@ -249,7 +249,7 @@ export default function AdminPanel() {
     try {
       await AdminService.createAdminAccount(accountForm);
       showMessage('Account created successfully!', true);
-      setAccountForm({ name: '', email: '', password: '', phone_num: '', address: '', birth_date: '', role: 'driver' });
+      setAccountForm({ name: '', email: '', password: '', phone_num: '', address: '', birth_date: '', company_name: '', role: 'driver' });
       loadAccounts();
     } catch (err) {
       showMessage(err.message || 'Failed to create account', false);
@@ -708,6 +708,16 @@ export default function AdminPanel() {
                   placeholder="Address"
                   value={accountForm.address}
                   onChange={e => setAccountForm({ ...accountForm, address: e.target.value })}
+                  className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2.5 text-sm text-white outline-none transition focus:border-sky-500"
+                  required
+                />
+                {/* Batch 46 (decided 2026-11-06): the Admin names the bus company; an existing name is reused. */}
+                <input
+                  type="text"
+                  placeholder="Company name"
+                  aria-label="Company name"
+                  value={accountForm.company_name}
+                  onChange={e => setAccountForm({ ...accountForm, company_name: e.target.value })}
                   className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2.5 text-sm text-white outline-none transition focus:border-sky-500"
                   required
                 />

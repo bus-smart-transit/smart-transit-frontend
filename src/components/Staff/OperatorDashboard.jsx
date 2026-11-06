@@ -1,8 +1,7 @@
 import { useState, useEffect, useCallback, useId, isValidElement, cloneElement } from 'react'
 import StaffPortalLayout from './StaffPortalLayout'
 import OperatorDashboardPage from './Operator/OperatorDashboardPage'
-import StaffRoster from './Operator/StaffRoster'
-import { GENDER_OPTIONS } from '../../utils/gender'
+import StaffDirectory from './Operator/StaffDirectory'
 import NotificationGroupList from './NotificationGroupList'
 import { groupNotifications } from '../../utils/notificationGroups'
 import FleetsPage from './Operator/FleetsPage'
@@ -23,6 +22,10 @@ import { addLeg, removeLastLeg } from '../../utils/legPlanning'
 import ScheduleRangePreview from './Schedule/ScheduleRangePreview'
 import CrewShiftTimes from './Operator/CrewShiftTimes'
 import { isRangeSchedule, rangeDayCount } from '../../utils/scheduleRange'
+import { crewOptionLabel, isPickable, needsCrew, sortForPicker } from '../../utils/crewPicker'
+import AssignCrewModal from './Operator/AssignCrewModal'
+import TripFocusNotice from './TripFocusNotice'
+import { roleLabel } from '../../utils/staffForm'
 import ProfilePage from '../Account/ProfilePage'
 import SchedulePage from './Schedule/SchedulePage'
 import ShiftBlocksView from './Schedule/ShiftBlocksView'
@@ -30,7 +33,7 @@ import FinancePage from './Finance/FinancePage'
 import { OPERATOR_ROLE, navForRole, viewsForRole } from '../../utils/operatorNav'
 import {
   LayoutDashboard, Bus, MapPin, PieChart, Users, Settings, Wallet, CalendarDays,
-  Plus, Eye, RefreshCw,
+  Eye, RefreshCw,
   X, Loader2, AlertTriangle, Bell,
 } from 'lucide-react'
 const fmt = (v) => {
@@ -60,9 +63,6 @@ const NAV_ICONS = {
 const NAV = navForRole(OPERATOR_ROLE).map((item) => ({ ...item, icon: NAV_ICONS[item.key] }))
 
 const getStaffFullName = (row) => row?.name || row?.user?.name || row?.user?.username || row?.username || '-'
-const getStaffUsername = (row) => row?.user?.username || row?.username || row?.name || '-'
-const getStaffRole = (row) => row?.user?.role || row?.role || '-'
-const getStaffJoinedAt = (row) => row?.user?.created_at || row?.created_at || null
 const getStaffCompanyUserId = (row) => row?.company_user_id || row?.user_id || row?.id
 
 function Modal({ title, onClose, children }) {
@@ -175,7 +175,7 @@ function TripRequestsPanel({ onDecided, showEmpty = false }) {
           return (
             <li key={r.id} className="flex flex-col gap-2 rounded-xl border border-amber-100 bg-white p-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="text-sm">
-                <p className="font-semibold text-slate-900">{staffName} <span className="font-normal text-slate-500">({r.role})</span></p>
+                <p className="font-semibold text-slate-900">{staffName} <span className="font-normal text-slate-500">({roleLabel(r.role)})</span></p>
                 <p className="text-xs text-slate-600">{route?.origin || '-'} to {route?.destination || '-'} · {r.trip?.trip_date}</p>
                 {r.shift_block_id && (
                   <p className="text-xs font-semibold text-amber-800" data-testid="request-block-label">Shift block #{r.shift_block_id}: all {r.legs_count} legs. Approving releases {staffName} from the whole block.</p>
@@ -191,145 +191,6 @@ function TripRequestsPanel({ onDecided, showEmpty = false }) {
         })}
           </ul>}
     </section>
-  )
-}
-
-function StaffDirectoryTab({ drivers, conductors, onRefresh, onCreateAccount }) {
-  const [roleFilter, setRoleFilter] = useState('all')
-  const [showModal, setShowModal] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [msg, setMsg] = useState('')
-  const [form, setForm] = useState({ name: '', username: '', email: '', password: '', phone_num: '', address: '', birth_date: '', gender: '', role: 'driver' })
-
-  const allStaff = [
-    ...drivers.map((row) => ({ ...row, _resolvedRole: 'driver' })),
-    ...conductors.map((row) => ({ ...row, _resolvedRole: 'conductor' })),
-  ].sort((a, b) => {
-    const roleCompare = String(getStaffRole(a) || a._resolvedRole).localeCompare(String(getStaffRole(b) || b._resolvedRole))
-    if (roleCompare !== 0) return roleCompare
-    return String(getStaffUsername(a)).localeCompare(String(getStaffUsername(b)))
-  })
-
-  const filteredStaff = roleFilter === 'all'
-    ? allStaff
-    : allStaff.filter((row) => String(getStaffRole(row) || row._resolvedRole).toLowerCase() === roleFilter)
-
-  const handleCreate = async (event) => {
-    event.preventDefault()
-    setSaving(true)
-    setMsg('')
-    try {
-      await onCreateAccount(form)
-      setMsg('Staff account created successfully.')
-      setShowModal(false)
-      setForm({ name: '', username: '', email: '', password: '', phone_num: '', address: '', birth_date: '', gender: '', role: roleFilter === 'all' ? 'driver' : roleFilter })
-      onRefresh()
-    } catch (err) {
-      setMsg(err?.message || 'Failed to create staff account.')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-xl font-bold text-slate-900">Staff Directory</h2>
-        <div className="flex items-center gap-2">
-          <select value={roleFilter} onChange={(event) => setRoleFilter(event.target.value)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-teal-500">
-            <option value="all">All roles</option>
-            <option value="driver">Driver</option>
-            <option value="conductor">Chauffeur</option>
-          </select>
-          <button type="button" onClick={onRefresh} className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50">
-            <RefreshCw className="h-4 w-4" /> Refresh
-          </button>
-          <button type="button" onClick={() => { setShowModal(true); setMsg('') }} className="flex items-center gap-1.5 rounded-lg bg-teal-600 px-3 py-2 text-sm font-semibold text-white hover:bg-teal-700">
-            <Plus className="h-4 w-4" /> Add Staff
-          </button>
-        </div>
-      </div>
-
-      {msg && <p className="rounded-lg bg-teal-50 border border-teal-200 px-4 py-2 text-sm text-teal-800">{msg}</p>}
-
-      <div className="staff-card staff-card-flush overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-slate-50">
-            <tr className="border-b border-slate-200">
-              {['Username', 'Name', 'Role', 'Availability', 'Joined'].map((header) => (
-                <th key={header} className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">{header}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {filteredStaff.length === 0 ? (
-              <tr><td colSpan={5} className="px-5 py-8 text-center text-sm text-slate-400">No staff found for this filter.</td></tr>
-            ) : (
-              filteredStaff.map((row) => (
-                <tr key={`${getStaffRole(row)}-${getStaffCompanyUserId(row)}`} className="border-b border-slate-100 hover:bg-slate-50">
-                  <td className="px-5 py-3 font-medium text-slate-900">{getStaffUsername(row)}</td>
-                  <td className="px-5 py-3 text-slate-600">{getStaffFullName(row)}</td>
-                  <td className="px-5 py-3">
-                    <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-700 capitalize">{getStaffRole(row) || row._resolvedRole}</span>
-                  </td>
-                  <td className="px-5 py-3">
-                    {/* Batch 15, Item 4/9 completion (Batch 17, Issue #3):
-                        Available/Not Available was already toggleable by the
-                        Driver/Conductor themselves but never surfaced here. */}
-                    <span className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-semibold ${
-                      row?.is_available
-                        ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                        : 'border-slate-200 bg-slate-100 text-slate-500'
-                    }`}>
-                      <span className={`h-1.5 w-1.5 rounded-full ${row?.is_available ? 'bg-emerald-500' : 'bg-slate-400'}`} />
-                      {row?.is_available ? 'Available' : 'Not Available'}
-                    </span>
-                  </td>
-                  <td className="px-5 py-3 text-slate-500">{fmtDate(getStaffJoinedAt(row))}</td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {showModal && (
-        <Modal title="Create Staff Account" onClose={() => setShowModal(false)}>
-          <form className="space-y-4" onSubmit={handleCreate}>
-            <Field label="Role" required>
-              <select
-                value={form.role}
-                onChange={(event) => setForm((prev) => ({ ...prev, role: event.target.value }))}
-                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500"
-              >
-                <option value="driver">Driver</option>
-                <option value="conductor">Chauffeur</option>
-              </select>
-            </Field>
-            <Field label="Full Name" value={form.name} onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))} required placeholder="Juan Dela Cruz" />
-            <Field label="Username" value={form.username} onChange={(event) => setForm((prev) => ({ ...prev, username: event.target.value }))} required placeholder="juan_dela_cruz" />
-            <Field label="Email" type="email" value={form.email} onChange={(event) => setForm((prev) => ({ ...prev, email: event.target.value }))} required placeholder="juan@example.com" />
-            <Field label="Phone Number" type="tel" value={form.phone_num} onChange={(event) => setForm((prev) => ({ ...prev, phone_num: event.target.value }))} required placeholder="09123456789" />
-            <Field label="Address" value={form.address} onChange={(event) => setForm((prev) => ({ ...prev, address: event.target.value }))} required placeholder="Street, Barangay, City" />
-            <Field label="Birth Date (optional)" type="date" value={form.birth_date} onChange={(event) => setForm((prev) => ({ ...prev, birth_date: event.target.value }))} />
-            <Field label="Gender (optional)">
-              <select aria-label="Gender" value={form.gender} onChange={(event) => setForm((prev) => ({ ...prev, gender: event.target.value }))} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500">
-                <option value="">Not given</option>
-                {GENDER_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-              </select>
-            </Field>
-            <Field label="Password" type="password" value={form.password} onChange={(event) => setForm((prev) => ({ ...prev, password: event.target.value }))} required placeholder="Minimum 8 characters" />
-            {msg && <p className="text-sm text-red-600">{msg}</p>}
-            <div className="flex justify-end gap-2 pt-2">
-              <button type="button" onClick={() => setShowModal(false)} className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50">Cancel</button>
-              <button type="submit" disabled={saving} className="flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-60">
-                {saving && <Loader2 className="h-4 w-4 animate-spin" />}Create Staff
-              </button>
-            </div>
-          </form>
-        </Modal>
-      )}
-    </div>
   )
 }
 
@@ -479,28 +340,33 @@ function ScheduleServiceModal({ state, drivers, conductors }) {
             />
           </>
         )}
-        <Field label="Driver" required>
-          <select value={form.driver_id} onChange={e => setForm(p => ({ ...p, driver_id: e.target.value }))} required disabled={loadingDateDrivers || Boolean(dateDriversError)} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500 disabled:opacity-60">
-            <option value="">Select a driver...</option>
-            {dateDrivers.map(d => (
-              <option key={getStaffCompanyUserId(d)} value={getStaffCompanyUserId(d)}>
-                {getStaffFullName(d) || getStaffUsername(d)} (@{getStaffUsername(d)})
+        {/* Batch 46: a single trip may be scheduled before its crew is chosen; a shift block still needs both. Not
+            Available crew are listed but cannot be picked. */}
+        <Field label={multiLeg ? 'Driver' : 'Driver (or choose later)'} required={multiLeg}>
+          <select aria-label="Driver" value={form.driver_id} onChange={e => setForm(p => ({ ...p, driver_id: e.target.value }))} required={multiLeg} disabled={loadingDateDrivers || Boolean(dateDriversError)} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500 disabled:opacity-60">
+            <option value="">{multiLeg ? 'Select a driver...' : 'Choose later'}</option>
+            {sortForPicker(dateDrivers).map(d => (
+              <option key={getStaffCompanyUserId(d)} value={getStaffCompanyUserId(d)} disabled={!isPickable(d)}>
+                {crewOptionLabel(d)}
               </option>
             ))}
           </select>
         </Field>
         {loadingDateDrivers && <p role="status" className="text-xs text-slate-500">Checking driver availability...</p>}
         {dateDriversError && <p role="alert" className="text-xs text-rose-700">{dateDriversError}</p>}
-        <Field label="Chauffeur" required>
-          <select value={form.conductor_id} onChange={e => setForm(p => ({ ...p, conductor_id: e.target.value }))} required className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500">
-            <option value="">Select a chauffeur...</option>
-            {conductors.map(c => (
-              <option key={getStaffCompanyUserId(c)} value={getStaffCompanyUserId(c)}>
-                {getStaffFullName(c) || getStaffUsername(c)} (@{getStaffUsername(c)})
+        <Field label={multiLeg ? 'Chauffeur' : 'Chauffeur (or choose later)'} required={multiLeg}>
+          <select aria-label="Chauffeur" value={form.conductor_id} onChange={e => setForm(p => ({ ...p, conductor_id: e.target.value }))} required={multiLeg} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500">
+            <option value="">{multiLeg ? 'Select a chauffeur...' : 'Choose later'}</option>
+            {sortForPicker(conductors).map(c => (
+              <option key={getStaffCompanyUserId(c)} value={getStaffCompanyUserId(c)} disabled={!isPickable(c)}>
+                {crewOptionLabel(c)}
               </option>
             ))}
           </select>
         </Field>
+        {!multiLeg && (!form.driver_id || !form.conductor_id) && (
+          <p role="status" className="text-xs text-amber-700">Without both a Driver and a Chauffeur the trip shows "Crew needed" and cannot start boarding.</p>
+        )}
         {msg && <p className="text-sm text-red-600">{msg}</p>}
         {rangeMode && <ScheduleRangePreview preview={rangePreview} saving={saving} onConfirm={confirmRange} />}
         <div className="flex justify-end gap-2 pt-2">
@@ -513,7 +379,7 @@ function ScheduleServiceModal({ state, drivers, conductors }) {
     </Modal>
   )
 }
-function TripsTab({ drivers, conductors, onRefresh, tripsState }) {
+function TripsTab({ drivers, conductors, onRefresh, tripsState, focusTripId = null, onDismissFocus = () => {} }) {
   const {
     selectedTrip, setSelectedTrip,
     tripFilter, setTripFilter,
@@ -533,6 +399,7 @@ function TripsTab({ drivers, conductors, onRefresh, tripsState }) {
     loadingMoreTrips,
     loadMoreTrips,
     handleAssign,
+    assignCrew,
     handleAction,
     handleConfirmedComplete,
     handleStatusOverride,
@@ -541,7 +408,7 @@ function TripsTab({ drivers, conductors, onRefresh, tripsState }) {
   const [cancelTarget, setCancelTarget] = useState(null)
   const [cancelNotice, setCancelNotice] = useState('')
   const { drivers: dateDrivers, loading: loadingDateDrivers, error: dateDriversError } = useDateDrivers(
-    assignModal?.type === 'driver' ? String(assignModal.trip?.trip_date || '').slice(0, 10) : '',
+    ['driver', 'crew'].includes(assignModal?.type) ? String(assignModal.trip?.trip_date || '').slice(0, 10) : '',
     drivers,
   )
 
@@ -584,8 +451,17 @@ function TripsTab({ drivers, conductors, onRefresh, tripsState }) {
     return tripDateStr < todayStart && !['completed', 'cancelled'].includes(trip?.status)
   }
 
+  // Batch 46: the trip opened from the calendar pop-up. TripFocusNotice scrolls to its row; the row is highlighted.
+  const focusedTrip = focusTripId ? visibleTrips.find((t) => Number(t.trip_id) === Number(focusTripId)) : null
+  const focusNotice = focusTripId
+    ? (focusedTrip
+      ? { state: 'shown', tone: 'info', title: `Trip #${focusTripId}`, message: `${focusedTrip.fleet_route?.route?.route_name || 'Route not provided'}, ${fmtDate(focusedTrip.trip_date)}. It is highlighted below.` }
+      : { state: 'missing', tone: 'warning', title: `Trip #${focusTripId}`, message: 'This trip is not in the loaded list yet. Choose "Load more trips" below, or Refresh.' })
+    : null
+
   return (
     <div className="space-y-4">
+      <TripFocusNotice tripId={focusedTrip ? focusTripId : null} notice={focusNotice} onDismiss={onDismissFocus} />
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Trips</h3>
         <div className="flex flex-wrap items-center gap-2">
@@ -632,7 +508,7 @@ function TripsTab({ drivers, conductors, onRefresh, tripsState }) {
                     const driverName = driverRow ? getStaffFullName(driverRow) || (driverRow?.user?.email || driverRow?.email) : null
                     const conductorName = conductorRow ? getStaffFullName(conductorRow) || (conductorRow?.user?.email || conductorRow?.email) : null
                     return (
-                      <tr key={t.trip_id} className="border-b border-slate-100 hover:bg-slate-50">
+                      <tr key={t.trip_id} id={`trip-row-${t.trip_id}`} data-focused={Number(t.trip_id) === Number(focusTripId) ? 'true' : undefined} className={`border-b border-slate-100 hover:bg-slate-50 ${Number(t.trip_id) === Number(focusTripId) ? 'bg-teal-50 ring-2 ring-inset ring-teal-500' : ''}`}>
                         <td className="px-4 py-3 font-mono text-xs text-slate-600">#{t.trip_id}</td>
                         <td className="px-4 py-3 text-slate-700 whitespace-nowrap">{fmtDate(t.trip_date)}</td>
                         <td className="px-4 py-3 text-slate-700 whitespace-nowrap">{String(t.departure_time || t.fleet_route?.start_time || '--:--').slice(0, 5)}</td>
@@ -645,14 +521,18 @@ function TripsTab({ drivers, conductors, onRefresh, tripsState }) {
                         <td className="px-4 py-3 text-slate-700">{t.fleet_route?.fleet?.plate_number || '-'} <RunInfoChips runPattern={t.run_info?.run_pattern} service={t.run_info?.service} serviceType={t.service_type} showRunPattern /></td>
                         <td className="px-4 py-3">
                           {driverName ? <span className="text-slate-700">{driverName}</span>
-                            : <button type="button" onClick={() => { setAssignModal({ trip: t, type: 'driver' }); setAssignId(''); setMsg('') }} className="text-xs text-teal-600 hover:underline">Assign</button>}
+                            : <span className="text-xs text-slate-400">Not assigned</span>}
                         </td>
                         <td className="px-4 py-3">
                           {conductorName ? <span className="text-slate-700">{conductorName}</span>
-                            : <button type="button" onClick={() => { setAssignModal({ trip: t, type: 'conductor' }); setAssignId(''); setMsg('') }} className="text-xs text-teal-600 hover:underline">Assign</button>}
+                            : <span className="text-xs text-slate-400">Not assigned</span>}
                         </td>
                         <td className="px-4 py-3">
                           <span className={`rounded-full px-2 py-0.5 text-xs font-semibold whitespace-nowrap ${STATUS_CHIP[t.status] ?? 'bg-slate-100 text-slate-600'}`}>{t.status}</span>
+                          {/* Batch 46: a trip waiting for its crew cannot start boarding. */}
+                          {needsCrew(t) && ['scheduled', 'delayed'].includes(t.status) && (
+                            <span className="ml-1.5 inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800 whitespace-nowrap">Crew needed</span>
+                          )}
                           {isOverdueUnclosed(t) && (
                             <span
                               className="ml-1.5 inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700 whitespace-nowrap"
@@ -664,7 +544,10 @@ function TripsTab({ drivers, conductors, onRefresh, tripsState }) {
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex gap-1">
-                            {['scheduled', 'delayed'].includes(t.status)    && <button type="button" onClick={() => handleAction(t.trip_id,'boarding')} disabled={actionInFlight === t.trip_id} className="rounded px-2 py-1 text-xs bg-blue-100 text-blue-700 hover:bg-blue-200 disabled:opacity-50">{actionInFlight === t.trip_id ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Board'}</button>}
+                            {needsCrew(t) && ['scheduled', 'delayed'].includes(t.status) && (
+                              <button type="button" onClick={() => { setAssignModal({ trip: t, type: 'crew' }); setMsg('') }} className="rounded px-2 py-1 text-xs font-semibold bg-teal-600 text-white hover:bg-teal-700 whitespace-nowrap">Assign crew</button>
+                            )}
+                            {['scheduled', 'delayed'].includes(t.status) && !needsCrew(t) && <button type="button" onClick={() => handleAction(t.trip_id,'boarding')} disabled={actionInFlight === t.trip_id} className="rounded px-2 py-1 text-xs bg-blue-100 text-blue-700 hover:bg-blue-200 disabled:opacity-50">{actionInFlight === t.trip_id ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Board'}</button>}
                             {t.status === 'boarding'     && <button type="button" onClick={() => handleAction(t.trip_id,'depart')} disabled={actionInFlight === t.trip_id} className="rounded px-2 py-1 text-xs bg-amber-100 text-amber-700 hover:bg-amber-200 disabled:opacity-50">{actionInFlight === t.trip_id ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Depart'}</button>}
                             {['departed','in-progress'].includes(t.status) && <button type="button" onClick={() => handleAction(t.trip_id,'complete')} disabled={actionInFlight === t.trip_id} className="rounded px-2 py-1 text-xs bg-emerald-100 text-emerald-700 hover:bg-emerald-200 disabled:opacity-50">Complete</button>}
                             {['scheduled', 'delayed', 'boarding', 'departed', 'in-progress'].includes(t.status) && <button type="button" onClick={() => setCancelTarget(t)} className="rounded px-2 py-1 text-xs bg-red-50 text-red-700 hover:bg-red-100">Cancel</button>}
@@ -702,14 +585,28 @@ function TripsTab({ drivers, conductors, onRefresh, tripsState }) {
         <CancelTripModal trip={cancelTarget} service={OperatorService} onClose={() => setCancelTarget(null)} onDone={(text) => { setCancelNotice(text); onRefresh() }} />
       )}
 
-      {assignModal && (
-        <Modal title={`Assign ${assignModal.type} to Trip #${assignModal.trip.trip_id}`} onClose={() => setAssignModal(null)}>
+      {assignModal?.type === 'crew' && (
+        <AssignCrewModal
+          trip={assignModal.trip}
+          drivers={dateDrivers}
+          conductors={conductors}
+          loadingDrivers={loadingDateDrivers}
+          driversError={dateDriversError}
+          saving={saving}
+          msg={msg}
+          onClose={() => setAssignModal(null)}
+          onAssign={(ids) => assignCrew(assignModal.trip, ids)}
+        />
+      )}
+
+      {assignModal && assignModal.type !== 'crew' && (
+        <Modal title={`Assign ${assignModal.type === 'conductor' ? 'Chauffeur' : 'Driver'} to Trip #${assignModal.trip.trip_id}`} onClose={() => setAssignModal(null)}>
           <form className="space-y-4" onSubmit={handleAssign}>
-            <Field label={`Select ${assignModal.type}`} required>
+            <Field label={`Select ${assignModal.type === 'conductor' ? 'Chauffeur' : 'Driver'}`} required>
               <select value={assignId} onChange={e => setAssignId(e.target.value)} required disabled={assignModal.type === 'driver' && (loadingDateDrivers || Boolean(dateDriversError))} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500 disabled:opacity-60">
                 <option value="">Choose...</option>
-                {(assignModal.type === 'driver' ? dateDrivers : conductors).map(p => (
-                  <option key={getStaffCompanyUserId(p)} value={getStaffCompanyUserId(p)}>{getStaffFullName(p) || getStaffUsername(p)} (@{getStaffUsername(p)})</option>
+                {sortForPicker(assignModal.type === 'driver' ? dateDrivers : conductors).map(p => (
+                  <option key={getStaffCompanyUserId(p)} value={getStaffCompanyUserId(p)} disabled={!isPickable(p)}>{crewOptionLabel(p)}</option>
                 ))}
               </select>
             </Field>
@@ -841,6 +738,13 @@ function ScheduleTab({ trips, drivers, conductors, onRefresh, view, onViewChange
   }, [onRefresh])
   const tripsState = useTripsTab({ trips, onRefresh: refreshAll })
   const views = viewsForRole('schedule', OPERATOR_ROLE)
+  // Batch 46: a trip chosen in the calendar pop-up opens the Trips view with that trip shown (filter set to All).
+  const [focusTripId, setFocusTripId] = useState(null)
+  const openTripFromCalendar = (item) => {
+    setFocusTripId(Number(item.trip_id))
+    tripsState.setTripFilter('all')
+    onViewChange('trips')
+  }
 
   return (
     <>
@@ -853,9 +757,9 @@ function ScheduleTab({ trips, drivers, conductors, onRefresh, view, onViewChange
         {(active) => (
           <>
             {tripsState.msg && <p className="rounded-lg border border-teal-200 bg-teal-50 px-4 py-2 text-sm text-teal-800">{tripsState.msg}</p>}
-            {active === 'calendar' && <StaffCalendar key={calendarFocus || 'today'} service={OperatorService} initialDate={calendarFocus} refreshKey={reloadToken} />}
+            {active === 'calendar' && <StaffCalendar key={calendarFocus || 'today'} service={OperatorService} initialDate={calendarFocus} refreshKey={reloadToken} onOpenTrip={openTripFromCalendar} />}
             {active === 'blocks' && <ShiftBlocksView reloadToken={reloadToken} />}
-            {active === 'trips' && <TripsTab drivers={drivers} conductors={conductors} onRefresh={refreshAll} tripsState={tripsState} />}
+            {active === 'trips' && <TripsTab drivers={drivers} conductors={conductors} onRefresh={refreshAll} tripsState={tripsState} focusTripId={focusTripId} onDismissFocus={() => setFocusTripId(null)} />}
             {active === 'requests' && <TripRequestsPanel onDecided={refreshAll} showEmpty />}
           </>
         )}
@@ -885,7 +789,6 @@ export default function OperatorDashboard() {
     stops,
     loadFull,
     handleLogout,
-    handleCreateAccount,
   } = useOperatorDashboardData()
 
   if (loading) {
@@ -903,7 +806,7 @@ export default function OperatorDashboard() {
       navItems={NAV}
       activeTab={activeTab}
       onTabChange={setActiveTab}
-      profile={profile ? { name: profile?.name || profile?.user?.name || profile?.user?.username || profile?.user?.email || 'Operator' } : null}
+      profile={profile ? { name: profile?.name || profile?.user?.name || profile?.user?.username || profile?.user?.email || 'Operator', company: profile?.company ?? null } : null}
       profileRoleLabel="Operator"
       profileInitialFallback="O"
       onLogout={handleLogout}
@@ -936,9 +839,9 @@ export default function OperatorDashboard() {
         )}
         {activeTab === 'staffs'     && (
           <div className="space-y-4">
-            <StaffRoster drivers={drivers} conductors={conductors} fleets={fleets} />
-            <StaffDirectoryTab drivers={drivers} conductors={conductors} onRefresh={loadFull} onCreateAccount={handleCreateAccount} />
-            <CrewShiftTimes />
+            {/* Batch 46: the directory pages and counts on the server; a change also refreshes the scheduling pickers. */}
+            <StaffDirectory fleetCount={fleets.length} onChanged={loadFull} />
+            <CrewShiftTimes staff={[...drivers, ...conductors]} />
           </div>
         )}
         {activeTab === 'fleets'     && <FleetsPage fleets={fleets} routes={routes} trips={trips} onRefresh={loadFull} />}

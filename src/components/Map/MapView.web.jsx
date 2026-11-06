@@ -384,7 +384,7 @@ function MapViewInner({ role = "passenger", trackedFleetId = null, onRetry }) {
             new maplibregl.Popup({ offset: 25 }).setHTML(
               `<div style="color: #0f172a; font-family: sans-serif; padding: 4px;">
                 <p style="margin: 0; font-weight: bold;">Current Location</p>
-                <p style="margin: 4px 0 0 0; font-size: 11px; color: #64748b; text-transform: capitalize;">Verified ${role}</p>
+                <p style="margin: 4px 0 0 0; font-size: 11px; color: #64748b; text-transform: capitalize;">Verified ${role === "conductor" ? "Chauffeur" : role}</p>
               </div>`
             )
           )

@@ -4,6 +4,7 @@ import ProfileOverview from './ProfileOverview';
 import PersonalInfoSection from './PersonalInfoSection';
 import RoleInfoSection from './RoleInfoSection';
 import SecuritySection from './SecuritySection';
+import ChangePasswordSection from './ChangePasswordSection';
 import PreferencesSection from './PreferencesSection';
 import AccountActionsSection from './AccountActionsSection';
 import DeleteAccountSection from './DeleteAccountSection';
@@ -49,6 +50,8 @@ export default function ProfilePage({ role, profile, loading = false, error = ''
       <PersonalInfoSection view={view} profile={profile} onSave={role === 'passenger' ? onSaveProfile : null} />
       <RoleInfoSection view={view} assignment={assignment} />
       <SecuritySection view={view} twoFactor={twoFactor} />
+      {/* Batch 46: staff change their own password here (passengers use "Forgot password" on the sign-in page). */}
+      {['driver', 'conductor', 'operator'].includes(role) && <ChangePasswordSection />}
       <PreferencesSection availability={availability} />
       <AccountActionsSection onSignOut={onSignOut} />
       {role === 'passenger' && onDeleteAccount && <DeleteAccountSection onDelete={onDeleteAccount} />}

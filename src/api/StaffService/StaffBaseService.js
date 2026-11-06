@@ -101,6 +101,19 @@ export class StaffBaseService extends BaseService {
     return await this.request(`/${role}/profile`, 'GET');
   }
 
+  // Batch 46: change one's own password (current password required); skip the one-time offer after the first sign-in.
+  async changePassword({ currentPassword, password, passwordConfirmation }) {
+    return await this.request('/staff/password', 'POST', {
+      current_password: currentPassword,
+      password,
+      password_confirmation: passwordConfirmation,
+    });
+  }
+
+  async skipPasswordPrompt() {
+    return await this.request('/staff/password/skip', 'POST');
+  }
+
   // Batch 24 (C8): one role-scoped endpoint shared by Driver, Chauffeur and Operator.
   async getCalendarSummary() {
     return await this.request('/staff/calendar-summary', 'GET');

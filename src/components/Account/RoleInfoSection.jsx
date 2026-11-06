@@ -13,6 +13,8 @@ export default function RoleInfoSection({ view, assignment = null }) {
       <h3 id="profile-role-title" className="font-display text-base font-semibold text-navy-950">{view.roleLabel} information</h3>
       <dl className="mt-4 grid gap-4 sm:grid-cols-2">
         {view.identification && <ReadOnlyField label={view.identification.label} value={view.identification.value} mono testId="field-identification" />}
+        {/* Batch 46: the company this staff member works for; only that company's Operators can see their details. */}
+        {view.role !== 'passenger' && <ReadOnlyField label="Company" value={view.company} emptyText="Not provided" testId="field-company" />}
         {view.role === 'passenger' && <ReadOnlyField label="Rewards balance" value={view.rewardPoints} testId="field-rewards" />}
         {isCrew && <ReadOnlyField label="Today's fleet" value={assignment?.fleet ?? null} mono emptyText="None today" testId="field-fleet" />}
         {isCrew && <ReadOnlyField label="Today's route" value={assignment?.route ?? null} emptyText="None today" testId="field-route" />}

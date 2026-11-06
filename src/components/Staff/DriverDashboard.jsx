@@ -12,6 +12,7 @@ import {
 import PairingScreen from './PairingScreen';
 import StaffPortalLayout from './StaffPortalLayout';
 import ProfilePage from '../Account/ProfilePage';
+import FirstPasswordPrompt from '../Account/FirstPasswordPrompt';
 import AssignmentSection from './AssignmentSection';
 import MyScheduleList from './MyScheduleList';
 import { shiftActionReason, driverTripActionReason } from '../../utils/actionReasons';
@@ -336,6 +337,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
       profileInitialFallback="D"
       onLogout={handleLogout}
     >
+        <FirstPasswordPrompt profile={profile} />
         <header className="crew-header mb-4">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>

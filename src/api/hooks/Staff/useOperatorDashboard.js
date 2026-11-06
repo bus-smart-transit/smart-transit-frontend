@@ -141,12 +141,6 @@ export function useOperatorDashboardData() {
     navigate('/employee/login');
   };
 
-  // Extracted from an inline JSX arrow function (architecture audit
-  // follow-up) so the render layer never calls OperatorService directly.
-  const handleCreateAccount = useCallback(async (accountData) => {
-    return await OperatorService.createEmployeeAccount(accountData);
-  }, []);
-
   return {
     activeTab, setActiveTab,
     view, setView,
@@ -160,7 +154,6 @@ export function useOperatorDashboardData() {
     stops,
     loadFull,
     handleLogout,
-    handleCreateAccount,
   };
 }
 
@@ -811,11 +804,12 @@ export function useTripsTab({ trips, onRefresh }) {
           trip_type: 'one_way',
           service_type: form.service_type || 'regular',
           return_departure_time: null,
-          driver_id: Number(form.driver_id),
-          conductor_id: Number(form.conductor_id),
+          // Batch 46: a single trip may wait for its crew ("Choose later"); it cannot board until both are assigned.
+          driver_id: form.driver_id ? Number(form.driver_id) : null,
+          conductor_id: form.conductor_id ? Number(form.conductor_id) : null,
           notes: form.notes,
         });
-        setMsg('Ad hoc trip scheduled.');
+        setMsg(form.driver_id && form.conductor_id ? 'Ad hoc trip scheduled.' : 'Trip scheduled. Assign its crew before it can start boarding.');
       }
 
       setForm(blankScheduleForm());
@@ -823,6 +817,24 @@ export function useTripsTab({ trips, onRefresh }) {
       onRefresh();
     } catch (err) { setMsg(err?.message || 'Failed.'); }
     finally { setSaving(false); }
+  };
+
+  // Batch 46: "Assign crew" on a trip still waiting for its Driver and / or Chauffeur. Only the missing ones are sent;
+  // the server checks each (own company, available, not turned off, free that day).
+  const assignCrew = async (trip, { driverId, conductorId }) => {
+    setSaving(true); setMsg('');
+    try {
+      if (driverId && !trip.driver_id) await OperatorService.assignDriver(trip.trip_id, Number(driverId));
+      if (conductorId && !trip.conductor_id) await OperatorService.assignConductor(trip.trip_id, Number(conductorId));
+      setMsg('Crew assigned.');
+      setAssignModal(null);
+      onRefresh();
+      return true;
+    } catch (err) {
+      setMsg(err?.message || 'Could not assign the crew.');
+      onRefresh();
+      return false;
+    } finally { setSaving(false); }
   };
 
   const handleAssign = async (e) => {
@@ -923,6 +935,7 @@ export function useTripsTab({ trips, onRefresh }) {
     confirmRange,
     closeScheduleModal,
     handleAssign,
+    assignCrew,
     handleAction,
     handleConfirmedComplete,
     handleStatusOverride,

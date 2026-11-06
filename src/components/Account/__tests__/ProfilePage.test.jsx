@@ -82,10 +82,11 @@ describe('ProfilePage', () => {
     expect(screen.queryByTestId('profile-security')).not.toBeInTheDocument();
   });
 
-  it('Operator: company ID, always-on extra login code with no switch, and the administrator note', () => {
-    render(<ProfilePage role="operator" profile={staff({ user: { email: 'o@example.test', two_factor_enabled: true } })} onSignOut={() => {}} />);
+  it('Operator: staff ID, company name, always-on extra login code with no switch, and the administrator note', () => {
+    render(<ProfilePage role="operator" profile={staff({ user: { email: 'o@example.test', two_factor_enabled: true }, company: { company_id: 1, company_name: 'Tagum Bus Lines' } })} onSignOut={() => {}} />);
     expect(screen.getByTestId('profile-role')).toHaveTextContent('Operator');
-    expect(screen.getByTestId('field-identification')).toHaveTextContent('Company ID');
+    expect(screen.getByTestId('field-identification')).toHaveTextContent('Staff ID');
+    expect(screen.getByTestId('field-company')).toHaveTextContent('Tagum Bus Lines');
     expect(within(screen.getByTestId('profile-security')).getByText('Always on')).toBeInTheDocument();
     expect(screen.queryByRole('switch')).not.toBeInTheDocument();
     expect(screen.getByTestId('locked-note')).toHaveTextContent('system administrator');

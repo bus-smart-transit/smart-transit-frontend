@@ -210,21 +210,24 @@ test('Operator: every page and view opens, and a new Driver account keeps its ge
 
   await clickSidebar(page, 'Staffs');
   await expect(page.getByTestId('staff-roster')).toBeVisible();
-  await page.getByRole('button', { name: /Create|Add/ }).first().click();
+  await page.getByRole('button', { name: 'Add Staff' }).first().click();
   const dialog = page.getByRole('dialog');
   await expect(dialog).toBeVisible();
-  const fill = (label, value) => dialog.getByLabel(label, { exact: false }).first().fill(value);
-  await fill('Full Name', 'Eto Driver');
-  await fill('Username', `eto_driver_${stamp}`);
-  await fill('Email', newDriverEmail);
-  await fill('Phone Number', '09170000070');
-  await fill('Address', 'Panabo City');
-  await dialog.getByLabel('Gender').selectOption('male');
-  await fill('Password', 'password123');
+  // Batch 46: the Add Staff form follows sign-up (first and last name, phone with +63, birth date, password twice).
+  await dialog.locator('#staff-firstName').fill('Eto');
+  await dialog.locator('#staff-lastName').fill('Driver');
+  await dialog.locator('#staff-username').fill(`eto_driver_${stamp}`);
+  await dialog.locator('#staff-email').fill(newDriverEmail);
+  await dialog.locator('#staff-phone').fill('917 000 0070');
+  await dialog.locator('#staff-birthDate').fill('1990-04-05');
+  await dialog.locator('#staff-gender').selectOption('male');
+  await dialog.locator('#staff-address').fill('Panabo City');
+  await dialog.locator('#staff-password').fill('Password123');
+  await dialog.locator('#staff-confirm').fill('Password123');
   await shot(page, 'o1-new-driver-gender');
-  await dialog.getByRole('button', { name: /Create|Save/ }).last().click();
+  await dialog.getByRole('button', { name: 'Add Staff' }).click();
   // The single-threaded test server answers this after the dashboard's queued polling.
-  await expect(page.getByText('Staff account created successfully.')).toBeVisible({ timeout: 120000 });
+  await expect(page.getByText('Staff account created. Give them their username and first password.')).toBeVisible({ timeout: 120000 });
 
   const drivers = await getData('operator/drivers', operatorToken);
   const newDriver = drivers.find((row) => (row.user?.username ?? row.username) === `eto_driver_${stamp}`);

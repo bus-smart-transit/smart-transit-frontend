@@ -133,6 +133,23 @@ class OperatorService extends StaffBaseService {
     return await this.request('/operator/accounts', 'POST', accountData);
   }
 
+  // Batch 46: the Staff Directory (own crew only): one page with search and role, edit, turn off and on again.
+  async getStaffPage(params = {}) {
+    return await this.request('/operator/staff', 'GET', params);
+  }
+
+  async updateStaff(companyUserId, changes) {
+    return await this.request(`/operator/staff/${companyUserId}`, 'PATCH', changes);
+  }
+
+  async deactivateStaff(companyUserId) {
+    return await this.request(`/operator/staff/${companyUserId}/deactivate`, 'PATCH');
+  }
+
+  async reactivateStaff(companyUserId) {
+    return await this.request(`/operator/staff/${companyUserId}/reactivate`, 'PATCH');
+  }
+
   // ── Reporting ──
   // Batch 29, cash step 3: the remittance batch of each ended Chauffeur shift, and the Operator's confirmation.
   async getRemittances(params = {}) {
@@ -309,8 +326,11 @@ class OperatorService extends StaffBaseService {
   }
 
   // §4.8: the crew's time in / time out (Start Shift / End Shift) on one Manila date, read only.
-  async getCrewShifts(date) {
-    return await this.request('/operator/crew-shifts', 'GET', date ? { date } : {});
+  // Batch 46: the time in / out table for a range (at most 31 days), one person if staffId is set, one page.
+  async getCrewShiftRange({ from, to, staffId = null, page = 1 }) {
+    const params = { from, to, page };
+    if (staffId) params.staff_id = staffId;
+    return await this.request('/operator/crew-shifts', 'GET', params);
   }
 
   // Phase B (§4.13): the same block on every day From..To. Preview saves nothing; create makes the clean days.

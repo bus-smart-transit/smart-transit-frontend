@@ -1,25 +1,18 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import PassengerService from "../../../api/PassengerService/PassengerService";
-
-const STRENGTH_INFO = [
-  { label: "", color: "transparent" },
-  { label: "Very Weak", color: "#ef4444" },
-  { label: "Weak", color: "#f97316" },
-  { label: "Fair", color: "#eab308" },
-  { label: "Strong", color: "#22c55e" },
-  { label: "Very Strong", color: "#06b6d4" },
-];
-
-const getStrength = (pwd) => {
-  let score = 0;
-  if (pwd.length >= 8) score++;
-  if (/[A-Z]/.test(pwd)) score++;
-  if (/[a-z]/.test(pwd)) score++;
-  if (/\d/.test(pwd)) score++;
-  if (/[^a-zA-Z\d]/.test(pwd)) score++;
-  return score;
-};
+// Batch 46: the same field rules as the Operator's Add Staff form (utils/accountFormRules.js).
+import {
+  STRENGTH_INFO,
+  passwordStrength as getStrength,
+  nameErrors,
+  emailError,
+  birthDateError,
+  passwordError,
+  confirmPasswordError,
+  compactErrors,
+  LOOSE_PHONE_PATTERN,
+} from "../../../utils/accountFormRules";
 
 export function useSignUp() {
   const navigate = useNavigate();
@@ -53,35 +46,23 @@ export function useSignUp() {
 
   /* ── Validation ── */
   const validateStep1 = () => {
-    const e = {};
-    if (!form.firstName.trim()) e.firstName = "First name is required";
-    if (!form.lastName.trim()) e.lastName = "Last name is required";
-    if (!form.email.trim()) e.email = "Email is required";
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email))
-      e.email = "Enter a valid email";
+    const e = { ...nameErrors(form), email: emailError(form.email) };
+    // The calling-code phone field arrives with Batch 47 part B; until then sign-up keeps its plain phone check.
     if (!form.phone.trim()) e.phone = "Phone number is required";
-    else if (!/^\+?[\d\s\-()]{7,15}$/.test(form.phone))
+    else if (!LOOSE_PHONE_PATTERN.test(form.phone))
       e.phone = "Enter a valid phone number";
-    if (!form.dateOfBirth) e.dateOfBirth = "Date of birth is required";
-    return e;
+    if (!form.dateOfBirth) e.dateOfBirth = birthDateError(form.dateOfBirth);
+    return compactErrors(e);
   };
 
   const validateStep2 = () => {
-    const e = {};
-    if (!form.password) e.password = "Password is required";
-    else if (form.password.length < 8)
-      e.password = "Password must be at least 8 characters";
-    else if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(form.password))
-      e.password = "Must include uppercase, lowercase, and a number";
-
-    if (!form.confirmPassword)
-      e.confirmPassword = "Please confirm your password";
-    else if (form.password !== form.confirmPassword)
-      e.confirmPassword = "Passwords do not match";
-
+    const e = {
+      password: passwordError(form.password),
+      confirmPassword: confirmPasswordError(form.password, form.confirmPassword),
+    };
     if (!form.agreeTerms)
       e.agreeTerms = "You must accept the Terms & Conditions";
-    return e;
+    return compactErrors(e);
   };
 
   const handleStep1 = (e) => {

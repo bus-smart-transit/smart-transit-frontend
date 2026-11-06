@@ -43,7 +43,8 @@ export function buildProfileView(role, raw) {
   const user = profile.user ?? {};
   const staff = role !== 'passenger';
 
-  const idLabel = role === 'passenger' ? 'Passenger ID' : role === 'operator' ? 'Company ID' : 'Staff ID';
+  // Batch 46: every staff member's own reference is a Staff ID ("Company" is now the bus company they work for).
+  const idLabel = role === 'passenger' ? 'Passenger ID' : 'Staff ID';
   // 2026-10-30: staff show their company_user_uuid reference too, never the numeric company_user_id.
   const idValue = accountReference(role === 'passenger' ? profile.passenger_uuid : profile.company_user_uuid);
   const identification = { label: idLabel, value: idValue };
@@ -62,6 +63,8 @@ export function buildProfileView(role, raw) {
     // A passenger's own address is shown to them. A staff member's address and birth date are not shown.
     address: staff ? null : clean(profile.address),
     identification,
+    // Batch 46: the bus company a staff member works for (null for a passenger; "Not provided" when unlinked).
+    company: staff ? clean(profile.company?.company_name) : null,
     rewardPoints: role === 'passenger' ? pointsLabel(profile.reward_points) : null,
     createdOn: joined ? formatManilaDate(joined.slice(0, 10)) || null : null,
     twoFactorEnabled: Boolean(user.two_factor_enabled ?? profile.two_factor_enabled),

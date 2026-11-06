@@ -103,7 +103,10 @@ export default function StaffPortalLayout({
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-semibold text-white">{profile.name}</p>
-                    <p className="truncate text-xs text-slate-400">{profileRoleLabel}</p>
+                    {/* Batch 46: the company this person works for, next to the role. */}
+                    <p className="truncate text-xs text-slate-400" data-testid="profile-company-line">
+                      {profile.company?.company_name ? `${profileRoleLabel} · ${profile.company.company_name}` : profileRoleLabel}
+                    </p>
                   </div>
                 </>
               )}
