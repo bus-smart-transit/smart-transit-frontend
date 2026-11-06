@@ -110,13 +110,28 @@ describe('ProfilePage passenger edit', () => {
     expect(name).toHaveValue('Pia Passenger');
     expect(screen.getByLabelText('Gender')).toHaveValue('female');
     fireEvent.change(name, { target: { value: '  Ana Reyes ' } });
-    fireEvent.change(screen.getByLabelText(/Phone/), { target: { value: '0917 123 4567' } });
+    // Batch 47 part B: the old stored 09... number opens as +63 and the local part; the saved form is E.164.
+    expect(screen.getByLabelText('Phone: country calling code')).toHaveValue('+63');
+    expect(screen.getByLabelText('Phone: number')).toHaveValue('9100000001');
+    fireEvent.change(screen.getByLabelText('Phone: number'), { target: { value: '0917 123 4567' } });
     fireEvent.change(screen.getByLabelText('Gender'), { target: { value: '' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
     expect(await screen.findByTestId('profile-edit-result')).toHaveTextContent('Your profile was saved.');
-    expect(save).toHaveBeenCalledWith({ name: 'Ana Reyes', phone_num: '0917 123 4567', gender: null });
+    expect(save).toHaveBeenCalledWith({ name: 'Ana Reyes', phone_num: '+639171234567', gender: null });
     expect(screen.queryByTestId('profile-edit-form')).not.toBeInTheDocument();
+  });
+
+  it('refuses a phone number that is not a mobile number before sending (Batch 47 part B)', async () => {
+    const save = vi.fn();
+    render(<ProfilePage role="passenger" profile={passenger()} onSaveProfile={save} onSignOut={() => {}} />);
+
+    fireEvent.click(screen.getByTestId('profile-edit'));
+    fireEvent.change(screen.getByLabelText('Phone: number'), { target: { value: '12345' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Enter a valid mobile number, for example 917 123 4567.');
+    expect(save).not.toHaveBeenCalled();
   });
 
   it('keeps the form open and shows the reason when saving fails', async () => {

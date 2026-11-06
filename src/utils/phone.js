@@ -49,10 +49,15 @@ export function splitPhone(stored) {
   return { callingCode: match.code, local: digitsOf(raw.replace(/\s/g, '').slice(match.code.length)) };
 }
 
-/** "+63 917 123 4567" for a Philippine mobile, the number as stored otherwise, "Not provided" when empty. */
+/**
+ * "+63 917 123 4567" for a Philippine mobile, also one stored in an older shape (09171234567, 9171234567); the number
+ * as stored otherwise; "Not provided" when empty. Stored numbers are never rewritten, only shown the same way.
+ */
 export function formatPhone(stored) {
   const raw = String(stored ?? '').trim();
   if (!raw) return 'Not provided';
-  const ph = raw.replace(/\s/g, '').match(/^\+63(9\d{2})(\d{3})(\d{4})$/);
+  const { callingCode, local } = splitPhone(raw);
+  const e164 = toE164(callingCode, local) ?? raw.replace(/\s/g, '');
+  const ph = e164.match(/^\+63(9\d{2})(\d{3})(\d{4})$/);
   return ph ? `+63 ${ph[1]} ${ph[2]} ${ph[3]}` : raw;
 }

@@ -11,8 +11,8 @@ import {
   passwordError,
   confirmPasswordError,
   compactErrors,
-  LOOSE_PHONE_PATTERN,
 } from "../../../utils/accountFormRules";
+import { DEFAULT_CALLING_CODE, PHONE_INVALID_MESSAGE, toE164 } from "../../../utils/phone";
 
 export function useSignUp() {
   const navigate = useNavigate();
@@ -27,6 +27,8 @@ export function useSignUp() {
     firstName: "",
     lastName: "",
     email: "",
+    // Batch 47 part B: calling code (default +63) and the local number, sent as one E.164 number.
+    callingCode: DEFAULT_CALLING_CODE,
     phone: "",
     dateOfBirth: "",
     gender: "",
@@ -47,10 +49,9 @@ export function useSignUp() {
   /* ── Validation ── */
   const validateStep1 = () => {
     const e = { ...nameErrors(form), email: emailError(form.email) };
-    // The calling-code phone field arrives with Batch 47 part B; until then sign-up keeps its plain phone check.
+    // Batch 47 part B: the same phone rule as the server and the staff forms (utils/phone.js).
     if (!form.phone.trim()) e.phone = "Phone number is required";
-    else if (!LOOSE_PHONE_PATTERN.test(form.phone))
-      e.phone = "Enter a valid phone number";
+    else if (!toE164(form.callingCode, form.phone)) e.phone = PHONE_INVALID_MESSAGE;
     if (!form.dateOfBirth) e.dateOfBirth = birthDateError(form.dateOfBirth);
     return compactErrors(e);
   };
@@ -90,7 +91,7 @@ export function useSignUp() {
       const response = await PassengerService.register({
         name: `${form.firstName.trim()} ${form.lastName.trim()}`, // Combines into 'name'
         email: form.email,
-        phone_num: form.phone, // Maps 'phone' to 'phone_num'
+        phone_num: toE164(form.callingCode, form.phone), // Batch 47 part B: one stored form, e.g. +639171234567
         birthdate: form.dateOfBirth, // Maps 'dateOfBirth' to 'birthdate'
         gender: form.gender || null, // 2026-10-28: optional
         address: form.address,

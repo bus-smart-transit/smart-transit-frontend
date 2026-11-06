@@ -4,13 +4,16 @@ import Card from '../ui/Card';
 import Button from '../ui/Button';
 import FormInput from '../ui/FormInput';
 import ReadOnlyField from './ReadOnlyField';
+import PhoneInput from '../ui/PhoneInput';
+import { PHONE_INVALID_MESSAGE, splitPhone, toE164 } from '../../utils/phone';
 import { GENDER_OPTIONS } from '../../utils/gender';
 
-const formFrom = (profile) => ({
-  name: profile?.name ?? '',
-  phone_num: profile?.phone_num ?? '',
-  gender: profile?.gender ?? '',
-});
+// Batch 47 part B: the phone is edited as calling code + local number (PhoneInput); an older stored shape such as
+// 0917... opens as +63 917... (utils/phone.js splitPhone).
+const formFrom = (profile) => {
+  const { callingCode, local } = splitPhone(profile?.phone_num);
+  return { name: profile?.name ?? '', callingCode, phoneLocal: local, gender: profile?.gender ?? '' };
+};
 
 /**
  * Name, email and phone (and a passenger's address). Staff see them read-only; the note says who can change them.
@@ -32,13 +35,17 @@ export default function PersonalInfoSection({ view, profile = null, onSave = nul
   const handleSubmit = async (event) => {
     event.preventDefault();
     const name = form.name.trim();
-    const phone = form.phone_num.trim();
     if (name.length < 2) {
       setResult({ ok: false, message: 'Enter your full name.' });
       return;
     }
-    if (!phone) {
+    if (!form.phoneLocal.trim()) {
       setResult({ ok: false, message: 'Enter your phone number.' });
+      return;
+    }
+    const phone = toE164(form.callingCode, form.phoneLocal);
+    if (!phone) {
+      setResult({ ok: false, message: PHONE_INVALID_MESSAGE });
       return;
     }
     setSaving(true);
@@ -62,7 +69,13 @@ export default function PersonalInfoSection({ view, profile = null, onSave = nul
       {editing ? (
         <form onSubmit={handleSubmit} noValidate className="mt-4 grid gap-4 sm:grid-cols-2" data-testid="profile-edit-form">
           <FormInput label="Name" value={form.name} onChange={set('name')} maxLength={255} autoComplete="name" required />
-          <FormInput label="Phone" type="tel" value={form.phone_num} onChange={set('phone_num')} maxLength={20} autoComplete="tel" required />
+          <PhoneInput
+            id="profile-phone"
+            label="Phone"
+            callingCode={form.callingCode}
+            local={form.phoneLocal}
+            onChange={({ callingCode, local }) => setForm((prev) => ({ ...prev, callingCode, phoneLocal: local }))}
+          />
           <label className="block text-sm">
             <span className="mb-1.5 block font-medium text-navy-900">Gender</span>
             <select

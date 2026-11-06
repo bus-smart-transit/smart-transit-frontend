@@ -11,12 +11,12 @@ import {
   Lock,
   Mail,
   MapPin,
-  Phone,
   Shield,
   TriangleAlert,
   UserRound } from 'lucide-react';
 import { useSignUp } from '../../../api/hooks/Passenger/signup';
 import { useRegion } from '../../../api/hooks/useRegion';
+import PhoneInput from '../../ui/PhoneInput';
 
 export default function SignUpPage() {
   const region = useRegion();
@@ -166,14 +166,15 @@ export default function SignUpPage() {
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <label className="block text-sm font-medium text-slate-900 mb-1.5" htmlFor="signup-phone">Phone</label>
-                  <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 focus-within:ring-2 focus-within:ring-teal-500 focus-within:border-transparent pointer-events-auto cursor-text">
-                    <Phone className="h-4 w-4 text-slate-400 shrink-0" />
-                    <input id="signup-phone" type="tel" className="font-data h-11 w-full bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400 cursor-text pointer-events-auto" placeholder="+63 9XX XXX XXXX" value={form.phone} onChange={e => update('phone', e.target.value)} autoComplete="tel" />
-                  </div>
-                  {errors.phone && <p className="mt-1 text-xs text-red-600">{errors.phone}</p>}
-                </div>
+                {/* Batch 47 part B: the shared phone field with the calling code (+63 by default). */}
+                <PhoneInput
+                  id="signup-phone"
+                  label="Phone"
+                  callingCode={form.callingCode}
+                  local={form.phone}
+                  onChange={({ callingCode, local }) => { update('callingCode', callingCode); update('phone', local); }}
+                  error={errors.phone}
+                />
                 <div>
                   <label className="block text-sm font-medium text-slate-900 mb-1.5" htmlFor="signup-dob">Date of Birth</label>
                   <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 focus-within:ring-2 focus-within:ring-teal-500 focus-within:border-transparent pointer-events-auto cursor-text">

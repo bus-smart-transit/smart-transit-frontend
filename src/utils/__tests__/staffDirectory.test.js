@@ -23,6 +23,10 @@ describe('phone (mirrors App\\Support\\PhoneNumber)', () => {
     expect(splitPhone('+85291234567')).toEqual({ callingCode: '+852', local: '91234567' });
     expect(splitPhone(null)).toEqual({ callingCode: '+63', local: '' });
     expect(formatPhone('+639171234567')).toBe('+63 917 123 4567');
+    // Batch 47 part B: older stored shapes are shown the same way (never rewritten in the database).
+    expect(formatPhone('09171234567')).toBe('+63 917 123 4567');
+    expect(formatPhone('9171234567')).toBe('+63 917 123 4567');
+    expect(formatPhone('call me')).toBe('call me');
     expect(formatPhone('')).toBe('Not provided');
   });
 });

@@ -1,5 +1,6 @@
 import { formatManilaDate } from './dates';
 import { genderLabel } from './gender';
+import { formatPhone } from './phone';
 
 // Batch 36: what the one shared Profile page shows, worked out from the profile each portal already loads. Nothing is
 // invented here: a value the server did not send is null, and the page says "Not provided". The role names are the
@@ -58,7 +59,8 @@ export function buildProfileView(role, raw) {
     email: clean(user.email) ?? clean(profile.email),
     // 2026-11-05: crews can sign in with their username, so they are shown it; other roles sign in with email only.
     username: ['driver', 'conductor'].includes(role) ? clean(user.username) : null,
-    phone: clean(profile.phone_num),
+    // Batch 47 part B: one readable phone format everywhere (utils/phone.js); missing reads "Not provided".
+    phone: clean(profile.phone_num) ? formatPhone(profile.phone_num) : null,
     gender: genderLabel(profile.gender),
     // A passenger's own address is shown to them. A staff member's address and birth date are not shown.
     address: staff ? null : clean(profile.address),

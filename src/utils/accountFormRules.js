@@ -2,7 +2,6 @@
 // two cannot drift apart. The server checks again; these only help before sending. Messages are plain language.
 
 export const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-export const LOOSE_PHONE_PATTERN = /^\+?[\d\s\-()]{7,15}$/;
 export const USERNAME_PATTERN = /^[A-Za-z0-9._-]{3,50}$/;
 
 export function nameErrors({ firstName, lastName }) {
