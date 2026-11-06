@@ -1,6 +1,7 @@
 import { TriangleAlert } from 'lucide-react';
 import Navbar from '../../Layout/Navbar';
 import Footer from '../../Layout/Footer';
+import { useRegion } from '../../../api/hooks/useRegion';
 
 // 2026-11-06: SAMPLE Privacy Policy and Terms of Service for the test period (decided by the user: a mock-up for now).
 // The privacy text lists only what SmartTransit really collects and does today. It is not legal advice and must be
@@ -59,7 +60,7 @@ const DOCUMENTS = {
       {
         heading: 'Using SmartTransit',
         items: [
-          'SmartTransit helps you find buses, buy tickets and track your bus in the Davao Region.',
+          'SmartTransit helps you find buses, buy tickets and track your bus in {region}.',
           'Give true details when you sign up, and keep your password to yourself.',
         ],
       },
@@ -89,6 +90,9 @@ const DOCUMENTS = {
 
 export default function LegalPage({ kind }) {
   const doc = DOCUMENTS[kind] ?? DOCUMENTS.privacy;
+  // The region name comes from the server (no place names in the code).
+  const region = useRegion();
+  const fill = (text) => text.replace('{region}', region?.name || 'your region');
   return (
     <div className="min-h-screen bg-slate-50">
       <Navbar />
@@ -102,7 +106,7 @@ export default function LegalPage({ kind }) {
           <section key={section.heading} className="mt-8">
             <h2 className="font-display text-lg font-semibold text-slate-900">{section.heading}</h2>
             <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-relaxed text-slate-700">
-              {section.items.map((item) => <li key={item}>{item}</li>)}
+              {section.items.map((item) => <li key={item}>{fill(item)}</li>)}
             </ul>
           </section>
         ))}

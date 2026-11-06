@@ -3,6 +3,7 @@ import { Loader2, Pencil, Plus, Power, RefreshCw } from 'lucide-react';
 import { OpCard, OpChip, OpEmpty, OpTable } from './OperatorUI';
 import StaffRoster from './StaffRoster';
 import StaffFormModal from './StaffFormModal';
+import { READ_ONLY_NOTE, useCanManageCompany } from './companyAdmin';
 import SearchBar from '../../ui/SearchBar';
 import Pagination from '../../ui/Pagination';
 import Modal from '../../ui/Modal';
@@ -91,6 +92,7 @@ function ConfirmPowerDialog({ member, onCancel, onConfirm }) {
  */
 export default function StaffDirectory({ fleetCount, onChanged }) {
   const directory = useStaffDirectory();
+  const canManage = useCanManageCompany();
   const [form, setForm] = useState(null);
   const [power, setPower] = useState(null);
   const [notice, setNotice] = useState('');
@@ -128,7 +130,7 @@ export default function StaffDirectory({ fleetCount, onChanged }) {
       key: 'actions',
       header: '',
       className: 'md:text-right',
-      render: (row) => (
+      render: (row) => (canManage && (
         <span className="inline-flex gap-2">
           <button type="button" onClick={() => setForm({ mode: 'edit', member: row })} aria-label={`Edit ${row.name}`} className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50">
             <Pencil className="h-3.5 w-3.5" aria-hidden="true" /> Edit
@@ -142,7 +144,7 @@ export default function StaffDirectory({ fleetCount, onChanged }) {
             <Power className="h-3.5 w-3.5" aria-hidden="true" /> {row.deactivated ? 'Turn on' : 'Turn off'}
           </button>
         </span>
-      ),
+      )),
     },
   ];
 
@@ -160,12 +162,15 @@ export default function StaffDirectory({ fleetCount, onChanged }) {
             <button type="button" onClick={directory.reload} className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-slate-200 px-3 text-sm text-slate-600 hover:bg-slate-50">
               <RefreshCw className="h-4 w-4" aria-hidden="true" /> Refresh
             </button>
-            <button type="button" onClick={() => { setNotice(''); setForm({ mode: 'add' }); }} className="inline-flex min-h-11 items-center gap-1.5 rounded-lg bg-teal-600 px-3 text-sm font-semibold text-white hover:bg-teal-700">
-              <Plus className="h-4 w-4" aria-hidden="true" /> Add Staff
-            </button>
+            {canManage && (
+              <button type="button" onClick={() => { setNotice(''); setForm({ mode: 'add' }); }} className="inline-flex min-h-11 items-center gap-1.5 rounded-lg bg-teal-600 px-3 text-sm font-semibold text-white hover:bg-teal-700">
+                <Plus className="h-4 w-4" aria-hidden="true" /> Add Staff
+              </button>
+            )}
           </span>
         )}
       >
+        {!canManage && <p className="mb-3 text-xs text-slate-500" data-testid="read-only-note">{READ_ONLY_NOTE}</p>}
         <div className="space-y-4">
           <div className="flex flex-col gap-2 sm:flex-row">
             <SearchBar value={directory.search} onChange={directory.setSearch} placeholder="Search by username, email or role" className="flex-1" />

@@ -13,6 +13,7 @@ vi.mock('../../../../api/StaffService/OperatorService', () => ({
 
 import OperatorService from '../../../../api/StaffService/OperatorService';
 import StaffDirectory from '../StaffDirectory';
+import { CompanyAdminContext } from '../companyAdmin';
 import { SEARCH_DEBOUNCE_MS } from '../../../../api/hooks/Staff/useStaffDirectory';
 
 // Batch 46: the Operator's Staff Directory.
@@ -133,5 +134,15 @@ describe('StaffDirectory', () => {
     await waitFor(() => expect(OperatorService.createEmployeeAccount).toHaveBeenCalledWith(expect.objectContaining({
       role: 'conductor', name: 'Ana Reyes', phone_num: '+639170001111', birth_date: '1995-02-03',
     })));
+  });
+
+  test('shows a dispatcher (not a company admin) the list without Add, Edit or Turn off', async () => {
+    render(<CompanyAdminContext.Provider value={false}><StaffDirectory fleetCount={0} /></CompanyAdminContext.Provider>);
+
+    expect(await screen.findByText('Juan Dela Cruz')).toBeInTheDocument();
+    expect(screen.getByTestId('read-only-note')).toHaveTextContent('Only your company admin can change these.');
+    expect(screen.queryByRole('button', { name: 'Add Staff' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Edit Juan/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Turn off/ })).toBeNull();
   });
 });

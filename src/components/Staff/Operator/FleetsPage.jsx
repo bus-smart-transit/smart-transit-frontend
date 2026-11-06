@@ -5,6 +5,7 @@ import { OP_SPACE } from './operatorUiTokens';
 import Modal from '../../ui/Modal';
 import FilterTabs from '../../ui/FilterTabs';
 import FareRulesPanel from '../FareRulesPanel';
+import { useCanManageCompany } from './companyAdmin';
 import FleetTrackingMap from './FleetTrackingMap';
 import RerouteAdviceItem from './RerouteAdviceItem';
 import OperatorService from '../../../api/StaffService/OperatorService';
@@ -250,6 +251,7 @@ export default function FleetsPage({ fleets, routes, trips, onRefresh, companyNa
   const [modal, setModal] = useState(null); // 'add' | 'assign' | null
   const [trackedFleetId, setTrackedFleetId] = useState(null);
   const [editingFleet, setEditingFleet] = useState(null);
+  const canManage = useCanManageCompany();
   const [notice, setNotice] = useState('');
 
   const rows = useMemo(() => buildFleetRows({ fleets, trips, locations: fleetLocations, nowMs }), [fleets, trips, fleetLocations, nowMs]);
@@ -291,9 +293,9 @@ export default function FleetsPage({ fleets, routes, trips, onRefresh, companyNa
         >
           <MapPinned className="h-3.5 w-3.5" aria-hidden="true" /> Track
         </button>
-        <button type="button" aria-label={`Edit fleet ${row.fleet.plate_number}`} onClick={() => { setNotice(''); setEditingFleet(row.fleet); }} className={SECONDARY}>
+        {canManage && <button type="button" aria-label={`Edit fleet ${row.fleet.plate_number}`} onClick={() => { setNotice(''); setEditingFleet(row.fleet); }} className={SECONDARY}>
           <Pencil className="h-3.5 w-3.5" aria-hidden="true" /> Edit
-        </button>
+        </button>}
       </span>
     ) },
   ];
@@ -303,7 +305,7 @@ export default function FleetsPage({ fleets, routes, trips, onRefresh, companyNa
       <OpPageHeader
         title="Fleets"
         subtitle="Your buses, their status today and where they are"
-        action={<button type="button" onClick={() => open('add')} className={PRIMARY}><Plus className="h-4 w-4" aria-hidden="true" /> Add fleet</button>}
+        action={canManage ? <button type="button" onClick={() => open('add')} className={PRIMARY}><Plus className="h-4 w-4" aria-hidden="true" /> Add fleet</button> : null}
       />
 
       {notice && <p role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{notice}</p>}
@@ -321,7 +323,7 @@ export default function FleetsPage({ fleets, routes, trips, onRefresh, companyNa
         subtitle="Status is worked out from today's trips and the bus's last GPS report."
         badge={(
           <div className={OP_SPACE.inline}>
-            <button type="button" onClick={() => open('assign')} className={SECONDARY}>Assign route</button>
+            {canManage && <button type="button" onClick={() => open('assign')} className={SECONDARY}>Assign route</button>}
             <button type="button" onClick={() => { onRefresh(); void refreshFleetLocations(); }} className={SECONDARY}><RefreshCw className="h-3.5 w-3.5" aria-hidden="true" /> Refresh</button>
           </div>
         )}
@@ -331,7 +333,7 @@ export default function FleetsPage({ fleets, routes, trips, onRefresh, companyNa
       </OpCard>
 
       <OpCard>
-        <FareRulesPanel service={OperatorService} fleets={fleets} routes={routes} canCreateGeneral={false} tone="light" />
+        <FareRulesPanel service={OperatorService} fleets={fleets} routes={routes} canCreateGeneral={false} tone="light" readOnly={!canManage} />
       </OpCard>
 
       <AddFleetModal companyName={companyName} open={modal === 'add'} onClose={closeModal} form={fleetForm} setForm={setFleetForm} routes={routes} fareOptions={fareOptions} saving={manageSaving} message={manageMsg} onSubmit={submitFleet} />

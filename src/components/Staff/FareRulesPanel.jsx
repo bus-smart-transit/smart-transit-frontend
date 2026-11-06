@@ -36,7 +36,7 @@ const money = (value) => (value === null || value === undefined || value === '' 
  * No fare value lives here: the list and every option come from the server, which re-validates what is saved.
  * `service` supplies getFareRules(filters) and createFareRule(payload, stepUpToken).
  */
-export default function FareRulesPanel({ service, fleets = [], routes = [], canCreateGeneral = false, tone = 'dark' }) {
+export default function FareRulesPanel({ service, fleets = [], routes = [], canCreateGeneral = false, tone = 'dark', readOnly = false }) {
   const t = TONES[tone] ?? TONES.dark
   const options = useFareOptions()
   const [rules, setRules] = useState([])
@@ -130,7 +130,7 @@ export default function FareRulesPanel({ service, fleets = [], routes = [], canC
   const today = getBusinessToday()
   const [copying, setCopying] = useState(null)
   const [editing, setEditing] = useState(null)
-  const canChange = (rule) => Boolean(rule.fleet_id) || canCreateGeneral
+  const canChange = (rule) => !readOnly && (Boolean(rule.fleet_id) || canCreateGeneral)
   const ruleTitle = (rule) => `${ruleScope(rule)}, ${cap(rule.seat_type)}`
   const copyRule = (rule, payload) => withStepUp(async (token) => {
     await service.copyFareRule(rule.fare_rule_id, payload, token)
@@ -224,7 +224,9 @@ export default function FareRulesPanel({ service, fleets = [], routes = [], canC
         </table>
       </div>
 
-      <form onSubmit={onSubmit} className={`space-y-3 border-t pt-4 ${t.rule}`} aria-label="Add fare rule">
+      {readOnly ? (
+        <p className={`border-t pt-4 text-xs ${t.muted} ${t.rule}`} data-testid="fare-read-only-note">Only your company admin can change fares.</p>
+      ) : <form onSubmit={onSubmit} className={`space-y-3 border-t pt-4 ${t.rule}`} aria-label="Add fare rule">
         <p className={`text-xs font-semibold uppercase tracking-[0.14em] ${t.title}`}>Add a rule</p>
         <div className="grid gap-3 md:grid-cols-4">
           {canCreateGeneral && (
@@ -271,7 +273,7 @@ export default function FareRulesPanel({ service, fleets = [], routes = [], canC
         {message && (
           <p role="status" className={`rounded-xl border px-3 py-2 text-sm ${message.toLowerCase().startsWith('failed') ? t.bad : t.ok}`}>{message}</p>
         )}
-      </form>
+      </form>}
       {copying && <FareRuleCopyModal rule={copying} today={today} title={ruleTitle(copying)} onClose={() => setCopying(null)} onSubmit={(payload) => copyRule(copying, payload)} />}
       {editing && <FareRuleEditModal rule={editing} today={today} title={ruleTitle(editing)} onClose={() => setEditing(null)} onSubmit={(payload) => editRule(editing, payload)} />}
       <StepUpModal open={stepUpOpen} onClose={onStepUpClosed} onVerified={onVerified} />

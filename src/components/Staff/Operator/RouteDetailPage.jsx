@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ArrowLeft, RotateCw } from 'lucide-react';
 import { OpPageHeader, OpCard, OpChip, OpStat, OpTable } from './OperatorUI';
+import { useCanManageCompany } from './companyAdmin';
 import { OP_SPACE, TRIP_STATUS_TONE } from './operatorUiTokens';
 import ViewTabs from '../../ui/ViewTabs';
 import Modal from '../../ui/Modal';
@@ -115,6 +116,7 @@ function OverviewTab({ row, route, trips, onRedraw, redrawPending, redrawSaving,
 }
 
 function StopsTab({ route, routesTab, onOpenAssign }) {
+  const canManage = useCanManageCompany();
   const stops = sortedRouteStops(route);
   const columns = [
     { key: 'order', header: '#', render: (row) => row.stop_order },
@@ -127,14 +129,14 @@ function StopsTab({ route, routesTab, onOpenAssign }) {
         <input
           type="checkbox"
           checked={Boolean(row.served_by_express)}
-          disabled={routesTab.manageSaving}
+          disabled={routesTab.manageSaving || !canManage}
           onChange={(event) => { void routesTab.handleToggleStopExpress(route.route_id, row.id, event.target.checked); }}
           aria-label={`Express trips stop at ${row.stop?.stop_name || row.stop_id}`}
         />
         {row.served_by_express ? 'Yes' : 'No'}
       </label>
     ) : <span className="text-slate-400">-</span>) },
-    { key: 'remove', header: '', render: (row) => (row.id ? (
+    { key: 'remove', header: '', render: (row) => (row.id && canManage ? (
       <button type="button" disabled={routesTab.manageSaving} aria-label={`Remove ${row.stop?.stop_name || `stop ${row.stop_id}`} from route`} onClick={() => { void routesTab.handleRemoveStopFromRoute(route.route_id, row.id); }} className="rounded-lg border border-rose-200 bg-rose-50 px-2 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-50">Remove</button>
     ) : null) },
   ];
@@ -142,7 +144,7 @@ function StopsTab({ route, routesTab, onOpenAssign }) {
     <OpCard
       title="Stops in order"
       subtitle="The order is set when a stop is assigned."
-      badge={<button type="button" onClick={onOpenAssign} className={PRIMARY}>Assign stop</button>}
+      badge={canManage ? <button type="button" onClick={onOpenAssign} className={PRIMARY}>Assign stop</button> : null}
     >
       <OpTable caption="Stops on this route" columns={columns} rows={stops} rowKey={(row) => row.id ?? `${row.stop_id}-${row.stop_order}`} empty="No stops on this route yet. Use Assign stop to add the first one." />
     </OpCard>

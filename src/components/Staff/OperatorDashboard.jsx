@@ -24,6 +24,7 @@ import CrewShiftTimes from './Operator/CrewShiftTimes'
 import { isRangeSchedule, rangeDayCount } from '../../utils/scheduleRange'
 import { crewOptionLabel, isPickable, needsCrew, sortForPicker } from '../../utils/crewPicker'
 import AssignCrewModal from './Operator/AssignCrewModal'
+import { CompanyAdminContext } from './Operator/companyAdmin'
 import TripFocusNotice from './TripFocusNotice'
 import { roleLabel } from '../../utils/staffForm'
 import ProfilePage from '../Account/ProfilePage'
@@ -800,6 +801,8 @@ export default function OperatorDashboard() {
   }
 
   return (
+    // 2026-11-06: screens hide changes a dispatcher (not a company admin) may not make; the server refuses them anyway.
+    <CompanyAdminContext.Provider value={Boolean(profile?.is_company_admin)}>
     <StaffPortalLayout
       brandLabel="Operator Portal"
       brandIcon={Bus}
@@ -851,6 +854,7 @@ export default function OperatorDashboard() {
         {activeTab === 'account'    && <ProfilePage role="operator" profile={profile} loading={loading} onSignOut={handleLogout} />}
         </div>
     </StaffPortalLayout>
+    </CompanyAdminContext.Provider>
   )
 }
 

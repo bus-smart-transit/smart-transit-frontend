@@ -4,6 +4,7 @@ import { OpPageHeader, OpCard, OpChip, OpStat, OpTable, OpPager } from './Operat
 import { OP_SPACE } from './operatorUiTokens';
 import Modal from '../../ui/Modal';
 import RouteDetailPage from './RouteDetailPage';
+import { useCanManageCompany } from './companyAdmin';
 import { useRoutesTab } from '../../../api/hooks/Staff/useOperatorDashboard';
 import {
   buildRouteRows, filterRouteRows, municipalityOptions, formatDuration, filterStops, pageOf,
@@ -68,6 +69,7 @@ function StopModal({ open, onClose, editing, form, setForm, saving, message, onS
  */
 export default function RoutesPage({ routes, stops, trips, fleets, onRefresh, onOpenSchedule, onOpenFleets }) {
   const routesTab = useRoutesTab({ onRefresh });
+  const canManage = useCanManageCompany();
   const {
     manageMsg, clearManageMsg, manageSaving, editingStopId, setEditingStopId, stopForm, setStopForm,
     routeForm, handleCreateStop, handleDeleteStop, handleCreateRoute, setRouteForm,
@@ -132,12 +134,12 @@ export default function RoutesPage({ routes, stops, trips, fleets, onRefresh, on
     { key: 'stop', header: 'Stop', render: (stop) => <span className="whitespace-nowrap"><strong className="text-slate-900">{stop.stop_name}</strong>{stop.stop_code && <span className="block text-xs text-slate-500">{stop.stop_code}</span>}</span> },
     { key: 'lat', header: 'Latitude', render: (stop) => stop.latitude ?? '-' },
     { key: 'lng', header: 'Longitude', render: (stop) => stop.longitude ?? '-' },
-    { key: 'actions', header: '', render: (stop) => (
+    { key: 'actions', header: '', render: (stop) => (canManage && (
       <span className="inline-flex gap-2">
         <button type="button" aria-label={`Edit stop ${stop.stop_name}`} onClick={() => openEditStop(stop)} className={SECONDARY}>Edit</button>
         <button type="button" aria-label={`Delete stop ${stop.stop_name}`} disabled={manageSaving} onClick={() => { void handleDeleteStop(stop.stop_id); }} className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-50">Delete</button>
       </span>
-    ) },
+    )) },
   ];
 
   return (
@@ -145,7 +147,7 @@ export default function RoutesPage({ routes, stops, trips, fleets, onRefresh, on
       <OpPageHeader
         title="Routes"
         subtitle="Where your buses run, the stops on each route and who serves it"
-        action={<button type="button" onClick={() => open('route')} className={PRIMARY}><Plus className="h-4 w-4" aria-hidden="true" /> Add route</button>}
+        action={canManage ? <button type="button" onClick={() => open('route')} className={PRIMARY}><Plus className="h-4 w-4" aria-hidden="true" /> Add route</button> : null}
       />
 
       {manageMsg && !modal && (
@@ -180,7 +182,7 @@ export default function RoutesPage({ routes, stops, trips, fleets, onRefresh, on
       <OpCard
         title="Stops directory"
         subtitle="Stops you can place on routes."
-        badge={<button type="button" onClick={openAddStop} className={PRIMARY}><Plus className="h-4 w-4" aria-hidden="true" /> Add stop</button>}
+        badge={canManage ? <button type="button" onClick={openAddStop} className={PRIMARY}><Plus className="h-4 w-4" aria-hidden="true" /> Add stop</button> : null}
       >
         <div className="mb-4">
           <label className="relative block">
