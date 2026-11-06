@@ -264,6 +264,7 @@ describe('Route detail', () => {
   });
 
   it('assigns a stop with the next order and only offers stops not yet on the route', async () => {
+    mocks.addOperatorStopToRoute.mockResolvedValueOnce({ data: { warnings: ['On Davao - Tagum, this stop adds about 12 km between "Stop 2" and "Stop 3". Check that the pin is in the right place.'] } });
     renderPage();
     await openTagum();
     goToTab('Stops');
@@ -275,6 +276,7 @@ describe('Route detail', () => {
     fireEvent.change(within(dialog).getByLabelText('Stop'), { target: { value: '9' } });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Assign stop' }));
     await waitFor(() => expect(mocks.addOperatorStopToRoute).toHaveBeenCalledWith(4, { stop_id: 9, stop_order: 4 }));
+    expect(await screen.findByText(/Stop assigned to route successfully\. On Davao - Tagum, this stop adds about 12 km/)).toBeInTheDocument();
   });
 
   it('schedule tab shows service windows and the trips still to run, and opens Schedule', async () => {

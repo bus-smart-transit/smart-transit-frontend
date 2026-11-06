@@ -61,7 +61,7 @@ export default function PlaceSearch({ onPick }) {
           placeholder="Street, landmark or barangay"
           className={INPUT}
         />
-        <button type="button" onClick={search} className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">
+        <button type="button" onClick={search} className="inline-flex min-h-11 shrink-0 items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">
           <Search className="h-3.5 w-3.5" aria-hidden="true" /> Search
         </button>
       </div>

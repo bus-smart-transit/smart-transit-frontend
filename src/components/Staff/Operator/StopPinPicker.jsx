@@ -9,7 +9,7 @@ import { MAP_CONFIG } from '../../../config/mapConfig';
 import { parsePin, roundCoord } from '../../../utils/stopPin';
 
 const INPUT = 'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500';
-const BUTTON = 'inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50';
+const BUTTON = 'inline-flex min-h-11 items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50';
 const PIN_ZOOM = 17;
 
 function otherStopElement(name) {

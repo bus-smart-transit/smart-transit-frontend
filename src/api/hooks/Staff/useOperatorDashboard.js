@@ -571,7 +571,7 @@ export function useRoutesTab({ onRefresh }) {
     setManageSaving(true);
     setManageMsg('');
     try {
-      await OperatorService.addOperatorStopToRoute(Number(routeStopForm.route_id), {
+      const added = await OperatorService.addOperatorStopToRoute(Number(routeStopForm.route_id), {
         stop_id: Number(routeStopForm.stop_id),
         stop_order: Number(routeStopForm.stop_order || suggestedStopOrder || 1),
       });
@@ -580,7 +580,8 @@ export function useRoutesTab({ onRefresh }) {
         stop_id: '',
         stop_order: String(Number(prev.stop_order || suggestedStopOrder || 1) + 1),
       }));
-      setManageMsg('Stop assigned to route successfully.');
+      // 2026-11-06 (Batch 47 part A): the server warns when the stop is well off the way between its neighbours.
+      setManageMsg(['Stop assigned to route successfully.', ...(added?.data?.warnings ?? [])].join(' '));
       onRefresh();
       return true;
     } catch (err) {
