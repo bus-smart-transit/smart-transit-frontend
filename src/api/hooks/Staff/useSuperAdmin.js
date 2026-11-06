@@ -136,3 +136,46 @@ export function useAdminUsers() {
     setCompanyAdmin: after((id, on) => AdminService.setCompanyAdmin(id, on)),
   };
 }
+
+/**
+ * Batch 48 Phase 4: the Audit log page. The action text waits for a short pause; any filter goes back to page 1.
+ */
+export function useAdminAuditLog() {
+  const [actionText, setActionText] = useState('');
+  const [query, setQuery] = useState({ action: '', role: '', from: '', to: '', page: 1 });
+  const [result, setResult] = useState({ entries: [], pagination: { page: 1, per_page: 25, total: 0, last_page: 1 } });
+  const [error, setError] = useState('');
+  const [answered, setAnswered] = useState(null);
+
+  useEffect(() => {
+    const id = setTimeout(() => setQuery((prev) => (prev.action === actionText ? prev : { ...prev, action: actionText, page: 1 })), ADMIN_SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(id);
+  }, [actionText]);
+
+  useEffect(() => {
+    let active = true;
+    const params = Object.fromEntries(Object.entries(query).filter(([, value]) => value !== '' && value !== null));
+    AdminService.getAuditLog(params)
+      .then((response) => { if (active && response?.data) { setResult(response.data); setError(''); } })
+      .catch((err) => { if (active) setError(adminErrorText(err, 'The audit log could not be loaded. Try again.')); })
+      .finally(() => { if (active) setAnswered(query); });
+    return () => { active = false; };
+  }, [query]);
+
+  const setFilter = (key) => (value) => setQuery((prev) => ({ ...prev, [key]: value, page: 1 }));
+
+  return {
+    ...result,
+    loading: answered !== query,
+    error,
+    actionText,
+    setActionText,
+    role: query.role,
+    setRole: setFilter('role'),
+    from: query.from,
+    setFrom: setFilter('from'),
+    to: query.to,
+    setTo: setFilter('to'),
+    setPage: (page) => setQuery((prev) => ({ ...prev, page })),
+  };
+}

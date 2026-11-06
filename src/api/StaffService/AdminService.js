@@ -40,6 +40,11 @@ class AdminService extends StaffBaseService {
     return await this.request(`/admin/users/${userId}/reactivate`, 'PATCH');
   }
 
+  // Batch 48 Phase 4: the Audit log page.
+  async getAuditLog(params = {}) {
+    return await this.request('/admin/audit-log', 'GET', params);
+  }
+
   async setCompanyAdmin(userId, isCompanyAdmin) {
     return await this.request(`/admin/users/${userId}/company-admin`, 'PATCH', { is_company_admin: isCompanyAdmin });
   }

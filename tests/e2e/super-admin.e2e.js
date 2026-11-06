@@ -97,3 +97,17 @@ for (const width of [1280, 390]) {
     await page.screenshot({ path: path.join(SHOTS, `users_${width}.png`), fullPage: true });
   });
 }
+
+// Batch 48 Phase 4: the Audit log shows the Super Admin's own changes (from the tests above) and filters by action.
+test('the Audit log lists recorded changes and filters them', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await signIn(page, 'admin@smarttransit.com', /admin\/dashboard/);
+  await page.getByRole('button', { name: 'Audit log', exact: true }).click();
+  const table = page.getByRole('table', { name: 'Audit log' });
+  await expect(table.getByRole('row').nth(1)).toBeVisible({ timeout: 30000 });
+  await page.getByPlaceholder('Search actions, for example fare or stop').fill('company.create');
+  await expect(table.getByText('company.create').first()).toBeVisible({ timeout: 30000 });
+  await expect(table.getByText('user.deactivate')).toHaveCount(0, { timeout: 30000 });
+  await expect(table.getByText('admin.patch')).toHaveCount(0);
+  await page.screenshot({ path: path.join(SHOTS, 'audit_1280.png'), fullPage: true });
+});

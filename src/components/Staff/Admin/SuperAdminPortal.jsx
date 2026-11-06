@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Building2, LayoutDashboard, ShieldCheck, Users, Wrench } from 'lucide-react';
+import { Building2, ClipboardList, LayoutDashboard, ShieldCheck, Users, Wrench } from 'lucide-react';
 import StaffPortalLayout from '../StaffPortalLayout';
 import SuperAdminDashboard from './SuperAdminDashboard';
 import CompaniesPage from './CompaniesPage';
 import UsersPage from './UsersPage';
-import { useAdminCompanies, useAdminOverview, useAdminUsers, useSuperAdminSession } from '../../../api/hooks/Staff/useSuperAdmin';
+import AuditLogPage from './AuditLogPage';
+import { useAdminAuditLog, useAdminCompanies, useAdminOverview, useAdminUsers, useSuperAdminSession } from '../../../api/hooks/Staff/useSuperAdmin';
 
 // Batch 48: the Super Admin portal. Each phase adds its own item here. "Older tools" opens the earlier Admin panel
 // until it is replaced (Phase 7, with the user's approval).
@@ -13,6 +14,7 @@ const NAV = [
   { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { key: 'companies', label: 'Companies', icon: Building2 },
   { key: 'users', label: 'Users', icon: Users },
+  { key: 'audit', label: 'Audit log', icon: ClipboardList },
   { key: 'tools', label: 'Older tools', icon: Wrench },
 ];
 
@@ -24,6 +26,10 @@ function DashboardTab() {
 
 function CompaniesTab() {
   return <CompaniesPage companiesTab={useAdminCompanies()} />;
+}
+
+function AuditTab() {
+  return <AuditLogPage auditTab={useAdminAuditLog()} />;
 }
 
 function UsersTab() {
@@ -59,6 +65,7 @@ export default function SuperAdminPortal() {
         {tab === 'dashboard' && <DashboardTab />}
         {tab === 'companies' && <CompaniesTab />}
         {tab === 'users' && <UsersTab />}
+        {tab === 'audit' && <AuditTab />}
       </div>
     </StaffPortalLayout>
   );
