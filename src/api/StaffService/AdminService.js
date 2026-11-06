@@ -6,6 +6,11 @@ import { StaffBaseService } from './StaffBaseService';
  * for auth — no admin-specific overrides needed there.
  */
 class AdminService extends StaffBaseService {
+  // Batch 48 Phase 2: the Super Admin Dashboard counts.
+  async getOverview() {
+    return await this.request('/admin/overview', 'GET');
+  }
+
   // ── Stop Management ──
   async getStops() {
     return await this.request(`/admin/stops`, 'GET');
