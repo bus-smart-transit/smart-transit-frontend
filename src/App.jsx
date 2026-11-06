@@ -12,6 +12,16 @@ const CheckoutReturn = lazy(() => import('./components/Passenger/CheckoutReturn/
 const AboutPage = lazy(() => import('./components/Passenger/About/AboutPage'));
 const TrackBusPage = lazy(() => import('./components/Passenger/Track/TrackBusPage'));
 const TrackLookupPage = lazy(() => import('./components/Passenger/Track/TrackLookupPage'));
+const LegalPage = lazy(() => import('./components/Passenger/Legal/LegalPage'));
+
+// 2026-11-06: sample Privacy Policy and Terms for the test period (same navbar and footer as About).
+function LegalWithAuth({ kind }) {
+  return (
+    <AuthProvider role="passenger">
+      <LegalPage kind={kind} />
+    </AuthProvider>
+  );
+}
 
 function LandingWithAuth() {
   return (
@@ -46,6 +56,8 @@ export default function App() {
             {/* LandingPage is self-contained — no layout wrapper needed */}
             <Route path="/" element={<LandingWithAuth />} />
             <Route path="/about" element={<AboutWithAuth />} />
+            <Route path="/privacy" element={<LegalWithAuth kind="privacy" />} />
+            <Route path="/terms" element={<LegalWithAuth kind="terms" />} />
             {/* Public: the link itself is the credential, so no account or auth provider is involved. */}
             <Route path="/track" element={<TrackLookupPage />} />
             <Route path="/track/:token" element={<TrackBusPage />} />

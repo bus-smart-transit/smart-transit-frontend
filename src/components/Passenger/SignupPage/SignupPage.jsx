@@ -262,8 +262,8 @@ export default function SignUpPage() {
               <label className="inline-flex cursor-pointer items-start gap-2 text-sm text-slate-600" htmlFor="signup-terms">
                 <input id="signup-terms" type="checkbox" className="mt-0.5 h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500" checked={form.agreeTerms} onChange={e => update('agreeTerms', e.target.checked)} />
                 <span>
-                  I agree to the <a href="#" className="text-teal-600 hover:text-teal-700 font-medium">Terms of Service</a> and{' '}
-                  <a href="#" className="text-teal-600 hover:text-teal-700 font-medium">Privacy Policy</a>.
+                  I agree to the <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-teal-600 hover:text-teal-700 font-medium">Terms of Service</a> and{' '}
+                  <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-teal-600 hover:text-teal-700 font-medium">Privacy Policy</a>.
                 </span>
               </label>
               {errors.agreeTerms && <p className="-mt-2 text-xs text-red-600">{errors.agreeTerms}</p>}

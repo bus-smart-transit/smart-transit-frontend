@@ -10,6 +10,12 @@ export default function Footer() {
           <BrandLogo onDark className="h-8" />
         </Link>
 
+        {/* 2026-11-06: sample Privacy Policy and Terms for the test period. */}
+        <nav aria-label="Legal" className="flex gap-4 text-xs">
+          <Link to="/privacy" className="text-slate-300 hover:text-white">Privacy Policy</Link>
+          <Link to="/terms" className="text-slate-300 hover:text-white">Terms of Service</Link>
+        </nav>
+
         {/* Copyright */}
         <p className="text-xs text-slate-400">
           © {new Date().getFullYear()}. All rights reserved.
