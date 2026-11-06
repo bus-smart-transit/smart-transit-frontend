@@ -26,7 +26,7 @@ for (const width of [1280, 390]) {
     await signInOperator(page);
     await page.goto('/employee/operator/dashboard?tab=staffs');
 
-    await expect(page.getByText(/Drivers and Chauffeurs of SmartTransit Demo Bus Co\./)).toBeVisible({ timeout: 60000 });
+    await expect(page.getByText(/Drivers, Chauffeurs and Operators of SmartTransit Demo Bus Co\./)).toBeVisible({ timeout: 60000 });
     await expect(page.getByTestId('profile-company-line').first()).toContainText('SmartTransit Demo Bus Co.');
     await expect(page.getByRole('navigation', { name: 'Staff pages' }).getByText(/Showing 1 to \d+ of \d+/)).toBeVisible();
     await expect(page.getByRole('table', { name: 'Staff Directory' }).getByText('Conductor', { exact: true })).toHaveCount(0);

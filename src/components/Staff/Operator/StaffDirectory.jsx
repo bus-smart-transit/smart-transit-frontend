@@ -21,6 +21,8 @@ const joined = (value) => {
 
 function AvailabilityChip({ member }) {
   if (member.deactivated) return <OpChip tone="danger">Turned off</OpChip>;
+  // Availability is for crews; an Operator account is just on.
+  if (member.role === 'operator') return <OpChip tone="success">Active</OpChip>;
   return member.is_available
     ? <OpChip tone="success">Available</OpChip>
     : <OpChip tone="neutral">Not Available</OpChip>;
@@ -86,7 +88,8 @@ function ConfirmPowerDialog({ member, onCancel, onConfirm }) {
 }
 
 /**
- * Batch 46: the Operator's Staff Directory. Only this Operator's own Drivers and Chauffeurs (the server scopes it).
+ * Batch 46: the Operator's Staff Directory. Only this company's Drivers and Chauffeurs and (2026-11-06) Operators (the
+ * server scopes it). A Company Admin adds and turns off Operators too, but not their own account or another Company Admin.
  * Search by username, email, name or role, a role filter, 10 per page, Edit (username, phone, email) and turning an
  * account off or on. Availability is set by each crew member on their own profile and only shown here.
  */
@@ -130,7 +133,10 @@ export default function StaffDirectory({ fleetCount, onChanged }) {
       key: 'actions',
       header: '',
       className: 'md:text-right',
-      render: (row) => (canManage && (
+      render: (row) => (canManage && (row.manageable === false ? (
+        // 2026-11-06: your own account (My Account) and Company Admins (the Super Admin) are changed elsewhere.
+        <span className="text-xs text-slate-500">{row.is_you ? 'You' : 'Changed by the Super Admin'}</span>
+      ) : (
         <span className="inline-flex gap-2">
           <button type="button" onClick={() => setForm({ mode: 'edit', member: row })} aria-label={`Edit ${row.name}`} className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50">
             <Pencil className="h-3.5 w-3.5" aria-hidden="true" /> Edit
@@ -144,7 +150,7 @@ export default function StaffDirectory({ fleetCount, onChanged }) {
             <Power className="h-3.5 w-3.5" aria-hidden="true" /> {row.deactivated ? 'Turn on' : 'Turn off'}
           </button>
         </span>
-      )),
+      ))),
     },
   ];
 
@@ -156,7 +162,7 @@ export default function StaffDirectory({ fleetCount, onChanged }) {
 
       <OpCard
         title="Staff Directory"
-        subtitle={`${directory.company?.company_name ? `Drivers and Chauffeurs of ${directory.company.company_name}. Only your company's Operators can see them.` : 'Your company\'s Drivers and Chauffeurs.'} Each one sets Available or Not Available on their profile.`}
+        subtitle={`${directory.company?.company_name ? `Drivers, Chauffeurs and Operators of ${directory.company.company_name}. Only your company's Operators can see them.` : 'Your company\'s Drivers, Chauffeurs and Operators.'} Drivers and Chauffeurs set Available or Not Available on their profile.`}
         badge={(
           <span className="flex flex-wrap gap-2">
             <button type="button" onClick={directory.reload} className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-slate-200 px-3 text-sm text-slate-600 hover:bg-slate-50">
@@ -179,6 +185,7 @@ export default function StaffDirectory({ fleetCount, onChanged }) {
               <option value="">All roles</option>
               <option value="driver">Driver</option>
               <option value="conductor">Chauffeur</option>
+              <option value="operator">Operator</option>
             </select>
           </div>
 

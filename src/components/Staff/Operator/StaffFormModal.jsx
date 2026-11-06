@@ -62,7 +62,9 @@ export default function StaffFormModal({ mode = 'add', member = null, defaultRol
               <select id="staff-role" value={form.role} onChange={(event) => update('role', event.target.value)} className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500">
                 <option value="driver">Driver</option>
                 <option value="conductor">Chauffeur</option>
+                <option value="operator">Operator</option>
               </select>
+              {form.role === 'operator' && <p className="mt-1.5 text-xs text-slate-500">An Operator schedules trips and handles the day. They can see your buses, fares and staff but not change them. Only the Super Admin can make someone a Company Admin.</p>}
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <IconField id="staff-firstName" label="First Name" icon={UserRound} placeholder="Juan" autoComplete="off" value={form.firstName} onChange={(event) => update('firstName', event.target.value)} error={errors.firstName} />

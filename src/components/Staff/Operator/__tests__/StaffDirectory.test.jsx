@@ -145,4 +145,24 @@ describe('StaffDirectory', () => {
     expect(screen.queryByRole('button', { name: /Edit Juan/ })).toBeNull();
     expect(screen.queryByRole('button', { name: /Turn off/ })).toBeNull();
   });
+
+  test('lists the company Operators; a Company Admin manages plain Operators but not themselves or another Company Admin', async () => {
+    const me = { company_user_id: 1, name: 'Boss', username: 'boss', email: 'boss@example.com', phone_num: '+639171230000', role: 'operator', role_label: 'Company Admin', is_company_admin: true, is_you: true, manageable: false, deactivated: false, joined_at: '2026-11-01T02:00:00Z' };
+    const coOwner = { ...me, company_user_id: 2, name: 'Co Owner', username: 'co', is_you: false };
+    const dispatcher = { ...me, company_user_id: 3, name: 'Dina Dispatcher', username: 'dina', role_label: 'Operator', is_company_admin: false, is_you: false, manageable: true };
+    OperatorService.getStaffPage.mockResolvedValue(page([me, coOwner, dispatcher]));
+    render(<StaffDirectory fleetCount={0} />);
+
+    const row = async (name) => (await screen.findByText(name)).closest('tr');
+    expect(within(await row('Dina Dispatcher')).getByRole('button', { name: "Turn off Dina Dispatcher's account" })).toBeInTheDocument();
+    expect(within(await row('Dina Dispatcher')).getByText('Active')).toBeInTheDocument();
+    expect(within(await row('Boss')).getByText('You')).toBeInTheDocument();
+    expect(within(await row('Boss')).queryByRole('button')).toBeNull();
+    expect(within(await row('Co Owner')).getByText('Changed by the Super Admin')).toBeInTheDocument();
+    expect(screen.getAllByText('Company Admin')).toHaveLength(2);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add Staff' }));
+    fireEvent.change(await screen.findByLabelText('Role', { selector: '#staff-role' }), { target: { value: 'operator' } });
+    expect(screen.getByText(/Only the Super Admin can make someone a Company Admin/)).toBeInTheDocument();
+  });
 });

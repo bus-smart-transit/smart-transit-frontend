@@ -12,9 +12,10 @@ import {
 } from './accountFormRules';
 import { DEFAULT_CALLING_CODE, PHONE_INVALID_MESSAGE, splitPhone, toE164 } from './phone';
 
-export const ROLE_LABELS = { driver: 'Driver', conductor: 'Chauffeur' };
+// 2026-11-06: a Company Admin also adds Operators (never Company Admins; only the Super Admin makes those).
+export const ROLE_LABELS = { driver: 'Driver', conductor: 'Chauffeur', operator: 'Operator' };
 
-/** "Driver" or "Chauffeur" (never the stored word "conductor"); "Not provided" when unknown. */
+/** "Driver", "Chauffeur" or "Operator" (never the stored word "conductor"); "Not provided" when unknown. */
 export const roleLabel = (role) => ROLE_LABELS[String(role ?? '').toLowerCase()] ?? 'Not provided';
 
 export function emptyStaffForm(role = 'driver') {
