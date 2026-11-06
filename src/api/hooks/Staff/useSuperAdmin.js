@@ -219,3 +219,24 @@ export function useAdminPayments(today) {
     setRefundPage,
   };
 }
+
+/** Batch 48 Phase 6: the System health page (read only); Refresh asks again. */
+export function useAdminHealth() {
+  const [health, setHealth] = useState(null);
+  const [error, setError] = useState('');
+  const [requested, setRequested] = useState(0);
+  const [answered, setAnswered] = useState(-1);
+
+  useEffect(() => {
+    let active = true;
+    AdminService.getHealth()
+      .then((response) => { if (active) { setHealth(response?.data ?? null); setError(''); } })
+      .catch((err) => { if (active) setError(adminErrorText(err, 'System health could not be loaded. Try again.')); })
+      .finally(() => { if (active) setAnswered(requested); });
+    return () => { active = false; };
+  }, [requested]);
+
+  const reload = useCallback(() => setRequested((n) => n + 1), []);
+
+  return { health, loading: answered !== requested, error, reload };
+}

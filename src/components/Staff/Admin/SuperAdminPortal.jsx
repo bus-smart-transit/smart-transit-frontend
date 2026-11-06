@@ -1,14 +1,15 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Banknote, Building2, ClipboardList, LayoutDashboard, ShieldCheck, Users, Wrench } from 'lucide-react';
+import { Activity, Banknote, Building2, ClipboardList, LayoutDashboard, ShieldCheck, Users, Wrench } from 'lucide-react';
 import StaffPortalLayout from '../StaffPortalLayout';
 import SuperAdminDashboard from './SuperAdminDashboard';
 import CompaniesPage from './CompaniesPage';
 import UsersPage from './UsersPage';
 import AuditLogPage from './AuditLogPage';
 import PaymentsPage from './PaymentsPage';
+import SystemHealthPage from './SystemHealthPage';
 import { getBusinessToday } from '../../../utils/dates';
-import { useAdminAuditLog, useAdminCompanies, useAdminPayments, useAdminOverview, useAdminUsers, useSuperAdminSession } from '../../../api/hooks/Staff/useSuperAdmin';
+import { useAdminAuditLog, useAdminCompanies, useAdminHealth, useAdminPayments, useAdminOverview, useAdminUsers, useSuperAdminSession } from '../../../api/hooks/Staff/useSuperAdmin';
 
 // Batch 48: the Super Admin portal. Each phase adds its own item here. "Older tools" opens the earlier Admin panel
 // until it is replaced (Phase 7, with the user's approval).
@@ -18,6 +19,7 @@ const NAV = [
   { key: 'users', label: 'Users', icon: Users },
   { key: 'payments', label: 'Payments', icon: Banknote },
   { key: 'audit', label: 'Audit log', icon: ClipboardList },
+  { key: 'health', label: 'System health', icon: Activity },
   { key: 'tools', label: 'Older tools', icon: Wrench },
 ];
 
@@ -34,6 +36,10 @@ function CompaniesTab() {
 function PaymentsTab() {
   const today = getBusinessToday();
   return <PaymentsPage paymentsTab={useAdminPayments(today)} today={today} />;
+}
+
+function HealthTab() {
+  return <SystemHealthPage healthTab={useAdminHealth()} />;
 }
 
 function AuditTab() {
@@ -75,6 +81,7 @@ export default function SuperAdminPortal() {
         {tab === 'users' && <UsersTab />}
         {tab === 'payments' && <PaymentsTab />}
         {tab === 'audit' && <AuditTab />}
+        {tab === 'health' && <HealthTab />}
       </div>
     </StaffPortalLayout>
   );

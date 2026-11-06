@@ -11,6 +11,11 @@ class AdminService extends StaffBaseService {
     return await this.request('/admin/overview', 'GET');
   }
 
+  // Batch 48 Phase 6: System health (read only).
+  async getHealth() {
+    return await this.request('/admin/health', 'GET');
+  }
+
   // Batch 48 Phase 3: companies and every account.
   async getCompanies() {
     return await this.request('/admin/companies', 'GET');

@@ -129,3 +129,20 @@ for (const width of [1280, 390]) {
     await page.screenshot({ path: path.join(SHOTS, `payments_${width}.png`), fullPage: true });
   });
 }
+
+// Batch 48 Phase 6: System health (read only) at both widths.
+for (const width of [1280, 390]) {
+  test(`System health shows the database, scheduler, jobs and outside services at ${width} px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
+    await signIn(page, 'admin@smarttransit.com', /admin\/dashboard/);
+    if (width === 390) await page.getByRole('button', { name: 'Open navigation' }).click();
+    await page.getByRole('button', { name: 'System health', exact: true }).click();
+    const database = page.getByText('Database', { exact: true }).locator('xpath=ancestor::li');
+    await expect(database.getByText('Working')).toBeVisible({ timeout: 30000 });
+    await expect(page.getByText('Scheduled tasks')).toBeVisible();
+    await expect(page.getByText('Online payments (PayMongo)')).toBeVisible();
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+    expect(overflow).toBeLessThanOrEqual(1);
+    await page.screenshot({ path: path.join(SHOTS, `health_${width}.png`), fullPage: true });
+  });
+}
