@@ -13,7 +13,7 @@ import path from 'node:path';
 //
 // Needs a backend where staff sign in without the emailed code (DISABLE_STAFF_OTP=true, APP_ENV=local) and the
 // frontend pointed at it (E2E_BASE_URL, E2E_API_URL). Writes to that database: a passenger, a Driver account, and
-// today's trip for driver3 / conductor3 with one cash sale.
+// today's trip for driver5 / conductor5 (their own demo crew, so batch44 and trip-day do not collide) with one cash sale.
 
 const API = process.env.E2E_API_URL || 'http://localhost:8000/api/';
 const PASSWORD = process.env.E2E_PASSWORD || 'password123';
@@ -248,13 +248,13 @@ test('Driver: accepts today\'s trip, sees the pairing code, and opens every tab'
   const entry = watch(page, 'driver');
   const now = manila();
   const minutes = Math.ceil((Number(now.hour) * 60 + Number(now.minute) + 25) / 5) * 5;
-  driverToken = await staffLogin('driver3@smarttransit.com', 'driver');
-  chauffeurToken = await staffLogin('conductor3@smarttransit.com', 'conductor');
+  driverToken = await staffLogin('driver5@smarttransit.com', 'driver');
+  chauffeurToken = await staffLogin('conductor5@smarttransit.com', 'conductor');
 
   // Outside bus hours no trip can be made for today: the Driver's pages are still opened and checked for errors.
   if (minutes > 20 * 60 + 55 || minutes < 5 * 60 + 30) {
     test.info().annotations.push({ type: 'outside bus hours', description: 'No trip made; pages opened only.' });
-    await staffSignIn(page, 'driver3@smarttransit.com', /driver\/dashboard/);
+    await staffSignIn(page, 'driver5@smarttransit.com', /driver\/dashboard/);
     for (const label of ['Dashboard', 'Active Trip', 'Schedule', 'Account']) {
       await clickSidebar(page, label);
       await settle(page);
@@ -268,8 +268,8 @@ test('Driver: accepts today\'s trip, sees the pairing code, and opens every tab'
 
   const drivers = await getData('operator/drivers', operatorToken);
   const chauffeurs = await getData('operator/conductors', operatorToken);
-  const driver = byEmail(drivers, 'driver3@smarttransit.com');
-  const chauffeur = byEmail(chauffeurs, 'conductor3@smarttransit.com');
+  const driver = byEmail(drivers, 'driver5@smarttransit.com');
+  const chauffeur = byEmail(chauffeurs, 'conductor5@smarttransit.com');
   const trips = await getData('operator/trips', operatorToken);
   trip = trips.find((t) => String(t.trip_date).slice(0, 10) === manilaDate() && Number(t.conductor_id) === Number(chauffeur.company_user_id) && ['scheduled', 'boarding'].includes(t.status));
   for (const fr of await getData('operator/fleet-routes', operatorToken)) {
@@ -277,11 +277,11 @@ test('Driver: accepts today\'s trip, sees the pairing code, and opens every tab'
     const res = await api.post('operator/trips', { ...as(operatorToken), data: { fleet_route_id: fr.fleet_route_id, trip_date: manilaDate(), departure_time: hhmm(minutes), trip_type: 'one_way', driver_id: driver.company_user_id, conductor_id: chauffeur.company_user_id } });
     if (res.ok()) trip = (await res.json()).data;
   }
-  expect(trip, 'a trip today for driver3 and conductor3').toBeTruthy();
+  expect(trip, 'a trip today for driver5 and conductor5').toBeTruthy();
 
   await api.patch(`driver/trips/${trip.trip_id}/accept`, as(driverToken));
 
-  await staffSignIn(page, 'driver3@smarttransit.com', /driver\/dashboard/);
+  await staffSignIn(page, 'driver5@smarttransit.com', /driver\/dashboard/);
   for (const label of ['Dashboard', 'Active Trip', 'Schedule', 'Account']) {
     await clickSidebar(page, label);
     await settle(page);
@@ -299,7 +299,7 @@ test('Chauffeur: pairs, starts a shift with no opening cash, sells, drops off by
   // Outside bus hours (no trip from the Driver step): the Chauffeur's pages are still opened and checked for errors.
   if (!trip) {
     test.info().annotations.push({ type: 'outside bus hours', description: 'No trip; pages opened only.' });
-    await staffSignIn(page, 'conductor3@smarttransit.com', /conductor\/dashboard/);
+    await staffSignIn(page, 'conductor5@smarttransit.com', /conductor\/dashboard/);
     for (const label of ['Dashboard', 'Ticketing & Fares', 'Active Shift', 'Schedule', 'Account']) {
       await clickSidebar(page, label);
       await settle(page);
@@ -314,7 +314,7 @@ test('Chauffeur: pairs, starts a shift with no opening cash, sells, drops off by
   const pairing = await (await api.get('driver/pairing-token', as(driverToken))).json();
   await api.post('conductor/pair', { ...as(chauffeurToken), data: { token: pairing.data?.token } });
 
-  await staffSignIn(page, 'conductor3@smarttransit.com', /conductor\/dashboard/);
+  await staffSignIn(page, 'conductor5@smarttransit.com', /conductor\/dashboard/);
   const start = page.getByRole('button', { name: /^Start Shift/ }).first();
   // 2026-11-05: the button appears about a second after sign-in, once the shift status has loaded. Checking at once
   // skipped the shift, so ticketing never opened. Wait for it; it stays absent only when a shift is already open.

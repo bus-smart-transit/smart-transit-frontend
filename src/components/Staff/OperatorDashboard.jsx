@@ -844,7 +844,7 @@ export default function OperatorDashboard() {
             <CrewShiftTimes staff={[...drivers, ...conductors]} />
           </div>
         )}
-        {activeTab === 'fleets'     && <FleetsPage fleets={fleets} routes={routes} trips={trips} onRefresh={loadFull} />}
+        {activeTab === 'fleets'     && <FleetsPage fleets={fleets} routes={routes} trips={trips} onRefresh={loadFull} companyName={profile?.company?.company_name ?? null} />}
         {activeTab === 'routes'     && <RoutesPage routes={routes} stops={stops} trips={trips} fleets={fleets} onRefresh={loadFull} onOpenSchedule={() => setActiveTab('schedule')} onOpenFleets={() => setActiveTab('fleets')} />}
         {activeTab === 'finance'    && <FinancePage views={viewsForRole('finance', OPERATOR_ROLE)} view={view} onViewChange={setView} />}
         {activeTab === 'reports'    && <ReportsTab fleets={fleets} />}

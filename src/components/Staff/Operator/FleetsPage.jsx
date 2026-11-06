@@ -39,7 +39,7 @@ function FormMessage({ message }) {
   return <p role={failed ? 'alert' : 'status'} className={`mt-3 rounded-lg border px-3 py-2 text-sm ${failed ? 'border-rose-200 bg-rose-50 text-rose-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}>{message}</p>;
 }
 
-function AddFleetModal({ open, onClose, form, setForm, routes, fareOptions, saving, message, onSubmit }) {
+function AddFleetModal({ open, onClose, form, setForm, routes, fareOptions, saving, message, onSubmit, companyName = null }) {
   const set = (key) => (event) => setForm((prev) => ({ ...prev, [key]: event.target.value }));
   return (
     <Modal open={open} onClose={onClose} title="Add fleet" fullScreenOnMobile>
@@ -52,7 +52,12 @@ function AddFleetModal({ open, onClose, form, setForm, routes, fareOptions, savi
               <option value="private">Private</option>
             </select>
           </Label>
-          <Label text="Bus company name" hint="Shown to passengers"><input value={form.bus_company_name} onChange={set('bus_company_name')} maxLength={100} className={INPUT} /></Label>
+          {/* Batch 46 step 2: the bus belongs to the Operator's company; its name is the label's first part (set by the Admin). */}
+          <div className="text-xs font-semibold text-slate-700">
+            Bus company name
+            <p className="mt-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-normal text-slate-900" data-testid="fleet-company-name">{companyName || 'Not provided'}</p>
+            <span className="mt-1 block font-normal text-slate-500">Your company. Shown to passengers.</span>
+          </div>
           <Label text="Body number" hint="Shown to passengers"><input value={form.body_no} onChange={set('body_no')} maxLength={30} className={INPUT} /></Label>
           <Label text="Vehicle class" className="sm:col-span-2">
             <select aria-label="Vehicle class" value={form.vehicle_class} onChange={set('vehicle_class')} className={INPUT}>
@@ -163,7 +168,7 @@ function TrackFleetModal({ row, advice, saving, error, onDecide, onClose, onOpen
  * Batch 31 Phase 3: the Operator's Fleets page. One row per bus; its status is derived from today's trips and its last
  * GPS report (utils/operatorFleetView.js). There is no maintenance state and no progress bar: neither exists in the data.
  */
-export default function FleetsPage({ fleets, routes, trips, onRefresh }) {
+export default function FleetsPage({ fleets, routes, trips, onRefresh, companyName = null }) {
   const nowMs = useNow();
   const fareOptions = useFareOptions();
   const {
@@ -254,7 +259,7 @@ export default function FleetsPage({ fleets, routes, trips, onRefresh }) {
         <FareRulesPanel service={OperatorService} fleets={fleets} routes={routes} canCreateGeneral={false} tone="light" />
       </OpCard>
 
-      <AddFleetModal open={modal === 'add'} onClose={closeModal} form={fleetForm} setForm={setFleetForm} routes={routes} fareOptions={fareOptions} saving={manageSaving} message={manageMsg} onSubmit={submitFleet} />
+      <AddFleetModal companyName={companyName} open={modal === 'add'} onClose={closeModal} form={fleetForm} setForm={setFleetForm} routes={routes} fareOptions={fareOptions} saving={manageSaving} message={manageMsg} onSubmit={submitFleet} />
       <AssignRouteModal open={modal === 'assign'} onClose={closeModal} form={assignForm} setForm={setAssignForm} fleets={fleets} routes={routes} saving={manageSaving} message={manageMsg} onSubmit={submitAssign} />
       <TrackFleetModal
         row={tracked}

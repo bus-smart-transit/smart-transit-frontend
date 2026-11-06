@@ -191,4 +191,14 @@ describe('FleetsPage', () => {
     expect(screen.getByText(/No fleets yet/)).toBeInTheDocument();
     await waitFor(() => expect(mocks.getFleetLocations).toHaveBeenCalled());
   });
+
+  it('shows the company as the bus company name, read only (Batch 46 step 2)', async () => {
+    renderPage({ companyName: 'Davao Metro Shuttle' });
+    fireEvent.click(screen.getByRole('button', { name: /Add fleet/ }));
+    const dialog = screen.getByRole('dialog');
+
+    expect(within(dialog).getByTestId('fleet-company-name')).toHaveTextContent('Davao Metro Shuttle');
+    expect(within(dialog).queryByRole('textbox', { name: /Bus company name/ })).toBeNull();
+    await waitFor(() => expect(mocks.getFleetLocations).toHaveBeenCalled());
+  });
 });
