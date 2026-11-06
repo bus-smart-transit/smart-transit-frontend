@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import BrandLogo from '../ui/BrandLogo';
-import { Menu, X, House, Info, MapPin, Newspaper, CircleHelp, Phone, LayoutGrid, Ticket, History, Gift, User, LogOut } from 'lucide-react';
+import { Menu, X, House, Info, MapPin, CircleHelp, Phone, LayoutGrid, Ticket, History, Gift, User, LogOut } from 'lucide-react';
 import { useAuth } from '../../api/hooks/useAuth';
 import ProfileDropdown from './ProfileDropdown';
 
@@ -12,7 +12,6 @@ const NAV_LINKS = [
   { label: 'Home', to: '/', icon: House },
   { label: 'About', to: '/about', icon: Info },
   { label: 'Track Bus', to: '/track-bus', icon: MapPin },
-  { label: 'News', to: '/news', icon: Newspaper },
   { label: 'FAQ', to: '/faq', icon: CircleHelp },
   { label: 'Contact Us', to: '/contact', icon: Phone },
 ];
