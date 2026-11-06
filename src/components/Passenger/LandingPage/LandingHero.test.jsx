@@ -86,13 +86,6 @@ describe('LandingHero search card', () => {
     expect(screen.queryByLabelText(/time/i)).not.toBeInTheDocument();
   });
 
-  test('Track a Bus opens the dedicated tracking page, not the passenger dashboard', async () => {
-    renderHero();
-    fireEvent.click(screen.getByRole('button', { name: /track a bus/i }));
-
-    expect((await screen.findByTestId('where')).textContent).toBe('/track');
-  });
-
   test('From narrows as you type, by stop name', async () => {
     renderHero();
     const from = screen.getByLabelText('From');

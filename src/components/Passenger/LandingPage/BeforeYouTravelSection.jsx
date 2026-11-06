@@ -19,17 +19,20 @@ export default function BeforeYouTravelSection() {
           A few reminders to keep your trip smooth, from booking to boarding.
         </p>
 
-        <div className="mt-8 space-y-3">
+        {/* 2026-11-06 (passenger redesign): one card with dividers, each note with a soft icon badge. */}
+        <ul className="mt-8 divide-y divide-slate-100 rounded-2xl border border-slate-200 bg-white shadow-card">
           {NOTES.map(({ icon: Icon, title, description }) => (
-            <div key={title} className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3.5">
-              <Icon className="mt-0.5 h-5 w-5 shrink-0 text-teal-600" aria-hidden="true" />
+            <li key={title} className="flex items-start gap-4 px-5 py-4 sm:px-6">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-teal-50 text-teal-600">
+                <Icon className="h-4 w-4" aria-hidden="true" />
+              </span>
               <div>
                 <p className="text-sm font-semibold text-slate-900">{title}</p>
-                <p className="text-xs text-slate-500">{description}</p>
+                <p className="mt-0.5 text-sm text-slate-500">{description}</p>
               </div>
-            </div>
+            </li>
           ))}
-        </div>
+        </ul>
       </div>
     </section>
   );

@@ -10,10 +10,16 @@ const SOURCES = {
   icon: '/brand/logo-icon.png',
 };
 
-export default function BrandLogo({ variant = 'wordmark', onDark = false, className = 'h-8', alt = 'SmartTransit' }) {
+// 2026-11-06 (passenger redesign): the white wordmark and bus for navy backgrounds, with no badge.
+const LIGHT_SOURCES = {
+  wordmark: '/brand/logo-light.png',
+  icon: '/brand/logo-icon-light.png',
+};
+
+export default function BrandLogo({ variant = 'wordmark', onDark = false, light = false, className = 'h-8', alt = 'SmartTransit' }) {
   const image = (
     <img
-      src={SOURCES[variant] ?? SOURCES.wordmark}
+      src={(light ? LIGHT_SOURCES[variant] : SOURCES[variant]) ?? SOURCES.wordmark}
       alt={alt}
       className={`${className} w-auto select-none object-contain`}
       draggable={false}

@@ -7,7 +7,9 @@ import TripsPreview from '../Trips/TripsPreview';
 import { useBookingStops } from '../../../api/hooks/Passenger/useBookingSearch';
 import { useRegion } from '../../../api/hooks/useRegion';
 import { findStopCode, lastBookableDateOf, tripBookingPath } from '../../../utils/bookingQuery';
-import heroBg from '../../../assets/hero.png';
+
+// 2026-11-06 (passenger redesign): Pexels photo 1178448, saved in public/images (Pexels licence: free to use).
+const HERO_IMAGE = '/images/hero-bus.jpg';
 
 const stopName = (groups, stopId) => groups.flatMap((group) => group.stops).find((stop) => String(stop.stop_id) === String(stopId))?.name || '';
 
@@ -53,55 +55,28 @@ export default function LandingHero() {
 
   return (
     <section>
-      {/* The picture belongs to this block only. Its height comes from the text inside it, never from
-          the search card below, so the image keeps its size and crop whatever the card does. */}
-      <div className="relative isolate overflow-hidden">
-        <div
-          className="absolute inset-0 -z-10 bg-cover bg-center"
-          style={{ backgroundImage: `url(${heroBg})` }}
-          aria-hidden="true"
-        />
-        <div className="absolute inset-0 -z-10 bg-gradient-to-b from-navy-950/80 via-navy-950/60 to-navy-950/40" aria-hidden="true" />
+      {/* 2026-11-06 (passenger redesign, joshua-frontend): a full-width photo with the title in the middle and
+          rounded lower corners. Its height comes from the text inside it, never from the search card below. */}
+      <div className="relative isolate overflow-hidden rounded-b-[32px] bg-navy-900 sm:rounded-b-[48px]">
+        <div className="absolute inset-0 -z-10 bg-cover bg-center" style={{ backgroundImage: `url(${HERO_IMAGE})` }} aria-hidden="true" />
+        <div className="absolute inset-0 -z-10 bg-gradient-to-b from-navy-950/50 via-navy-900/40 to-navy-950/70" aria-hidden="true" />
 
-        <div className="px-4 pb-28 pt-14 sm:px-6 lg:px-10">
-          <div className="mx-auto max-w-7xl">
-            <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-teal-500/90 px-3 py-1 text-xs font-semibold text-white">
-              <span className="h-2 w-2 rounded-full bg-white animate-pulse" aria-hidden="true" />
-              REAL-TIME GPS ACTIVE
-            </div>
-
-            <h1 className="font-display text-4xl font-bold leading-tight text-white sm:text-5xl lg:text-6xl">
-              Ride smarter,<br />arrive on time.
-            </h1>
-            <p className="mt-4 max-w-2xl text-base text-slate-200 sm:text-lg">
-              Track your bus, manage your trips, access your tickets, and enjoy a smarter public transit experience{region?.name ? ` across ${region.name}` : ''}.
-            </p>
-
-            <div className="mt-6 flex flex-wrap gap-3">
-              <Button href="#search-trips" variant="accent" size="md">
-                Get Started
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="md"
-                onClick={() => navigate('/track')}
-                className="border-white/40 bg-white/5 text-white hover:bg-white/15 hover:text-white"
-              >
-                Track a Bus
-              </Button>
-            </div>
-          </div>
+        <div className="container-page flex min-h-[380px] flex-col items-center justify-center pb-32 pt-16 text-center sm:min-h-[460px] sm:pb-40 lg:min-h-[520px]">
+          {region?.name && <p className="font-display text-lg font-medium text-white/90 sm:text-3xl">Travel across {region.name}</p>}
+          <h1 className="mt-2 font-display text-5xl font-extrabold uppercase leading-none tracking-wide text-white sm:text-7xl lg:text-8xl">
+            Ride Smarter
+          </h1>
+          <p className="mt-5 text-sm font-medium text-white/85 sm:text-base">Book your trip, track your bus, and arrive on time.</p>
         </div>
       </div>
 
       {/* The card overlaps the picture's lower edge and is free to grow downward; the suggestion lists
           open over the page (absolute), so opening one does not change the card's height either. */}
-      <div id="search-trips" className="relative z-10 -mt-20 scroll-mt-4 px-4 sm:px-6 lg:px-10">
-        <div className="mx-auto max-w-7xl">
-          <div className="rounded-2xl bg-white p-6 shadow-xl">
-            <h2 className="text-lg font-bold text-slate-900">Where are you going?</h2>
-            <p className="mt-0.5 text-sm text-slate-500">Choose where you board, where you get off and the day. We find the bus.</p>
+      <div id="search-trips" className="relative z-10 -mt-24 scroll-mt-24 sm:-mt-28">
+        <div className="container-page">
+          <div className="rounded-2xl bg-white p-5 shadow-card sm:p-6">
+            <h2 className="font-display text-lg font-semibold text-navy-950">Search Trips</h2>
+            <p className="mt-0.5 text-sm text-slate-500">Choose where you board, where you get off and the day. Sign in to complete a booking.</p>
 
             <form onSubmit={handleSubmit} className="mt-4 space-y-3">
               {stops.error && <p className="text-sm text-red-600">{stops.error}</p>}

@@ -459,7 +459,7 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
         )}
 
         <div className="grid gap-4 lg:grid-cols-[1.5fr_1fr]">
-          <article className="rounded-2xl border border-slate-200 bg-slate-50 p-3 sm:p-4">
+          <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-card sm:p-5">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-widest text-teal-600">Track Bus</p>
@@ -476,7 +476,7 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
               </button>
             </div>
 
-            <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
               <RouteMap
                 routeId={selectedRouteId}
                 direction={selectedFleet?.leg_direction || 'outbound'}
@@ -489,7 +489,7 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
             </div>
 
             <div className="mt-3 grid gap-2 sm:grid-cols-3">
-              <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
                 <p className="text-[11px] uppercase tracking-widest text-slate-500">ETA</p>
                 {!selectedFleet ? (
                   <p className="mt-1 text-sm text-slate-500">No bus selected</p>
@@ -515,12 +515,12 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
                   </div>
                 )}
               </div>
-              <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
                 <p className="text-[11px] uppercase tracking-widest text-slate-500">Location</p>
                 <p className="mt-1 flex items-start gap-1 text-sm font-semibold text-slate-900" title={selectedFleet ? coordinatesTitle(selectedFleet) : undefined}><MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-teal-600" /><span>{selectedFleet ? placeLabel(selectedFleet) : 'N/A'}</span></p>
                 <p className="text-[11px] text-slate-500 capitalize">{selectedFleet?.trip_status || 'idle'}</p>
               </div>
-              <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
                 <p className="text-[11px] uppercase tracking-widest text-slate-500">Next Stop / Destination</p>
                 <p className="mt-1 inline-flex items-center gap-1 text-sm font-semibold text-slate-900"><Navigation className="h-3.5 w-3.5 text-teal-600" />{nextStopOrDestinationLabel}</p>
                 <p className="text-[11px] text-slate-500">{selectedFleet?.route_name || selectedFleet?.destination || 'Route sync pending'}</p>
@@ -544,7 +544,7 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
             {pinError && <p className="mt-2 text-xs font-medium text-red-600">{pinError}</p>}
           </article>
 
-          <article className="rounded-2xl border border-slate-200 bg-slate-50 p-3 sm:p-4" data-testid="nearby-panel">
+          <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-card sm:p-5" data-testid="nearby-panel">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-widest text-teal-600">{nearbyMode ? 'Buses near you' : 'Active Buses'}</p>

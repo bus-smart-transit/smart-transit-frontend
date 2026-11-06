@@ -41,7 +41,7 @@ for (const width of [1280, 390]) {
     const pageErrors = [];
     page.on('pageerror', (err) => pageErrors.push(String(err?.message || err)));
 
-    await page.goto('/');
+    await page.goto('/track-bus'); // 2026-11-06: the live map moved off the homepage
     const panel = page.getByTestId('nearby-panel');
     await panel.scrollIntoViewIfNeeded();
     await expect(page.getByTestId('nearby-needs-location')).toContainText('Your location stays on this device');
@@ -63,7 +63,7 @@ for (const width of [1280, 390]) {
 
 test('Track my bus: a wrong code is refused, a real one shows the trip and opens tracking after Yes', async ({ page }) => {
   test.skip(!token, 'No trackable ticket on the local backend.');
-  await page.goto('/');
+  await page.goto('/track-bus');
   await page.getByTestId('open-track-my-bus').click();
   const dialog = page.getByRole('dialog', { name: 'Track my bus' });
   await expect(dialog).toBeVisible();

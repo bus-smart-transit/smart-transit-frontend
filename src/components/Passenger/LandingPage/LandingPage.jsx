@@ -3,16 +3,18 @@ import { useLocation } from 'react-router-dom';
 import Navbar from '../../Layout/Navbar';
 import Footer from '../../Layout/Footer';
 import LandingHero from './LandingHero';
-import WhyRideSection from './WhyRideSection';
-import PublicTrackingSection from './PublicTrackingSection';
+import ProvincesSection from './ProvincesSection';
 import HowItWorksSection from './HowItWorksSection';
-import WhatYouCanDoSection from './WhatYouCanDoSection';
 import DigitalTicketSection from './DigitalTicketSection';
 import BeforeYouTravelSection from './BeforeYouTravelSection';
 import HomeFaqSection from './HomeFaqSection';
-import NeedHelpSection from './NeedHelpSection';
 import AccountDeletionNotice from '../../Account/AccountDeletionNotice';
 
+/**
+ * 2026-11-06 (passenger redesign, joshua-frontend): search, the provinces, how it works, the digital ticket, notes
+ * and the FAQ. Live bus tracking moved to its own page (/track-bus); "What you can do", "Why ride" and "Need help"
+ * were dropped with the new design.
+ */
 export default function LandingPage() {
   const { hash } = useLocation();
 
@@ -28,22 +30,11 @@ export default function LandingPage() {
 
       <main className="flex-1">
         <LandingHero />
-
+        <ProvincesSection />
         <HowItWorksSection />
-
-        <WhatYouCanDoSection />
-
         <DigitalTicketSection />
-
-        <PublicTrackingSection />
-
         <BeforeYouTravelSection />
-
-        <WhyRideSection />
-
         <HomeFaqSection />
-
-        <NeedHelpSection />
       </main>
 
       <Footer />

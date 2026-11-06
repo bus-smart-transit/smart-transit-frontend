@@ -12,10 +12,12 @@ export default function HowItWorksSection() {
   return (
     <section className="bg-white px-4 py-12 sm:px-6 lg:px-10">
       <div className="mx-auto max-w-7xl">
-        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Quick Guide</p>
-        <h2 className="mt-1 font-display text-2xl font-bold text-slate-900 sm:text-3xl">
+        {/* 2026-11-06 (passenger redesign): the shorter heading of the new design; the steps are our real flow. */}
+        <p className="text-xs font-semibold uppercase tracking-wide text-teal-600">How SmartTransit works</p>
+        <h2 className="mt-1 font-display text-3xl font-bold text-navy-950 sm:text-4xl">Your trip, made simple.</h2>
+        <p className="mt-3 max-w-2xl text-base leading-relaxed text-slate-500">
           New to SmartTransit? Follow these simple steps to find a trip, reserve your seat, complete your booking, and board with your digital ticket.
-        </h2>
+        </p>
 
         <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-5">
           {STEPS.map(({ step, icon: Icon, title, description }) => (

@@ -214,7 +214,7 @@ test('5. The homepage tracker shows the moving bus, the next-stop ETA and the st
   const page = await context.newPage();
   const entry = watch(page, 'homepage');
 
-  await page.goto('/');
+  await page.goto('/track-bus'); // 2026-11-06: the live map moved off the homepage
   const icon = page.locator('.st-bus-marker').first();
   await expect(icon).toBeVisible({ timeout: 120000 });
   await expect(page.getByTestId('eta-next')).toBeVisible({ timeout: 120000 });

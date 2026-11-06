@@ -12,6 +12,7 @@ const CheckoutReturn = lazy(() => import('./components/Passenger/CheckoutReturn/
 const AboutPage = lazy(() => import('./components/Passenger/About/AboutPage'));
 const TrackBusPage = lazy(() => import('./components/Passenger/Track/TrackBusPage'));
 const TrackLookupPage = lazy(() => import('./components/Passenger/Track/TrackLookupPage'));
+const TrackBusPublicPage = lazy(() => import('./components/Passenger/Track/TrackBusPublicPage'));
 const LegalPage = lazy(() => import('./components/Passenger/Legal/LegalPage'));
 
 // 2026-11-06: sample Privacy Policy and Terms for the test period (same navbar and footer as About).
@@ -27,6 +28,15 @@ function LandingWithAuth() {
   return (
     <AuthProvider role="passenger">
       <LandingPage />
+    </AuthProvider>
+  );
+}
+
+// 2026-11-06 (passenger redesign): the public Track Bus page (the live map moved here from the homepage).
+function TrackBusPublicWithAuth() {
+  return (
+    <AuthProvider role="passenger">
+      <TrackBusPublicPage />
     </AuthProvider>
   );
 }
@@ -59,6 +69,7 @@ export default function App() {
             <Route path="/privacy" element={<LegalWithAuth kind="privacy" />} />
             <Route path="/terms" element={<LegalWithAuth kind="terms" />} />
             {/* Public: the link itself is the credential, so no account or auth provider is involved. */}
+            <Route path="/track-bus" element={<TrackBusPublicWithAuth />} />
             <Route path="/track" element={<TrackLookupPage />} />
             <Route path="/track/:token" element={<TrackBusPage />} />
 
