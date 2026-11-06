@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import AuthShell from '../Auth/AuthShell';
+import GoogleButton from '../Auth/GoogleButton';
 import { GENDER_OPTIONS } from '../../../utils/gender';
 import {
   ArrowLeft,
@@ -230,6 +231,7 @@ export default function SignUpPage() {
             Already have an account?{' '}
             <Link to="/passenger/login" className="font-semibold text-navy-800 hover:text-navy-700" id="switch-to-login">Log In</Link>
           </p>
+          {step === 1 && <GoogleButton />}
     </AuthShell>
   );
 }

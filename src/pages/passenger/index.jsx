@@ -11,6 +11,7 @@ const ResetPasswordPage = lazy(() => import('../../components/Passenger/Auth/Res
 const PassengerDashboard = lazy(() => import('../../components/Passenger/Dashboard/Dashboard'));
 const BuyTicketPage = lazy(() => import('../../components/Passenger/BuyTicket/BuyTicketPage'));
 const AvailableTripsPage = lazy(() => import('../../components/Passenger/Trips/AvailableTripsPage'));
+const AddPhonePage = lazy(() => import('../../components/Passenger/Auth/AddPhonePage'));
 
 function PassengerRouteFallback() {
     return (
@@ -37,6 +38,8 @@ export default function PassengerBaseRouter() {
                     <Route path="book" element={<BuyTicketPage />} />
                     <Route path="trips" element={<AvailableTripsPage />} />
                     <Route path="dashboard" element={<PassengerDashboard />} />
+                    {/* 2026-11-07: after signing up with Google, add the mobile number. */}
+                    <Route path="add-phone" element={<AddPhonePage />} />
 
                     <Route element={<GuestRoute role="passenger" authenticatedRedirectTo="/" />}>
                         {GUEST_ROUTES.map((route) => (

@@ -2,6 +2,7 @@ import { useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Lock, Mail, TriangleAlert, CheckCircle } from 'lucide-react';
 import AuthShell from '../Auth/AuthShell';
+import GoogleButton from '../Auth/GoogleButton';
 import { useLogin } from '../../../api/hooks/Passenger/login';
 import Button from '../../ui/Button';
 import FormInput from '../../ui/FormInput';
@@ -178,6 +179,7 @@ export default function LoginPage() {
                   Sign Up
                 </Link>
               </p>
+              <GoogleButton />
             </>
           ) : (
             /* OTP Verification Screen */

@@ -7,6 +7,7 @@ vi.mock('../../../../api/hooks/useRegion', () => ({ useRegion: () => ({ name: 'D
 // 2026-11-06: the page now sits in the site header and footer (AuthShell); they are tested on their own.
 vi.mock('../../../Layout/Navbar', () => ({ default: () => null }));
 vi.mock('../../../Layout/Footer', () => ({ default: () => null }));
+vi.mock('../../Auth/GoogleButton', () => ({ default: () => null }));
 
 import PassengerService from '../../../../api/PassengerService/PassengerService';
 import SignUpPage from '../SignupPage';

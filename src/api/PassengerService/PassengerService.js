@@ -9,6 +9,11 @@ class PassengerService extends RoleAuthServiceBase {
     return await this.request(`/${this.endpointBase}/profile`, "PUT", updates);
   }
 
+  /** 2026-11-07: sign in (or sign up) with the proof from Google; returns { token, is_new, needs_phone }. */
+  async googleSignIn(idToken) {
+    return await this.request("/auth/google", "POST", { id_token: idToken });
+  }
+
   /** 2026-11-05: deletes the signed-in passenger's own account (no id is sent; the server uses the session). */
   async deleteOwnAccount(password) {
     return await this.request(`/${this.endpointBase}/account`, "DELETE", { password, confirm: true });

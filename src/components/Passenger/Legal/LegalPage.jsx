@@ -15,6 +15,7 @@ const DOCUMENTS = {
         heading: 'What we collect',
         items: [
           'Your name, email address, phone number and date of birth when you sign up. Gender and address are optional.',
+          'If you continue with Google: your name and email address from your Google account, and an account number that links it to SmartTransit. We never see your Google password.',
           'Your bookings, tickets and payment records (amount, status and reference).',
           'Payment card and e-wallet details are entered on PayMongo\'s page. SmartTransit does not see or keep them.',
           'Your location only when you choose "Pin My Location". It stays on your device to find buses near you; it is not sent to us.',
