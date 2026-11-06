@@ -179,3 +179,43 @@ export function useAdminAuditLog() {
     setPage: (page) => setQuery((prev) => ({ ...prev, page })),
   };
 }
+
+/**
+ * Batch 48 Phase 5: the Payments page. The money report for a date range (this month first) and the payments to
+ * refund by hand, across every company. Read only.
+ */
+export function useAdminPayments(today) {
+  const [range, setRange] = useState(() => ({ from: `${today.slice(0, 8)}01`, to: today }));
+  const [report, setReport] = useState(null);
+  const [refunds, setRefunds] = useState({ data: [], meta: { page: 1, total: 0, last_page: 1, per_page: 20 } });
+  const [refundPage, setRefundPage] = useState(1);
+  const [error, setError] = useState('');
+  const [answered, setAnswered] = useState(null);
+
+  useEffect(() => {
+    let active = true;
+    AdminService.getFinancials(range)
+      .then((response) => { if (active) { setReport(response?.data ?? null); setError(''); } })
+      .catch((err) => { if (active) setError(adminErrorText(err, 'The payments could not be loaded. Try again.')); })
+      .finally(() => { if (active) setAnswered(range); });
+    return () => { active = false; };
+  }, [range]);
+
+  useEffect(() => {
+    let active = true;
+    AdminService.getNeedsRefund({ status: 'needs_refund', page: refundPage })
+      .then((response) => { if (active && response?.data) setRefunds(response.data); })
+      .catch(() => {});
+    return () => { active = false; };
+  }, [refundPage]);
+
+  return {
+    range,
+    setRange: (next) => setRange((prev) => ({ ...prev, ...next })),
+    report,
+    loading: answered !== range,
+    error,
+    refunds,
+    setRefundPage,
+  };
+}

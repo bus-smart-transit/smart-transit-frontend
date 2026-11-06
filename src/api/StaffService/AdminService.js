@@ -40,6 +40,15 @@ class AdminService extends StaffBaseService {
     return await this.request(`/admin/users/${userId}/reactivate`, 'PATCH');
   }
 
+  // Batch 48 Phase 5: money across every company (read only) and payments to refund by hand.
+  async getFinancials(params = {}) {
+    return await this.request('/admin/financials', 'GET', params);
+  }
+
+  async getNeedsRefund(params = {}) {
+    return await this.request('/admin/payments/needs-refund', 'GET', params);
+  }
+
   // Batch 48 Phase 4: the Audit log page.
   async getAuditLog(params = {}) {
     return await this.request('/admin/audit-log', 'GET', params);

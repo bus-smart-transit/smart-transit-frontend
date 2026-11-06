@@ -86,3 +86,21 @@ export function csvFileName(type, filters) {
   const range = filters.from === filters.to ? filters.from : `${filters.from}_to_${filters.to}`;
   return `financial-${type}-${range}.csv`;
 }
+
+/**
+ * Batch 48 Phase 5: the daily rows of a financial report added up per month ("2026-11"), for the Super Admin's
+ * platform revenue. Fares kept and booking fees kept stay apart.
+ */
+export function monthTotals(daily = []) {
+  const months = new Map();
+  for (const day of daily) {
+    const key = String(day.date || '').slice(0, 7);
+    if (!key) continue;
+    const row = months.get(key) || { month: key, tickets: 0, net: 0, booking_fees: 0 };
+    row.tickets += Number(day.tickets || 0);
+    row.net = Math.round((row.net + Number(day.net || 0)) * 100) / 100;
+    row.booking_fees = Math.round((row.booking_fees + Number(day.booking_fees || 0)) * 100) / 100;
+    months.set(key, row);
+  }
+  return [...months.values()].sort((a, b) => a.month.localeCompare(b.month));
+}

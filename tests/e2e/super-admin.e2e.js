@@ -111,3 +111,21 @@ test('the Audit log lists recorded changes and filters them', async ({ page }) =
   await expect(table.getByText('admin.patch')).toHaveCount(0);
   await page.screenshot({ path: path.join(SHOTS, 'audit_1280.png'), fullPage: true });
 });
+
+// Batch 48 Phase 5: the Payments page (read only): fares and booking fees apart, by month and day, refunds by hand.
+for (const width of [1280, 390]) {
+  test(`the Payments page shows fares and booking fees apart at ${width} px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
+    await signIn(page, 'admin@smarttransit.com', /admin\/dashboard/);
+    if (width === 390) await page.getByRole('button', { name: 'Open navigation' }).click();
+    await page.getByRole('button', { name: 'Payments', exact: true }).click();
+    await expect(page.getByRole('region', { name: 'Booking fees' }).getByText('Booking fees kept')).toBeVisible({ timeout: 30000 });
+    await expect(page.getByRole('table', { name: 'By month' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Payments to refund by hand' })).toBeVisible();
+    await page.getByRole('button', { name: 'Last 7 days' }).click();
+    await expect(page.getByRole('region', { name: 'Fares' })).toBeVisible();
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+    expect(overflow).toBeLessThanOrEqual(1);
+    await page.screenshot({ path: path.join(SHOTS, `payments_${width}.png`), fullPage: true });
+  });
+}
