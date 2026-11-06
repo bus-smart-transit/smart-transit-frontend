@@ -11,6 +11,39 @@ class AdminService extends StaffBaseService {
     return await this.request('/admin/overview', 'GET');
   }
 
+  // Batch 48 Phase 3: companies and every account.
+  async getCompanies() {
+    return await this.request('/admin/companies', 'GET');
+  }
+
+  async createCompany(companyName) {
+    return await this.request('/admin/companies', 'POST', { company_name: companyName });
+  }
+
+  async renameCompany(companyId, companyName) {
+    return await this.request(`/admin/companies/${companyId}`, 'PATCH', { company_name: companyName });
+  }
+
+  async addCompanyAdmin(companyId, payload) {
+    return await this.request(`/admin/companies/${companyId}/company-admins`, 'POST', payload);
+  }
+
+  async getUsers(params = {}) {
+    return await this.request('/admin/users', 'GET', params);
+  }
+
+  async deactivateUser(userId) {
+    return await this.request(`/admin/users/${userId}/deactivate`, 'PATCH');
+  }
+
+  async reactivateUser(userId) {
+    return await this.request(`/admin/users/${userId}/reactivate`, 'PATCH');
+  }
+
+  async setCompanyAdmin(userId, isCompanyAdmin) {
+    return await this.request(`/admin/users/${userId}/company-admin`, 'PATCH', { is_company_admin: isCompanyAdmin });
+  }
+
   // ── Stop Management ──
   async getStops() {
     return await this.request(`/admin/stops`, 'GET');

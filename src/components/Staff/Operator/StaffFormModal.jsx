@@ -14,8 +14,9 @@ import { apiFieldErrors } from '../../../api/hooks/Staff/useStaffDirectory';
  * purpose: email verification, terms and rewards (passenger only) and a license number (out of scope).
  * Edit shows only what an Operator may change: username, phone and email.
  */
-export default function StaffFormModal({ mode = 'add', member = null, defaultRole = 'driver', onClose, onSubmit }) {
-  const [form, setForm] = useState(() => (mode === 'edit' ? editStaffForm(member) : emptyStaffForm(defaultRole)));
+// Batch 48 Phase 3: fixedRole hides the Role choice (the Super Admin's Add Company Admin uses 'operator'); addTitle names it.
+export default function StaffFormModal({ mode = 'add', member = null, defaultRole = 'driver', fixedRole = null, addTitle = 'Add Staff', submitLabel = null, onClose, onSubmit }) {
+  const [form, setForm] = useState(() => (mode === 'edit' ? editStaffForm(member) : emptyStaffForm(fixedRole || defaultRole)));
   const [errors, setErrors] = useState({});
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -48,7 +49,7 @@ export default function StaffFormModal({ mode = 'add', member = null, defaultRol
     }
   };
 
-  const title = mode === 'edit' ? `Edit ${member?.name ?? 'staff'}` : 'Add Staff';
+  const title = mode === 'edit' ? `Edit ${member?.name ?? 'staff'}` : addTitle;
 
   return (
     <Modal open onClose={onClose} title={title} fullScreenOnMobile>
@@ -57,7 +58,7 @@ export default function StaffFormModal({ mode = 'add', member = null, defaultRol
 
         {mode === 'add' ? (
           <>
-            <div>
+            {!fixedRole && <div>
               <label className="mb-1.5 block text-sm font-medium text-slate-900" htmlFor="staff-role">Role</label>
               <select id="staff-role" value={form.role} onChange={(event) => update('role', event.target.value)} className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500">
                 <option value="driver">Driver</option>
@@ -65,7 +66,7 @@ export default function StaffFormModal({ mode = 'add', member = null, defaultRol
                 <option value="operator">Operator</option>
               </select>
               {form.role === 'operator' && <p className="mt-1.5 text-xs text-slate-500">An Operator schedules trips and handles the day. They can see your buses, fares and staff but not change them. Only the Super Admin can make someone a Company Admin.</p>}
-            </div>
+            </div>}
             <div className="grid gap-4 sm:grid-cols-2">
               <IconField id="staff-firstName" label="First Name" icon={UserRound} placeholder="Juan" autoComplete="off" value={form.firstName} onChange={(event) => update('firstName', event.target.value)} error={errors.firstName} />
               <IconField id="staff-lastName" label="Last Name" icon={UserRound} placeholder="Dela Cruz" autoComplete="off" value={form.lastName} onChange={(event) => update('lastName', event.target.value)} error={errors.lastName} />
@@ -104,7 +105,7 @@ export default function StaffFormModal({ mode = 'add', member = null, defaultRol
           <button type="button" onClick={onClose} className="min-h-11 rounded-lg border border-slate-200 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50">Cancel</button>
           <button type="submit" disabled={saving} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-teal-600 px-4 text-sm font-semibold text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-60">
             {saving && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
-            {mode === 'edit' ? 'Save changes' : 'Add Staff'}
+            {mode === 'edit' ? 'Save changes' : (submitLabel || addTitle)}
           </button>
         </div>
       </form>

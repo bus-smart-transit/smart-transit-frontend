@@ -46,3 +46,54 @@ test('an Operator cannot open the Super Admin portal', async ({ page }) => {
   await expect(page.getByRole('region', { name: 'Platform counts' })).toHaveCount(0);
   expect(page.url()).not.toMatch(/admin\/dashboard/);
 });
+
+// Batch 48 Phase 3: Companies and Users. Adds one company and its Company Admin to the local database (accounts are
+// never deleted; a fresh reseed removes them), then turns that account off and on from Users.
+for (const width of [1280, 390]) {
+  test(`Super Admin adds a company and its Company Admin, then turns the account off and on, at ${width} px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
+    const openTab = async (name) => {
+      if (width === 390) await page.getByRole('button', { name: 'Open navigation' }).click();
+      await page.getByRole('button', { name, exact: true }).click();
+    };
+    page.on('dialog', (dialog) => dialog.accept());
+
+    await signIn(page, 'admin@smarttransit.com', /admin\/dashboard/);
+    await openTab('Companies');
+    await expect(page.getByRole('table', { name: 'Companies' }).getByText('SmartTransit Demo Bus Co.')).toBeVisible({ timeout: 30000 });
+
+    const stamp = `${width}${Date.now() % 100000}`;
+    const companyName = `E2E Bus Co ${stamp}`;
+    await page.getByRole('button', { name: 'Add company' }).first().click();
+    await page.getByRole('dialog').getByLabel('Company name').fill(companyName);
+    await page.getByRole('dialog').getByRole('button', { name: 'Add company' }).click();
+    await expect(page.getByText('Company added. Next, add its Company Admin.')).toBeVisible({ timeout: 30000 });
+
+    await page.getByRole('button', { name: `Add Company Admin to ${companyName}` }).click();
+    const form = page.getByRole('dialog', { name: `Add Company Admin to ${companyName}` });
+    const username = `owner${stamp}`;
+    await form.getByLabel('First Name').fill('Olive');
+    await form.getByLabel('Last Name').fill(`Owner ${stamp}`);
+    await form.getByLabel('Username (for signing in)').fill(username);
+    await form.getByLabel('Email Address').fill(`${username}@example.com`);
+    await form.getByLabel('Phone: number').fill('9171234598');
+    await form.getByLabel('Birth Date').fill('1990-01-01');
+    await form.locator('#staff-address').fill('Sample City');
+    await form.locator('#staff-password').fill('Strong-Pass-123');
+    await form.locator('#staff-confirm').fill('Strong-Pass-123');
+    await form.getByRole('button', { name: 'Add Company Admin' }).click();
+    await expect(page.getByText('Company Admin added.', { exact: false })).toBeVisible({ timeout: 30000 });
+    await expect(page.getByRole('table', { name: 'Companies' }).getByRole('row').filter({ hasText: companyName }).getByText(`Olive Owner ${stamp}`)).toBeVisible();
+    await page.screenshot({ path: path.join(SHOTS, `companies_${width}.png`), fullPage: true });
+
+    await openTab('Users');
+    await page.getByPlaceholder('Search by name, username or email').fill(username);
+    const row = page.getByRole('table', { name: 'Accounts' }).getByRole('row').filter({ hasText: username });
+    await expect(row.getByText('Company Admin', { exact: true })).toBeVisible({ timeout: 30000 });
+    await row.getByRole('button', { name: /Turn off/ }).click();
+    await expect(row.getByText('Turned off')).toBeVisible({ timeout: 30000 });
+    await row.getByRole('button', { name: /Turn on/ }).click();
+    await expect(row.getByText('Active')).toBeVisible({ timeout: 30000 });
+    await page.screenshot({ path: path.join(SHOTS, `users_${width}.png`), fullPage: true });
+  });
+}
