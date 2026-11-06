@@ -7,7 +7,7 @@ const QUICK_LINKS = [
   { label: 'Home', to: '/' },
   { label: 'About', to: '/about' },
   { label: 'News', to: '/news' },
-  { label: 'FAQ', to: '/#faq' },
+  { label: 'FAQ', to: '/faq' },
   { label: 'Contact Us', to: '/contact' },
 ];
 

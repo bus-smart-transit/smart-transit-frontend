@@ -13,7 +13,7 @@ const NAV_LINKS = [
   { label: 'About', to: '/about', icon: Info },
   { label: 'Track Bus', to: '/track-bus', icon: MapPin },
   { label: 'News', to: '/news', icon: Newspaper },
-  { label: 'FAQ', to: '/#faq', icon: CircleHelp },
+  { label: 'FAQ', to: '/faq', icon: CircleHelp },
   { label: 'Contact Us', to: '/contact', icon: Phone },
 ];
 

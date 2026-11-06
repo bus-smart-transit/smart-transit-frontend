@@ -1,8 +1,9 @@
-import { Bus, Clock3, MapPin, ShieldCheck, Sparkles, Wallet } from 'lucide-react';
+import { Clock3, MapPin, ShieldCheck, Wallet } from 'lucide-react';
 import { useRegion } from '../../../api/hooks/useRegion';
 import Navbar from '../../Layout/Navbar';
 import Footer from '../../Layout/Footer';
 import Button from '../../ui/Button';
+import TeamSection from './TeamSection';
 
 const BENEFITS = [
   {
@@ -71,28 +72,50 @@ export default function AboutPage() {
           </div>
         </section>
 
-        <section className="bg-white pb-16 sm:pb-20">
-          <div className="mx-auto grid max-w-7xl gap-6 px-4 sm:px-6 lg:grid-cols-2 lg:px-10">
-            <div className="rounded-2xl border border-slate-200 p-8">
-              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-navy-50 text-navy-800">
-                <Sparkles size={22} aria-hidden="true" />
+        {/* 2026-11-07 (passenger redesign, joshua-frontend): tinted round photos over grey bands that run to opposite
+            edges on wide screens; one grey card each on phones. */}
+        <section className="overflow-hidden bg-white pb-16 sm:pb-20">
+          <div className="relative">
+            <div className="absolute inset-y-6 left-[38%] right-0 hidden bg-slate-100 lg:block" aria-hidden="true" />
+            <div className="container-page relative grid items-center gap-8 lg:grid-cols-12">
+              <div className="lg:col-span-4">
+                <h2 className="font-display text-4xl font-extrabold leading-tight text-navy-950 sm:text-5xl">Our Mission<br />&amp; Vision</h2>
+                <span className="mt-5 block h-1 w-24 rounded-full bg-navy-900" aria-hidden="true" />
+                <span className="mt-1.5 block h-1 w-24 rounded-full bg-teal-400" aria-hidden="true" />
               </div>
-              <h2 className="mt-4 font-display text-xl font-bold text-navy-950">Our Mission</h2>
-              <p className="mt-3 text-sm leading-relaxed text-slate-500">
-                To make provincial bus travel simpler, safer, and more transparent, by giving every passenger
-                real-time information and control over their own trip, from booking to boarding.
-              </p>
+              <div className="flex flex-col items-center gap-6 rounded-2xl bg-slate-100 p-6 sm:flex-row lg:col-span-8 lg:gap-10 lg:rounded-none lg:bg-transparent lg:p-0">
+                <div className="relative h-44 w-44 shrink-0 overflow-hidden rounded-full sm:h-52 sm:w-52 lg:h-60 lg:w-60">
+                  <img src="/images/about/bus-terminal.jpg" alt="" className="h-full w-full object-cover grayscale" />
+                  <span className="absolute inset-0 bg-navy-800/45 mix-blend-multiply" aria-hidden="true" />
+                </div>
+                <div className="max-w-md">
+                  <h3 className="font-display text-2xl font-bold text-navy-950 sm:text-3xl">Mission</h3>
+                  <p className="mt-3 text-sm leading-relaxed text-slate-600 sm:text-base">
+                    To make provincial bus travel{region?.name ? ` across ${region.name}` : ''} simpler, safer, and more transparent, by giving every
+                    passenger real-time information and control over their own trip, from booking to boarding.
+                  </p>
+                </div>
+              </div>
             </div>
-            <div className="rounded-2xl border border-slate-200 p-8">
-              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-teal-50 text-teal-700">
-                <Bus size={22} aria-hidden="true" />
+          </div>
+
+          <div className="relative mt-10 lg:mt-14">
+            <div className="absolute inset-y-6 left-0 right-[40%] hidden bg-slate-100 lg:block" aria-hidden="true" />
+            <div className="container-page relative grid items-center lg:grid-cols-12">
+              <div className="flex flex-col-reverse items-center gap-6 rounded-2xl bg-slate-100 p-6 sm:flex-row lg:col-span-8 lg:justify-end lg:gap-10 lg:rounded-none lg:bg-transparent lg:p-0">
+                <div className="max-w-md sm:text-right">
+                  <h3 className="font-display text-2xl font-bold text-navy-950 sm:text-3xl">Vision</h3>
+                  <p className="mt-3 text-sm leading-relaxed text-slate-600 sm:text-base">
+                    A region where no commuter has to wonder if the bus has already left, where a seat can be
+                    reserved in advance, and where public transportation feels as reliable and convenient as any
+                    other digital service.
+                  </p>
+                </div>
+                <div className="relative h-44 w-44 shrink-0 overflow-hidden rounded-full sm:h-52 sm:w-52 lg:h-60 lg:w-60">
+                  <img src="/images/about/gps-map.jpg" alt="" className="h-full w-full object-cover grayscale" />
+                  <span className="absolute inset-0 bg-teal-400/70 mix-blend-multiply" aria-hidden="true" />
+                </div>
               </div>
-              <h2 className="mt-4 font-display text-xl font-bold text-navy-950">Our Vision</h2>
-              <p className="mt-3 text-sm leading-relaxed text-slate-500">
-                A region where no commuter has to wonder if the bus has already left, where a seat can be
-                reserved in advance, and where public transportation feels as reliable and convenient as any
-                other digital service.
-              </p>
             </div>
           </div>
         </section>
@@ -124,6 +147,8 @@ export default function AboutPage() {
             </div>
           </div>
         </section>
+
+        <TeamSection regionName={region?.name} />
 
         <section className="bg-navy-950 px-4 py-14 text-center sm:px-6 lg:px-10">
           <div className="mx-auto max-w-2xl">

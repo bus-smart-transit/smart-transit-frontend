@@ -16,7 +16,7 @@ describe('Navbar', () => {
     renderNav();
     const site = screen.getByRole('navigation', { name: 'Site navigation' });
     expect(within(site).getByRole('link', { name: 'Track Bus' })).toHaveAttribute('href', '/track-bus');
-    expect(within(site).getByRole('link', { name: 'FAQ' })).toHaveAttribute('href', '/#faq');
+    expect(within(site).getByRole('link', { name: 'FAQ' })).toHaveAttribute('href', '/faq');
     expect(screen.getAllByRole('link', { name: 'Log In' })[0]).toHaveAttribute('href', '/passenger/login');
   });
 
