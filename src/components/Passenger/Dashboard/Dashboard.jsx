@@ -288,8 +288,10 @@ export default function Dashboard() {
             </Card>
           </div>
 
-          <div className="grid gap-6 lg:grid-cols-3">
-            <div className="space-y-6 lg:col-span-2">
+          {/* 2026-11-06: grid-cols-1 and min-w-0 let the columns shrink on phones, so the wide schedule and booking
+              tables scroll inside their cards instead of pushing the page 156 px past the screen (found 2026-11-04). */}
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+            <div className="min-w-0 space-y-6 lg:col-span-2">
               <Card className="p-6">
                 <h2 className="font-display text-lg font-semibold text-navy-950">Upcoming Trip</h2>
                 {upcomingTicket ? (
@@ -377,7 +379,7 @@ export default function Dashboard() {
               </Card>
             </div>
 
-            <div className="space-y-6">
+            <div className="min-w-0 space-y-6">
               <Card className="p-6">
                 <h2 className="font-display text-lg font-semibold text-navy-950">Quick Actions</h2>
                 <div className="mt-4 flex flex-col gap-2.5">
