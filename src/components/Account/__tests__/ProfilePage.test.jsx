@@ -111,7 +111,7 @@ describe('ProfilePage passenger edit', () => {
     expect(screen.getByLabelText('Gender')).toHaveValue('female');
     fireEvent.change(name, { target: { value: '  Ana Reyes ' } });
     // Batch 47 part B: the old stored 09... number opens as +63 and the local part; the saved form is E.164.
-    expect(screen.getByLabelText('Phone: country calling code')).toHaveValue('+63');
+    expect(screen.getByRole('button', { name: 'Phone: country calling code' })).toHaveTextContent('+63');
     expect(screen.getByLabelText('Phone: number')).toHaveValue('9100000001');
     fireEvent.change(screen.getByLabelText('Phone: number'), { target: { value: '0917 123 4567' } });
     fireEvent.change(screen.getByLabelText('Gender'), { target: { value: '' } });

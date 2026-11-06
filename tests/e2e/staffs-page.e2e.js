@@ -42,7 +42,7 @@ for (const width of [1280, 390]) {
     await page.getByRole('button', { name: 'Add Staff' }).first().click();
     const dialog = page.getByRole('dialog', { name: 'Add Staff' });
     await expect(dialog.getByLabel('First Name')).toBeVisible();
-    await expect(dialog.getByLabel('Phone: country calling code')).toHaveValue('+63');
+    await expect(dialog.getByRole('button', { name: 'Phone: country calling code' })).toContainText('+63');
     await dialog.getByRole('button', { name: 'Add Staff' }).click();
     await expect(dialog.getByText('First name is required')).toBeVisible();
     await noSidewaysScroll(page);

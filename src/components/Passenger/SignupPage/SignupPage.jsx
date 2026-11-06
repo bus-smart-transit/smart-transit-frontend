@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import BrandLogo from '../../ui/BrandLogo';
+import AuthShell from '../Auth/AuthShell';
 import { GENDER_OPTIONS } from '../../../utils/gender';
 import {
   ArrowLeft,
@@ -11,15 +11,12 @@ import {
   Lock,
   Mail,
   MapPin,
-  Shield,
   TriangleAlert,
   UserRound } from 'lucide-react';
 import { useSignUp } from '../../../api/hooks/Passenger/signup';
-import { useRegion } from '../../../api/hooks/useRegion';
 import PhoneInput from '../../ui/PhoneInput';
 
 export default function SignUpPage() {
-  const region = useRegion();
   const {
     step,
     setStep,
@@ -46,82 +43,23 @@ export default function SignUpPage() {
     { check: /\d/.test(form.password), label: 'One number' },
   ];
 
+  // 2026-11-06 (passenger redesign, joshua-frontend): the two steps sit in the shared AuthShell; their logic is unchanged.
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col lg:grid lg:grid-cols-[1fr_1fr]">
-      {/* Left Side: Branding */}
-      <div className="hidden lg:flex flex-col justify-between bg-slate-900 px-8 py-12 text-white">
-        <div>
-          <Link to="/" className="inline-flex items-center gap-3 mb-12">
-            <BrandLogo variant="icon" onDark alt="" className="h-8" />
-            <span className="font-display text-xl">SmartTransit</span>
-          </Link>
-
-          <div className="max-w-sm space-y-4">
-            <span className="inline-flex items-center gap-2 rounded-full bg-teal-500/20 border border-teal-500/50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-teal-300">
-              <Shield className="h-3.5 w-3.5" />
+    <AuthShell
+      photoSide="left"
+      title="Join SmartTransit."
+      text="Create your free SmartTransit account to book trips, pay online, and follow your bus in real time."
+      tagline="Your journey starts here."
+    >
+          <div className="mb-8">
+            <span className="inline-flex items-center rounded-full bg-navy-50 px-3 py-1 text-xs font-semibold text-navy-800">
               Passenger Registration
             </span>
-            <h1 className="font-display text-4xl leading-tight">
-              Join SmartTransit
-            </h1>
-            <p className="text-slate-400 text-lg leading-relaxed">
-              Register once to unlock real-time trip tracking, e-tickets, and travel history.
+            <h1 className="mt-4 font-display text-3xl font-bold text-navy-950 sm:text-4xl">Get started now</h1>
+            <p className="mt-2 text-sm text-slate-500">
+              {step === 1 ? 'Step 1 of 2: tell us a bit about yourself.' : 'Step 2 of 2: set a strong password.'}
             </p>
           </div>
-        </div>
-
-        {/* Step indicator on left side */}
-        <div className="space-y-4">
-          <p className="text-sm font-semibold uppercase tracking-wide text-slate-400">
-            Registration Steps
-          </p>
-          {[
-            { num: 1, label: 'Personal Information', desc: 'Your name, email and contact' },
-            { num: 2, label: 'Account Security', desc: 'Set a strong password' },
-          ].map(({ num, label, desc }) => (
-            <div key={num} className={`flex items-center gap-3 ${step >= num ? 'opacity-100' : 'opacity-40'}`}>
-              <span className={`flex h-9 w-9 items-center justify-center rounded-full text-sm font-bold ${step >= num ? 'bg-teal-500 text-white' : 'bg-slate-800 text-slate-500'}`}>
-                {step > num ? <Check className="h-4 w-4" /> : num}
-              </span>
-              <div>
-                <p className="text-sm font-semibold text-slate-100">{label}</p>
-                <p className="text-xs text-slate-500">{desc}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        <p className="text-xs text-slate-500">
-          © {new Date().getFullYear()} SmartTransit.{region?.name ? ` ${region.name}.` : ''}
-        </p>
-      </div>
-
-      {/* Right Side: Form */}
-      <div className="flex flex-col justify-center px-4 py-8 sm:px-6 lg:px-8">
-        <div className="w-full max-w-sm mx-auto lg:mx-0">
-          {/* Mobile header */}
-          <div className="mb-8 lg:hidden">
-            <Link to="/" className="inline-flex items-center gap-2">
-              <BrandLogo variant="icon" alt="" className="h-8" />
-              <span className="font-display text-slate-900">SmartTransit</span>
-            </Link>
-          </div>
-
-          <div className="mb-8">
-            <span className="inline-flex items-center gap-2 rounded-full bg-sky-50 border border-sky-200 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-sky-700">
-              <Shield className="h-3.5 w-3.5" />
-              {step === 1 ? 'Step 1 of 2' : 'Step 2 of 2'}
-            </span>
-            <h2 className="font-display text-3xl text-slate-950 mt-4">
-              {step === 1 ? 'Personal Information' : 'Account Security'}
-            </h2>
-            <p className="text-slate-600 mt-2 text-sm">
-              {step === 1
-                ? 'Fill in your passenger details to continue.'
-                : 'Set a strong password and complete registration.'}
-            </p>
-          </div>
-
           {error && (
             <div className="mb-4 flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3">
               <TriangleAlert className="h-5 w-5 text-red-600 shrink-0" />
@@ -165,7 +103,8 @@ export default function SignUpPage() {
                 {errors.email && <p className="mt-1 text-xs text-red-600">{errors.email}</p>}
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-2">
+              {/* 2026-11-06: one column, so the number field is not squeezed beside the flag choice. */}
+              <div className="grid gap-4">
                 {/* Batch 47 part B: the shared phone field with the calling code (+63 by default). */}
                 <PhoneInput
                   id="signup-phone"
@@ -289,10 +228,8 @@ export default function SignUpPage() {
 
           <p className="mt-6 text-center text-sm text-slate-600">
             Already have an account?{' '}
-            <Link to="/passenger/login" className="font-semibold text-teal-600 hover:text-teal-700" id="switch-to-login">Sign in</Link>
+            <Link to="/passenger/login" className="font-semibold text-navy-800 hover:text-navy-700" id="switch-to-login">Log In</Link>
           </p>
-        </div>
-      </div>
-    </div>
+    </AuthShell>
   );
 }

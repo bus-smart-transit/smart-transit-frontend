@@ -1,7 +1,7 @@
 import { useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import BrandLogo from '../../ui/BrandLogo';
-import { Lock, Mail, Route, ShieldCheck, TriangleAlert, CheckCircle, Clock } from 'lucide-react';
+import { Lock, Mail, TriangleAlert, CheckCircle } from 'lucide-react';
+import AuthShell from '../Auth/AuthShell';
 import { useLogin } from '../../../api/hooks/Passenger/login';
 import Button from '../../ui/Button';
 import FormInput from '../../ui/FormInput';
@@ -65,74 +65,22 @@ export default function LoginPage() {
     }
   };
 
-  const BENEFITS = [
-    { icon: CheckCircle, label: 'Book and pay online' },
-    { icon: ShieldCheck, label: 'Live bus tracking' },
-    { icon: Clock, label: 'Manage your tickets' },
-  ];
-
+  // 2026-11-06 (passenger redesign, joshua-frontend): the form sits in the shared AuthShell; its logic is unchanged.
   return (
-    <div className="min-h-screen bg-linear-to-br from-slate-50 to-blue-50 flex flex-col lg:grid lg:grid-cols-[1fr_1fr] lg:gap-0">
-      {/* Left Side: Messaging & Benefits */}
-      <div className="hidden lg:flex flex-col justify-between bg-slate-900 px-8 py-12 text-white">
-        <div>
-          <Link to="/" className="inline-flex items-center gap-3 mb-12">
-            <BrandLogo variant="icon" onDark alt="" className="h-8" />
-            <span className="font-display text-xl">SmartTransit</span>
-          </Link>
-
-          <div className="max-w-sm space-y-4">
-            <span className="inline-flex items-center gap-2 rounded-full bg-teal-500/20 border border-teal-500/50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-teal-300">
-              <Route className="h-3.5 w-3.5" />
-              Passenger Login
-            </span>
-            <h1 className="font-display text-4xl leading-tight">
-              Welcome back to SmartTransit
-            </h1>
-            <p className="text-slate-400 text-lg leading-relaxed">
-              Your transportation partner for seamless, stress-free commuting{region?.name ? ` across ${region.name}` : ''}.
-            </p>
-          </div>
-        </div>
-
-        <div className="space-y-4">
-          {BENEFITS.map(({ icon: Icon, label }) => (
-            <div key={label} className="flex items-center gap-3">
-              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-teal-500/20">
-                <Icon size={20} className="text-teal-300" />
-              </span>
-              <span className="text-slate-300">{label}</span>
-            </div>
-          ))}
-        </div>
-
-        <p className="text-xs text-slate-500">
-          © {new Date().getFullYear()} SmartTransit.{region?.name ? ` ${region.name}.` : ''}
-        </p>
-      </div>
-
-      {/* Right Side: Login Form */}
-      <div className="flex flex-col justify-center px-4 py-8 sm:px-6 lg:px-8">
-        <div className="w-full max-w-sm mx-auto lg:mx-0">
-          {/* Mobile Header */}
-          <div className="mb-8 lg:hidden">
-            <Link to="/" className="inline-flex items-center gap-2">
-              <BrandLogo variant="icon" alt="" className="h-8" />
-              <span className="font-display text-slate-900">SmartTransit</span>
-            </Link>
-          </div>
-
+    <AuthShell
+      photoSide="right"
+      title="Your commute, simplified."
+      text={`Sign in to manage your tickets, follow your bus live, and keep track of every trip${region?.name ? ` across ${region.name}` : ''}.`}
+      tagline="Your next trip starts here."
+    >
           {!otpRequired ? (
             <>
               <div className="mb-8">
-                <span className="inline-flex items-center gap-2 rounded-full bg-sky-50 border border-sky-200 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-sky-700">
-                  <Route className="h-3.5 w-3.5" />
-                  Passenger Access
+                <span className="inline-flex items-center rounded-full bg-navy-50 px-3 py-1 text-xs font-semibold text-navy-800">
+                  Passenger Login
                 </span>
-                <h2 className="font-display text-3xl text-slate-950 mt-4">Sign in</h2>
-                <p className="text-slate-600 mt-2 text-sm">
-                  Access your tickets, track buses, and manage your account.
-                </p>
+                <h1 className="mt-4 font-display text-3xl font-bold text-navy-950 sm:text-4xl">Welcome back</h1>
+                <p className="mt-2 text-sm text-slate-500">Sign in to access your trips and tickets.</p>
               </div>
 
               <form onSubmit={handleSubmit} className="space-y-5" noValidate>
@@ -219,15 +167,15 @@ export default function LoginPage() {
                   disabled={isLoading}
                   loading={isLoading}
                 >
-                  Sign In
+                  Log In
                 </Button>
               </form>
 
               {/* Sign up link */}
               <p className="text-center text-sm text-slate-600 mt-6">
                 Don't have an account?{' '}
-                <Link to="/passenger/signup" className="font-semibold text-teal-600 hover:text-teal-700">
-                  Create Account
+                <Link to="/passenger/signup" className="font-semibold text-navy-800 hover:text-navy-700">
+                  Sign Up
                 </Link>
               </p>
             </>
@@ -308,9 +256,7 @@ export default function LoginPage() {
               </div>
             </div>
           )}
-        </div>
-      </div>
-    </div>
+    </AuthShell>
   );
 }
 

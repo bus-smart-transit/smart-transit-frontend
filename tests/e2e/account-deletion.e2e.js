@@ -27,7 +27,7 @@ async function passengerSignIn(page) {
   await page.goto('/passenger/login');
   await page.getByRole('textbox', { name: /Email/ }).fill(EMAIL);
   await page.getByRole('textbox', { name: 'Password' }).fill(PASSWORD);
-  await page.getByRole('button', { name: 'Sign In' }).click();
+  await page.getByRole('button', { name: 'Log In', exact: true }).click();
   // A passenger lands on the home page (or the page they came from) after signing in.
   await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 60000 });
 }

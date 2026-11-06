@@ -45,7 +45,7 @@ describe('LoginPage email verification', () => {
     renderAt(undefined);
 
     expect(screen.queryByText('Verify your email')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Sign In' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Log In' })).toBeInTheDocument();
   });
 });
 

@@ -4,6 +4,9 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 vi.mock('../../../../api/PassengerService/PassengerService', () => ({ default: { register: vi.fn() } }));
 vi.mock('../../../../api/hooks/useRegion', () => ({ useRegion: () => ({ name: 'Davao Region' }) }));
+// 2026-11-06: the page now sits in the site header and footer (AuthShell); they are tested on their own.
+vi.mock('../../../Layout/Navbar', () => ({ default: () => null }));
+vi.mock('../../../Layout/Footer', () => ({ default: () => null }));
 
 import PassengerService from '../../../../api/PassengerService/PassengerService';
 import SignUpPage from '../SignupPage';
@@ -28,7 +31,7 @@ describe('SignUpPage phone', () => {
   test('starts on +63 and refuses a number that is not a mobile number', () => {
     render(<MemoryRouter><SignUpPage /></MemoryRouter>);
 
-    expect(screen.getByLabelText('Phone: country calling code')).toHaveValue('+63');
+    expect(screen.getByRole('button', { name: 'Phone: country calling code' })).toHaveTextContent('+63');
     fillStep1('12345');
 
     expect(screen.getByText('Enter a valid mobile number, for example 917 123 4567.')).toBeInTheDocument();
