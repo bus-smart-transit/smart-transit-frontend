@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   createFleet: vi.fn(),
   assignRouteToFleet: vi.fn(),
   saveDispatchDecision: vi.fn(),
+  updateFleet: vi.fn(),
 }));
 
 vi.mock('../../../../api/StaffService/OperatorService', () => ({ default: mocks }));
@@ -190,6 +191,27 @@ describe('FleetsPage', () => {
     renderPage({ fleets: [], trips: [] });
     expect(screen.getByText(/No fleets yet/)).toBeInTheDocument();
     await waitFor(() => expect(mocks.getFleetLocations).toHaveBeenCalled());
+  });
+
+  it('edits a bus and shows the server\'s answer when places would drop below what is sold (2026-11-06)', async () => {
+    mocks.updateFleet
+      .mockRejectedValueOnce(new Error('32 seats are already sold on a trip of this bus that has not finished. Choose at least 32.'))
+      .mockResolvedValueOnce({ data: {} });
+    const onRefresh = vi.fn();
+    renderPage({ onRefresh });
+    fireEvent.click(screen.getByRole('button', { name: 'Edit fleet PLT-1' }));
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByLabelText('Plate number')).toHaveValue('PLT-1');
+
+    fireEvent.change(within(dialog).getByLabelText('Seated capacity'), { target: { value: '20' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save changes' }));
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('Choose at least 32.');
+
+    fireEvent.change(within(dialog).getByLabelText('Seated capacity'), { target: { value: '35' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save changes' }));
+    await waitFor(() => expect(mocks.updateFleet).toHaveBeenLastCalledWith(1, expect.objectContaining({ plate_number: 'PLT-1', seated_capacity: 35, standing_capacity: 10 })));
+    expect(await screen.findByText('Fleet PLT-1 updated.')).toBeInTheDocument();
+    expect(onRefresh).toHaveBeenCalled();
   });
 
   it('shows the company as the bus company name, read only (Batch 46 step 2)', async () => {

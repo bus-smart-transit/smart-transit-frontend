@@ -312,6 +312,22 @@ class OperatorService extends StaffBaseService {
     return await this.request(`/operator/fare-rules`, 'POST', fareData, extraHeaders);
   }
 
+  // 2026-11-06: edit (end, stop, or change a fare not yet started) and copy to a later date; same extra check.
+  async updateFareRule(fareRuleId, changes, stepUpToken = null) {
+    const extraHeaders = stepUpToken ? { 'X-Step-Up-Token': stepUpToken } : {};
+    return await this.request(`/operator/fare-rules/${fareRuleId}`, 'PATCH', changes, extraHeaders);
+  }
+
+  async copyFareRule(fareRuleId, values, stepUpToken = null) {
+    const extraHeaders = stepUpToken ? { 'X-Step-Up-Token': stepUpToken } : {};
+    return await this.request(`/operator/fare-rules/${fareRuleId}/copy`, 'POST', values, extraHeaders);
+  }
+
+  // 2026-11-06: edit one of the company's buses.
+  async updateFleet(fleetId, changes) {
+    return await this.request(`/operator/fleets/${fleetId}`, 'PATCH', changes);
+  }
+
   // ── Batch 18: Shift Block Hand-off System ──
   async getShiftBlocks(statusFilter = null) {
     return await this.request('/operator/shift-blocks', 'GET', statusFilter ? { status_filter: statusFilter } : {});

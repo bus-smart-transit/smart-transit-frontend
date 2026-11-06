@@ -416,7 +416,19 @@ export function useFleetsTab({ onRefresh }) {
     window.open(`https://www.google.com/maps?q=${lat},${lng}`, '_blank', 'noopener,noreferrer');
   };
 
+  // 2026-11-06: edit one of the company's buses. Resolves to { ok, message } for the Edit dialog.
+  const handleUpdateFleet = async (fleetId, changes) => {
+    try {
+      await OperatorService.updateFleet(fleetId, changes);
+      onRefresh();
+      return { ok: true, message: 'Fleet updated.' };
+    } catch (err) {
+      return { ok: false, message: err?.message || 'Could not save the fleet.' };
+    }
+  };
+
   return {
+    handleUpdateFleet,
     focusedTripId, setFocusedTripId,
     fleetLocations,
     manageMsg,

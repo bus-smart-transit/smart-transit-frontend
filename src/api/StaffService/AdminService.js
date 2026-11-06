@@ -113,6 +113,16 @@ class AdminService extends StaffBaseService {
     return await this.request(`/admin/fare-rules`, 'POST', fareData, extraHeaders);
   }
 
+  async updateFareRule(fareRuleId, changes, stepUpToken = null) {
+    const extraHeaders = stepUpToken ? { 'X-Step-Up-Token': stepUpToken } : {};
+    return await this.request(`/admin/fare-rules/${fareRuleId}`, 'PATCH', changes, extraHeaders);
+  }
+
+  async copyFareRule(fareRuleId, values, stepUpToken = null) {
+    const extraHeaders = stepUpToken ? { 'X-Step-Up-Token': stepUpToken } : {};
+    return await this.request(`/admin/fare-rules/${fareRuleId}/copy`, 'POST', values, extraHeaders);
+  }
+
   async createAdminAccount(accountData) {
     return await this.request(`/admin/accounts`, 'POST', accountData);
   }

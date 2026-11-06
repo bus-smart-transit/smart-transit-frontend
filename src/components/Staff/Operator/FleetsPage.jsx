@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { RefreshCw, Bus, MapPinned, Plus } from 'lucide-react';
+import { RefreshCw, Bus, MapPinned, Pencil, Plus } from 'lucide-react';
 import { OpPageHeader, OpCard, OpChip, OpStat, OpTable, OpEmpty } from './OperatorUI';
 import { OP_SPACE } from './operatorUiTokens';
 import Modal from '../../ui/Modal';
@@ -90,6 +90,75 @@ function AddFleetModal({ open, onClose, form, setForm, routes, fareOptions, savi
   );
 }
 
+/**
+ * 2026-11-06: edit a bus. The company name stays the company's; places may not drop below what is already sold on a
+ * trip that has not finished (the server says how many).
+ */
+function EditFleetModal({ fleet, fareOptions, companyName, onClose, onSave }) {
+  const [form, setForm] = useState(() => ({
+    plate_number: fleet.plate_number ?? '',
+    body_no: fleet.body_no ?? '',
+    fleet_type: fleet.fleet_type || 'public',
+    vehicle_class: fleet.vehicle_class ?? '',
+    seated_capacity: fleet.seated_capacity ?? 0,
+    standing_capacity: fleet.standing_capacity ?? 0,
+  }));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const set = (key) => (event) => setForm((prev) => ({ ...prev, [key]: event.target.value }));
+
+  const submit = async (event) => {
+    event.preventDefault();
+    setSaving(true);
+    setError('');
+    const result = await onSave({
+      plate_number: form.plate_number.trim(),
+      body_no: form.body_no.trim(),
+      fleet_type: form.fleet_type,
+      vehicle_class: form.vehicle_class || null,
+      seated_capacity: Number(form.seated_capacity),
+      standing_capacity: Number(form.standing_capacity),
+    });
+    setSaving(false);
+    if (result.ok) onClose();
+    else setError(result.message);
+  };
+
+  return (
+    <Modal open onClose={onClose} title={`Edit fleet ${fleet.plate_number}`} fullScreenOnMobile>
+      <form onSubmit={submit} aria-label="Edit fleet">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Label text="Plate number"><input value={form.plate_number} onChange={set('plate_number')} required className={INPUT} /></Label>
+          <Label text="Body number" hint="Shown to passengers"><input value={form.body_no} onChange={set('body_no')} maxLength={30} className={INPUT} /></Label>
+          <div className="text-xs font-semibold text-slate-700">
+            Bus company name
+            <p className="mt-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-normal text-slate-900">{fleet.bus_company_name || companyName || 'Not provided'}</p>
+          </div>
+          <Label text="Fleet type">
+            <select value={form.fleet_type} onChange={set('fleet_type')} className={INPUT}>
+              <option value="public">Public</option>
+              <option value="private">Private</option>
+            </select>
+          </Label>
+          <Label text="Vehicle class">
+            <select aria-label="Vehicle class" value={form.vehicle_class} onChange={set('vehicle_class')} className={INPUT}>
+              <option value="">Not specified</option>
+              {fareOptions.vehicle_classes.map((entry) => <option key={entry.key} value={entry.key}>{entry.label}</option>)}
+            </select>
+          </Label>
+          <Label text="Seated capacity"><input type="number" min="0" value={form.seated_capacity} onChange={set('seated_capacity')} required className={INPUT} /></Label>
+          <Label text="Standing capacity"><input type="number" min="0" value={form.standing_capacity} onChange={set('standing_capacity')} required className={INPUT} /></Label>
+        </div>
+        {error && <p role="alert" className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>}
+        <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <button type="button" onClick={onClose} className={SECONDARY}>Cancel</button>
+          <button type="submit" disabled={saving} className={PRIMARY}>{saving ? 'Saving...' : 'Save changes'}</button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
 function AssignRouteModal({ open, onClose, form, setForm, fleets, routes, saving, message, onSubmit }) {
   const set = (key) => (event) => setForm((prev) => ({ ...prev, [key]: event.target.value }));
   return (
@@ -173,13 +242,14 @@ export default function FleetsPage({ fleets, routes, trips, onRefresh, companyNa
   const fareOptions = useFareOptions();
   const {
     manageMsg, clearManageMsg, manageSaving, fleetForm, setFleetForm, assignForm, setAssignForm,
-    fleetLocations, refreshFleetLocations, handleCreateFleet, handleAssignRoute, openFleetMap,
+    fleetLocations, refreshFleetLocations, handleCreateFleet, handleAssignRoute, openFleetMap, handleUpdateFleet,
   } = useFleetsTab({ onRefresh });
   const { savingTripId, error, decide } = useDispatchAdvice({ onSaved: onRefresh });
 
   const [filter, setFilter] = useState('all');
   const [modal, setModal] = useState(null); // 'add' | 'assign' | null
   const [trackedFleetId, setTrackedFleetId] = useState(null);
+  const [editingFleet, setEditingFleet] = useState(null);
   const [notice, setNotice] = useState('');
 
   const rows = useMemo(() => buildFleetRows({ fleets, trips, locations: fleetLocations, nowMs }), [fleets, trips, fleetLocations, nowMs]);
@@ -210,16 +280,21 @@ export default function FleetsPage({ fleets, routes, trips, onRefresh, companyNa
       ? <span className="whitespace-nowrap"><OpChip tone={GPS_TONE[row.gps.state]}>{row.gps.state === 'live' ? 'Live' : row.gps.state === 'none' ? 'No GPS' : row.gps.state === 'stale' ? 'Out of date' : row.gps.state === 'weak' ? 'Weak signal' : 'Off route'}</OpChip>{row.lastSeen && <span className="ml-2 text-xs text-slate-500">{row.lastSeen}</span>}</span>
       : <span className="text-xs text-slate-500">{row.lastSeen ? `Last seen ${row.lastSeen}` : '-'}</span>) },
     { key: 'action', header: '', render: (row) => (
-      <button
-        type="button"
-        disabled={!row.trackable}
-        title={row.trackable ? undefined : 'Tracking is available while a trip is boarding or on the road'}
-        aria-label={`Track fleet ${row.fleet.plate_number}`}
-        onClick={() => setTrackedFleetId(row.fleetId)}
-        className={SECONDARY}
-      >
-        <MapPinned className="h-3.5 w-3.5" aria-hidden="true" /> Track
-      </button>
+      <span className="inline-flex gap-2">
+        <button
+          type="button"
+          disabled={!row.trackable}
+          title={row.trackable ? undefined : 'Tracking is available while a trip is boarding or on the road'}
+          aria-label={`Track fleet ${row.fleet.plate_number}`}
+          onClick={() => setTrackedFleetId(row.fleetId)}
+          className={SECONDARY}
+        >
+          <MapPinned className="h-3.5 w-3.5" aria-hidden="true" /> Track
+        </button>
+        <button type="button" aria-label={`Edit fleet ${row.fleet.plate_number}`} onClick={() => { setNotice(''); setEditingFleet(row.fleet); }} className={SECONDARY}>
+          <Pencil className="h-3.5 w-3.5" aria-hidden="true" /> Edit
+        </button>
+      </span>
     ) },
   ];
 
@@ -260,6 +335,19 @@ export default function FleetsPage({ fleets, routes, trips, onRefresh, companyNa
       </OpCard>
 
       <AddFleetModal companyName={companyName} open={modal === 'add'} onClose={closeModal} form={fleetForm} setForm={setFleetForm} routes={routes} fareOptions={fareOptions} saving={manageSaving} message={manageMsg} onSubmit={submitFleet} />
+      {editingFleet && (
+        <EditFleetModal
+          fleet={editingFleet}
+          fareOptions={fareOptions}
+          companyName={companyName}
+          onClose={() => setEditingFleet(null)}
+          onSave={async (changes) => {
+            const result = await handleUpdateFleet(editingFleet.fleet_id, changes);
+            if (result.ok) setNotice(`Fleet ${changes.plate_number || editingFleet.plate_number} updated.`);
+            return result;
+          }}
+        />
+      )}
       <AssignRouteModal open={modal === 'assign'} onClose={closeModal} form={assignForm} setForm={setAssignForm} fleets={fleets} routes={routes} saving={manageSaving} message={manageMsg} onSubmit={submitAssign} />
       <TrackFleetModal
         row={tracked}

@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import useFareOptions from '../../api/hooks/Staff/useFareOptions'
 import StepUpModal from './StepUpModal'
-import { buildFareRulePayload } from '../../utils/fareRule'
+import { buildFareRulePayload, formatUpdatedAt } from '../../utils/fareRule'
+import { getBusinessToday } from '../../utils/dates'
+import { FareRuleCopyModal, FareRuleEditModal } from './FareRuleActions'
 
 // Batch 31: the Operator page uses the light tone; Admin keeps the dark one (the default).
 const TONES = {
@@ -69,41 +71,79 @@ export default function FareRulesPanel({ service, fleets = [], routes = [], canC
   const set = (field) => (event) => setForm((prev) => ({ ...prev, [field]: event.target.value }))
   const setFilter = (field) => (event) => setFilters((prev) => ({ ...prev, [field]: event.target.value }))
 
-  const submit = async (token) => {
+  // 2026-11-06: every fare change (add, copy, edit) needs the extra check. One flow: use the held token, or ask for it
+  // and then run the waiting action. Each action resolves to { ok, message }.
+  const pendingRef = useRef(null)
+  const withStepUp = (action) => new Promise((resolve) => {
+    const attempt = async (token) => {
+      try {
+        resolve({ ok: true, message: await action(token) })
+      } catch (err) {
+        if (err?.cause?.response?.data?.step_up === true) {
+          stepUpRef.current = null
+          resolve({ ok: false, message: 'Your verification expired. Please try again.' })
+        } else {
+          resolve({ ok: false, message: err?.message || 'Could not save. Please try again.' })
+        }
+      }
+    }
+    const held = stepUpRef.current
+    if (held && held.expiresAt > Date.now()) {
+      void attempt(held.token)
+      return
+    }
+    stepUpRef.current = null
+    pendingRef.current = { attempt, resolve }
+    setStepUpOpen(true)
+  })
+
+  const onSubmit = async (event) => {
+    event.preventDefault()
     setMessage('')
     setSaving(true)
-    try {
+    const result = await withStepUp(async (token) => {
       await service.createFareRule(buildFareRulePayload(form), token)
       setForm((prev) => ({ ...prev, base_fare: '', fare_per_km: '', base_distance_km: '', note: '', effective_from: '', effective_to: '' }))
-      setMessage('Fare rule saved.')
       await load()
-    } catch (err) {
-      if (err?.cause?.response?.data?.step_up === true) {
-        stepUpRef.current = null
-        setStepUpOpen(true)
-        setMessage('Failed: your verification expired. Confirm your password to continue.')
-      } else {
-        setMessage(`Failed: ${err?.message || 'the fare rule could not be saved.'}`)
-      }
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const onSubmit = (event) => {
-    event.preventDefault()
-    const held = stepUpRef.current
-    if (held && held.expiresAt > Date.now()) return submit(held.token)
-    stepUpRef.current = null
-    setStepUpOpen(true)
-    return undefined
+      return 'Fare rule saved.'
+    })
+    setSaving(false)
+    setMessage(result.ok ? result.message : `Failed: ${result.message}`)
   }
 
   const onVerified = ({ token, expiresIn }) => {
     stepUpRef.current = { token, expiresAt: Date.now() + Math.max(0, expiresIn - 30) * 1000 }
     setStepUpOpen(false)
-    void submit(token)
+    const pending = pendingRef.current
+    pendingRef.current = null
+    if (pending) void pending.attempt(token)
   }
+
+  const onStepUpClosed = () => {
+    setStepUpOpen(false)
+    const pending = pendingRef.current
+    pendingRef.current = null
+    pending?.resolve({ ok: false, message: 'Not saved: the check was cancelled.' })
+  }
+
+  // 2026-11-06: Copy and Edit. An Operator changes rules of their own buses; general rules stay the Admin's.
+  const today = getBusinessToday()
+  const [copying, setCopying] = useState(null)
+  const [editing, setEditing] = useState(null)
+  const canChange = (rule) => Boolean(rule.fleet_id) || canCreateGeneral
+  const ruleTitle = (rule) => `${ruleScope(rule)}, ${cap(rule.seat_type)}`
+  const copyRule = (rule, payload) => withStepUp(async (token) => {
+    await service.copyFareRule(rule.fare_rule_id, payload, token)
+    await load()
+    setMessage('Fare copied. The current fare ends the day before the copy starts.')
+    return 'Fare copied.'
+  })
+  const editRule = (rule, payload) => withStepUp(async (token) => {
+    await service.updateFareRule(rule.fare_rule_id, payload, token)
+    await load()
+    setMessage('Fare rule updated.')
+    return 'Fare rule updated.'
+  })
 
   const ruleScope = (rule) => (rule.fleet_id ? `Fleet ${rule.fleet?.plate_number ?? `#${rule.fleet_id}`}` : 'General')
 
@@ -146,14 +186,14 @@ export default function FareRulesPanel({ service, fleets = [], routes = [], canC
         <table className="w-full min-w-[56rem] text-left text-xs ${t.table}" data-testid="fare-rules-table">
           <thead className={t.muted}>
             <tr>
-              {['Applies to', 'Class', 'Service', 'Route', 'Seat', 'Base fare', 'Base km', 'Per km', 'Rounding', 'From', 'To', 'Note'].map((heading) => (
+              {['Applies to', 'Class', 'Service', 'Route', 'Seat', 'Base fare', 'Base km', 'Per km', 'Rounding', 'From', 'To', 'Status', 'Updated', 'Note', ''].map((heading) => (
                 <th key={heading} className="px-2 py-1.5 font-semibold">{heading}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {rules.length === 0 ? (
-              <tr><td colSpan={12} className={`px-2 py-4 text-left ${t.muted}`}>{loadError || 'No fare rules match.'}</td></tr>
+              <tr><td colSpan={15} className={`px-2 py-4 text-left ${t.muted}`}>{loadError || 'No fare rules match.'}</td></tr>
             ) : rules.map((rule) => (
               <tr key={rule.fare_rule_id} className={`border-t ${t.row}`} data-testid="fare-rule-row">
                 <td className="px-2 py-1.5">{ruleScope(rule)}</td>
@@ -167,7 +207,17 @@ export default function FareRulesPanel({ service, fleets = [], routes = [], canC
                 <td className="px-2 py-1.5">{cap(rule.rounding_mode)}</td>
                 <td className="px-2 py-1.5">{rule.effective_from ? String(rule.effective_from).slice(0, 10) : '-'}</td>
                 <td className="px-2 py-1.5">{rule.effective_to ? String(rule.effective_to).slice(0, 10) : '-'}</td>
+                <td className="px-2 py-1.5">{rule.status === 'inactive' ? 'Stopped' : 'Active'}</td>
+                <td className="px-2 py-1.5 whitespace-nowrap" data-testid="fare-rule-updated">{formatUpdatedAt(rule.updated_at)}</td>
                 <td className={`px-2 py-1.5 ${t.muted}`}>{rule.note || ''}</td>
+                <td className="px-2 py-1.5">
+                  {canChange(rule) && (
+                    <span className="flex gap-1.5">
+                      <button type="button" onClick={() => setCopying(rule)} aria-label={`Copy fare ${ruleTitle(rule)}`} className="min-h-9 rounded-lg border border-teal-300 px-2.5 text-xs font-semibold text-teal-700 hover:bg-teal-50">Copy</button>
+                      <button type="button" onClick={() => setEditing(rule)} aria-label={`Edit fare ${ruleTitle(rule)}`} className="min-h-9 rounded-lg border border-slate-300 px-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-100">Edit</button>
+                    </span>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -222,7 +272,9 @@ export default function FareRulesPanel({ service, fleets = [], routes = [], canC
           <p role="status" className={`rounded-xl border px-3 py-2 text-sm ${message.toLowerCase().startsWith('failed') ? t.bad : t.ok}`}>{message}</p>
         )}
       </form>
-      <StepUpModal open={stepUpOpen} onClose={() => setStepUpOpen(false)} onVerified={onVerified} />
+      {copying && <FareRuleCopyModal rule={copying} today={today} title={ruleTitle(copying)} onClose={() => setCopying(null)} onSubmit={(payload) => copyRule(copying, payload)} />}
+      {editing && <FareRuleEditModal rule={editing} today={today} title={ruleTitle(editing)} onClose={() => setEditing(null)} onSubmit={(payload) => editRule(editing, payload)} />}
+      <StepUpModal open={stepUpOpen} onClose={onStepUpClosed} onVerified={onVerified} />
     </section>
   )
 }
