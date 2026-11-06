@@ -731,7 +731,8 @@ export default function Dashboard() {
         }`}
       >
         <div className="flex items-center justify-between">
-          <BrandLogo onDark className="h-9" />
+          {/* 2026-11-07 (user): the white logo on the navy sidebar, as on the redesigned public pages. */}
+          <BrandLogo light className="h-10" />
           <button
             type="button"
             className="rounded-lg p-1.5 text-navy-200 hover:bg-white/10 lg:hidden"
