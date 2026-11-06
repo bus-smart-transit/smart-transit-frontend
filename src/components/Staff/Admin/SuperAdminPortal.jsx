@@ -1,6 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Activity, Banknote, Building2, ClipboardList, LayoutDashboard, ShieldCheck, Users, Wrench } from 'lucide-react';
+import { Activity, Banknote, Building2, ClipboardList, LayoutDashboard, ShieldCheck, Users } from 'lucide-react';
 import StaffPortalLayout from '../StaffPortalLayout';
 import SuperAdminDashboard from './SuperAdminDashboard';
 import CompaniesPage from './CompaniesPage';
@@ -11,8 +10,7 @@ import SystemHealthPage from './SystemHealthPage';
 import { getBusinessToday } from '../../../utils/dates';
 import { useAdminAuditLog, useAdminCompanies, useAdminHealth, useAdminPayments, useAdminOverview, useAdminUsers, useSuperAdminSession } from '../../../api/hooks/Staff/useSuperAdmin';
 
-// Batch 48: the Super Admin portal. Each phase adds its own item here. "Older tools" opens the earlier Admin panel
-// until it is replaced (Phase 7, with the user's approval).
+// Batch 48: the Super Admin portal. Each phase added its own item here (Phase 7 removed the earlier Admin panel).
 const NAV = [
   { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { key: 'companies', label: 'Companies', icon: Building2 },
@@ -20,7 +18,6 @@ const NAV = [
   { key: 'payments', label: 'Payments', icon: Banknote },
   { key: 'audit', label: 'Audit log', icon: ClipboardList },
   { key: 'health', label: 'System health', icon: Activity },
-  { key: 'tools', label: 'Older tools', icon: Wrench },
 ];
 
 // Each page loads its own data only when it is open.
@@ -51,17 +48,8 @@ function UsersTab() {
 }
 
 export default function SuperAdminPortal() {
-  const navigate = useNavigate();
   const { profile, signOut } = useSuperAdminSession();
   const [tab, setTab] = useState('dashboard');
-
-  const onTabChange = (key) => {
-    if (key === 'tools') {
-      navigate('/employee/admin/tools');
-      return;
-    }
-    setTab(key);
-  };
 
   return (
     <StaffPortalLayout
@@ -69,7 +57,7 @@ export default function SuperAdminPortal() {
       brandIcon={ShieldCheck}
       navItems={NAV}
       activeTab={tab}
-      onTabChange={onTabChange}
+      onTabChange={setTab}
       profile={profile ? { name: profile?.name || profile?.user?.username || 'Super Admin' } : null}
       profileRoleLabel="Super Admin"
       profileInitialFallback="S"

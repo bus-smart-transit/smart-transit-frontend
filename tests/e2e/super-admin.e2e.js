@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import path from 'node:path';
 
 // Batch 48 Phase 2: the Super Admin signs in to their own portal (Dashboard counts across every company, the
-// needs-attention list, "Older tools" for the earlier panel). An Operator who opens the Super Admin address does not
+// needs-attention list). An Operator who opens the Super Admin address does not
 // get it. Changes nothing.
 const PASSWORD = process.env.E2E_PASSWORD || 'password123';
 const SHOTS = path.resolve('test-results/super-admin');
@@ -30,11 +30,11 @@ for (const width of [1280, 390]) {
     expect(overflow).toBeLessThanOrEqual(1);
     await page.screenshot({ path: path.join(SHOTS, `dashboard_${width}.png`), fullPage: true });
 
+    // Batch 48 Phase 7: the earlier Admin panel and its "Older tools" link are gone.
     if (width === 390) {
       await page.getByRole('button', { name: 'Open navigation' }).click();
     }
-    await page.getByRole('button', { name: 'Older tools' }).click();
-    await page.waitForURL(/admin\/tools/);
+    await expect(page.getByRole('button', { name: 'Older tools' })).toHaveCount(0);
     expect(problems).toEqual([]);
   });
 }
@@ -120,7 +120,7 @@ for (const width of [1280, 390]) {
     if (width === 390) await page.getByRole('button', { name: 'Open navigation' }).click();
     await page.getByRole('button', { name: 'Payments', exact: true }).click();
     await expect(page.getByRole('region', { name: 'Booking fees' }).getByText('Booking fees kept')).toBeVisible({ timeout: 30000 });
-    await expect(page.getByRole('table', { name: 'By month' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'By month' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Payments to refund by hand' })).toBeVisible();
     await page.getByRole('button', { name: 'Last 7 days' }).click();
     await expect(page.getByRole('region', { name: 'Fares' })).toBeVisible();

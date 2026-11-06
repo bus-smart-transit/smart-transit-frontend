@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 // 2026-11-04: replaces the mocked Reports test in the old dropoff-policy.e2e.js (its two route tests were removed;
-// RoutesPage.test.jsx and AdminPanel.test.jsx cover them). This one runs against the real local backend: the Operator
+// RoutesPage.test.jsx covers them). This one runs against the real local backend: the Operator
 // opens Reports, runs each of the three reports for a seeded fleet, and the page shows results with no failed calls.
 // Needs the app on E2E_BASE_URL and its backend with the demo seeders (staff sign in without the emailed code).
 

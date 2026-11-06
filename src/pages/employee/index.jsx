@@ -8,7 +8,6 @@ const StaffResetPasswordPage = lazy(() => import('../../components/Staff/StaffRe
 const DriverDashboard = lazy(() => import('../../components/Staff/DriverDashboard'));
 const ConductorDashboard = lazy(() => import('../../components/Staff/ConductorDashboard'));
 const OperatorDashboard = lazy(() => import('../../components/Staff/OperatorDashboard'));
-const AdminPanel = lazy(() => import('../../components/Staff/AdminPanel'));
 const SuperAdminPortal = lazy(() => import('../../components/Staff/Admin/SuperAdminPortal'));
 
 function EmployeeRouteFallback() {
@@ -42,9 +41,8 @@ export default function EmployeeBaseRouter() {
 				</Route>
 
 				<Route element={<StaffProtectedRoute allowedRoles={["admin"]} />}>
-					{/* Batch 48: the Super Admin portal; the earlier panel stays reachable as "Older tools" until Phase 7. */}
+					{/* Batch 48: the Super Admin portal (Phase 7 removed the earlier panel). */}
 					<Route path="admin/dashboard" element={<SuperAdminPortal />} />
-					<Route path="admin/tools" element={<AdminPanel />} />
 				</Route>
 
 				<Route path="*" element={<Navigate to="/employee/login" replace />} />
