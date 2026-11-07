@@ -58,7 +58,7 @@ export default function StaffPortalLayout({
             </button>
           </div>
           <div className="mb-6 space-y-2 px-2 pt-2">
-            <BrandLogo onDark className="h-9" />
+            <BrandLogo light className="h-9" />
             <p className="flex items-center gap-1.5 truncate text-xs text-slate-400">
               {BrandIcon && <BrandIcon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />}
               {brandLabel}

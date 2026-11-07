@@ -38,7 +38,7 @@ export default function StaffForgotPasswordPage() {
     <div className="min-h-screen bg-slate-100 flex flex-col lg:grid lg:grid-cols-[1fr_1.2fr]">
       <div className="hidden lg:flex flex-col items-center justify-center bg-[#0D1B2A] px-8 py-12 text-white">
         <div className="flex flex-col items-center text-center gap-5 max-w-xs">
-          <BrandLogo variant="icon" onDark alt="" className="h-20" />
+          <BrandLogo variant="icon" light alt="" className="h-20" />
           <div>
             <h1 className="font-display text-3xl font-bold tracking-wide">SMARTTRANSIT</h1>
             <p className="mt-1 text-base text-slate-400">Staff Security</p>

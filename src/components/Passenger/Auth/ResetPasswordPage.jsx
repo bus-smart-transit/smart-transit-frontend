@@ -63,7 +63,7 @@ export default function ResetPasswordPage() {
       <div className="hidden lg:flex flex-col justify-between bg-slate-900 px-8 py-12 text-white">
         <div>
           <Link to="/" className="inline-flex items-center gap-3 mb-12">
-            <BrandLogo variant="icon" onDark alt="" className="h-8" />
+            <BrandLogo variant="icon" light alt="" className="h-8" />
             <span className="font-display text-xl">SmartTransit</span>
           </Link>
 
