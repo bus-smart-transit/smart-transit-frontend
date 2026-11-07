@@ -79,6 +79,7 @@ export default function BuyTicket({ onTicketPurchased, returnTo = '/' }) {
     maxRedeemableRewardPoints,
     netTotal,
     bookingFee,
+    maxSeatsPerPurchase,
     totalDue,
     printQrTicket,
     qrTickets,
@@ -166,7 +167,7 @@ export default function BuyTicket({ onTicketPurchased, returnTo = '/' }) {
           <h2 className="font-display text-lg font-semibold text-navy-950">Payment in progress</h2>
           <p className="mt-2 text-sm text-slate-500">
             Finish the payment in the payment tab (or in your GCash / Maya app if it opens). This page updates
-            when the payment is confirmed. Your seats are held for a short time while you pay.
+            when the payment is confirmed. Your seat is saved once the payment goes through.
           </p>
         </Card>
       )}
@@ -443,13 +444,13 @@ export default function BuyTicket({ onTicketPurchased, returnTo = '/' }) {
                       id="ticket_quantity"
                       type="number"
                       min="1"
-                      max="20"
+                      max={maxSeatsPerPurchase}
                       step="1"
                       value={form.ticket_quantity}
                       onChange={(e) => handleChange('ticket_quantity', e.target.value)}
                       className={FIELD}
                     />
-                    <p className="mt-1.5 text-xs text-slate-500">Up to 20 tickets per booking.</p>
+                    <p className="mt-1.5 text-xs text-slate-500">Up to {maxSeatsPerPurchase} tickets per booking.</p>
                     {formErrors.ticket_quantity && <span className="mt-1.5 block text-xs text-red-600">{formErrors.ticket_quantity}</span>}
                   </div>
 
@@ -591,6 +592,8 @@ export default function BuyTicket({ onTicketPurchased, returnTo = '/' }) {
                 <><CreditCard size={16} /> Continue to Payment</>
               )}
             </button>
+            {/* Batch 49 item 1 (user's wording): seats are taken only when the payment is confirmed. */}
+            {canSubmit && <p className="mt-2 text-center text-xs text-slate-500">Proceed to checkout to save the seat.</p>}
             {!canSubmit && !isSubmitting && (
               <p className="mt-2 text-center text-xs text-slate-500">
                 {!form.origin_stop_id || !form.destination_stop_id

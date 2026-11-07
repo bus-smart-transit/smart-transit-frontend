@@ -25,6 +25,7 @@ const bookingState = () => ({
   availableRewardPoints: 20,
   rewardPointsToApply: 0,
   maxRedeemableRewardPoints: 20,
+  maxSeatsPerPurchase: 20,
   isGuestCheckout: false,
   handleChange: vi.fn(),
   handleSubmit: vi.fn(event => event.preventDefault()),
@@ -54,6 +55,17 @@ describe('single-journey booking', () => {
     expect(paymentButton).toBeEnabled();
     fireEvent.submit(paymentButton.closest('form'));
     expect(state.handleSubmit).toHaveBeenCalledOnce();
+  });
+
+  // Batch 49 item 1: seats are taken only when the payment is confirmed (the user's wording), and the purchase limit
+  // comes from the server.
+  it('says the seat is saved at checkout and shows the server purchase limit', () => {
+    useBuyTicket.mockReturnValue({ ...bookingState(), maxSeatsPerPurchase: 8 });
+    render(<MemoryRouter><BuyTicket /></MemoryRouter>);
+
+    expect(screen.getByText('Proceed to checkout to save the seat.')).toBeInTheDocument();
+    expect(screen.getByText('Up to 8 tickets per booking.')).toBeInTheDocument();
+    expect(screen.getByLabelText('Ticket Quantity')).toHaveAttribute('max', '8');
   });
 
   it('blocks payment until the single-journey fare is ready or rewards are valid', () => {

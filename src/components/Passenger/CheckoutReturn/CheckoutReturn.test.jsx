@@ -52,6 +52,17 @@ describe('CheckoutReturn (C4: the webhook decides, the return URL only refreshes
     expect(storedEvent().status).toBe(status);
   });
 
+  // Batch 49 item 1: seats are taken only when the payment is confirmed; a bus that filled up first means a refund.
+  test.each(['needs_refund', 'refunded'])('a paid checkout whose bus filled up (%s) says the money is being refunded', async (status) => {
+    getPaymentStatus.mockResolvedValue({ status });
+    renderAt('/checkout/success?ref=TXN-9');
+
+    await waitFor(() => expect(screen.getByText('The Bus Filled Up')).toBeInTheDocument());
+    expect(screen.getByText(/refunded automatically/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Book Again' })).toBeInTheDocument();
+    expect(storedEvent().status).toBe('refund');
+  });
+
   test('the cancel redirect reads as cancelled while nothing is recorded yet', async () => {
     getPaymentStatus.mockResolvedValue({ status: 'pending' });
     renderAt('/checkout/cancel?ref=TXN-3');

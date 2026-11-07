@@ -54,6 +54,30 @@ describe('PaymentRefundsPage', () => {
     expect(reason).toHaveTextContent('does not move money');
   });
 
+  // Batch 49 item 1: a "bus filled up" payment is refunded through PayMongo automatically.
+  it('shows an automatic refund in progress with nothing to record by hand', async () => {
+    render(<PaymentRefundsPage service={makeService([row({ automatic_refund_pending: true })])} embedded />);
+
+    const card = await screen.findByTestId('refund-card');
+    expect(screen.getByTestId('refund-status')).toHaveTextContent('Refund in progress');
+    expect(screen.getByTestId('refund-automatic')).toHaveTextContent('sent back through PayMongo automatically');
+    expect(within(card).queryByRole('button', { name: 'Record refund' })).not.toBeInTheDocument();
+  });
+
+  it('shows why an automatic refund needs a hand refund, and the form to record it', async () => {
+    render(<PaymentRefundsPage service={makeService([row({ refund_note: 'Automatic refund failed. Refund it by hand.' })])} embedded />);
+
+    expect(await screen.findByTestId('refund-reason')).toHaveTextContent('Automatic refund failed. Refund it by hand.');
+    expect(screen.getByRole('button', { name: 'Record refund' })).toBeInTheDocument();
+  });
+
+  it('says a refund was made automatically through PayMongo', async () => {
+    const done = row({ status: 'refunded', refunded_automatically: true, refunded_at: '2026-10-05T03:00:00+00:00', refund_note: 'Refunded automatically through PayMongo (ref_1).' });
+    render(<PaymentRefundsPage service={makeService([done])} embedded />);
+
+    expect(await screen.findByTestId('refund-recorded')).toHaveTextContent('Refunded automatically through PayMongo on');
+  });
+
   it('shows a guest by the email they paid with', async () => {
     const service = makeService([row({ payer: { is_guest: true, name: null, email: 'guest@example.com' } })]);
     render(<PaymentRefundsPage service={service} embedded />);

@@ -26,7 +26,12 @@ const COPY = {
   },
   expired: {
     title: 'Payment Session Expired',
-    body: 'The payment session ran out of time and the held seats were released. Please start a new booking.',
+    body: 'The payment session ran out of time. No ticket was issued. Please start a new booking.',
+  },
+  // Batch 49 item 1: seats are taken only when the payment is confirmed; if the bus filled up first, it is refunded.
+  refund: {
+    title: 'The Bus Filled Up',
+    body: 'Your payment went through, but the last seats were taken before it was confirmed, so no ticket was issued. Your full payment is being refunded automatically, and we will email you when it is done.',
   },
   cancel: {
     title: 'Payment Cancelled',
@@ -67,6 +72,7 @@ export default function CheckoutReturn() {
           if (status?.status === 'paid') return 'success';
           if (status?.status === 'failed') return 'failed';
           if (status?.status === 'expired') return 'expired';
+          if (status?.status === 'needs_refund' || status?.status === 'refunded') return 'refund';
         } catch (error) {
           // Not yet known: keep trying, later when the server said "too many requests".
           delay = nextCheckDelay(error, POLL_INTERVAL_MS);
@@ -130,7 +136,7 @@ export default function CheckoutReturn() {
           <Link to="/passenger/dashboard?tab=tickets" className="rounded-lg bg-sky-500 px-3 py-2 text-xs font-semibold text-slate-950 hover:bg-sky-400">
             Open My Tickets
           </Link>
-          {(outcome === 'failed' || outcome === 'expired' || outcome === 'cancel') && (
+          {(outcome === 'failed' || outcome === 'expired' || outcome === 'cancel' || outcome === 'refund') && (
             <Link to="/passenger/book" className="rounded-lg border border-slate-700 px-3 py-2 text-xs hover:border-slate-500">
               Book Again
             </Link>

@@ -10,6 +10,7 @@ const FILTERS = [['needs_refund', 'Needs refund'], ['outcome_unknown', 'Unknown 
 
 const STATUS_CHIP = {
   needs_refund: ['Needs refund', 'bg-red-100 text-red-700'],
+  refund_in_progress: ['Refund in progress', 'bg-sky-100 text-sky-700'],
   outcome_unknown: ['Outcome unknown', 'bg-amber-100 text-amber-800'],
   refunded: ['Refunded', 'bg-emerald-100 text-emerald-700'],
 };
@@ -26,7 +27,9 @@ function RefundCard({ row, busy, error, onRecord, onReconcile }) {
   const [confirmedNotCharged, setConfirmedNotCharged] = useState(false);
   const waiting = row.status === 'needs_refund';
   const outcomeUnknown = row.reconciliation_status === 'outcome_unknown';
-  const displayStatus = outcomeUnknown ? 'outcome_unknown' : row.status;
+  // Batch 49 item 1: a "bus filled up" payment is refunded through PayMongo automatically; nothing to do while it runs.
+  const automatic = waiting && row.automatic_refund_pending === true;
+  const displayStatus = outcomeUnknown ? 'outcome_unknown' : automatic ? 'refund_in_progress' : row.status;
   const [chipLabel, chipClass] = STATUS_CHIP[displayStatus] || [displayStatus, 'bg-slate-100 text-slate-600'];
   const noteValue = note.trim();
   const invalid = noteValue.length < (outcomeUnknown ? 12 : 3);
@@ -88,10 +91,15 @@ function RefundCard({ row, busy, error, onRecord, onReconcile }) {
             </div>
           </form>
         </>
+      ) : automatic ? (
+        <p className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-900" data-testid="refund-automatic">
+          {row.reason} The full amount was sent back through PayMongo automatically. Nothing to do here: this changes to Refunded when PayMongo confirms it.
+        </p>
       ) : waiting ? (
         <>
           <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800" data-testid="refund-reason">
             {row.reason} The passenger was charged. Refund it in your PayMongo dashboard, then record it here. This screen does not move money.
+            {row.refund_note ? <span className="mt-1 block font-semibold">{row.refund_note}</span> : null}
           </p>
           <dl className="grid gap-x-4 gap-y-1 text-xs text-slate-600 sm:grid-cols-2">
             <div className="min-w-0"><dt className="inline text-slate-500">PayMongo payment: </dt><dd className="inline font-data break-all">{row.gateway_payment_id || 'not stored (find it by the checkout reference)'}</dd></div>
@@ -114,7 +122,9 @@ function RefundCard({ row, busy, error, onRecord, onReconcile }) {
         </>
       ) : (
         <p className="border-t border-slate-100 pt-3 text-sm text-slate-700" data-testid="refund-recorded">
-          Refund recorded by {row.refunded_by_name || 'an Operator'} on {formatPaidAt(row.refunded_at)}.
+          {row.refunded_automatically
+            ? <>Refunded automatically through PayMongo on {formatPaidAt(row.refunded_at)}.</>
+            : <>Refund recorded by {row.refunded_by_name || 'an Operator'} on {formatPaidAt(row.refunded_at)}.</>}
           {row.refund_note ? <span className="mt-1 block text-xs text-slate-500">Reference: <span className="font-data">{row.refund_note}</span></span> : null}
         </p>
       )}
@@ -156,7 +166,7 @@ export default function PaymentRefundsPage({ service, embedded = false }) {
         <p className="rounded-xl border border-slate-200 bg-slate-50 p-6 text-sm text-slate-500">Loading payments...</p>
       ) : r.rows.length === 0 ? (
         <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-6 text-sm text-slate-600" data-testid="refunds-empty">
-          {r.status === 'needs_refund' ? 'Nothing needs a refund. A payment appears here only when it was charged after its seats were released.' : r.status === 'outcome_unknown' ? 'No checkout outcomes need reconciliation.' : 'No payments to show.'}
+          {r.status === 'needs_refund' ? 'Nothing needs a refund. A payment appears here only when it was charged but no ticket could be made.' : r.status === 'outcome_unknown' ? 'No checkout outcomes need reconciliation.' : 'No payments to show.'}
         </p>
       ) : (
         <div className={`space-y-3 ${r.loading ? 'opacity-60' : ''}`}>

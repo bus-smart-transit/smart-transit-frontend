@@ -18,6 +18,7 @@ const QR_CACHE_TTL_MS = 5 * 60 * 1000;
 // PayMongo checkout sessions are short-lived; treat a pending-checkout flag
 // older than this as abandoned/stale rather than trusting it forever.
 const CHECKOUT_PENDING_TTL_MS = 30 * 60 * 1000;
+const DEFAULT_MAX_SEATS = 20;
 
 
 const pickStopName = (value) => {
@@ -118,13 +119,18 @@ export default function useBuyTicket({ onTicketPurchased }) {
   const [error, setError] = useState('');
   const [formErrors, setFormErrors] = useState({});
   const [bookingFee, setBookingFee] = useState(null);
+  // Batch 49 item 1: the most tickets in one purchase comes from the server (it checks it too); 20 until it answers.
+  const [maxSeatsPerPurchase, setMaxSeatsPerPurchase] = useState(DEFAULT_MAX_SEATS);
 
   useEffect(() => {
     let cancelled = false;
     getBookingWindow()
       .then((window) => {
         const fee = Number(window?.online_booking_fee);
-        if (!cancelled) setBookingFee(Number.isFinite(fee) ? fee : null);
+        const maxSeats = Number(window?.max_seats_per_purchase);
+        if (cancelled) return;
+        setBookingFee(Number.isFinite(fee) ? fee : null);
+        if (Number.isInteger(maxSeats) && maxSeats > 0) setMaxSeatsPerPurchase(maxSeats);
       })
       .catch(() => { if (!cancelled) setBookingFee(null); });
     return () => { cancelled = true; };
@@ -537,8 +543,9 @@ export default function useBuyTicket({ onTicketPurchased }) {
     lastCheckoutEventTsRef.current = normalizedTs;
 
     // The return page reports what the server has recorded (the webhook is the source of
-    // truth): success | pending (still confirming) | failed | expired | cancel.
-    const normalized = ['success', 'pending', 'failed', 'expired'].includes(status) ? status : 'cancel';
+    // truth): success | pending (still confirming) | failed | expired | refund (Batch 49: paid, but the bus filled up
+    // first, so the money is being given back) | cancel.
+    const normalized = ['success', 'pending', 'failed', 'expired', 'refund'].includes(status) ? status : 'cancel';
     setCheckoutStatus(normalized);
 
     if (normalized === 'pending') {
@@ -589,7 +596,8 @@ export default function useBuyTicket({ onTicketPurchased }) {
     setQrTickets([]);
     setError({
       failed: 'The payment did not go through. No ticket was issued and you were not charged. You may try again.',
-      expired: 'The payment session expired and the seats were released. Please start again.',
+      expired: 'The payment session expired. No ticket was issued. Please start again.',
+      refund: 'The bus filled up before your payment went through, so no ticket was issued. Your full payment is being refunded automatically, and we will email you when it is done.',
     }[normalized] || 'Payment was cancelled. No ticket was issued. You may try again.');
     clearPendingCheckout();
     localStorage.removeItem(CHECKOUT_EVENT_KEY);
@@ -732,6 +740,8 @@ export default function useBuyTicket({ onTicketPurchased }) {
       }
       if (!Number.isFinite(parseInt(form.ticket_quantity, 10)) || parseInt(form.ticket_quantity, 10) < 1) {
         nextErrors.ticket_quantity = 'Ticket quantity must be at least 1.';
+      } else if (parseInt(form.ticket_quantity, 10) > maxSeatsPerPurchase) {
+        nextErrors.ticket_quantity = `You can buy up to ${maxSeatsPerPurchase} tickets in one purchase.`;
       }
       if (!effectiveAlightingStopId) {
         nextErrors.destination_stop_id = 'Please choose where you get off.';
@@ -821,6 +831,7 @@ export default function useBuyTicket({ onTicketPurchased }) {
     isGuestCheckout,
     isRewardRequestInsufficient,
     maxRedeemableRewardPoints,
+    maxSeatsPerPurchase,
     quantity,
     rewardPointsToApply,
     trip,
@@ -852,6 +863,7 @@ export default function useBuyTicket({ onTicketPurchased }) {
     maxRedeemableRewardPoints,
     netTotal,
     bookingFee,
+    maxSeatsPerPurchase,
     totalDue,
     printQrTicket,
     qrTickets,
