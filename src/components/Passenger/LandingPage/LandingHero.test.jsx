@@ -119,7 +119,7 @@ describe('LandingHero available trips preview', () => {
     expect(getTrips).toHaveBeenCalledWith({ seat_type: 'seated', page: 1, date: '2026-10-01', per_page: 5 });
     expect(screen.getAllByRole('button', { name: 'Book Seat' })).toHaveLength(5);
     expect(screen.getAllByText('PHP 58.00')).toHaveLength(5);
-    expect(screen.getByText(/11 seated seats available/)).toBeInTheDocument();
+    expect(screen.getByText(/11 seats left on this bus/)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /see all available trips \(7\)/i })).toHaveAttribute('href', '/passenger/trips?date=2026-10-01');
   });
 

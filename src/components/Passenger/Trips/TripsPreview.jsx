@@ -40,7 +40,6 @@ export default function TripsPreview({ today, previewLimit, live, search, onBook
             state={{ ...state, message: emptyMessage }}
             fromName={view.fromName}
             toName={view.toName}
-            seatType="seated"
             searchedDate={queryDate}
             onBook={onBook}
             footer={state.total > 0 && (

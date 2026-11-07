@@ -110,6 +110,8 @@ const ticketMeta = (ticket) => {
     expires_at: ticket?.expires_at ?? null,
     // The link that follows this ticket's bus (the owner's own; set by the server).
     tracking_token: ticket?.tracking_token ?? null,
+    // Batch 49 item 5: the short code typed at "Track my bus".
+    tracking_code: ticket?.tracking_code ?? null,
   };
 };
 

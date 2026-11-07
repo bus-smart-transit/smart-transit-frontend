@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import useFareOptions from '../../api/hooks/Staff/useFareOptions'
 import StepUpModal from './StepUpModal'
-import { buildFareRulePayload, formatUpdatedAt } from '../../utils/fareRule'
+import { addFormFrom, addFormHasInput, buildFareRulePayload, formatUpdatedAt } from '../../utils/fareRule'
 import { getBusinessToday } from '../../utils/dates'
 import { FareRuleCopyModal, FareRuleEditModal } from './FareRuleActions'
 
@@ -24,6 +24,8 @@ const EMPTY_FORM = {
   scope: 'general', fleet_id: '', vehicle_class: '', service_type: 'regular', route_id: '', seat_type: 'seated',
   base_fare: '', base_distance_km: '', fare_per_km: '', rounding_mode: '', effective_from: '', effective_to: '', note: '',
 }
+// When a held extra check runs out (30 seconds early, to be safe). Outside the component: it reads the clock.
+const stepUpExpiry = (expiresIn) => Date.now() + Math.max(0, expiresIn - 30) * 1000
 const EMPTY_FILTERS = { scope: '', vehicle_class: '', service_type: '', seat_type: '', status: '', route_id: '' }
 
 const cap = (value) => (value ? String(value).charAt(0).toUpperCase() + String(value).slice(1) : '')
@@ -104,6 +106,7 @@ export default function FareRulesPanel({ service, fleets = [], routes = [], canC
     const result = await withStepUp(async (token) => {
       await service.createFareRule(buildFareRulePayload(form), token)
       setForm((prev) => ({ ...prev, base_fare: '', fare_per_km: '', base_distance_km: '', note: '', effective_from: '', effective_to: '' }))
+      setCopiedFrom(null)
       await load()
       return 'Fare rule saved.'
     })
@@ -112,7 +115,7 @@ export default function FareRulesPanel({ service, fleets = [], routes = [], canC
   }
 
   const onVerified = ({ token, expiresIn }) => {
-    stepUpRef.current = { token, expiresAt: Date.now() + Math.max(0, expiresIn - 30) * 1000 }
+    stepUpRef.current = { token, expiresAt: stepUpExpiry(expiresIn) }
     setStepUpOpen(false)
     const pending = pendingRef.current
     pendingRef.current = null
@@ -132,6 +135,27 @@ export default function FareRulesPanel({ service, fleets = [], routes = [], canC
   const [editing, setEditing] = useState(null)
   const canChange = (rule) => !readOnly && (Boolean(rule.fleet_id) || canCreateGeneral)
   const ruleTitle = (rule) => `${ruleScope(rule)}, ${cap(rule.seat_type)}`
+
+  // Batch 49 item 3: "Use in form" copies a row's values into the Add form (nothing saved until Save). If the person
+  // already typed something, they are asked first.
+  const emptyForm = { ...EMPTY_FORM, scope: canCreateGeneral ? 'general' : 'fleet' }
+  const formRef = useRef(null)
+  const [copiedFrom, setCopiedFrom] = useState(null)
+  const [replacing, setReplacing] = useState(null)
+  const fillFrom = (rule) => {
+    setForm(addFormFrom(rule, { canCreateGeneral }))
+    setCopiedFrom(rule)
+    setReplacing(null)
+    setMessage('')
+    formRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
+    formRef.current?.querySelector('input, select')?.focus?.({ preventScroll: true })
+  }
+  const applyRuleToForm = (rule) => (addFormHasInput(form, emptyForm) ? setReplacing(rule) : fillFrom(rule))
+  const clearForm = () => {
+    setForm(emptyForm)
+    setCopiedFrom(null)
+    setReplacing(null)
+  }
   const copyRule = (rule, payload) => withStepUp(async (token) => {
     await service.copyFareRule(rule.fare_rule_id, payload, token)
     await load()
@@ -211,6 +235,9 @@ export default function FareRulesPanel({ service, fleets = [], routes = [], canC
                 <td className="px-2 py-1.5 whitespace-nowrap" data-testid="fare-rule-updated">{formatUpdatedAt(rule.updated_at)}</td>
                 <td className={`px-2 py-1.5 ${t.muted}`}>{rule.note || ''}</td>
                 <td className="px-2 py-1.5">
+                  {!readOnly && (
+                    <button type="button" onClick={() => applyRuleToForm(rule)} aria-label={`Use fare ${ruleTitle(rule)} in the form`} className="mb-1.5 min-h-11 whitespace-nowrap rounded-lg border border-navy-300 px-2.5 text-xs font-semibold text-navy-800 hover:bg-navy-50 sm:min-h-9">Use in form</button>
+                  )}
                   {canChange(rule) && (
                     <span className="flex gap-1.5">
                       <button type="button" onClick={() => setCopying(rule)} aria-label={`Copy fare ${ruleTitle(rule)}`} className="min-h-9 rounded-lg border border-teal-300 px-2.5 text-xs font-semibold text-teal-700 hover:bg-teal-50">Copy</button>
@@ -226,8 +253,21 @@ export default function FareRulesPanel({ service, fleets = [], routes = [], canC
 
       {readOnly ? (
         <p className={`border-t pt-4 text-xs ${t.muted} ${t.rule}`} data-testid="fare-read-only-note">Only your company admin can change fares.</p>
-      ) : <form onSubmit={onSubmit} className={`space-y-3 border-t pt-4 ${t.rule}`} aria-label="Add fare rule">
+      ) : <form ref={formRef} onSubmit={onSubmit} className={`space-y-3 border-t pt-4 ${t.rule}`} aria-label="Add fare rule">
         <p className={`text-xs font-semibold uppercase tracking-[0.14em] ${t.title}`}>Add a rule</p>
+        {replacing && (
+          <div role="alertdialog" aria-label="Replace the form" className="flex flex-wrap items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            <span>Replace what you typed with the {ruleTitle(replacing)} rule?</span>
+            <button type="button" onClick={() => fillFrom(replacing)} className="min-h-9 rounded-lg bg-amber-600 px-3 text-xs font-semibold text-white hover:bg-amber-700">Replace</button>
+            <button type="button" onClick={() => setReplacing(null)} className="min-h-9 rounded-lg border border-amber-300 px-3 text-xs font-semibold">Keep what I typed</button>
+          </div>
+        )}
+        {copiedFrom && (
+          <p data-testid="fare-copied-note" className={`flex flex-wrap items-center gap-2 rounded-xl border px-3 py-2 text-sm ${t.ok}`}>
+            <span>Copied from the {ruleTitle(copiedFrom)} rule. Change what you need, then save.{form.scope === 'fleet' && !form.fleet_id ? ' Pick the fleet.' : ''}</span>
+            <button type="button" onClick={clearForm} className="min-h-9 rounded-lg border border-current px-3 text-xs font-semibold">Clear</button>
+          </p>
+        )}
         <div className="grid gap-3 md:grid-cols-4">
           {canCreateGeneral && (
             <select aria-label="Rule applies to" value={form.scope} onChange={set('scope')} className={t.field}>

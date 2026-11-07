@@ -104,6 +104,12 @@ export default function TrackBusPage() {
               </div>
             )}
 
+            {/* Batch 49 item 4: the Super Admin's GPS simulator is moving this bus (a demonstration). */}
+            {bus?.simulated && (
+              <p data-testid="simulated-chip" className="rounded-xl bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-900 ring-1 ring-inset ring-amber-200">
+                Simulated: this bus position is a demonstration, not the real bus.
+              </p>
+            )}
             {canMap && (
               <section aria-label="Map" className="h-96 overflow-hidden rounded-2xl ring-1 ring-slate-200">
                 <RouteMap

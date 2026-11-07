@@ -16,6 +16,19 @@ class AdminService extends StaffBaseService {
     return await this.request('/admin/health', 'GET');
   }
 
+  // Batch 49 item 4: the GPS simulator ("Take control of GPS location") for departed trips.
+  async getGpsSimulations() {
+    return await this.request('/admin/gps-simulations', 'GET');
+  }
+
+  async startGpsSimulation(tripId, speed) {
+    return await this.request('/admin/gps-simulations', 'POST', { trip_id: tripId, speed });
+  }
+
+  async controlGpsSimulation(simulationId, body) {
+    return await this.request(`/admin/gps-simulations/${simulationId}`, 'PATCH', body);
+  }
+
   // Batch 48 Phase 3: companies and every account.
   async getCompanies() {
     return await this.request('/admin/companies', 'GET');

@@ -28,10 +28,12 @@ export default function TicketCard({
   farePaid = null,
   discountVerified = false,
   trackingToken = '',
+  trackingCode = '',
   onRenewLink = null,
 }) {
   const footer = STATUS_FOOTER[String(statusLabel).toLowerCase()] ?? STATUS_FOOTER.issued;
   const [copied, setCopied] = useState(false);
+  const [codeCopied, setCodeCopied] = useState(false);
   // Replacing the link is a two-step action: it cuts off anyone who has the old one, including the passenger's own copies.
   const [renewStep, setRenewStep] = useState('idle'); // idle | confirm | working | error
   const [renewError, setRenewError] = useState('');
@@ -45,6 +47,17 @@ export default function TicketCard({
       setTimeout(() => setCopied(false), 2000);
     } catch {
       setCopied(false);
+    }
+  };
+
+  // Batch 49 item 5: the short code is the main way to follow the bus; typed at "Track my bus".
+  const copyCode = async () => {
+    try {
+      await navigator.clipboard.writeText(trackingCode);
+      setCodeCopied(true);
+      setTimeout(() => setCodeCopied(false), 2000);
+    } catch {
+      setCodeCopied(false);
     }
   };
 
@@ -103,6 +116,23 @@ export default function TicketCard({
           </>}
         </dl>
       </div>
+
+      {canTrack && trackingCode && (
+        <div className="mx-3.5 mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5" data-testid="tracking-code">
+          <div>
+            <span className="block text-[0.62rem] font-semibold uppercase tracking-wide text-slate-500">Tracking code</span>
+            <strong className="font-data text-lg tracking-[0.2em] text-navy-950">{trackingCode}</strong>
+            <span className="block text-xs text-slate-500">Type it at <Link to="/track" className="font-semibold text-navy-800 underline">Track my bus</Link>.</span>
+          </div>
+          <button
+            type="button"
+            onClick={copyCode}
+            className="min-h-11 rounded-full border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
+          >
+            {codeCopied ? 'Code copied' : 'Copy code'}
+          </button>
+        </div>
+      )}
 
       {canTrack && (
         <div className="mx-3.5 mb-3 flex flex-wrap items-center gap-2">

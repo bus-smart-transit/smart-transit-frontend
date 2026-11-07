@@ -240,3 +240,57 @@ export function useAdminHealth() {
 
   return { health, loading: answered !== requested, error, reload };
 }
+
+// Batch 49 item 4: how often the GPS simulator screen refreshes while a simulation is running (the bus moves every few
+// seconds on the server).
+export const GPS_SIMULATOR_REFRESH_MS = 4000;
+
+/**
+ * Batch 49 item 4: the GPS simulator screen. Loads the switch, the simulations and the departed trips; refreshes on
+ * its own while a simulation is running; every action reloads the list. The server checks everything.
+ */
+export function useAdminGpsSimulator() {
+  const [data, setData] = useState(null);
+  const [error, setError] = useState('');
+  const [requested, setRequested] = useState(0);
+  const [answered, setAnswered] = useState(-1);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    AdminService.getGpsSimulations()
+      .then((response) => { if (active) { setData(response?.data ?? null); setError(''); } })
+      .catch((err) => { if (active) setError(adminErrorText(err, 'The GPS simulator could not be loaded. Try again.')); })
+      .finally(() => { if (active) setAnswered(requested); });
+    return () => { active = false; };
+  }, [requested]);
+
+  const reload = useCallback(() => setRequested((n) => n + 1), []);
+  const running = Boolean(data?.simulations?.some((sim) => sim.status === 'running'));
+
+  useEffect(() => {
+    if (!running) return undefined;
+    const timer = setInterval(reload, GPS_SIMULATOR_REFRESH_MS);
+    return () => clearInterval(timer);
+  }, [running, reload]);
+
+  const act = useCallback(async (call, fallback) => {
+    setBusy(true);
+    try {
+      await call();
+      setError('');
+      return true;
+    } catch (err) {
+      setError(adminErrorText(err, fallback));
+      return false;
+    } finally {
+      setBusy(false);
+      reload();
+    }
+  }, [reload]);
+
+  const start = useCallback((tripId, speed) => act(() => AdminService.startGpsSimulation(tripId, speed), 'The simulation could not start. Try again.'), [act]);
+  const control = useCallback((simulationId, body) => act(() => AdminService.controlGpsSimulation(simulationId, body), 'That did not work. Try again.'), [act]);
+
+  return { data, loading: answered !== requested, error, busy, reload, start, control };
+}

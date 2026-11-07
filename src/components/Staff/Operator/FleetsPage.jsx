@@ -202,6 +202,8 @@ function TrackFleetModal({ row, advice, saving, error, onDecide, onClose, onOpen
           <div className={OP_SPACE.inline}>
             <OpChip tone={row.status.tone}>{row.status.label}</OpChip>
             <OpChip tone={GPS_TONE[row.gps.state]}>{row.gps.label}</OpChip>
+            {/* Batch 49 item 4: the Super Admin's GPS simulator has control of this bus. */}
+            {row.location?.is_simulated && <OpChip tone="warning">Simulated</OpChip>}
             {row.lastSeen && row.gps.state === 'live' && <span className="text-xs text-slate-500">Last update {row.lastSeen}</span>}
           </div>
           <div className="overflow-hidden rounded-xl border border-slate-200">

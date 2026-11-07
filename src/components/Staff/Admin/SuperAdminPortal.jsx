@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Activity, Banknote, Building2, ClipboardList, LayoutDashboard, ShieldCheck, Users } from 'lucide-react';
+import { Activity, Banknote, Building2, ClipboardList, LayoutDashboard, Navigation, ShieldCheck, Users } from 'lucide-react';
 import StaffPortalLayout from '../StaffPortalLayout';
 import SuperAdminDashboard from './SuperAdminDashboard';
 import CompaniesPage from './CompaniesPage';
@@ -7,8 +7,9 @@ import UsersPage from './UsersPage';
 import AuditLogPage from './AuditLogPage';
 import PaymentsPage from './PaymentsPage';
 import SystemHealthPage from './SystemHealthPage';
+import GpsSimulatorPage from './GpsSimulatorPage';
 import { getBusinessToday } from '../../../utils/dates';
-import { useAdminAuditLog, useAdminCompanies, useAdminHealth, useAdminPayments, useAdminOverview, useAdminUsers, useSuperAdminSession } from '../../../api/hooks/Staff/useSuperAdmin';
+import { useAdminAuditLog, useAdminCompanies, useAdminGpsSimulator, useAdminHealth, useAdminPayments, useAdminOverview, useAdminUsers, useSuperAdminSession } from '../../../api/hooks/Staff/useSuperAdmin';
 
 // Batch 48: the Super Admin portal. Each phase added its own item here (Phase 7 removed the earlier Admin panel).
 const NAV = [
@@ -18,6 +19,8 @@ const NAV = [
   { key: 'payments', label: 'Payments', icon: Banknote },
   { key: 'audit', label: 'Audit log', icon: ClipboardList },
   { key: 'health', label: 'System health', icon: Activity },
+  // Batch 49 item 4: "Take control of GPS location" for the defense demo.
+  { key: 'gps', label: 'GPS simulator', icon: Navigation },
 ];
 
 // Each page loads its own data only when it is open.
@@ -37,6 +40,10 @@ function PaymentsTab() {
 
 function HealthTab() {
   return <SystemHealthPage healthTab={useAdminHealth()} />;
+}
+
+function GpsTab() {
+  return <GpsSimulatorPage simulatorTab={useAdminGpsSimulator()} />;
 }
 
 function AuditTab() {
@@ -70,6 +77,7 @@ export default function SuperAdminPortal() {
         {tab === 'payments' && <PaymentsTab />}
         {tab === 'audit' && <AuditTab />}
         {tab === 'health' && <HealthTab />}
+        {tab === 'gps' && <GpsTab />}
       </div>
     </StaffPortalLayout>
   );

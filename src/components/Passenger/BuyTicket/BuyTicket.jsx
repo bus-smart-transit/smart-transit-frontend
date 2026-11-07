@@ -15,6 +15,7 @@ import Modal from '../../ui/Modal';
 import RouteMap from '../../Map/RouteMap';
 import { formatManilaDate } from '../../../utils/dates';
 import { formatDuration } from '../../../utils/tripTimeline';
+import { seatsLeftText, tripProgressText } from '../../../utils/passengerTripProgress';
 
 // Matches OnlineCheckoutRequest: the passenger picks GCash or Maya (C4). The payment
 // page itself collects whatever else the provider needs.
@@ -236,6 +237,7 @@ export default function BuyTicket({ onTicketPurchased, returnTo = '/' }) {
             farePaid={qrTickets[0]?.amount}
             discountVerified={Boolean(qrTickets[0]?.discount_id_checked_at)}
             trackingToken={qrTickets[0]?.tracking_token || ''}
+            trackingCode={qrTickets[0]?.tracking_code || ''}
           />
         )}
 
@@ -264,9 +266,14 @@ export default function BuyTicket({ onTicketPurchased, returnTo = '/' }) {
               <div className="flex items-center justify-between gap-3">
                 <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">Route</span>
                 <div className="flex items-center gap-2">
+                  {trip && tripProgressText(trip.progress) && (
+                    <span data-testid="trip-progress" className="rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700">
+                      {tripProgressText(trip.progress)}
+                    </span>
+                  )}
                   {trip && (
                     <span className="rounded-full bg-teal-50 px-3 py-1 text-xs font-semibold text-teal-700">
-                      {trip.seats_left} {form.seat_type} seat{trip.seats_left === 1 ? '' : 's'} available
+                      {seatsLeftText(trip.seats_left)}
                     </span>
                   )}
                   <button
@@ -364,7 +371,7 @@ export default function BuyTicket({ onTicketPurchased, returnTo = '/' }) {
                                 }`}
                               >
                                 <span className="block font-bold">{departure.boarding_time}</span>
-                                <span className="block text-[0.7rem] text-slate-500">{departure.seats_left} {form.seat_type} left</span>
+                                <span className="block text-[0.7rem] text-slate-500">{seatsLeftText(departure.seats_left)}</span>
                               </button>
                             );
                           })}
@@ -634,6 +641,7 @@ export default function BuyTicket({ onTicketPurchased, returnTo = '/' }) {
               validLabel={formatDateTime(ticketPreview.ticket.valid_from)}
               expiresLabel={formatDateTime(ticketPreview.ticket.expires_at)}
               trackingToken={ticketPreview.ticket.tracking_token || ''}
+              trackingCode={ticketPreview.ticket.tracking_code || ''}
             />
           </>
         )}

@@ -226,7 +226,8 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
         const projected = row?.route_position?.on_route ? row.route_position : null;
         const lat = Number(projected ? projected.snapped_latitude : row.latitude);
         const lng = Number(projected ? projected.snapped_longitude : row.longitude);
-        const title = busLabelText(row?.bus_label);
+        // Batch 49 item 4: a bus moved by the Super Admin's GPS simulator says so.
+        const title = `${busLabelText(row?.bus_label)}${row?.is_simulated ? ' (Simulated)' : ''}`;
 
         if (!markersRef.current.has(fleetId)) {
           const icon = createBusMarkerElement({ color: busColorFor(row), heading: headingOf(row), title });
@@ -463,7 +464,7 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-widest text-teal-600">Track Bus</p>
-                <h3 className="text-lg font-semibold text-slate-900">{selectedFleet ? busLabelText(selectedFleet.bus_label) : 'No active bus detected'}</h3>
+                <h3 className="text-lg font-semibold text-slate-900">{selectedFleet ? busLabelText(selectedFleet.bus_label) : 'No active bus detected'}{selectedFleet?.is_simulated && <span data-testid="simulated-chip" className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 align-middle text-xs font-semibold text-amber-800">Simulated</span>}</h3>
               </div>
               <button
                 type="button"
@@ -612,7 +613,7 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
                     className={`w-full rounded-xl border px-3 py-3 text-left transition ${isSelected ? 'border-teal-400 bg-teal-50' : 'border-slate-200 bg-white hover:border-teal-200'}`}
                   >
                     <div className="flex items-start justify-between gap-2">
-                      <p className="font-semibold text-slate-900">{busLabelText(row?.bus_label)}</p>
+                      <p className="font-semibold text-slate-900">{busLabelText(row?.bus_label)}{row?.is_simulated && <span className="ml-1.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-[11px] font-semibold text-amber-800">Simulated</span>}</p>
                       <span className="inline-flex max-w-48 items-center gap-1 truncate rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-700">
                         <Bus className="h-3 w-3" />
                         {row?.destination || row?.route_name || 'Destination pending'}

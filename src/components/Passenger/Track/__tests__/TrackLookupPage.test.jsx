@@ -53,12 +53,12 @@ describe('TrackLookupPage', () => {
     expect((await screen.findByTestId('where')).textContent).toBe(`/track/${TOKEN}`);
   });
 
-  test('something that is not a code gets a friendly message and goes nowhere', () => {
+  test('something that is not a code gets a friendly message and goes nowhere', async () => {
     renderPage();
     fireEvent.change(screen.getByLabelText('Tracking code or link'), { target: { value: 'hello' } });
     fireEvent.click(screen.getByRole('button', { name: /track my bus/i }));
 
-    expect(screen.getByRole('alert')).toHaveTextContent(/does not look like a tracking code/i);
+    expect(await screen.findByRole('alert')).toHaveTextContent(/does not look like a tracking code/i);
     expect(screen.queryByTestId('where')).not.toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Tracking code or link'), { target: { value: TOKEN } });
     expect(screen.queryByRole('alert')).not.toBeInTheDocument(); // the message clears as soon as the field changes

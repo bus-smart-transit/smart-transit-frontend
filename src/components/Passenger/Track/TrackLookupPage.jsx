@@ -4,7 +4,7 @@ import { Navigation, Search, Ticket } from 'lucide-react'
 import TrackHeader from './TrackHeader'
 import Button from '../../ui/Button'
 import PassengerService from '../../../api/PassengerService/PassengerService'
-import { extractTrackingToken } from '../../../utils/trackingToken'
+import { resolveTrackingInput } from '../../../services/trackingService'
 import { formatManilaDate } from '../../../utils/dates'
 
 const TRACKABLE = ['valid', 'boarded']
@@ -27,14 +27,29 @@ export default function TrackLookupPage() {
   const [form, setForm] = useState({ reference: '', email: '' })
   const [lookup, setLookup] = useState({ status: 'idle', tickets: [], error: '' })
 
-  const submitCode = (event) => {
+  const [checking, setChecking] = useState(false)
+
+  // Batch 49 item 5: the short code from the ticket (or a tracking link), through the one tracking flow.
+  const submitCode = async (event) => {
     event.preventDefault()
-    const token = extractTrackingToken(code)
-    if (!token) {
-      setCodeError('That does not look like a tracking code. Copy the whole link or code from your ticket.')
-      return
+    setChecking(true)
+    try {
+      const token = await resolveTrackingInput(code)
+      if (!token) {
+        setCodeError('That does not look like a tracking code. Type the 8-character code from your ticket.')
+        return
+      }
+      navigate(`/track/${token}`)
+    } catch (err) {
+      const status = err?.response?.status
+      setCodeError(status === 429
+        ? 'Too many tries. Please wait a few minutes and try again.'
+        : status === 404
+          ? 'We could not find a bus for that code. Check the code and try again.'
+          : 'We could not check that code right now. Please try again.')
+    } finally {
+      setChecking(false)
     }
-    navigate(`/track/${token}`)
   }
 
   const submitLookup = async (event) => {
@@ -68,7 +83,7 @@ export default function TrackLookupPage() {
       <main className="mx-auto w-full max-w-2xl space-y-6 p-4 sm:p-6">
         <section aria-labelledby="track-code-heading" className="rounded-2xl bg-white p-5 shadow-card ring-1 ring-slate-200 sm:p-6">
           <h2 id="track-code-heading" className="font-display text-xl font-bold text-navy-950">Where is my bus?</h2>
-          <p className="mt-1 text-sm text-slate-600">Enter the tracking code or paste the tracking link from your ticket. It works for guest tickets and for tickets in your account.</p>
+          <p className="mt-1 text-sm text-slate-600">Type the tracking code from your ticket or email, or paste the tracking link. It works for guest tickets and for tickets in your account.</p>
 
           <form onSubmit={submitCode} className="mt-4 space-y-3" noValidate>
             <div>
@@ -78,7 +93,7 @@ export default function TrackLookupPage() {
                 type="text"
                 value={code}
                 onChange={(e) => { setCode(e.target.value); setCodeError('') }}
-                placeholder="Paste your tracking link or code"
+                placeholder="e.g. 7KQ4 M2XD"
                 autoComplete="off"
                 spellCheck={false}
                 aria-invalid={Boolean(codeError)}
@@ -87,7 +102,7 @@ export default function TrackLookupPage() {
               />
               {codeError && <p id="track-code-error" role="alert" className="mt-1.5 text-sm text-red-600">{codeError}</p>}
             </div>
-            <Button type="submit" variant="primary" size="lg" icon={Navigation} className="w-full sm:w-auto">Track my bus</Button>
+            <Button type="submit" variant="primary" size="lg" icon={Navigation} loading={checking} className="w-full sm:w-auto">Track my bus</Button>
           </form>
 
           <p className="mt-4 text-xs text-slate-500">

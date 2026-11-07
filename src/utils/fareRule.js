@@ -24,6 +24,37 @@ export function buildFareRulePayload(form) {
   return payload
 }
 
+/**
+ * Batch 49 item 3: "Use in form" fills the Add form with a row's values; nothing is saved until Save. The dates and
+ * the note are left empty (a copy with the same dates would only overlap the original; the server refuses overlaps
+ * either way). Someone who cannot add general rules gets a fleet rule to pick a bus for.
+ */
+export function addFormFrom(rule, { canCreateGeneral = false } = {}) {
+  const asFleet = Boolean(rule?.fleet_id) || !canCreateGeneral
+  const text = (value) => (value === null || value === undefined ? '' : String(value))
+  return {
+    scope: asFleet ? 'fleet' : 'general',
+    fleet_id: rule?.fleet_id ? String(rule.fleet_id) : '',
+    vehicle_class: text(rule?.vehicle_class || rule?.fleet?.vehicle_class),
+    service_type: rule?.service_type || 'regular',
+    route_id: !asFleet && rule?.route_id ? String(rule.route_id) : '',
+    seat_type: rule?.seat_type || 'seated',
+    base_fare: text(rule?.base_fare),
+    base_distance_km: text(rule?.base_distance_km),
+    fare_per_km: text(rule?.fare_per_km),
+    rounding_mode: text(rule?.rounding_mode),
+    effective_from: '',
+    effective_to: '',
+    note: '',
+  }
+}
+
+/** True when the Add form holds something the person typed (so replacing it needs a yes). */
+export function addFormHasInput(form, emptyForm) {
+  return ['fleet_id', 'vehicle_class', 'route_id', 'base_fare', 'base_distance_km', 'fare_per_km', 'rounding_mode', 'effective_from', 'effective_to', 'note']
+    .some((field) => String(form?.[field] ?? '') !== String(emptyForm?.[field] ?? ''))
+}
+
 // 2026-11-06: Copy and Edit on the fare screen. Dates are Manila calendar days ('YYYY-MM-DD'); the server decides.
 
 const addDays = (isoDate, days) => {

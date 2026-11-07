@@ -110,7 +110,6 @@ export default function AvailableTripsPage() {
         {!results.error && !noTrips && (
           <TripResults
             state={{ ...results, loading, message: '' }}
-            seatType="seated"
             searchedDate={shownDate}
             onBook={(trip) => navigate(tripBookingPath(trip), { state: { returnTo } })}
             footer={results.lastPage > 1 && (

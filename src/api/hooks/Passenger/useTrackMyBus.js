@@ -1,6 +1,5 @@
 import { useCallback, useState } from 'react';
-import { getTracking } from '../../../services/trackingService';
-import { extractTrackingToken } from '../../../utils/trackingToken';
+import { getTracking, resolveTrackingInput } from '../../../services/trackingService';
 
 /**
  * Batch 45 Feature C: the "Track my bus" pop-up. Step 1 takes the tracking code or link from the ticket; the server
@@ -17,13 +16,14 @@ export default function useTrackMyBus() {
   }, []);
 
   const check = useCallback(async () => {
-    const token = extractTrackingToken(code);
-    if (!token) {
-      setState((prev) => ({ ...prev, error: 'That does not look like a tracking code. Copy the whole link or code from your ticket.' }));
-      return;
-    }
     setState((prev) => ({ ...prev, loading: true, error: '' }));
     try {
+      // Batch 49 item 5: the short code from the ticket, or the tracking link.
+      const token = await resolveTrackingInput(code);
+      if (!token) {
+        setState((prev) => ({ ...prev, loading: false, error: 'That does not look like a tracking code. Type the 8-character code from your ticket.' }));
+        return;
+      }
       const view = await getTracking(token);
       setState({ step: 'confirm', loading: false, error: '', token, view });
     } catch (err) {
@@ -31,7 +31,7 @@ export default function useTrackMyBus() {
       const error = status === 429
         ? 'Too many tries. Please wait a few minutes and try again.'
         : status === 404
-          ? 'We could not find a ticket with that code. Check that you copied all of it.'
+          ? 'We could not find a bus for that code. Check the code and try again.'
           : 'We could not check that code right now. Please try again.';
       setState((prev) => ({ ...prev, loading: false, error }));
     }

@@ -83,3 +83,53 @@ describe('fare copy and edit', () => {
     await waitFor(() => expect(service.updateFareRule).toHaveBeenCalledWith(7, { effective_to: null, status: 'inactive', note: 'No longer followed' }, 'step-up-1'))
   })
 })
+
+// Batch 49 item 3: "Use in form" fills the Add form with a row's values. Nothing is saved until Save.
+describe('fare row into the Add form', () => {
+  test('fills the form with the row values (not its dates or note), says where they came from, and saves nothing', async () => {
+    render(<FareRulesPanel service={service} fleets={[{ fleet_id: 1, plate_number: 'DMS-001' }]} tone="light" />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Use fare Fleet DMS-001, Seated in the form' }))
+
+    expect(screen.getByTestId('fare-copied-note')).toHaveTextContent('Copied from the Fleet DMS-001, Seated rule. Change what you need, then save.')
+    expect(screen.getByLabelText('Fleet')).toHaveValue('1')
+    expect(screen.getByLabelText('Base fare')).toHaveValue(15)
+    expect(screen.getByLabelText('Fare per km')).toHaveValue(2.25)
+    expect(screen.getByLabelText('Base distance in km')).toHaveValue(5)
+    expect(screen.getByLabelText('Note')).toHaveValue('')
+    expect(service.createFareRule).not.toHaveBeenCalled()
+    expect(service.copyFareRule).not.toHaveBeenCalled()
+  })
+
+  test('asks before replacing what was typed, keeps it on "Keep", and Clear empties the form', async () => {
+    render(<FareRulesPanel service={service} fleets={[{ fleet_id: 1, plate_number: 'DMS-001' }]} tone="light" />)
+    await screen.findAllByTestId('fare-rule-row')
+    fireEvent.change(screen.getByLabelText('Base fare'), { target: { value: '99' } })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Use fare Fleet DMS-001, Seated in the form' }))
+    const ask = screen.getByRole('alertdialog', { name: 'Replace the form' })
+    fireEvent.click(within(ask).getByRole('button', { name: 'Keep what I typed' }))
+    expect(screen.getByLabelText('Base fare')).toHaveValue(99)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Use fare Fleet DMS-001, Seated in the form' }))
+    fireEvent.click(within(screen.getByRole('alertdialog', { name: 'Replace the form' })).getByRole('button', { name: 'Replace' }))
+    expect(screen.getByLabelText('Base fare')).toHaveValue(15)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear' }))
+    expect(screen.getByLabelText('Base fare')).toHaveValue(null)
+    expect(screen.queryByTestId('fare-copied-note')).toBeNull()
+  })
+
+  test('a general rule becomes a fleet rule to pick a bus for, for someone who cannot add general rules', async () => {
+    render(<FareRulesPanel service={service} fleets={[{ fleet_id: 1, plate_number: 'DMS-001' }]} tone="light" />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Use fare General, Seated in the form' }))
+
+    expect(screen.getByLabelText('Fleet')).toHaveValue('')
+    expect(screen.getByTestId('fare-copied-note')).toHaveTextContent('Pick the fleet.')
+  })
+
+  test('is not offered to an Operator who can only read fares', async () => {
+    render(<FareRulesPanel service={service} tone="light" readOnly />)
+    await screen.findAllByTestId('fare-rule-row')
+    expect(screen.queryByRole('button', { name: /in the form/ })).toBeNull()
+  })
+})

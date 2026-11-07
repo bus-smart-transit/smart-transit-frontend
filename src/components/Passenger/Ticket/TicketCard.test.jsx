@@ -90,3 +90,29 @@ describe('TicketCard: replacing the tracking link', () => {
     expect(screen.queryByRole('button', { name: 'New tracking link' })).toBeNull();
   });
 });
+
+
+// Batch 49 item 5: the short tracking code is the main way to follow the bus.
+describe('TicketCard: the tracking code', () => {
+  test('shows the code with a copy button and where to type it', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('navigator', { clipboard: { writeText } });
+    renderCard({ trackingCode: '7KQ4M2XD' });
+
+    const block = screen.getByTestId('tracking-code');
+    expect(block).toHaveTextContent('7KQ4M2XD');
+    expect(block).toHaveTextContent('Track my bus');
+    fireEvent.click(screen.getByRole('button', { name: 'Copy code' }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith('7KQ4M2XD'));
+    expect(await screen.findByRole('button', { name: 'Code copied' })).toBeInTheDocument();
+    vi.unstubAllGlobals();
+  });
+
+  test('shows no code when there is none or the ticket can no longer be tracked', () => {
+    const { unmount } = renderCard();
+    expect(screen.queryByTestId('tracking-code')).toBeNull();
+    unmount();
+    renderCard({ trackingCode: '7KQ4M2XD', statusLabel: 'expired' });
+    expect(screen.queryByTestId('tracking-code')).toBeNull();
+  });
+});

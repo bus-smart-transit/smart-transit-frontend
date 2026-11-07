@@ -174,10 +174,13 @@ export default function Dashboard() {
 
   // A replaced tracking link, by ticket: the card shows the new one at once, the old one no longer works on the server.
   const [renewedTokens, setRenewedTokens] = useState({});
+  // Batch 49 item 5: the tracking code is replaced with the link (the old code stops working too).
+  const [renewedCodes, setRenewedCodes] = useState({});
   const renewTrackingLink = async (ticketUuid) => {
     const res = await PassengerService.renewTrackingLink(ticketUuid);
     const token = res?.data?.tracking_token;
     if (token) setRenewedTokens((prev) => ({ ...prev, [ticketUuid]: token }));
+    if (token) setRenewedCodes((prev) => ({ ...prev, [ticketUuid]: res?.data?.tracking_code || '' }));
   };
 
   // S2: ticket-history status filter — Scheduled/Completed/Expired/Group,
@@ -888,6 +891,7 @@ export default function Dashboard() {
                 farePaid={selectedTicket.amount ?? selectedTicketQr?.amount}
                 discountVerified={Boolean(selectedTicket.discount_id_checked_at ?? selectedTicketQr?.discount_id_checked_at)}
                 trackingToken={renewedTokens[selectedTicket.ticket_uuid] || selectedTicket.tracking_token || ''}
+                trackingCode={selectedTicket.ticket_uuid in renewedCodes ? renewedCodes[selectedTicket.ticket_uuid] : (selectedTicket.tracking_code || '')}
                 onRenewLink={selectedTicket.ticket_uuid ? () => renewTrackingLink(selectedTicket.ticket_uuid) : null}
               />
               <p className="mt-3 flex items-center gap-2 text-sm text-slate-600" data-testid="ticket-bus-service">

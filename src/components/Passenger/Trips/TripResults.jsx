@@ -6,17 +6,20 @@ import { formatDuration } from '../../../utils/tripTimeline'
 import { busLabelText } from '../../../utils/busLabel'
 import { FARE_UNAVAILABLE } from '../../../utils/serviceType'
 import RunInfoChips from '../../ui/RunInfoChips'
+import { isDeparted, seatsLeftText, tripProgressText } from '../../../utils/passengerTripProgress'
 
 /**
  * One departure in the search results. Every value comes from the server: times are the scheduled
  * times at the chosen stops (or "unavailable"), seats are what is left, the fare is the quote from
  * the same fare service the ticket is priced with.
  */
-export function TripCard({ trip, fromName, toName, seatType = 'seated', showDate = false, onBook }) {
+export function TripCard({ trip, fromName, toName, showDate = false, onBook }) {
   const duration = formatDuration(trip.duration_minutes)
   // The stops of this trip's own journey come from the server; the props are only a fallback.
   const origin = trip.origin?.name || fromName
   const destination = trip.destination?.name || toName
+  const progressText = tripProgressText(trip.progress)
+  const departed = isDeparted(trip.progress)
   return (
     <Card className="p-5 sm:p-6">
       <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
@@ -40,8 +43,14 @@ export function TripCard({ trip, fromName, toName, seatType = 'seated', showDate
           </div>
           <p className="mt-2 flex items-center gap-1.5 text-sm text-slate-500">
             <User size={15} aria-hidden="true" />
-            {trip.seats_left} {seatType} seat{trip.seats_left === 1 ? '' : 's'} available
+            {seatsLeftText(trip.seats_left)}
           </p>
+          {/* Batch 49 item 2: a bus that has left shows where it is; from a stop it has passed it reads "Departed". */}
+          {progressText && (
+            <p data-testid="trip-progress" className={`mt-2 inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${departed ? 'bg-slate-100 text-slate-600' : 'bg-teal-50 text-teal-700'}`}>
+              {progressText}
+            </p>
+          )}
         </div>
 
         <div className="flex items-center justify-between gap-4 border-t border-slate-100 pt-4 lg:flex-col lg:items-end lg:gap-2 lg:border-t-0 lg:pt-0">
@@ -51,7 +60,7 @@ export function TripCard({ trip, fromName, toName, seatType = 'seated', showDate
               : <p className="text-sm text-slate-500">Fare unavailable</p>}
           </div>
           <Button variant="primary" size="sm" onClick={() => onBook(trip)} disabled={trip.bookable === false}>
-            {trip.bookable === false ? FARE_UNAVAILABLE : 'Book Seat'}
+            {departed ? 'Departed' : trip.bookable === false ? FARE_UNAVAILABLE : 'Book Seat'}
           </Button>
         </div>
       </div>
@@ -60,7 +69,7 @@ export function TripCard({ trip, fromName, toName, seatType = 'seated', showDate
 }
 
 /** The list under a search: loading, error, empty and the trips themselves. */
-export default function TripResults({ state, fromName, toName, seatType, searchedDate, onBook, footer = null }) {
+export default function TripResults({ state, fromName, toName, searchedDate, onBook, footer = null }) {
   if (state.loading) return <p className="text-sm text-slate-500" role="status">Finding trips...</p>
   if (state.error) return <p className="text-sm text-red-600" role="alert">{state.error}</p>
   if (state.trips.length === 0) {
@@ -74,7 +83,6 @@ export default function TripResults({ state, fromName, toName, seatType, searche
           trip={trip}
           fromName={fromName}
           toName={toName}
-          seatType={seatType}
           showDate={trip.trip_date !== searchedDate}
           onBook={onBook}
         />
