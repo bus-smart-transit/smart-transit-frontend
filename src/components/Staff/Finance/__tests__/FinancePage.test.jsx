@@ -72,12 +72,13 @@ describe('FinancePage', () => {
     expect(screen.getAllByRole('heading', { level: 2 })).toHaveLength(1);
   });
 
-  it('Refunds shows the payments that need a refund, with no second heading', async () => {
+  // 2026-11-08 (user): the Refunds tab is one table of every refund (GET operator/refunds).
+  it('Refunds shows the refunds table, with no second heading', async () => {
     const service = makeService();
-    service.getUnfulfilledPayments = vi.fn().mockResolvedValue({ data: { data: [], meta: { page: 1, per_page: 20, total: 0, last_page: 1, status: 'needs_refund', counts: { needs_refund: 0, refunded: 0 } } } });
+    service.getRefunds = vi.fn().mockResolvedValue({ data: { data: [], meta: { page: 1, per_page: 20, total: 0, last_page: 1, status: 'all', counts: { all: 0, needs_action: 0, in_progress: 0, refunded: 0, failed: 0 } } } });
     renderPage('refunds', service);
-    expect(await screen.findByTestId('refunds-empty')).toHaveTextContent('Nothing needs a refund');
-    expect(service.getUnfulfilledPayments).toHaveBeenCalledWith({ status: 'needs_refund', page: 1 });
+    expect(await screen.findByTestId('refunds-empty')).toHaveTextContent('No refunds yet');
+    expect(service.getRefunds).toHaveBeenCalledWith({ status: 'all', page: 1 });
     expect(screen.getAllByRole('heading', { level: 2 })).toHaveLength(1);
   });
 

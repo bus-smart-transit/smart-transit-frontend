@@ -1,12 +1,11 @@
 import { useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import Card from '../../ui/Card';
-import usePaymentRefunds, { CANCELLED_TRIPS } from '../../../api/hooks/Staff/usePaymentRefunds';
+import usePaymentRefunds, { STATUS_FILTERS } from '../../../api/hooks/Staff/usePaymentRefunds';
+import Modal from '../../ui/Modal';
 import { formatCount, formatPaidAt, formatPeso } from '../../../utils/financials';
 
 const FIELD = 'w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500';
-
-const FILTERS = [['needs_refund', 'Needs refund'], ['outcome_unknown', 'Unknown checkout'], ['refunded', 'Refunded'], ['all', 'All'], [CANCELLED_TRIPS, 'Cancelled trips']];
 
 // 2026-11-08 (user): the refund of each ticket on a cancelled trip, from PayMongo or in cash.
 const TICKET_REFUND_STATUS = {
@@ -164,29 +163,48 @@ function RefundCard({ row, busy, error, onRecord, onReconcile }) {
   );
 }
 
+// 2026-11-08 (user): the Refunds tab is one table. One plain status per row; the server decides it (RefundListService).
+const ROW_STATUS = {
+  needs_refund: ['Needs refund', 'bg-red-100 text-red-700'],
+  check_paymongo: ['Check PayMongo', 'bg-amber-100 text-amber-800'],
+  in_progress: ['Refund in progress', 'bg-sky-100 text-sky-700'],
+  refunded: ['Refunded', 'bg-emerald-100 text-emerald-700'],
+  failed: ['Refund failed', 'bg-red-100 text-red-700'],
+  needs_review: ['Needs review', 'bg-amber-100 text-amber-800'],
+};
+
+const ROW_ACTION = { needs_refund: 'Record refund', check_paymongo: 'Check' };
+
 /**
- * Online payments the system took money for but could not turn into tickets: the payment arrived after its seats were
- * released and could not be honoured. The Operator refunds each in PayMongo and records it here. `embedded` (inside the
- * Finance page) drops the heading, which the Finance tab provides.
+ * The Refunds tab (2026-11-08, user: one table instead of filter buttons). Every refund of this company in one list,
+ * newest first: payments that were charged but made no ticket (or whose checkout is unclear) and the tickets of
+ * cancelled trips. A row's button opens its details, and the form to record a refund or confirm an unclear checkout
+ * when someone has to act. `embedded` (inside the Finance page) drops the heading, which the Finance tab provides.
  */
 export default function PaymentRefundsPage({ service, embedded = false }) {
   const r = usePaymentRefunds(service ? { service } : undefined);
   const counts = r.meta?.counts;
+  const [openKey, setOpenKey] = useState(null);
+  const open = r.rows.find((row) => row.key === openKey) ?? null;
+
+  const record = async (paymentId, body) => { if (await r.recordRefund(paymentId, body)) setOpenKey(null); };
+  const reconcile = async (paymentId, body) => { if (await r.reconcileNotCharged(paymentId, body)) setOpenKey(null); };
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           {!embedded && <h2 className="text-xl font-bold text-slate-900">Refunds</h2>}
-          <p className="text-xs text-slate-500">Review charged payments for refunds and unknown checkout outcomes. Only signed webhooks confirm payment.</p>
+          <p className="text-xs text-slate-500">Every refund in one list: payments that made no ticket, unclear checkouts and tickets of cancelled trips. Only signed PayMongo messages confirm a payment or a refund.</p>
         </div>
-        <div className="inline-flex max-w-full flex-wrap rounded-lg border border-slate-200 bg-white p-0.5 text-sm font-semibold" role="group" aria-label="Status">
-          {FILTERS.map(([key, label]) => (
-            <button key={key} type="button" aria-pressed={r.status === key} onClick={() => r.setStatus(key)} className={`rounded-md px-3 py-1.5 ${r.status === key ? 'bg-teal-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`}>
-              {label}{counts && key !== 'all' && key !== CANCELLED_TRIPS ? ` (${formatCount(counts[key])})` : ''}
-            </button>
-          ))}
-        </div>
+        <label className="text-xs font-semibold text-slate-600">
+          Status
+          <select aria-label="Status" value={r.status} onChange={(event) => r.setStatus(event.target.value)} className="mt-1 block min-h-11 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900">
+            {STATUS_FILTERS.map(([key, label]) => (
+              <option key={key} value={key}>{label}{counts ? ` (${formatCount(counts[key])})` : ''}</option>
+            ))}
+          </select>
+        </label>
       </div>
 
       {r.error ? (
@@ -195,16 +213,45 @@ export default function PaymentRefundsPage({ service, embedded = false }) {
           <button type="button" onClick={r.retry} className="font-semibold underline">Try again</button>
         </div>
       ) : r.loading && !r.hasData ? (
-        <p className="rounded-xl border border-slate-200 bg-slate-50 p-6 text-sm text-slate-500">Loading payments...</p>
+        <p className="rounded-xl border border-slate-200 bg-slate-50 p-6 text-sm text-slate-500">Loading refunds...</p>
       ) : r.rows.length === 0 ? (
         <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-6 text-sm text-slate-600" data-testid="refunds-empty">
-          {r.status === CANCELLED_TRIPS ? 'No cancelled-trip refunds yet. A ticket appears here when its trip is cancelled and it is refunded.' : r.status === 'needs_refund' ? 'Nothing needs a refund. A payment appears here only when it was charged but no ticket could be made.' : r.status === 'outcome_unknown' ? 'No checkout outcomes need reconciliation.' : 'No payments to show.'}
+          {r.status === 'needs_action' ? 'Nothing needs you right now.' : r.status === 'all' ? 'No refunds yet. A refund appears here when a payment made no ticket or a trip is cancelled.' : 'No refunds with this status.'}
         </p>
       ) : (
-        <div className={`space-y-3 ${r.loading ? 'opacity-60' : ''}`}>
-          {r.status === CANCELLED_TRIPS ? r.rows.map((row) => <TicketRefundCard key={row.id} row={row} />) : r.rows.map((row) => (
-            <RefundCard key={row.payment_id} row={row} busy={r.busyId === row.payment_id} error={r.errors[row.payment_id]} onRecord={r.recordRefund} onReconcile={r.reconcileNotCharged} />
-          ))}
+        <div className={`overflow-x-auto rounded-xl border border-slate-200 bg-white ${r.loading ? 'opacity-60' : ''}`}>
+          <table className="w-full min-w-[52rem] text-left text-sm" data-testid="refunds-table">
+            <thead className="bg-slate-50 text-xs text-slate-500">
+              <tr>
+                {['Date', 'Reference', 'Passenger', 'Trip', 'Reason', 'Amount', 'Status', ''].map((heading) => <th key={heading} className="px-3 py-2 font-semibold">{heading}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {r.rows.map((row) => {
+                const [label, chip] = ROW_STATUS[row.status] || [row.status, 'bg-slate-100 text-slate-600'];
+                return (
+                  <tr key={row.key} className="border-t border-slate-100" data-testid="refund-row" data-status={row.status}>
+                    <td className="whitespace-nowrap px-3 py-2 text-slate-600">{row.date ? formatPaidAt(row.date) : 'Not provided'}</td>
+                    <td className="px-3 py-2 font-data text-xs text-slate-700">{row.transaction_reference || 'Not provided'}</td>
+                    <td className="px-3 py-2 text-slate-700">{row.passenger}{row.email ? <span className="block text-xs text-slate-500">{row.email}</span> : null}</td>
+                    <td className="px-3 py-2 text-slate-700">{row.trip || 'Not provided'}</td>
+                    <td className="px-3 py-2 text-slate-700">{row.reason}</td>
+                    <td className="whitespace-nowrap px-3 py-2 font-data font-semibold text-slate-900">{formatPeso(row.amount)}</td>
+                    <td className="px-3 py-2"><span data-testid="refund-row-status" className={`whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold ${chip}`}>{label}</span></td>
+                    <td className="px-3 py-2 text-right">
+                      <button
+                        type="button"
+                        onClick={() => setOpenKey(row.key)}
+                        className={`min-h-11 whitespace-nowrap rounded-lg px-3 text-xs font-semibold ${row.needs_action ? 'bg-teal-600 text-white hover:bg-teal-700' : 'border border-slate-200 text-slate-700 hover:bg-slate-50'}`}
+                      >
+                        {ROW_ACTION[row.status] || (row.needs_action ? 'Review' : 'Details')}
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       )}
 
@@ -215,6 +262,18 @@ export default function PaymentRefundsPage({ service, embedded = false }) {
           <button type="button" onClick={() => r.setPage(r.meta.page + 1)} disabled={r.meta.page >= r.meta.last_page || r.loading} className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 font-semibold text-slate-700 disabled:opacity-50">Next <ChevronRight className="h-4 w-4" aria-hidden="true" /></button>
         </nav>
       )}
+
+      <Modal open={Boolean(open)} onClose={() => setOpenKey(null)} title={open ? `${open.reason} · ${open.transaction_reference || 'No reference'}` : 'Refund'} size="lg">
+        {open?.kind === 'payment' && (
+          <RefundCard row={open.detail} busy={r.busyId === open.detail.payment_id} error={r.errors[open.detail.payment_id]} onRecord={record} onReconcile={reconcile} />
+        )}
+        {open?.kind === 'ticket' && (
+          <div className="space-y-3">
+            <TicketRefundCard row={open.detail} />
+            {open.needs_action && <p className="text-xs text-slate-600">Handle it on the Schedule page, in the list of tickets of cancelled trips.</p>}
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

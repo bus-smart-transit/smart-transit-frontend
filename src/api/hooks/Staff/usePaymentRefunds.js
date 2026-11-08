@@ -2,15 +2,21 @@ import { useCallback, useEffect, useState } from 'react';
 import OperatorService from '../../StaffService/OperatorService';
 
 /**
- * State for the Operator's Refunds tab: online payments the system took money for but could not turn into tickets
- * (`needs_refund`), and the record that the Operator refunded them. The server decides every figure and every status;
- * this hook sends the filter, the page and the note the Operator types. "Loading" is derived (the result in hand is for
- * another request) so no effect sets state synchronously.
+ * State for the Operator's Refunds tab (2026-11-08, user: one table). Every refund of the company in one list (payments
+ * that made no ticket, unclear checkouts, tickets of cancelled trips) with one status filter; the server decides every
+ * figure and every status. This hook sends the filter, the page and the note the Operator types. "Loading" is derived
+ * (the result in hand is for another request) so no effect sets state synchronously.
  */
-export const CANCELLED_TRIPS = 'cancelled_trips';
+export const STATUS_FILTERS = [
+  ['all', 'All'],
+  ['needs_action', 'Needs action'],
+  ['in_progress', 'In progress'],
+  ['refunded', 'Refunded'],
+  ['failed', 'Failed'],
+];
 
 export default function usePaymentRefunds({ service = OperatorService } = {}) {
-  const [status, setStatusState] = useState('needs_refund');
+  const [status, setStatusState] = useState('all');
   const [page, setPage] = useState(1);
   const [reload, setReload] = useState(0);
   const [result, setResult] = useState({ key: null, data: null, error: '' });
@@ -22,13 +28,9 @@ export default function usePaymentRefunds({ service = OperatorService } = {}) {
   useEffect(() => {
     let cancelled = false;
     const params = JSON.parse(key);
-    // 2026-11-08: "Cancelled trips" lists the ticket refunds of cancelled trips (a different list on the server).
-    const load = params.status === CANCELLED_TRIPS
-      ? service.getTicketRefunds({ page: params.page })
-      : service.getUnfulfilledPayments({ status: params.status, page: params.page });
-    load
+    service.getRefunds({ status: params.status, page: params.page })
       .then((res) => { if (!cancelled) setResult({ key, data: res?.data ?? null, error: '' }); })
-      .catch((err) => { if (!cancelled) setResult({ key, data: null, error: err?.message || 'The payments could not be loaded.' }); });
+      .catch((err) => { if (!cancelled) setResult({ key, data: null, error: err?.message || 'The refunds could not be loaded.' }); });
     return () => { cancelled = true; };
   }, [key, service]);
 
@@ -41,8 +43,10 @@ export default function usePaymentRefunds({ service = OperatorService } = {}) {
     try {
       await action(id, payload);
       setReload((n) => n + 1);
+      return true;
     } catch (err) {
       setErrors((prev) => ({ ...prev, [id]: err?.message || fallbackMessage }));
+      return false;
     } finally {
       setBusyId(null);
     }
