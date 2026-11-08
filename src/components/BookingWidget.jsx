@@ -30,7 +30,7 @@ export default function BookingWidget({ onSearch }) {
     >
       <div className="mb-4">
         <h2 className="font-display text-lg font-bold text-navy-950">Search Trips</h2>
-        <p className="text-sm text-slate-500">Sign in required to complete a booking</p>
+        <p className="text-sm text-slate-500">Choose where you board, where you get off and the day. Sign in to complete a booking.</p>
       </div>
 
       <div className="grid gap-3 lg:grid-cols-[1fr_1fr_auto_auto] lg:items-end">

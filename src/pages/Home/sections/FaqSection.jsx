@@ -3,49 +3,59 @@ import FaqAccordionItem from "../../../components/ui/FaqAccordionItem.jsx";
 
 const FAQ_ITEMS = [
   {
-    question: "How do I create a SmartTransit account?",
+    question: 'How do I create a SmartTransit account?',
     answer:
-      "Select Log In, then Create Account, and enter your name, email, and phone number. You can start booking trips as soon as your account is set up.",
+      'Choose "Log In", then "Sign Up". Fill in your details and enter the code we email you, or choose "Continue with Google".',
   },
   {
-    question: "How do I book a trip?",
+    question: 'I forgot my password. What do I do?',
     answer:
-      "Search for your origin, destination, and travel date in the Search Trips section, then choose a schedule, enter your trip details, and complete payment.",
+      'On the Log In page, choose "Forgot password?" and follow the link we email you.',
   },
   {
-    question: "How do I pay for my booking?",
+    question: 'How do I book a trip?',
     answer:
-      "Bookings are paid online through GCash. Your reservation is confirmed as soon as payment goes through.",
+      'Use the Search Trips panel on the homepage to find a route and date, then select "Book Seat" on the trip you want.',
   },
   {
-    question: "Where can I find my digital ticket?",
+    question: 'Can I choose my seat?',
     answer:
-      "Open My Tickets from your account menu. Every confirmed booking appears there with its full ticket details.",
+      'Every online ticket reserves a seat. Standing places are sold only on the bus, by the Chauffeur, once all seats are taken.',
   },
   {
-    question: "Where can I find my QR code?",
+    question: 'How do I pay for my booking?',
     answer:
-      "Your QR code is part of your digital ticket in My Tickets. Open the ticket for your trip to view it.",
+      'Payments are completed online through your chosen payment method (GCash, Maya, or Card) during checkout.',
   },
   {
-    question: "How do I track my bus?",
+    question: 'How do rewards work?',
     answer:
-      "Go to Track Bus to see your bus's current stop, next stop, and estimated arrival time.",
+      'You earn SmartPoints for every paid ticket. Once you have enough points, you can redeem them for a discount on future tickets.',
   },
   {
-    question: "Can I view my previous trips?",
+    question: 'Where can I find my digital ticket?',
     answer:
-      "Yes. Trip History keeps a record of every trip you've taken, including fare and payment details.",
+      'Once payment is confirmed, your digital ticket is available under "My Tickets" in your account.',
   },
   {
-    question: "How do rewards work?",
+    question: 'Where can I find my QR code?',
     answer:
-      "You earn points on every trip you book. Check the Rewards page to see your points balance and what you can redeem them for.",
+      'Your QR code is shown on your digital ticket. Open it from My Tickets and present it when boarding.',
   },
   {
-    question: "What should I do if I have a problem with my booking?",
+    question: 'Can I view my previous trips?',
     answer:
-      "Check the FAQ page for common issues, or reach out through Contact Us and our support team will help.",
+      'Yes. Your Trip History page lists all past bookings, including completed and cancelled trips.',
+  },
+  {
+    question: 'How do I track my bus?',
+    answer:
+      'Open the "Track Bus" page to see the live location, arrival time and next stop of running buses. With a booking, use "Track with a booking code".',
+  },
+  {
+    question: 'What should I do if I have a problem with my booking?',
+    answer:
+      'Contact SmartTransit support through the Contact Us page, and include your booking reference if possible.',
   },
 ];
 
@@ -53,29 +63,27 @@ export default function FaqSection() {
   const [openIndex, setOpenIndex] = useState(-1);
 
   return (
-    <section className="bg-white py-16 sm:py-20">
-      <div className="container-page">
-        <div className="mx-auto max-w-2xl text-center">
-          <p className="text-sm font-semibold uppercase tracking-wide text-teal-600">FAQ</p>
-          <h2 className="mt-2 font-display text-3xl font-bold text-navy-950 sm:text-4xl">
-            Frequently Asked Questions
-          </h2>
-          <p className="mt-3 text-base text-slate-500">
-            Quick answers to common questions from SmartTransit passengers.
-          </p>
-        </div>
+    <section id="faq" className="scroll-mt-24 bg-white px-4 py-12 sm:px-6 lg:px-10">
+      <div className="mx-auto max-w-3xl text-center">
+        <p className="text-xs font-semibold uppercase tracking-wide text-teal-600">FAQ</p>
+        <h2 className="mt-1 font-display text-2xl font-bold text-slate-900 sm:text-3xl">
+          Frequently Asked Questions
+        </h2>
+        <p className="mt-2 text-sm text-slate-500">
+          Quick answers to common questions from SmartTransit passengers.
+        </p>
+      </div>
 
-        <div className="mx-auto mt-10 max-w-2xl rounded-2xl border border-slate-200 bg-white p-6 sm:p-8">
-          {FAQ_ITEMS.map((item, index) => (
-            <FaqAccordionItem
-              key={item.question}
-              question={item.question}
-              answer={item.answer}
-              open={openIndex === index}
-              onToggle={() => setOpenIndex(openIndex === index ? -1 : index)}
-            />
-          ))}
-        </div>
+      <div className="mx-auto mt-8 max-w-3xl rounded-2xl border border-slate-200 bg-white px-5">
+        {FAQ_ITEMS.map((item, index) => (
+          <FaqAccordionItem
+            key={item.question}
+            question={item.question}
+            answer={item.answer}
+            open={openIndex === index}
+            onToggle={() => setOpenIndex(openIndex === index ? -1 : index)}
+          />
+        ))}
       </div>
     </section>
   );

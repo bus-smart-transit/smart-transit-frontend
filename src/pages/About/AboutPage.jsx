@@ -104,7 +104,7 @@ export default function AboutPage() {
             <div className="flex flex-col items-center gap-6 rounded-2xl bg-slate-100 p-6 sm:flex-row lg:col-span-8 lg:gap-10 lg:rounded-none lg:bg-transparent lg:p-0">
               <div className="relative h-44 w-44 shrink-0 overflow-hidden rounded-full sm:h-52 sm:w-52 lg:h-60 lg:w-60">
                 <img
-                  src="/images/news/bus-terminal.jpg"
+                  src="/images/about/bus-terminal.jpg"
                   alt="Passenger boarding a bus at a terminal"
                   className="h-full w-full object-cover grayscale"
                 />
@@ -141,7 +141,7 @@ export default function AboutPage() {
               </div>
               <div className="relative h-44 w-44 shrink-0 overflow-hidden rounded-full sm:h-52 sm:w-52 lg:h-60 lg:w-60">
                 <img
-                  src="/images/news/gps-map.jpg"
+                  src="/images/about/gps-map.jpg"
                   alt="Phone showing a live map"
                   className="h-full w-full object-cover grayscale"
                 />

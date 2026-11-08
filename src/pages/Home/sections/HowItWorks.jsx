@@ -16,8 +16,8 @@ const STEPS = [
   {
     number: "03",
     icon: GridIcon,
-    title: "Enter Your Trip Details",
-    description: "Set your number of tickets and review your trip details.",
+    title: "Reserve Your Seat",
+    description: "Choose an available seat and review your trip details.",
   },
   {
     number: "04",
@@ -33,66 +33,33 @@ const STEPS = [
   },
 ];
 
-// Same five steps, rendered twice: a vertical connected timeline for
-// mobile/tablet, and a horizontal connected timeline for desktop.
-// Simpler and less error-prone than one layout trying to do both.
 export default function HowItWorks() {
   return (
-    <section className="bg-white py-16 sm:py-20">
-      <div className="container-page">
-        <div className="max-w-2xl">
-          <p className="text-sm font-semibold uppercase tracking-wide text-teal-600">
-            How SmartTransit Works
-          </p>
-          <h2 className="mt-2 font-display text-3xl font-bold text-navy-950 sm:text-4xl">
-            Your trip, made simple.
-          </h2>
-          <p className="mt-3 text-base leading-relaxed text-slate-500">
-            New to SmartTransit? Follow these simple steps to find a trip,
-            complete your booking, and board with your digital ticket.
-          </p>
-        </div>
+    <section className="bg-white px-4 py-12 sm:px-6 lg:px-10">
+      <div className="mx-auto max-w-7xl">
+        <p className="text-xs font-semibold uppercase tracking-wide text-teal-600">
+          How SmartTransit works
+        </p>
+        <h2 className="mt-1 font-display text-3xl font-bold text-navy-950 sm:text-4xl">
+          Your trip, made simple.
+        </h2>
+        <p className="mt-3 max-w-2xl text-base leading-relaxed text-slate-500">
+          New to SmartTransit? Follow these simple steps to find a trip, reserve your seat,
+          complete your booking, and board with your digital ticket.
+        </p>
 
-        {/* Vertical connected timeline -- mobile & tablet */}
-        <ol className="mt-12 lg:hidden">
-          {STEPS.map(({ number, icon: Icon, title, description }, index) => (
-            <li key={number} className="relative flex gap-4 pb-10 last:pb-0">
-              {index !== STEPS.length - 1 && (
-                <span
-                  className="absolute left-5 top-10 bottom-0 w-px bg-slate-200"
-                  aria-hidden="true"
-                />
-              )}
-              <span className="relative z-10 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 border-navy-800 bg-white text-sm font-bold text-navy-800">
-                {number}
-              </span>
-              <div className="pt-1.5">
-                <div className="flex items-center gap-2">
-                  <Icon size={16} className="text-teal-600" />
-                  <h3 className="font-display text-base font-semibold text-navy-950">{title}</h3>
-                </div>
-                <p className="mt-1.5 text-sm leading-relaxed text-slate-500">{description}</p>
-              </div>
-            </li>
-          ))}
-        </ol>
-
-        {/* Horizontal connected timeline -- desktop */}
-        <ol className="relative mt-14 hidden lg:grid lg:grid-cols-5 lg:gap-6">
-          <span className="absolute left-0 right-0 top-5 h-px bg-slate-200" aria-hidden="true" />
+        <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-5">
           {STEPS.map(({ number, icon: Icon, title, description }) => (
-            <li key={number} className="relative pr-4">
-              <span className="relative z-10 flex h-10 w-10 items-center justify-center rounded-full border-2 border-navy-800 bg-white text-sm font-bold text-navy-800">
+            <div key={number} className="flex flex-col items-start gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full border border-teal-200 bg-teal-50 text-xs font-bold text-teal-700">
                 {number}
-              </span>
-              <div className="mt-4 flex items-center gap-2">
-                <Icon size={16} className="text-teal-600" />
-                <h3 className="font-display text-sm font-semibold text-navy-950">{title}</h3>
               </div>
-              <p className="mt-1.5 text-sm leading-relaxed text-slate-500">{description}</p>
-            </li>
+              <Icon size={20} className="text-slate-400" aria-hidden="true" />
+              <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
+              <p className="text-xs leading-relaxed text-slate-500">{description}</p>
+            </div>
           ))}
-        </ol>
+        </div>
       </div>
     </section>
   );

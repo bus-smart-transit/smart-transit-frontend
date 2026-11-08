@@ -3,11 +3,11 @@ import RequireAuth from "./components/RequireAuth.jsx";
 
 import HomePage from "./pages/Home/HomePage.jsx";
 import AboutPage from "./pages/About/AboutPage.jsx";
-import NewsPage from "./pages/News/NewsPage.jsx";
 import FaqPage from "./pages/Faq/FaqPage.jsx";
 import ContactPage from "./pages/Contact/ContactPage.jsx";
 import LoginPage from "./pages/Auth/LoginPage.jsx";
 import SignupPage from "./pages/Auth/SignupPage.jsx";
+import LegalPage from "./pages/Legal/LegalPage.jsx";
 
 import DashboardPage from "./pages/Dashboard/DashboardPage.jsx";
 import MyTicketsPage from "./pages/MyTickets/MyTicketsPage.jsx";
@@ -29,11 +29,12 @@ export default function App() {
       {/* Public pages */}
       <Route path="/" element={<HomePage />} />
       <Route path="/about" element={<AboutPage />} />
-      <Route path="/news" element={<NewsPage />} />
       <Route path="/faq" element={<FaqPage />} />
       <Route path="/contact" element={<ContactPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/signup" element={<SignupPage />} />
+      <Route path="/privacy" element={<LegalPage kind="privacy" />} />
+      <Route path="/terms" element={<LegalPage kind="terms" />} />
 
       {/* Track Bus is reachable by guests and passengers alike -- it
           renders its own layout depending on auth state. */}

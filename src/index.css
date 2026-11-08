@@ -31,6 +31,12 @@
   }
 }
 
+/* Matches the hosted site: Poppins display text is always bold,
+   overriding any font-weight utility on the same element. */
+.font-display {
+  font-weight: 700;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

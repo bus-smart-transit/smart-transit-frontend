@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
-import { MenuIcon, CloseIcon, HomeIcon, BusIcon, BellIcon, InfoIcon, PhoneIcon, GridIcon, TicketIcon, ClockIcon, MapPinIcon, GiftIcon, UserIcon, LogoutIcon } from "./Icons.jsx";
+import { MenuIcon, CloseIcon, HomeIcon, BusIcon, InfoIcon, PhoneIcon, GridIcon, TicketIcon, ClockIcon, MapPinIcon, GiftIcon, UserIcon, LogoutIcon } from "./Icons.jsx";
 import ProfileDropdown from "./ProfileDropdown.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import Button from "./ui/Button.jsx";
@@ -9,7 +9,7 @@ import Logo from "./Logo.jsx";
 const NAV_LINKS = [
   { label: "Home", to: "/", icon: HomeIcon },
   { label: "About", to: "/about", icon: BusIcon },
-  { label: "News", to: "/news", icon: BellIcon },
+  { label: "Track Bus", to: "/track-bus", icon: MapPinIcon },
   { label: "FAQ", to: "/faq", icon: InfoIcon },
   { label: "Contact Us", to: "/contact", icon: PhoneIcon },
 ];
@@ -51,27 +51,31 @@ export default function Navbar() {
           <Logo className="h-10 sm:h-12" />
         </Link>
 
-        <nav className="hidden items-center gap-8 md:flex">
+        <nav className="hidden items-center gap-7 lg:flex" data-tour="nav-links">
           {NAV_LINKS.map((link) => (
-            <NavLink key={link.to} to={link.to} className={linkClasses} end={link.to === "/"}>
+            <NavLink key={link.to} to={link.to} className={linkClasses} end={link.to === "/"} data-tour={link.to === "/track-bus" ? "nav-track-bus" : undefined}>
               {link.label}
             </NavLink>
           ))}
         </nav>
 
-        <div className="hidden items-center gap-3 md:flex">
+        <div className="hidden items-center gap-3 lg:flex" data-tour="nav-account">
           {isAuthenticated ? (
             <ProfileDropdown />
           ) : (
-            <Button to="/login" variant="primary" size="sm">
+            <Link
+              to="/login"
+              className="inline-flex min-h-11 items-center rounded-full bg-navy-800 px-6 text-sm font-semibold text-white transition hover:bg-navy-700"
+            >
               Log In
-            </Button>
+            </Link>
           )}
         </div>
 
         <button
           type="button"
-          className="rounded-lg p-2 text-navy-900 md:hidden"
+          className="inline-flex h-11 w-11 items-center justify-center rounded-lg text-navy-900 lg:hidden"
+          data-tour="nav-menu"
           onClick={() => setMenuOpen(true)}
           aria-label="Open menu"
           aria-expanded={menuOpen}
@@ -84,14 +88,14 @@ export default function Navbar() {
 
     {menuOpen && (
       <div
-        className="fixed inset-0 z-40 bg-navy-950/50 md:hidden"
+        className="fixed inset-0 z-40 bg-navy-950/50 lg:hidden"
         onClick={() => setMenuOpen(false)}
         aria-hidden="true"
       />
     )}
 
     <aside
-      className={`fixed inset-y-0 right-0 z-50 flex w-72 max-w-[85vw] flex-col overflow-y-auto bg-navy-900 p-5 transition-transform duration-200 md:hidden ${
+      className={`fixed inset-y-0 right-0 z-50 flex w-72 max-w-[85vw] flex-col overflow-y-auto bg-navy-900 p-5 transition-transform duration-200 lg:hidden ${
         menuOpen ? "translate-x-0" : "translate-x-full"
       }`}
       aria-hidden={!menuOpen}

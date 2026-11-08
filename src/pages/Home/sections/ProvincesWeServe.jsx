@@ -80,7 +80,7 @@ export default function ProvincesWeServe() {
             Provinces we serve
           </h2>
           <p className="mt-3 text-base leading-relaxed text-slate-500">
-            Daily trips from Davao City to all five provinces of the Davao Region.
+            SmartTransit covers the provinces of Davao Region. Tap one to search for a trip.
           </p>
         </div>
 
@@ -98,9 +98,6 @@ export default function ProvincesWeServe() {
           <h3 className="font-display text-2xl font-bold text-navy-950 sm:text-3xl">
             And the city we call home
           </h3>
-          <p className="mt-2 text-base leading-relaxed text-slate-500">
-            Every route starts and ends in Davao City.
-          </p>
         </div>
         <div className="mt-6">
           <ProvinceCard {...DAVAO_CITY} tall />

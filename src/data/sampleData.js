@@ -131,16 +131,6 @@ export const ANNOUNCEMENTS = [
   },
 ];
 
-// Dummy GPS path for the Track Bus demo — a straight-line stand-in
-// for the Ecoland -> Tagum route. Replace with real coordinates and
-// a real map SDK once GPS hardware/backend is available.
-export const DUMMY_GPS_PATH = [
-  { lat: 7.0644, lng: 125.6078, label: "Ecoland Terminal" },
-  { lat: 7.1907, lng: 125.6144, label: "Buhangin Checkpoint" },
-  { lat: 7.313, lng: 125.6435, label: "Panabo Junction" },
-  { lat: 7.4479, lng: 125.6825, label: "Tagum Terminal" },
-];
-
 // --- My Tickets ------------------------------------------------------
 export const SAMPLE_TICKETS = [
   {
@@ -291,92 +281,6 @@ export const REWARDS_ACTIVITY = [
     label: "Ticket purchase",
     route: "Ecoland Terminal → Panabo Terminal",
     date: "Jul 28, 2026",
-  },
-];
-
-// --- News (full News page + homepage preview) ------------------------------------------------------
-export const NEWS_ITEMS = [
-  {
-    id: "news-1",
-    image: "/images/news/davao-city.jpg",
-    category: "Route Update",
-    date: "June 3, 2026",
-    title: "New Ecoland–Tagum express trip added at 5:30 AM",
-    summary:
-      "An earlier departure has been added on weekdays to help commuters beat rush hour traffic.",
-    body: [
-      "Starting this month, SmartTransit is adding a new 5:30 AM express trip on the Ecoland–Tagum route, running Monday through Friday.",
-      "The express service makes limited stops and is designed for commuters who need to be in Tagum before the morning rush. Trips can be booked in advance through the app just like any other trip.",
-      "This is the third schedule expansion this year as ridership on the northern routes continues to grow.",
-    ],
-  },
-  {
-    id: "news-2",
-    image: "/images/news/road-repair.jpg",
-    category: "Service Advisory",
-    date: "May 28, 2026",
-    title: "Panabo route detour due to road repair",
-    summary:
-      "Buses passing through Panabo will take an alternate route until repairs are completed.",
-    body: [
-      "Ongoing road repair along the national highway near Panabo Junction will require all SmartTransit buses on the Ecoland–Panabo route to take a short detour through the local barangay road.",
-      "Passengers should expect an additional 10 to 15 minutes of travel time until repairs are complete. Live tracking will reflect the detoured route automatically.",
-      "We appreciate our passengers' patience while local authorities complete the repair work.",
-    ],
-  },
-  {
-    id: "news-3",
-    image: "/images/news/davao-chinatown.jpg",
-    category: "Holiday Schedule",
-    date: "May 20, 2026",
-    title: "Adjusted trips for the Davao Fiesta holiday",
-    summary:
-      "Expect fewer trips and higher demand on routes to Mati and Digos during the holiday weekend.",
-    body: [
-      "In observance of the Davao Fiesta holiday weekend, SmartTransit will run a reduced weekend schedule on the Mati and Digos routes.",
-      "Because demand is traditionally higher during this weekend, we recommend booking your trip at least two days in advance through My Tickets.",
-      "Regular weekday schedules resume the following Monday.",
-    ],
-  },
-  {
-    id: "news-4",
-    image: "/images/news/phone-payment.jpg",
-    category: "Product Update",
-    date: "May 12, 2026",
-    title: "SmartPoints can now be used directly at checkout",
-    summary:
-      "Frequent riders can now switch on SmartPoints during payment and see the discount applied instantly.",
-    body: [
-      "SmartTransit Rewards now works like straightforward cashback: every ₱1 spent on a ticket earns 1 SmartPoint, and every SmartPoint is worth ₱1 off a future fare.",
-      "Once a passenger has at least 100 points, a new \"Use SmartPoints\" toggle appears on the payment page. Turning it on applies the discount automatically — no separate voucher required.",
-      "Points, discounts, and rewards activity can be tracked anytime from the Rewards page.",
-    ],
-  },
-  {
-    id: "news-5",
-    image: "/images/news/gps-map.jpg",
-    category: "Safety",
-    date: "April 30, 2026",
-    title: "All buses now equipped with live GPS tracking",
-    summary:
-      "Every active SmartTransit bus can now be tracked in real time from the Track Bus page.",
-    body: [
-      "As of this week, all buses in the SmartTransit fleet have been fitted with GPS tracking units, allowing passengers to see their bus's current stop and estimated arrival time before it arrives at the terminal.",
-      "This rollout completes a six-month effort to bring live tracking to every route we operate across Davao Region XI.",
-    ],
-  },
-  {
-    id: "news-6",
-    image: "/images/news/bus-terminal.jpg",
-    category: "Service Advisory",
-    date: "April 18, 2026",
-    title: "Terminal window hours extended at Ecoland Terminal",
-    summary:
-      "The Ecoland Terminal help desk now stays open later to assist passengers with walk-in concerns.",
-    body: [
-      "The passenger help desk at Ecoland Terminal is now open from 5:00 AM to 9:00 PM daily, an extension of two hours from the previous schedule.",
-      "This change is in response to passenger feedback requesting more support during early morning and evening trips.",
-    ],
   },
 ];
 

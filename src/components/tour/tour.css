@@ -1,0 +1,123 @@
+/* Driver.js popover restyled to the SmartTransit palette
+   (navy #153a6b / #091934, teal #6ac1b8, Poppins + Inter). */
+
+.driver-popover.st-tour-popover {
+  max-width: min(340px, calc(100vw - 32px));
+  min-width: 260px;
+  padding: 20px;
+  border-radius: 16px;
+  background: #ffffff;
+  color: #101418;
+  font-family: Inter, sans-serif;
+  box-shadow: 0 4px 8px rgba(16, 20, 24, 0.06), 0 16px 32px -12px rgba(16, 20, 24, 0.28);
+}
+
+.st-tour-popover .driver-popover-title {
+  font-family: Poppins, sans-serif;
+  font-size: 17px;
+  font-weight: 700;
+  color: #091934;
+  padding-right: 24px;
+}
+
+.st-tour-popover .driver-popover-description {
+  margin-top: 6px;
+  font-size: 14px;
+  line-height: 1.55;
+  color: #475569;
+}
+
+.st-tour-popover .driver-popover-close-btn {
+  top: 10px;
+  right: 10px;
+  width: 30px;
+  height: 30px;
+  border-radius: 9999px;
+  color: #94a3b8;
+}
+.st-tour-popover .driver-popover-close-btn:hover {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+/* Step progress bar */
+.st-tour-progress {
+  margin-top: 14px;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 9999px;
+  background: #d3f1ec;
+}
+.st-tour-progress > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #6ac1b8;
+  transition: width 0.25s ease;
+}
+
+.st-tour-popover .driver-popover-footer {
+  margin-top: 12px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.st-tour-popover .driver-popover-progress-text {
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.st-tour-popover .driver-popover-navigation-btns {
+  gap: 6px;
+  align-items: center;
+}
+
+.st-tour-popover .driver-popover-footer button {
+  padding: 7px 14px;
+  border-radius: 9999px;
+  font-family: Inter, sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  text-shadow: none;
+  line-height: 1.2;
+  border: 1px solid #153a6b;
+  background: #ffffff;
+  color: #153a6b;
+  margin: 0;
+}
+.st-tour-popover .driver-popover-footer button:hover {
+  background: #eef3fb;
+}
+.st-tour-popover .driver-popover-footer .driver-popover-next-btn {
+  background: #153a6b;
+  color: #ffffff;
+}
+.st-tour-popover .driver-popover-footer .driver-popover-next-btn:hover {
+  background: #0e2749;
+}
+.st-tour-popover .driver-popover-footer button.st-tour-skip {
+  border-color: transparent;
+  background: transparent;
+  color: #64748b;
+  padding-left: 6px;
+  padding-right: 6px;
+}
+.st-tour-popover .driver-popover-footer button.st-tour-skip:hover {
+  color: #091934;
+  background: transparent;
+  text-decoration: underline;
+}
+.st-tour-popover .driver-popover-footer button:focus-visible {
+  outline: 2px solid #0dbcbf;
+  outline-offset: 2px;
+}
+
+@media (max-width: 480px) {
+  .driver-popover.st-tour-popover {
+    padding: 16px;
+  }
+  .st-tour-popover .driver-popover-footer {
+    justify-content: space-between;
+  }
+}
