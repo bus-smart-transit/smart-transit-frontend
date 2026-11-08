@@ -1,5 +1,8 @@
+import { useState } from 'react';
 import { Download, Loader2, RotateCcw } from 'lucide-react';
 import Card from '../../ui/Card';
+import FileTypeSelect from '../../ui/FileTypeSelect';
+import { DEFAULT_FILE_TYPE } from '../../../utils/tableExport';
 import useFinancials from '../../../api/hooks/Staff/useFinancials';
 import { PRESETS, formatCount, formatPercent, formatPeso, paymentFilterPatch, paymentFilterValue } from '../../../utils/financials';
 import { BarList, HourChart, SplitBar } from './FinancialCharts';
@@ -39,6 +42,7 @@ function Section({ title, hint, children }) {
  */
 export default function FinancialsPage({ service, view = 'all', embedded = false }) {
   const f = useFinancials(service ? { service } : undefined);
+  const [fileType, setFileType] = useState(DEFAULT_FILE_TYPE);
   const { filters, summary, summaryError, summaryLoading } = f;
   const options = summary?.options ?? { routes: [], fleets: [], trips: [], channels: [] };
   const kpis = summary?.kpis;
@@ -54,12 +58,13 @@ export default function FinancialsPage({ service, view = 'all', embedded = false
           {!embedded && <h2 className="text-xl font-bold text-slate-900">Financials</h2>}
           <p className="text-xs text-slate-500">Paid tickets only.</p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          {[['transactions', 'Export transactions (CSV)'], ['refunds', 'Export refunds (CSV)'], ['daily', 'Export daily summary (CSV)']].map(([type, label]) => (
+        <div className="flex flex-wrap items-center gap-2">
+          <FileTypeSelect id="financials-file-type" value={fileType} onChange={setFileType} />
+          {[['transactions', 'Export transactions'], ['refunds', 'Export refunds'], ['daily', 'Export daily summary']].map(([type, label]) => (
             <button
               key={type}
               type="button"
-              onClick={() => f.exportCsv(type)}
+              onClick={() => f.exportReport(type, fileType)}
               disabled={Boolean(f.exporting)}
               className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
             >

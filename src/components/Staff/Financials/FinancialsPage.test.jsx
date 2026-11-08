@@ -166,16 +166,23 @@ describe('FinancialsPage', () => {
     expect(screen.getByRole('button', { name: /Previous/ })).toBeDisabled();
   });
 
-  it('downloads the CSV the server builds, for the transactions and for the daily summary', async () => {
+  // 2026-11-08 (advisor, user): the export is the server's CSV, saved as the file type chosen (PDF first).
+  it('downloads the report the server builds as PDF, or as CSV when chosen', async () => {
     const service = makeService();
     render(<FinancialsPage service={service} />);
     await screen.findByTestId('kpi-gross');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Export transactions (CSV)' }));
+    expect(screen.getByLabelText('File type')).toHaveValue('pdf');
+    fireEvent.click(screen.getByRole('button', { name: 'Export transactions' }));
     await waitFor(() => expect(service.downloadFinancialExport).toHaveBeenLastCalledWith(expect.objectContaining({ type: 'transactions' })));
-    fireEvent.click(screen.getByRole('button', { name: 'Export daily summary (CSV)' }));
+    await waitFor(() => expect(URL.createObjectURL).toHaveBeenCalledTimes(1));
+    expect(URL.createObjectURL.mock.calls[0][0].type).toBe('application/pdf');
+
+    fireEvent.change(screen.getByLabelText('File type'), { target: { value: 'csv' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Export daily summary' }));
     await waitFor(() => expect(service.downloadFinancialExport).toHaveBeenLastCalledWith(expect.objectContaining({ type: 'daily' })));
-    expect(URL.createObjectURL).toHaveBeenCalledTimes(2);
+    await waitFor(() => expect(URL.createObjectURL).toHaveBeenCalledTimes(2));
+    expect(URL.createObjectURL.mock.calls[1][0].type).toBe('text/csv;charset=utf-8');
   });
 
   it('shows an export failure as a message, not as a file', async () => {
@@ -183,7 +190,7 @@ describe('FinancialsPage', () => {
     render(<FinancialsPage service={service} />);
     await screen.findByTestId('kpi-gross');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Export transactions (CSV)' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Export transactions' }));
     expect(await screen.findByText('Too many requests. Please slow down.')).toBeInTheDocument();
     expect(URL.createObjectURL).not.toHaveBeenCalled();
   });
@@ -221,7 +228,7 @@ describe('FinancialsPage refunds', () => {
     render(<FinancialsPage service={service} />);
     await screen.findByTestId('kpi-gross');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Export refunds (CSV)' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Export refunds' }));
     await waitFor(() => expect(service.downloadFinancialExport).toHaveBeenLastCalledWith(expect.objectContaining({ type: 'refunds', refund_basis: 'completed' })));
   });
 });

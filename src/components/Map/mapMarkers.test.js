@@ -9,6 +9,8 @@ describe('map markers', () => {
 
   it('makes a bus marker that can change colour and heading, with no arrow when the heading is unknown', () => {
     const { element, setColor, setHeading } = createBusMarkerElement({ title: 'Bus DEMO-101' });
+    // 2026-11-08: MapLibre places the marker (absolute); an inline position would push every later bus down.
+    expect(element.style.position).toBe('');
     const arrow = element.querySelector('.st-bus-heading');
 
     expect(element.getAttribute('aria-label')).toBe('Bus DEMO-101');

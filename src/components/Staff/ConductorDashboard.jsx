@@ -30,6 +30,8 @@ import { useConductorPairing, useConductorDashboardData } from '../../api/hooks/
 import useOnsiteQuote from '../../api/hooks/Staff/useOnsiteQuote';
 import { getBusinessToday, getBusinessTodayLabel } from '../../utils/dates';
 import { downloadShiftSummary } from '../../utils/shiftSummaryReport';
+import { DEFAULT_FILE_TYPE } from '../../utils/tableExport';
+import FileTypeSelect from '../ui/FileTypeSelect';
 import { todaySummary } from '../../utils/assignmentCards';
 import { shiftActionReason, ticketingReason } from '../../utils/actionReasons';
 import { checkInLabel, destinationsAhead, destinationsNotPassed, isOnsiteFormComplete, orderedStopsForLeg, placesLeft, stopLabel } from '../../utils/cashTicket';
@@ -143,6 +145,8 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   // 2026-10-28 (§4.5): no opening cash at Start Shift. Chauffeurs are not given petty cash, so a shift starts at 0.
   // Batch 29: End Shift asks for the cash counted and handed over; the Operator confirms it on the web dashboard.
   const [confirmEnd, setConfirmEnd] = useState(false);
+  // 2026-11-08 (advisor, user): the shift summary downloads as PDF or CSV.
+  const [summaryFileType, setSummaryFileType] = useState(DEFAULT_FILE_TYPE);
   const [closingCash, setClosingCash] = useState('');
   const closingCashValue = Number(closingCash);
   const closingCashInvalid = closingCash === '' || !Number.isFinite(closingCashValue) || closingCashValue < 0;
@@ -1138,10 +1142,11 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
             {/* Shift Summary Header */}
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <h2 className="font-display text-lg font-bold text-slate-900">Shift Summary</h2>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <FileTypeSelect id="summary-file-type" value={summaryFileType} onChange={setSummaryFileType} />
                 <button
                   type="button"
-                  onClick={() => downloadShiftSummary(earnings, { chauffeur: profile?.name ?? '', date: getBusinessToday() })}
+                  onClick={() => { void downloadShiftSummary(earnings, { chauffeur: profile?.name ?? '', date: getBusinessToday() }, summaryFileType); }}
                   disabled={!earnings}
                   className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
                 >

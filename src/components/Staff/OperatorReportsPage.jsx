@@ -1,8 +1,10 @@
-import { Download, Eye, Loader2 } from 'lucide-react';
+import { useState } from 'react';
+import { Download, Eye, Loader2, Printer } from 'lucide-react';
 import { useReportsTab } from '../../api/hooks/Staff/useOperatorDashboard';
 import { openPrintReport } from '../../utils/printReport';
 import { reportFileName, reportToCsv } from '../../utils/reportCsv';
-import { saveCsv } from '../../utils/financials';
+import { DEFAULT_FILE_TYPE, downloadReport } from '../../utils/tableExport';
+import FileTypeSelect from '../ui/FileTypeSelect';
 
 const REPORTS = [
   { key: 'adherence', label: 'Route Adherence' },
@@ -228,12 +230,21 @@ export default function OperatorReportsPage({ fleets = [] }) {
     if (!opened) setMsg('Unable to open print preview. Please allow pop-ups for this site.');
   };
 
-  const handleDownloadCsv = () => {
+  // 2026-11-08 (advisor, user): the report downloads as the chosen file type, PDF or CSV, with the same cells.
+  const [fileType, setFileType] = useState(DEFAULT_FILE_TYPE);
+  const handleDownload = async () => {
     if (!reportRows.length) return;
-    saveCsv(
-      reportToCsv(reportColumns, reportRows, formatExportValue),
-      reportFileName({ type: reportType, fleet: fleetLabel, from: ranRange.from, to: ranRange.to }),
-    );
+    try {
+      await downloadReport({
+        format: fileType,
+        csvText: reportToCsv(reportColumns, reportRows, formatExportValue),
+        fileName: reportFileName({ type: reportType, fleet: fleetLabel, from: ranRange.from, to: ranRange.to }),
+        title: `${reportLabel} - ${fleetLabel}`,
+        subtitle: `${reportType === 'daily' ? 'Date' : 'Period'}: ${periodLabel}`,
+      });
+    } catch {
+      setMsg('The file could not be made. Please try again.');
+    }
   };
 
   return (
@@ -276,11 +287,14 @@ export default function OperatorReportsPage({ fleets = [] }) {
           Run report
         </button>
         <button type="button" onClick={handlePrint} disabled={!reportRows.length} className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
-          <Download className="h-4 w-4" /> Print / PDF
+          <Printer className="h-4 w-4" /> Print
         </button>
-        <button type="button" onClick={handleDownloadCsv} disabled={!reportRows.length} className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
-          <Download className="h-4 w-4" /> CSV
-        </button>
+        <div className="flex items-center gap-2">
+          <FileTypeSelect id="report-file-type" value={fileType} onChange={setFileType} />
+          <button type="button" onClick={handleDownload} disabled={!reportRows.length} className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+            <Download className="h-4 w-4" /> Download
+          </button>
+        </div>
       </div>
 
       {msg && <p role="alert" className="rounded-md border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">{msg}</p>}

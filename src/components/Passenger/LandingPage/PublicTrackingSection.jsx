@@ -10,18 +10,24 @@ import { getTripTimeline } from '../../../services/bookingService';
 import { busEtaSummary, etaMinutesLabel } from '../../../utils/busEta';
 import { BUS_COLORS, createBusMarkerElement, createYouAreHereElement } from '../../Map/mapMarkers';
 
-// 2026-10-29: the bus icon's colour from the trip status (delayed in amber).
-const busColorFor = (row) => (String(row?.trip_status || '').toLowerCase() === 'delayed' ? BUS_COLORS.warning : BUS_COLORS.live);
+// 2026-10-29: the bus icon's colour from the trip status (delayed in amber). 2026-11-08: a bus waiting at its first
+// stop (not departed) is slate.
+const busColorFor = (row) => {
+  if (row?.waiting) return BUS_COLORS.waiting;
+  return String(row?.trip_status || '').toLowerCase() === 'delayed' ? BUS_COLORS.warning : BUS_COLORS.live;
+};
+const ALL_ROUTES_SOURCE = 'pt-all-routes';
+const ALL_ROUTES_LAYER = 'pt-all-routes-line';
 const headingOf = (row) => (Number.isFinite(Number(row?.heading)) && row?.heading !== null ? Number(row.heading) : null);
 import { busLabelText } from '../../../utils/busLabel';
 import { useRegion } from '../../../api/hooks/useRegion';
 import { busArrival, busesNear, busTrip, formatKm, passengersText } from '../../../utils/nearbyBuses';
 import TrackMyBusModal from '../Track/TrackMyBusModal';
+import { setGeoJson } from '../../Map/routeLayers';
+// The stops of a bus's route, ordered for its leg direction, are what name its place (routeKeyOf).
+import { busCounts, busStatusText, routeKeyOf, routeLineFeatures } from '../../../utils/publicTrackingView';
 
 const POLL_MS = 12000;
-
-// The stops of a bus's route, ordered for its leg direction, are what name its place.
-const routeKeyOf = (row) => `${Number(row?.route_id)}:${row?.leg_direction === 'reverse' ? 'reverse' : 'outbound'}`;
 
 // Popup content is built with DOM nodes (never HTML strings) so plate numbers
 // and other operator-entered text cannot inject markup.
@@ -61,6 +67,8 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
   const [pollingEnabled, setPollingEnabled] = useState(true);
   const [selectedRouteStops, setSelectedRouteStops] = useState([]);
   const [stopsByRoute, setStopsByRoute] = useState({});
+  const [geometryByRoute, setGeometryByRoute] = useState({});
+  const markerWaitingRef = useRef(new Map());
   const requestedRoutesRef = useRef(new Set());
   // Batch 45 Feature C: "Buses near you" (radius from the server's region settings) and the "Track my bus" pop-up.
   const region = useRegion();
@@ -153,7 +161,15 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
         const lat = Number(projected ? projected.snapped_latitude : row.latitude);
         const lng = Number(projected ? projected.snapped_longitude : row.longitude);
         // Batch 49 item 4: a bus moved by the Super Admin's GPS simulator says so.
-        const title = `${busLabelText(row?.bus_label)}${row?.is_simulated ? ' (Simulated)' : ''}`;
+        const title = `${busLabelText(row?.bus_label)}${row?.is_simulated ? ' (Simulated)' : ''}${row?.waiting ? ` (${busStatusText(row)})` : ''}`;
+
+        // 2026-11-08: when a waiting bus departs, its icon is made again (live colour, title and popup).
+        if (markersRef.current.has(fleetId) && markerWaitingRef.current.get(fleetId) !== Boolean(row?.waiting)) {
+          markersRef.current.get(fleetId)?.remove();
+          markersRef.current.delete(fleetId);
+          busIconsRef.current.delete(fleetId);
+        }
+        markerWaitingRef.current.set(fleetId, Boolean(row?.waiting));
 
         if (!markersRef.current.has(fleetId)) {
           const icon = createBusMarkerElement({ color: busColorFor(row), heading: headingOf(row), title });
@@ -168,7 +184,7 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
             .setLngLat([lng, lat])
             .setPopup(
               new maplibregl.Popup({ offset: 18 }).setDOMContent(
-                buildFleetPopup(title, row?.trip_status || 'active', row?.fleet_type || 'unknown'),
+                buildFleetPopup(title, row?.waiting ? busStatusText(row) : (row?.trip_status || 'active'), row?.fleet_type || 'unknown'),
               ),
             )
             .addTo(map);
@@ -186,6 +202,7 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
           marker.remove();
           markersRef.current.delete(fleetId);
           busIconsRef.current.delete(fleetId);
+          markerWaitingRef.current.delete(fleetId);
         }
       }
 
@@ -236,7 +253,10 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
       missing.forEach(([key, row]) => {
         requestedRoutesRef.current.add(key);
         fetchRouteMapData(Number(row.route_id), row.leg_direction === 'reverse' ? 'reverse' : 'outbound')
-          .then((data) => setStopsByRoute((prev) => ({ ...prev, [key]: data.stops })))
+          .then((data) => {
+            setStopsByRoute((prev) => ({ ...prev, [key]: data.stops }));
+            setGeometryByRoute((prev) => ({ ...prev, [key]: data.geometry }));
+          })
           .catch(() => requestedRoutesRef.current.delete(key));
       });
     }, 0);
@@ -244,6 +264,7 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
   }, [fleets]);
 
   const placeLabel = (row) => {
+    if (row?.waiting) return row.waiting_at ? `At ${row.waiting_at}` : 'At its first stop';
     if (!(Number(row?.route_id) > 0)) return 'On the road (route not available)';
     const stops = stopsByRoute[routeKeyOf(row)];
     if (!stops) return 'Finding the bus location...';
@@ -266,6 +287,32 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
     }
   }, [selectedFleetId, fleets]);
   const showAll = useCallback(() => setSelectedFleetId(null), []);
+
+  // 2026-11-08 (user): with no bus chosen, the route line of every listed bus, so no icon floats. The chosen bus's
+  // route (with its stops) is drawn by RouteMap instead.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!mapReady || !map) return undefined;
+    const data = { type: 'FeatureCollection', features: selectedFleetId ? [] : routeLineFeatures(fleets, geometryByRoute) };
+    const apply = () => {
+      try {
+        setGeoJson(map, ALL_ROUTES_SOURCE, data);
+        if (!map.getLayer(ALL_ROUTES_LAYER)) {
+          map.addLayer({
+            id: ALL_ROUTES_LAYER,
+            type: 'line',
+            source: ALL_ROUTES_SOURCE,
+            layout: { 'line-join': 'round', 'line-cap': 'round' },
+            paint: { 'line-color': '#0d9488', 'line-width': 4, 'line-opacity': 0.55 },
+          });
+        }
+      } catch { /* the map style is not ready yet; the next poll draws it */ }
+    };
+    if (map.isStyleLoaded?.()) apply();
+    else map.once?.('idle', apply);
+    return undefined;
+  }, [mapReady, fleets, geometryByRoute, selectedFleetId]);
+  const counts = busCounts(fleets);
 
   const selectedTripId = Number(selectedFleet?.trip_id) > 0 ? Number(selectedFleet.trip_id) : null;
   useEffect(() => {
@@ -412,7 +459,10 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-widest text-teal-600">Track Bus</p>
-                <h3 className="text-lg font-semibold text-slate-900">{selectedFleet ? busLabelText(selectedFleet.bus_label) : fleets.length > 0 ? `${fleets.length} bus${fleets.length === 1 ? '' : 'es'} on the road` : 'No active bus detected'}{selectedFleet?.is_simulated && <span data-testid="simulated-chip" className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 align-middle text-xs font-semibold text-amber-800">Simulated</span>}</h3>
+                {/* 2026-11-08 (user): no "{n} buses on the road" heading; the "live" chip already counts them. */}
+                {(selectedFleet || fleets.length === 0) && (
+                  <h3 className="text-lg font-semibold text-slate-900">{selectedFleet ? busLabelText(selectedFleet.bus_label) : 'No active bus detected'}{selectedFleet?.is_simulated && <span data-testid="simulated-chip" className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 align-middle text-xs font-semibold text-amber-800">Simulated</span>}</h3>
+                )}
                 {selectedFleet && (
                   <button type="button" onClick={showAll} data-testid="show-all-buses" className="mt-1 inline-flex min-h-9 items-center text-xs font-semibold text-teal-700 underline">Show all buses</button>
                 )}
@@ -452,6 +502,15 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
                 <p className="text-[11px] uppercase tracking-widest text-slate-500">ETA</p>
                 {!selectedFleet ? (
                   <p className="mt-1 text-sm text-slate-500">No bus selected</p>
+                ) : selectedFleet.waiting ? (
+                  <div data-testid="eta-waiting">
+                    <p className="mt-1 inline-flex items-center gap-1 text-sm font-semibold text-slate-900">
+                      <Clock3 className="h-3.5 w-3.5 text-teal-600" />
+                      {selectedFleet.departs_at ? `Leaves at ${selectedFleet.departs_at}` : 'Not departed yet'}
+                    </p>
+                    <p className="text-[11px] text-slate-500">{busStatusText(selectedFleet)}</p>
+                    {selectedTrip.arrives && <p className="text-[11px] text-slate-500">Destination {selectedTrip.destination} {selectedTrip.arrives.time} · {selectedTrip.arrives.basis}</p>}
+                  </div>
                 ) : !eta ? (
                   <p className="mt-1 text-sm text-slate-500" data-testid="eta-unavailable">{timeline.error || (selectedTripId ? 'Working out arrival times...' : 'Not provided')}</p>
                 ) : eta.finished ? (
@@ -477,7 +536,7 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
               <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
                 <p className="text-[11px] uppercase tracking-widest text-slate-500">Location</p>
                 <p className="mt-1 flex items-start gap-1 text-sm font-semibold text-slate-900" title={selectedFleet ? coordinatesTitle(selectedFleet) : undefined}><MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-teal-600" /><span>{selectedFleet ? placeLabel(selectedFleet) : 'N/A'}</span></p>
-                <p className="text-[11px] text-slate-500">{selectedTrip.arrived ? 'Arrived' : selectedTrip.departedAt ? `Departed at ${selectedTrip.departedAt}` : <span className="capitalize">{selectedFleet?.trip_status || 'idle'}</span>}</p>
+                <p className="text-[11px] text-slate-500">{busStatusText(selectedFleet, selectedTrip)}</p>
               </div>
               <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
                 <p className="text-[11px] uppercase tracking-widest text-slate-500">Next Stop / Destination</p>
@@ -513,9 +572,14 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
                 </h3>
               </div>
               <div className="flex items-center gap-2">
-                <span className="rounded-full bg-teal-100 px-2.5 py-1 text-xs font-semibold text-teal-700">
-                  {nearbyMode ? `${nearby.length} near` : `${fleets.length} live`}
+                <span className="rounded-full bg-teal-100 px-2.5 py-1 text-xs font-semibold text-teal-700" data-testid="live-count">
+                  {nearbyMode ? `${nearby.length} near` : `${counts.live} live`}
                 </span>
+                {!nearbyMode && counts.waiting > 0 && (
+                  <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700" data-testid="waiting-count">
+                    {counts.waiting} waiting
+                  </span>
+                )}
                 <button
                   type="button"
                   onClick={() => setTrackOpen(true)}
@@ -581,7 +645,7 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
                         {row?.destination || row?.route_name || 'Destination pending'}
                       </span>
                     </div>
-                    <p className="mt-1 text-xs text-slate-600">{trip.arrived ? 'Arrived' : trip.departedAt ? `Departed at ${trip.departedAt}` : <span className="capitalize">{row?.trip_status || 'active'}</span>}{nearbyMode ? ` • ${formatKm(row?._distanceM)}` : ''}</p>
+                    <p className="mt-1 text-xs text-slate-600" data-testid="bus-status">{busStatusText(row, trip)}{nearbyMode ? ` • ${formatKm(row?._distanceM)}` : ''}</p>
                     <p className="mt-1 text-xs text-slate-500" title={coordinatesTitle(row)}>{placeLabel(row)}</p>
                     {/* Batch 50 (user): departed at, destination, when it arrives there, passengers on board. */}
                     <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs" data-testid="nearby-bus-details">

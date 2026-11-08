@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import OperatorService from '../../StaffService/OperatorService';
 import { getBusinessToday } from '../../../utils/dates';
-import { csvFileName, filtersToParams, presetRange, saveCsv } from '../../../utils/financials';
+import { csvFileName, filtersToParams, presetRange } from '../../../utils/financials';
+import { downloadReport } from '../../../utils/tableExport';
+
+const EXPORT_TITLES = { transactions: 'Financial transactions', refunds: 'Financial refunds', daily: 'Financial daily summary' };
 
 const BLANK = { route_id: '', fleet_id: '', trip_id: '', payment_method: '', channel: '' };
 
@@ -58,12 +61,19 @@ export default function useFinancials({ service = OperatorService } = {}) {
 
   const retry = useCallback(() => setReload((n) => n + 1), []);
 
-  const exportCsv = useCallback(async (type) => {
+  // 2026-11-08 (advisor, user): the same server CSV, saved as PDF or CSV.
+  const exportReport = useCallback(async (type, format = 'pdf') => {
     setExporting(type);
     setExportError('');
     try {
       const text = await service.downloadFinancialExport(filtersToParams(filters, { ...table, type }));
-      saveCsv(typeof text === 'string' ? text : '', csvFileName(type, filters));
+      await downloadReport({
+        format,
+        csvText: typeof text === 'string' ? text : '',
+        fileName: csvFileName(type, filters),
+        title: EXPORT_TITLES[type] ?? 'Financial report',
+        subtitle: filters.from === filters.to ? `Date: ${filters.from}` : `Period: ${filters.from} to ${filters.to}`,
+      });
     } catch (err) {
       setExportError(err?.message || 'The export could not be created.');
     } finally {
@@ -80,6 +90,6 @@ export default function useFinancials({ service = OperatorService } = {}) {
     log: logResult.key === logKey ? logResult.data : null,
     logError: logResult.key === logKey ? logResult.error : '',
     logLoading: logResult.key !== logKey,
-    retry, exportCsv, exporting, exportError,
+    retry, exportReport, exporting, exportError,
   };
 }

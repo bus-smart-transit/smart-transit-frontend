@@ -235,6 +235,10 @@ test('Chauffeur: a discounted cash sale shows the regular fare and the discount,
 
   const downloadButton = page.getByRole('button', { name: 'Download Summary Report' });
   if (await downloadButton.isEnabled()) {
+    // 2026-11-08 (advisor, user): PDF first; CSV when chosen.
+    const [pdf] = await Promise.all([page.waitForEvent('download'), downloadButton.click()]);
+    expect(pdf.suggestedFilename()).toMatch(/^shift-summary-\d{4}-\d{2}-\d{2}\.pdf$/);
+    await page.getByLabel('File type').selectOption('csv');
     const [download] = await Promise.all([page.waitForEvent('download'), downloadButton.click()]);
     expect(download.suggestedFilename()).toMatch(/^shift-summary-\d{4}-\d{2}-\d{2}\.csv$/);
   }

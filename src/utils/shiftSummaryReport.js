@@ -3,6 +3,8 @@
  * server sent (nothing is worked out here). A missing value reads "Not provided".
  */
 
+import { downloadReport } from './tableExport';
+
 const NOT_PROVIDED = 'Not provided';
 
 const cell = (value) => {
@@ -45,15 +47,12 @@ export function shiftSummaryFileName(date) {
   return `shift-summary-${date || 'today'}.csv`;
 }
 
-/** Saves the CSV in the browser. */
-export function downloadShiftSummary(earnings, meta) {
-  const blob = new Blob([shiftSummaryCsv(earnings, meta)], { type: 'text/csv;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = shiftSummaryFileName(meta?.date);
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
+/** Saves the summary in the browser as the chosen file type (2026-11-08: PDF or CSV, the same cells). */
+export function downloadShiftSummary(earnings, meta, format = 'pdf') {
+  return downloadReport({
+    format,
+    csvText: shiftSummaryCsv(earnings, meta),
+    fileName: shiftSummaryFileName(meta?.date),
+    title: 'Shift summary',
+  });
 }

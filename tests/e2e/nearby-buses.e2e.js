@@ -72,9 +72,12 @@ test('no bus is chosen at first; choosing one focuses on it until Show all buses
 
   const choices = page.getByTestId('bus-choice');
   await expect(choices.first()).toBeVisible({ timeout: 30000 });
-  const count = await choices.count();
-  await expect(page.getByText(new RegExp(`^${count} bus(es)? on the road$`))).toBeVisible();
+  // 2026-11-08 (user): no "{n} buses on the road" heading and no "Track with a booking code" link; the chip counts.
+  await expect(page.getByText(/buses? on the road$/)).toHaveCount(0);
+  await expect(page.getByText('Track with a booking code')).toHaveCount(0);
+  await expect(page.getByTestId('live-count')).toHaveText(/^\d+ live$/);
   await expect(page.getByTestId('choose-a-bus')).toBeVisible();
+  await page.screenshot({ path: path.join(SHOTS, '2-all-routes.png') }); // every bus's route line, no bus chosen
   await expect(page.getByTestId('bus-live-panels')).toHaveCount(0);
   await expect(page.getByTestId('show-all-buses')).toHaveCount(0);
 

@@ -14,6 +14,7 @@ export const BUS_COLORS = {
   live: '#0d9488', // teal: a fresh GPS position on the route
   warning: '#f59e0b', // amber: off the route, or delayed
   stale: '#94a3b8', // grey: the position is old or weak
+  waiting: '#475569', // slate: not departed yet, waiting at its first stop (2026-11-08)
   selected: '#0f766e',
 };
 
@@ -47,7 +48,9 @@ export function createBusMarkerElement({ color = BUS_COLORS.live, heading = null
   element.setAttribute('role', 'img');
   element.setAttribute('aria-label', title);
   element.title = title;
-  element.style.cssText = `position:relative;width:${BUS_SIZE}px;height:${BUS_SIZE}px;cursor:pointer;filter:drop-shadow(0 2px 3px rgba(15,23,42,0.35));`;
+  // 2026-11-08: no inline `position`. MapLibre's marker class makes it absolute; an inline `relative` kept every bus
+  // after the first in the page flow, so each was drawn one icon height (40 px) lower than its real place.
+  element.style.cssText = `width:${BUS_SIZE}px;height:${BUS_SIZE}px;cursor:pointer;filter:drop-shadow(0 2px 3px rgba(15,23,42,0.35));`;
 
   const arrow = document.createElement('div');
   arrow.className = 'st-bus-heading';
@@ -92,7 +95,7 @@ export function createYouAreHereElement({ title = 'You are here' } = {}) {
   element.setAttribute('role', 'img');
   element.setAttribute('aria-label', title);
   element.title = title;
-  element.style.cssText = 'position:relative;width:30px;height:40px;filter:drop-shadow(0 2px 3px rgba(15,23,42,0.35));';
+  element.style.cssText = 'width:30px;height:40px;filter:drop-shadow(0 2px 3px rgba(15,23,42,0.35));'; // no inline position (see the bus icon)
   element.innerHTML = `
     <span style="position:absolute;left:5px;bottom:-4px;width:20px;height:8px;border-radius:50%;background:rgba(13,148,136,0.45);animation:st-you-pulse 1.8s ease-out infinite;"></span>
     <svg xmlns="http://www.w3.org/2000/svg" width="30" height="40" viewBox="0 0 30 40" aria-hidden="true" style="position:absolute;inset:0;">
