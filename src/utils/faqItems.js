@@ -30,7 +30,7 @@ export const FAQ_TOPICS = [
   {
     topic: 'Tracking and help',
     items: [
-      { q: 'How do I track my bus?', a: 'Open the "Track Bus" page to see the live location, arrival time and next stop of running buses. With a booking, use "Track with a booking code".' },
+      { q: 'How do I track my bus?', a: 'Open the "Track Bus" page to see the live location, arrival time and next stop of running buses. With a booking, tap "Track my bus" and enter the tracking code on your ticket.' },
       { q: 'What should I do if I have a problem with my booking?', a: 'Contact SmartTransit support through the Contact Us page, and include your booking reference if possible.' },
     ],
   },
