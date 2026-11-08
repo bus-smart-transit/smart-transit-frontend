@@ -15,7 +15,7 @@ import { detectInAppBrowser } from '../../../utils/inAppBrowser';
  * - In-app browsers (Facebook, Messenger, ...) cannot reliably save files, so they get an
  *   "open in your browser" message instead of a button that fails silently.
  */
-export default function SaveQrButton({ ticket, group = false, groupSize = 1, active = true }) {
+export default function SaveQrButton({ ticket, group = false, groupSize = 1, active = true, onSaved = null }) {
   const inApp = detectInAppBrowser();
   const { file, status, error } = useTicketImage(ticket, { group, groupSize, enabled: active && !inApp });
   const [message, setMessage] = useState('');
@@ -32,7 +32,10 @@ export default function SaveQrButton({ ticket, group = false, groupSize = 1, act
     if (!file) return;
     setMessage('');
     deliverFile(file)
-      .then((result) => setMessage(result === 'cancelled' ? '' : result === 'shared' ? 'Choose "Save Image" to keep it.' : 'QR saved to your downloads.'))
+      .then((result) => {
+        setMessage(result === 'cancelled' ? '' : result === 'shared' ? 'Choose "Save Image" to keep it.' : 'QR saved to your downloads.');
+        if (result !== 'cancelled') onSaved?.();
+      })
       .catch(() => setMessage('The image could not be saved. Try again.'));
   };
 

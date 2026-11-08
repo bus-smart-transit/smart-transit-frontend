@@ -1,12 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import useBuyTicket from '../../../api/hooks/Passenger/useBuyTicket';
 import BuyTicket from './BuyTicket';
 
 vi.mock('../../../api/hooks/Passenger/useBuyTicket', () => ({ default: vi.fn() }));
 vi.mock('../../Map/RouteMap', () => ({ default: () => null }));
 vi.mock('../Timeline/TripTimeline', () => ({ default: () => null }));
+vi.mock('../Ticket/SaveQrButton', () => ({ default: ({ onSaved }) => <button type="button" onClick={() => onSaved?.()}>Save QR (test)</button> }));
 
 const bookingState = () => ({
   bookingLink: { status: 'ok' },
@@ -103,5 +104,59 @@ describe('group QR choice (§4.10)', () => {
     useBuyTicket.mockReturnValue({ ...state, form: { ...state.form, ticket_quantity: '1' } });
     rerender(<MemoryRouter><BuyTicket /></MemoryRouter>);
     expect(screen.queryByRole('checkbox', { name: /Send one group QR/ })).not.toBeInTheDocument();
+  });
+});
+
+// Batch 50 item 7 (user): a guest is asked once before leaving an unsaved ticket; closing goes home (guest) or to
+// My Tickets (account). The guest email is required.
+describe('after paying', () => {
+  const paidTicket = { ticket_uuid: 'u-1', origin: 'Ecoland', destination: 'Tagum', seat_type: 'seated', qr_content: 'u-1', tracking_code: '7KQ4M2XD', tracking_token: 't'.repeat(43) };
+  const paidState = (over = {}) => ({ ...bookingState(), checkoutStatus: 'success', qrTickets: [paidTicket], loadingQr: false, formatDateTime: () => '2026-11-09 08:00', printQrTicket: vi.fn(), ...over });
+  const renderAt = () => render(
+    <MemoryRouter initialEntries={['/passenger/book']}>
+      <Routes>
+        <Route path="/passenger/book" element={<BuyTicket />} />
+        <Route path="/" element={<p>home page</p>} />
+        <Route path="/passenger/dashboard" element={<p>my tickets page</p>} />
+      </Routes>
+    </MemoryRouter>,
+  );
+
+  it('asks a guest to save the ticket before leaving, then goes home', () => {
+    useBuyTicket.mockReturnValue(paidState({ isGuestCheckout: true }));
+    renderAt();
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Close' }).at(-1)); // the footer button (the X does the same)
+    const warning = screen.getByTestId('save-ticket-warning');
+    expect(warning).toHaveTextContent('You have not saved your ticket.');
+    expect(screen.queryByText('home page')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Leave anyway' }));
+    expect(screen.getByText('home page')).toBeInTheDocument();
+  });
+
+  it('lets a guest who saved the ticket close without asking', () => {
+    useBuyTicket.mockReturnValue(paidState({ isGuestCheckout: true }));
+    renderAt();
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Save QR (test)' })[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Close' }).at(-1)); // the footer button (the X does the same)
+    expect(screen.getByText('home page')).toBeInTheDocument();
+  });
+
+  it('takes a signed-in passenger to My Tickets without asking', () => {
+    useBuyTicket.mockReturnValue(paidState({ isGuestCheckout: false }));
+    renderAt();
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Close' }).at(-1)); // the footer button (the X does the same)
+    expect(screen.getByText('my tickets page')).toBeInTheDocument();
+  });
+
+  it('shows the required guest email and its error', () => {
+    useBuyTicket.mockReturnValue({ ...bookingState(), isGuestCheckout: true, form: { ...bookingState().form, guest_email: '' }, formErrors: { guest_email: 'Enter your email. Your ticket and tracking code are sent there.' } });
+    render(<MemoryRouter><BuyTicket /></MemoryRouter>);
+
+    expect(screen.getByText('Your ticket and tracking code are sent here. You need it to find your ticket again.')).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('Enter your email. Your ticket and tracking code are sent there.');
   });
 });

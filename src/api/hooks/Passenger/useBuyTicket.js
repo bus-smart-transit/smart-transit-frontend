@@ -740,6 +740,10 @@ export default function useBuyTicket({ onTicketPurchased }) {
       if (!form.origin_stop_id) {
         nextErrors.origin_stop_id = 'Please choose where you board.';
       }
+      // Batch 50 item 7 (user): a guest's ticket and tracking code are sent by email, so the email is required.
+      if (isGuestCheckout && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(form.guest_email || '').trim())) {
+        nextErrors.guest_email = 'Enter your email. Your ticket and tracking code are sent there.';
+      }
       if (!Number.isFinite(parseInt(form.ticket_quantity, 10)) || parseInt(form.ticket_quantity, 10) < 1) {
         nextErrors.ticket_quantity = 'Ticket quantity must be at least 1.';
       } else if (parseInt(form.ticket_quantity, 10) > maxSeatsPerPurchase) {
@@ -776,7 +780,7 @@ export default function useBuyTicket({ onTicketPurchased }) {
       };
       // Only a guest is asked for an email, and only so we can find their ticket again;
       // the payment page collects everything else.
-      if (isGuestCheckout && form.guest_email) payload.guest_email = form.guest_email;
+      if (isGuestCheckout) payload.guest_email = String(form.guest_email).trim();
       if (!isGuestCheckout && form.use_rewards && rewardPointsToApply > 0) {
         payload.reward_points_to_use = rewardPointsToApply;
       }

@@ -24,7 +24,8 @@ test.beforeAll(async () => {
   const dates = process.env.E2E_BOOK_DATE ? [process.env.E2E_BOOK_DATE] : Array.from({ length: 45 }, (_, i) => manilaDate(i));
   for (const date of dates) {
     const trips = (await (await api.get(`booking/trips?date=${date}&per_page=50`)).json()).data?.trips ?? [];
-    trip = trips.find((t) => t.origin?.stop_code && t.destination?.stop_code);
+    // A bookable one: since Batch 49/50 a departed trip is listed too (marked Departed, not bookable).
+    trip = trips.find((t) => t.bookable && t.origin?.stop_code && t.destination?.stop_code);
     if (trip) break;
   }
   await api.dispose();
@@ -45,10 +46,12 @@ function watch(page, step) {
   return entry;
 }
 
-async function openBooking(page) {
+async function openBooking(page, { email = 'e2e.guest@example.com' } = {}) {
   const query = new URLSearchParams({ from: trip.origin.stop_code, to: trip.destination.stop_code, date: trip.trip_date, time: trip.boarding_time });
   await page.goto(`/passenger/book?${query}`);
   await expect(page.getByRole('button', { name: /Continue to Payment/ })).toBeEnabled();
+  // Batch 50 item 7 (user): a guest must give an email (the ticket and tracking code are sent there). SAMPLE address.
+  if (email) await page.getByLabel(/Email for your ticket/).fill(email);
 }
 
 /** Clicks Continue to Payment; resolves to the checkout tab's URL, or the error the page shows instead. */
@@ -91,13 +94,15 @@ test('a guest pays online: the checkout opens, and a second try of the same book
   expect(entry.pageErrors, 'no script errors').toEqual([]);
 });
 
-test('a guest without an email can still pay', async ({ page }) => {
+// Batch 50 item 7 (user): a guest without an email is asked for one, and no payment opens.
+test('a guest must give an email before paying', async ({ page }) => {
   test.skip(!trip, 'No trip is bookable online in the next 45 days.');
-  const entry = watch(page, 'guest-no-email');
-  await openBooking(page);
-  const result = await pay(page, entry);
-  expect(result.error, 'no error without an email').toBeUndefined();
-  expect(result.url).toMatch(/paymongo/);
+  watch(page, 'guest-no-email');
+  await openBooking(page, { email: '' });
+  const popup = page.waitForEvent('popup', { timeout: 5000 }).catch(() => null);
+  await page.getByRole('button', { name: /Continue to Payment/ }).click();
+  await expect(page.getByText('Enter your email. Your ticket and tracking code are sent there.')).toBeVisible();
+  expect(await popup, 'no payment tab opens').toBeNull();
 });
 
 /** The reference of the next checkout the page starts. */
@@ -136,6 +141,7 @@ test('a guest reloads the booking page while a payment is open, and can still pa
   await expect(page.getByRole('button', { name: /Continue to Payment/ })).toBeVisible();
   await page.screenshot({ path: path.join(SHOTS, '6-reload-while-pending.png'), fullPage: true });
   await page.locator('#ticket_quantity').fill('2');
+  await page.getByLabel(/Email for your ticket/).fill('e2e.guest@example.com'); // Batch 50: the email is asked again after a reload
   const two = await pay(page, entry);
   await page.screenshot({ path: path.join(SHOTS, '7-two-tickets.png'), fullPage: true });
   expect(two.error, 'two tickets after a reload shows no error').toBeUndefined();

@@ -58,9 +58,12 @@ export function buildTicketImageModel(ticket, { group = false, groupSize = 1 } =
       { label: 'Transaction', value: ticket?.transaction_reference || '-' },
     ];
 
+  // Batch 50 item 7 (user): the tracking code is on the saved ticket, set apart, so it can be typed at Track my bus.
+  const code = String(ticket?.tracking_code || '').trim();
   return {
     title: group ? 'SmartTransit Group Ticket' : 'SmartTransit Ticket',
     qrContent: content || null,
+    tracking: code ? { code: `${code.slice(0, 4)} ${code.slice(4)}`.trim(), hint: 'Type this code at Track my bus to see where your bus is' } : null,
     lines,
     footer: group ? 'Show this QR once to board everyone in this order' : 'Present this QR code to the chauffeur when boarding',
   };
@@ -97,7 +100,8 @@ export async function renderTicketCanvas(model) {
   const width = 900;
   const rowHeight = 64;
   const qrSize = 600; // quiet zone is part of the generated image
-  const height = 220 + qrSize + 40 + model.lines.length * rowHeight + 120;
+  const trackingHeight = model.tracking ? 170 : 0;
+  const height = 220 + qrSize + 40 + trackingHeight + model.lines.length * rowHeight + 120;
   const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = height;
@@ -117,6 +121,21 @@ export async function renderTicketCanvas(model) {
   ctx.drawImage(qrImage, (width - qrSize) / 2, 200, qrSize, qrSize);
 
   let y = 200 + qrSize + 60;
+  if (model.tracking) {
+    ctx.fillStyle = '#f1f5f9';
+    ctx.fillRect(48, y - 40, width - 96, 140);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#475569';
+    ctx.font = '26px Arial, sans-serif';
+    ctx.fillText('Tracking code', width / 2, y);
+    ctx.fillStyle = '#0f172a';
+    ctx.font = 'bold 52px Arial, sans-serif';
+    ctx.fillText(model.tracking.code, width / 2, y + 56);
+    ctx.fillStyle = '#475569';
+    ctx.font = '22px Arial, sans-serif';
+    ctx.fillText(fit(ctx, model.tracking.hint, width - 120), width / 2, y + 90);
+    y += trackingHeight;
+  }
   model.lines.forEach((line) => {
     ctx.fillStyle = '#64748b';
     ctx.font = '28px Arial, sans-serif';

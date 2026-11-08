@@ -127,3 +127,16 @@ describe('in-app browser and device detection', () => {
     expect(isMobileDevice({ userAgent: 'Windows NT 10.0' })).toBe(false)
   })
 })
+
+// Batch 50 item 7 (user): the saved ticket shows the tracking code, set apart, with where to type it.
+describe('the tracking code on the saved ticket', () => {
+  it('puts the code in two groups of four, with a hint', () => {
+    const model = buildTicketImageModel({ ...ticket, tracking_code: '4XGXCSM5' })
+    expect(model.tracking).toEqual({ code: '4XGXCSM5'.slice(0, 4) + ' ' + '4XGXCSM5'.slice(4), hint: 'Type this code at Track my bus to see where your bus is' })
+    expect(buildTicketImageModel({ ...ticket, tracking_code: '4XGXCSM5' }, { group: true, groupSize: 3 }).tracking.code).toBe('4XGX CSM5')
+  })
+
+  it('leaves it out when the ticket has no code', () => {
+    expect(buildTicketImageModel(ticket).tracking).toBeNull()
+  })
+})

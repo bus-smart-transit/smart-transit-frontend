@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { AlertCircle, Bus, CalendarDays, CheckCircle, Clock3, CreditCard, Loader, MapPin, Pencil, Smartphone, Wallet } from 'lucide-react';
 import useBuyTicket from '../../../api/hooks/Passenger/useBuyTicket';
 import { busLabelText } from '../../../utils/busLabel';
@@ -132,6 +132,27 @@ export default function BuyTicket({ onTicketPurchased, returnTo = '/' }) {
     : null;
   const qrModalOpen = qrModalIdentity !== null && qrModalIdentity !== qrModalDismissedFor;
 
+  // Batch 50 item 7 (user): a guest cannot see the ticket again without the email, so leaving an unsaved ticket asks
+  // once (and the browser warns before the tab closes). Closing goes home for a guest, to My Tickets for an account.
+  const navigate = useNavigate();
+  const [savedFor, setSavedFor] = useState(null);
+  const [confirmLeaveFor, setConfirmLeaveFor] = useState(null);
+  const ticketSaved = savedFor !== null && savedFor === qrModalIdentity;
+  const confirmLeave = confirmLeaveFor !== null && confirmLeaveFor === qrModalIdentity;
+  const mustSave = qrModalOpen && isGuestCheckout && qrTickets.length > 0 && !ticketSaved;
+  const markSaved = () => setSavedFor(qrModalIdentity);
+  const closeTicket = () => {
+    setQrModalDismissedFor(qrModalIdentity);
+    navigate(isGuestCheckout ? '/' : '/passenger/dashboard?tab=tickets');
+  };
+  const requestClose = () => (mustSave ? setConfirmLeaveFor(qrModalIdentity) : closeTicket());
+  useEffect(() => {
+    if (!mustSave) return undefined;
+    const warn = (event) => { event.preventDefault(); event.returnValue = ''; };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [mustSave]);
+
   const canSubmit = !isSubmitting && canProceedToOnlinePayment && !isRewardRequestInsufficient && Boolean(form.ticket_quantity);
 
   return (
@@ -176,9 +197,19 @@ export default function BuyTicket({ onTicketPurchased, returnTo = '/' }) {
       {/* "Your Ticket QR": the Group QR for a multi-ticket purchase, or the single ticket's own QR. */}
       <Modal
         open={qrModalOpen}
-        onClose={() => setQrModalDismissedFor(qrModalIdentity)}
+        onClose={requestClose}
         title="Your Ticket QR"
       >
+        {confirmLeave && (
+          <div role="alertdialog" aria-label="Save your ticket" className="mb-4 space-y-2 rounded-xl bg-amber-50 p-3 text-sm text-amber-900 ring-1 ring-inset ring-amber-200" data-testid="save-ticket-warning">
+            <p className="font-semibold">You have not saved your ticket.</p>
+            <p>As a guest, you can only find it again with the email we sent you. Save it to your phone first.</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <SaveQrButton ticket={qrTickets[0]} group={qrTickets.length > 1} groupSize={qrTickets.length} active={Boolean(qrTickets.length > 1 ? qrTickets[0]?.group_qr_content : qrTickets[0]?.qr_content)} onSaved={markSaved} />
+              <Button type="button" variant="outline" size="sm" onClick={closeTicket}>Leave anyway</Button>
+            </div>
+          </div>
+        )}
         {loadingQr ? (
           <div className="flex items-center gap-2 text-sm text-slate-500"><Loader size={16} className="animate-spin" /> Loading ticket QR...</div>
         ) : qrTickets.length === 0 ? (
@@ -194,8 +225,11 @@ export default function BuyTicket({ onTicketPurchased, returnTo = '/' }) {
                 <p className="mt-2 text-xs text-teal-700">
                   The chauffeur scans this QR to board all passengers in your order at once.
                 </p>
+                {qrTickets[0]?.tracking_code && (
+                  <p className="mt-2 text-sm text-teal-900" data-testid="group-tracking-code">Tracking code: <strong className="font-data tracking-widest">{qrTickets[0].tracking_code}</strong></p>
+                )}
                 <div className="mt-3">
-                  <SaveQrButton ticket={qrTickets[0]} group groupSize={qrTickets.length} active={Boolean(qrTickets[0]?.group_qr_content)} />
+                  <SaveQrButton ticket={qrTickets[0]} group groupSize={qrTickets.length} active={Boolean(qrTickets[0]?.group_qr_content)} onSaved={markSaved} />
                 </div>
               </div>
             ) : (
@@ -244,7 +278,7 @@ export default function BuyTicket({ onTicketPurchased, returnTo = '/' }) {
         {qrTickets.length > 0 && (
           <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
             {qrTickets.length === 1 ? (
-              <SaveQrButton ticket={qrTickets[0]} active={Boolean(qrTickets[0]?.qr_content)} />
+              <SaveQrButton ticket={qrTickets[0]} active={Boolean(qrTickets[0]?.qr_content)} onSaved={markSaved} />
             ) : <span />}
             <div className="flex gap-2">
               {qrTickets.length === 1 && (
@@ -252,7 +286,7 @@ export default function BuyTicket({ onTicketPurchased, returnTo = '/' }) {
                   Print PDF
                 </Button>
               )}
-              <Button type="button" variant="primary" size="sm" onClick={() => setQrModalDismissedFor(qrModalIdentity)}>Close</Button>
+              <Button type="button" variant="primary" size="sm" onClick={requestClose}>Close</Button>
             </div>
           </div>
         )}
@@ -503,14 +537,19 @@ export default function BuyTicket({ onTicketPurchased, returnTo = '/' }) {
 
                     {isGuestCheckout && (
                       <label className="mt-4 block text-sm font-semibold text-navy-950">
-                        Email to find your ticket later (optional)
+                        {/* Batch 50 item 7 (user): required for a guest; the ticket and tracking code are sent here. */}
+                        Email for your ticket <span className="text-red-600" aria-hidden="true">*</span>
                         <input
                           type="email"
+                          aria-required="true"
+                          aria-invalid={Boolean(formErrors.guest_email)}
                           value={form.guest_email}
                           onChange={(e) => handleChange('guest_email', e.target.value)}
                           placeholder="you@example.com"
                           className={FIELD}
                         />
+                        <span className="mt-1 block text-xs font-normal text-slate-500">Your ticket and tracking code are sent here. You need it to find your ticket again.</span>
+                        {formErrors.guest_email && <span role="alert" className="mt-1 block text-xs font-medium text-red-600">{formErrors.guest_email}</span>}
                       </label>
                     )}
 
