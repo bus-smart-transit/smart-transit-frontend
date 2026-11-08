@@ -104,7 +104,7 @@ export function useSignUp() {
       setSuccess("Account created! Check your email for the code to verify it.");
       setTimeout(() => navigate("/passenger/login", {
         state: data.verification_required
-          ? { verifyEmail: { accountUuid: data.account_uuid, emailMasked: data.email_masked, email: form.email.trim().toLowerCase() } }
+          ? { verifyEmail: { accountUuid: data.account_uuid, emailMasked: data.email_masked, expiresInSeconds: data.otp_expires_in_seconds, email: form.email.trim().toLowerCase() } }
           : undefined,
       }), 1500);
     } catch (err) {

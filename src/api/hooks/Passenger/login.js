@@ -4,6 +4,9 @@ import PassengerService from "../../../api/PassengerService/PassengerService";
 import { leaveAccountDeletionNotice } from "../../../utils/accountDeletionNotice";
 import { useAuth } from "../../../api/hooks/useAuth"; // adjust path
 
+/** Whole minutes a login code works, from the server's seconds; null when not given. */
+const codeMinutes = (seconds) => (Number(seconds) > 0 ? Math.max(1, Math.round(Number(seconds) / 60)) : null);
+
 export function useLogin() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -36,6 +39,8 @@ export function useLogin() {
   // The account's uuid from step 1 (never the numeric user id).
   const [otpUserId, setOtpUserId] = useState(pendingVerify?.accountUuid ?? null);
   const [otpEmailMasked, setOtpEmailMasked] = useState(pendingVerify ? (pendingVerify.emailMasked ?? "your email") : "");
+  // 2026-11-08 (user): how long the code works, as the server says (null when it did not say).
+  const [otpMinutes, setOtpMinutes] = useState(codeMinutes(pendingVerify?.expiresInSeconds));
   const [otp, setOtp] = useState("");
   const [otpError, setOtpError] = useState("");
   // 2026-10-28: true while the code also verifies the email (right after sign-up, or an account not verified yet).
@@ -78,6 +83,7 @@ export function useLogin() {
       if (data?.otp_required) {
         setOtpUserId(data.account_uuid);
         setOtpEmailMasked(data.email_masked ?? "your email");
+        setOtpMinutes(codeMinutes(data.otp_expires_in_seconds));
         setVerifyingEmail(Boolean(data.verification_required));
         setOtpRequired(true);
       } else {
@@ -165,6 +171,7 @@ export function useLogin() {
     setOtp,
     otpError,
     otpEmailMasked,
+    otpMinutes,
     handleVerifyOtp,
     handleResendOtp,
     cancelOtp,

@@ -32,6 +32,17 @@ describe('LoginPage email verification', () => {
     expect(screen.getByTestId('verify-email-note')).toHaveTextContent('finish creating your account');
   });
 
+  // 2026-11-08 (user): the screen states the code's real lifetime from the server, and no number when it is unknown.
+  it('says how long the code works, from the server', () => {
+    renderAt({ verifyEmail: { ...fromSignup.verifyEmail, expiresInSeconds: 180 } });
+    expect(screen.getByTestId('verify-email-note')).toHaveTextContent('The code works for 3 minutes.');
+  });
+
+  it('gives no number when the server did not say', () => {
+    renderAt(fromSignup);
+    expect(screen.getByTestId('verify-email-note')).not.toHaveTextContent(/minute/);
+  });
+
   it('asks for a new verification code without the password', async () => {
     renderAt(fromSignup);
 

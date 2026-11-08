@@ -32,6 +32,7 @@ export default function LoginPage() {
     setOtp,
     otpError,
     otpEmailMasked,
+    otpMinutes,
     handleVerifyOtp,
     handleResendOtp,
     cancelOtp } = useLogin();
@@ -191,7 +192,7 @@ export default function LoginPage() {
                 </p>
                 {verifyingEmail && (
                   <p className="text-slate-600 mt-1 text-sm" data-testid="verify-email-note">
-                    Enter it to verify your email and finish creating your account. The code works for 10 minutes.
+                    Enter it to verify your email and finish creating your account.{otpMinutes ? ` The code works for ${otpMinutes} minute${otpMinutes === 1 ? '' : 's'}.` : ''}
                   </p>
                 )}
               </div>
