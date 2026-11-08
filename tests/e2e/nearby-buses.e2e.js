@@ -62,6 +62,34 @@ for (const width of [1280, 390]) {
   });
 }
 
+// Batch 50 (user, 2026-11-08): no bus is chosen at first and every bus shows; choosing one focuses on it alone and
+// shows its ETA, location and next stop; "Show all buses" goes back.
+test('no bus is chosen at first; choosing one focuses on it until Show all buses', async ({ page }) => {
+  test.skip(!bus, 'No running bus on the local backend (start gps:simulate on a boarding or departed trip).');
+  const pageErrors = [];
+  page.on('pageerror', (err) => pageErrors.push(String(err?.message || err)));
+  await page.goto('/track-bus');
+
+  const choices = page.getByTestId('bus-choice');
+  await expect(choices.first()).toBeVisible({ timeout: 30000 });
+  const count = await choices.count();
+  await expect(page.getByText(new RegExp(`^${count} bus(es)? on the road$`))).toBeVisible();
+  await expect(page.getByTestId('choose-a-bus')).toBeVisible();
+  await expect(page.getByTestId('bus-live-panels')).toHaveCount(0);
+  await expect(page.getByTestId('show-all-buses')).toHaveCount(0);
+
+  await choices.first().click();
+  await expect(choices.first()).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByTestId('bus-live-panels')).toBeVisible();
+  await expect(page.getByTestId('choose-a-bus')).toHaveCount(0);
+  await page.screenshot({ path: path.join(SHOTS, '2-focused.png') });
+
+  await page.getByTestId('show-all-buses').click();
+  await expect(page.getByTestId('choose-a-bus')).toBeVisible();
+  await expect(page.getByTestId('bus-live-panels')).toHaveCount(0);
+  expect(pageErrors).toEqual([]);
+});
+
 test('Track my bus: a wrong code is refused, a real one shows the trip and opens tracking after Yes', async ({ page }) => {
   test.skip(!token, 'No trackable ticket on the local backend.');
   await page.goto('/track-bus');

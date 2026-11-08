@@ -68,7 +68,9 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
   const [trackOpen, setTrackOpen] = useState(false);
   const [showAllBuses, setShowAllBuses] = useState(false);
 
-  const selectedFleet = fleets.find((row) => Number(row?.fleet_id) === Number(selectedFleetId)) || fleets[0] || null;
+  // Batch 50 (user, 2026-11-08): no bus is chosen at first; every bus shows on the map. Choosing one focuses on it
+  // alone (its route, ETA, location and next stop) until "Show all buses".
+  const selectedFleet = fleets.find((row) => Number(row?.fleet_id) === Number(selectedFleetId)) || null;
 
   const selectedRouteId = Number(selectedFleet?.route_id) > 0 ? Number(selectedFleet.route_id) : null;
 
@@ -187,10 +189,9 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
         }
       }
 
-      if (rows.length > 0 && (!selectedFleetId || !rows.some((row) => Number(row?.fleet_id) === Number(selectedFleetId)))) {
-        const first = Number(rows[0].fleet_id);
-        setSelectedFleetId(first);
-        flyToFleet(rows[0]);
+      // The chosen bus finished its trip (it left the list): back to all buses.
+      if (selectedFleetId && !rows.some((row) => Number(row?.fleet_id) === Number(selectedFleetId))) {
+        setSelectedFleetId(null);
       }
     } catch {
       // Keep the section resilient to transient polling failures.
@@ -249,6 +250,22 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
     return describeBusPlace(stops, row.latitude, row.longitude)?.text ?? 'On the road';
   };
   const coordinatesTitle = (row) => `${Number(row?.latitude).toFixed(5)}, ${Number(row?.longitude).toFixed(5)}`;
+
+  // Only the chosen bus is drawn while one is chosen; with none, every bus, and the map fits them all.
+  useEffect(() => {
+    for (const [fleetId, marker] of markersRef.current) {
+      const el = marker.getElement?.();
+      if (el) el.style.display = selectedFleetId && Number(fleetId) !== Number(selectedFleetId) ? 'none' : '';
+    }
+    const map = mapRef.current;
+    const maplibregl = mapLibRef.current;
+    if (!selectedFleetId && map && maplibregl && fleets.length > 0) {
+      const bounds = new maplibregl.LngLatBounds();
+      fleets.forEach((row) => bounds.extend([Number(row.longitude), Number(row.latitude)]));
+      try { map.fitBounds(bounds, { padding: 60, maxZoom: 13, duration: 600 }); } catch { /* map not ready */ }
+    }
+  }, [selectedFleetId, fleets]);
+  const showAll = useCallback(() => setSelectedFleetId(null), []);
 
   const selectedTripId = Number(selectedFleet?.trip_id) > 0 ? Number(selectedFleet.trip_id) : null;
   useEffect(() => {
@@ -395,7 +412,10 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-widest text-teal-600">Track Bus</p>
-                <h3 className="text-lg font-semibold text-slate-900">{selectedFleet ? busLabelText(selectedFleet.bus_label) : 'No active bus detected'}{selectedFleet?.is_simulated && <span data-testid="simulated-chip" className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 align-middle text-xs font-semibold text-amber-800">Simulated</span>}</h3>
+                <h3 className="text-lg font-semibold text-slate-900">{selectedFleet ? busLabelText(selectedFleet.bus_label) : fleets.length > 0 ? `${fleets.length} bus${fleets.length === 1 ? '' : 'es'} on the road` : 'No active bus detected'}{selectedFleet?.is_simulated && <span data-testid="simulated-chip" className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 align-middle text-xs font-semibold text-amber-800">Simulated</span>}</h3>
+                {selectedFleet && (
+                  <button type="button" onClick={showAll} data-testid="show-all-buses" className="mt-1 inline-flex min-h-9 items-center text-xs font-semibold text-teal-700 underline">Show all buses</button>
+                )}
               </div>
               <button
                 type="button"
@@ -421,7 +441,13 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
               />
             </div>
 
-            <div className="mt-3 grid gap-2 sm:grid-cols-3">
+            {!selectedFleet && fleets.length > 0 && (
+              <p className="mt-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600" data-testid="choose-a-bus">
+                Choose a bus on the map or in the list to see when it arrives, where it is and its next stop.
+              </p>
+            )}
+            {selectedFleet && (
+            <div className="mt-3 grid gap-2 sm:grid-cols-3" data-testid="bus-live-panels">
               <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
                 <p className="text-[11px] uppercase tracking-widest text-slate-500">ETA</p>
                 {!selectedFleet ? (
@@ -459,6 +485,7 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
                 <p className="text-[11px] text-slate-500">{selectedTrip.destination ? `Destination: ${selectedTrip.destination}` : (selectedFleet?.route_name || 'Route sync pending')}</p>
               </div>
             </div>
+            )}
             {routeProgress && (
               <div className="mt-3 rounded-lg border border-slate-200 bg-white px-3 py-3">
                 <div className="mb-2 flex items-center justify-between gap-2">
@@ -539,6 +566,8 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
                   <button
                     key={row?.fleet_id}
                     type="button"
+                    data-testid="bus-choice"
+                    aria-pressed={isSelected}
                     onClick={() => {
                       setSelectedFleetId(Number(row.fleet_id));
                       flyToFleet(row);
