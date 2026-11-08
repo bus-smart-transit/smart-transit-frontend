@@ -15,7 +15,7 @@ const busColorFor = (row) => (String(row?.trip_status || '').toLowerCase() === '
 const headingOf = (row) => (Number.isFinite(Number(row?.heading)) && row?.heading !== null ? Number(row.heading) : null);
 import { busLabelText } from '../../../utils/busLabel';
 import { useRegion } from '../../../api/hooks/useRegion';
-import { busArrival, busesNear, formatKm, passengersText } from '../../../utils/nearbyBuses';
+import { busArrival, busesNear, busTrip, formatKm, passengersText } from '../../../utils/nearbyBuses';
 import TrackMyBusModal from '../Track/TrackMyBusModal';
 
 const POLL_MS = 12000;
@@ -41,82 +41,6 @@ const buildFleetPopup = (title, status, fleetType) => {
   });
   return root;
 };
-
-const deriveStopProgress = (stops = [], fleetLat, fleetLng, lastAcknowledgedStopId, tripStatus) => {
-  const normalizedStops = (Array.isArray(stops) ? stops : [])
-    .map((row) => {
-      const stopLat = Number(row?.latitude);
-      const stopLng = Number(row?.longitude);
-      if (!Number.isFinite(stopLat) || !Number.isFinite(stopLng)) return null;
-      return {
-        ...row,
-        latitude: stopLat,
-        longitude: stopLng,
-        stop_order: Number(row?.stop_order ?? 0),
-      };
-    })
-    .filter(Boolean)
-    .sort((a, b) => a.stop_order - b.stop_order);
-
-  if (normalizedStops.length === 0) return null;
-
-  const totalStops = normalizedStops.length;
-  const normalizedTripStatus = String(tripStatus || '').toLowerCase();
-  const acknowledgedId = Number(lastAcknowledgedStopId);
-
-  let completedStops = 0;
-  let nearestDistance = null;
-
-  if (normalizedTripStatus === 'completed') {
-    completedStops = totalStops;
-  } else if (Number.isFinite(acknowledgedId) && acknowledgedId > 0) {
-    const acknowledgedIndex = normalizedStops.findIndex((stop) => Number(stop?.stop_id) === acknowledgedId);
-    if (acknowledgedIndex >= 0) {
-      completedStops = acknowledgedIndex + 1;
-    }
-  }
-
-  if (completedStops === 0) {
-    const lat = Number(fleetLat);
-    const lng = Number(fleetLng);
-    if (Number.isFinite(lat) && Number.isFinite(lng)) {
-      let nearestIndex = 0;
-      nearestDistance = Number.POSITIVE_INFINITY;
-
-      normalizedStops.forEach((stop, idx) => {
-        const distance = haversineM(lat, lng, stop.latitude, stop.longitude);
-        if (distance < nearestDistance) {
-          nearestDistance = distance;
-          nearestIndex = idx;
-        }
-      });
-
-      completedStops = Math.min(totalStops, nearestIndex + 1);
-    }
-  }
-
-  completedStops = Math.max(0, Math.min(totalStops, completedStops));
-  const progressPercent = totalStops > 1
-    ? Math.round((Math.max(0, completedStops - 1) / (totalStops - 1)) * 100)
-    : 0;
-  const nextStop = completedStops >= totalStops
-    ? normalizedStops[totalStops - 1]
-    : normalizedStops[completedStops];
-
-  return {
-    completedStops,
-    totalStops,
-    progressPercent,
-    nextStopName: nextStop?.stop_name || 'Final stop',
-    nearestDistance,
-  };
-};
-
-function formatDistance(meters) {
-  if (!Number.isFinite(Number(meters))) return '-';
-  if (meters < 1000) return `${Math.round(meters)} m`;
-  return `${(meters / 1000).toFixed(1)} km`;
-}
 
 export default function PublicTrackingSection({ showHeader = true, compact = false, activeTicket = null }) {
   const mapRef = useRef(null);
@@ -341,7 +265,8 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
       if (!cancelled) setNowMs(Date.now());
     };
     void load();
-    const id = setInterval(load, 60000);
+    // Batch 50: the ETA follows the live position, so it is asked for again every 20 seconds while a bus is watched.
+    const id = setInterval(load, 20000);
     return () => { cancelled = true; clearInterval(id); };
   }, [selectedTripId]);
 
@@ -363,16 +288,22 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
     [timeline, selectedTripId, nowMs, nearStopId],
   );
 
+  // Batch 50: the stops passed come from the server (the bus position and the Driver's taps, one owner), so the map's
+  // gray stops, the progress bar and the next stop always agree with the ETA.
+  const passedStopIds = useMemo(() => (selectedFleet?.trip_progress?.passed_stop_ids || []).map(Number), [selectedFleet]);
   const routeProgress = useMemo(() => {
     if (!selectedFleet || selectedRouteStops.length < 2) return null;
-    return deriveStopProgress(
-      selectedRouteStops,
-      selectedFleet.latitude,
-      selectedFleet.longitude,
-      selectedFleet.last_acknowledged_stop_id,
-      selectedFleet.trip_status,
-    );
-  }, [selectedFleet, selectedRouteStops]);
+    const progress = selectedFleet.trip_progress || {};
+    const total = selectedRouteStops.length;
+    const passed = progress.arrived ? total : Math.min(total, passedStopIds.length);
+    return {
+      completedStops: passed,
+      totalStops: total,
+      progressPercent: total > 1 ? Math.round((Math.max(0, passed - 1) / (total - 1)) * 100) : 0,
+      nextStopName: progress.arrived ? `Arrived at ${progress.destination || 'the last stop'}` : (progress.next_stop || 'Not provided'),
+    };
+  }, [selectedFleet, selectedRouteStops, passedStopIds]);
+  const selectedTrip = busTrip(selectedFleet?.trip_progress);
 
   const handlePinLocation = () => {
     if (!navigator.geolocation) {
@@ -482,6 +413,7 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
                 routeId={selectedRouteId}
                 direction={selectedFleet?.leg_direction || 'outbound'}
                 highlight={ticketHighlight}
+                acknowledgedStopIds={passedStopIds}
                 showStatus={false}
                 onMapReady={handleMapReady}
                 onRouteData={handleRouteData}
@@ -497,15 +429,15 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
                 ) : !eta ? (
                   <p className="mt-1 text-sm text-slate-500" data-testid="eta-unavailable">{timeline.error || (selectedTripId ? 'Working out arrival times...' : 'Not provided')}</p>
                 ) : eta.finished ? (
-                  <p className="mt-1 text-sm font-semibold text-slate-900">This trip has reached its last stop</p>
+                  <p className="mt-1 text-sm font-semibold text-slate-900" data-testid="eta-arrived">Arrived at its final destination, {eta.destination?.name || 'the last stop'}</p>
                 ) : (
                   <div data-testid="eta-next">
                     <p className="mt-1 inline-flex items-center gap-1 text-sm font-semibold text-slate-900">
                       <Clock3 className="h-3.5 w-3.5 text-teal-600" />
-                      {eta.next.time ? `${eta.next.time} ${etaMinutesLabel(eta.next.minutes)}` : 'Not provided'}
+                      {eta.next.time ? `Arriving at ${eta.next.name} ${etaMinutesLabel(eta.next.minutes)}` : `Next: ${eta.next.name}`}
                     </p>
-                    <p className="text-[11px] text-slate-500">Next: {eta.next.name}{eta.next.time ? (eta.next.live ? ' · live estimate' : ' · scheduled') : ''}</p>
-                    {eta.destination.time && <p className="text-[11px] text-slate-500">Last stop {eta.destination.name} {eta.destination.time}</p>}
+                    <p className="text-[11px] text-slate-500">{eta.next.time ? `${eta.next.time}${eta.next.live ? ' · live estimate' : ' · scheduled'}` : 'Arrival time: Not provided'}</p>
+                    {eta.destination.time && <p className="text-[11px] text-slate-500">Destination {eta.destination.name} {eta.destination.time}{eta.destination.live ? ' · live estimate' : ''}</p>}
                     {eta.nearYou && (
                       <p className="mt-1 text-[11px] font-semibold text-teal-700" data-testid="eta-near-you">
                         {eta.nearYou.passed
@@ -519,12 +451,12 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
               <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
                 <p className="text-[11px] uppercase tracking-widest text-slate-500">Location</p>
                 <p className="mt-1 flex items-start gap-1 text-sm font-semibold text-slate-900" title={selectedFleet ? coordinatesTitle(selectedFleet) : undefined}><MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-teal-600" /><span>{selectedFleet ? placeLabel(selectedFleet) : 'N/A'}</span></p>
-                <p className="text-[11px] text-slate-500 capitalize">{selectedFleet?.trip_status || 'idle'}</p>
+                <p className="text-[11px] text-slate-500">{selectedTrip.arrived ? 'Arrived' : selectedTrip.departedAt ? `Departed at ${selectedTrip.departedAt}` : <span className="capitalize">{selectedFleet?.trip_status || 'idle'}</span>}</p>
               </div>
               <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
                 <p className="text-[11px] uppercase tracking-widest text-slate-500">Next Stop / Destination</p>
-                <p className="mt-1 inline-flex items-center gap-1 text-sm font-semibold text-slate-900"><Navigation className="h-3.5 w-3.5 text-teal-600" />{nextStopOrDestinationLabel}</p>
-                <p className="text-[11px] text-slate-500">{selectedFleet?.route_name || selectedFleet?.destination || 'Route sync pending'}</p>
+                <p className="mt-1 inline-flex items-center gap-1 text-sm font-semibold text-slate-900"><Navigation className="h-3.5 w-3.5 text-teal-600" />{selectedTrip.arrived ? `Arrived at ${selectedTrip.destination}` : (selectedFleet?.trip_progress?.next_stop || nextStopOrDestinationLabel)}</p>
+                <p className="text-[11px] text-slate-500">{selectedTrip.destination ? `Destination: ${selectedTrip.destination}` : (selectedFleet?.route_name || 'Route sync pending')}</p>
               </div>
             </div>
             {routeProgress && (
@@ -602,6 +534,7 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
               {(nearbyMode ? nearby : fleetsWithDistance).map((row) => {
                 const isSelected = Number(selectedFleetId) === Number(row?.fleet_id);
                 const arrival = busArrival(row?.trip_progress);
+                const trip = busTrip(row?.trip_progress);
                 return (
                   <button
                     key={row?.fleet_id}
@@ -619,17 +552,16 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
                         {row?.destination || row?.route_name || 'Destination pending'}
                       </span>
                     </div>
-                    <p className="mt-1 text-xs text-slate-600"><span className="capitalize">{row?.trip_status || 'active'}</span> • {nearbyMode ? formatKm(row?._distanceM) : formatDistance(row?._distanceM)}</p>
+                    <p className="mt-1 text-xs text-slate-600">{trip.arrived ? 'Arrived' : trip.departedAt ? `Departed at ${trip.departedAt}` : <span className="capitalize">{row?.trip_status || 'active'}</span>}{nearbyMode ? ` • ${formatKm(row?._distanceM)}` : ''}</p>
                     <p className="mt-1 text-xs text-slate-500" title={coordinatesTitle(row)}>{placeLabel(row)}</p>
-                    {/* Batch 45 Feature C: next stop, arrival (live or scheduled, the scheduled time and delay apart), passengers. */}
+                    {/* Batch 50 (user): departed at, destination, when it arrives there, passengers on board. */}
                     <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs" data-testid="nearby-bus-details">
-                      <dt className="text-slate-500">Next stop</dt>
-                      <dd className="text-right font-semibold text-slate-800">{row?.trip_progress?.next_stop || 'Not provided'}</dd>
+                      <dt className="text-slate-500">Destination</dt>
+                      <dd className="text-right font-semibold text-slate-800">{trip.destination || 'Not provided'}</dd>
                       <dt className="text-slate-500">Arrives</dt>
-                      <dd className="text-right font-semibold text-slate-800">
-                        {arrival.time ? `${arrival.time} · ${arrival.basis}` : 'Not provided'}
-                        {arrival.scheduled && <span className="block font-normal text-slate-500">{arrival.scheduled}{arrival.delay ? ` · ${arrival.delay}` : ''}</span>}
-                        {!arrival.scheduled && arrival.delay && <span className="block font-normal text-slate-500">{arrival.delay}</span>}
+                      <dd className="text-right font-semibold text-slate-800" data-testid="nearby-bus-arrives">
+                        {trip.arrived ? 'Arrived' : trip.arrives ? `${trip.arrives.time} · ${trip.arrives.basis}` : 'Not provided'}
+                        {!trip.arrived && arrival.delay && <span className="block font-normal text-slate-500">{arrival.delay}</span>}
                       </dd>
                       <dt className="text-slate-500">Passengers</dt>
                       <dd className="text-right font-semibold text-slate-800" data-testid="nearby-bus-passengers">{passengersText(row?.trip_progress)}</dd>

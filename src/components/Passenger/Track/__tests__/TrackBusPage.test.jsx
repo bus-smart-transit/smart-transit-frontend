@@ -140,11 +140,25 @@ describe('TrackBusPage refresh', () => {
   test('stops polling when the backend reports that the trip has arrived', async () => {
     getTracking.mockResolvedValue(view({ state: 'arrived', message: 'The bus has completed this trip.', bus: null }));
     renderPage();
-    expect(await screen.findByText('Trip completed')).toBeInTheDocument();
+    expect(await screen.findByText('Bus arrived')).toBeInTheDocument(); // Batch 50: also at the last stop before it is ended
     expect(getTracking).toHaveBeenCalledTimes(1);
 
     await act(async () => { await vi.advanceTimersByTimeAsync(60000); });
     expect(getTracking).toHaveBeenCalledTimes(1);
+  });
+
+  // Batch 50 (user): at its last stop the page names the final destination instead of "Bus location may be old",
+  // and on the way it says the next stop with its live time.
+  test('says the bus arrived at its final destination, and shows the next stop on the way', async () => {
+    getTracking.mockResolvedValueOnce(view({ state: 'arrived', message: 'The bus has arrived at its final destination, Stop E.', bus: null }));
+    const first = renderPage();
+    expect(await screen.findByText('The bus has arrived at its final destination, Stop E.')).toBeInTheDocument();
+    expect(screen.queryByText('Bus location may be old')).toBeNull();
+    first.unmount();
+
+    getTracking.mockResolvedValueOnce(view({ state: 'tracking', next_stop: { name: 'Stop D', eta: null, eta_time: null, eta_source: null } }));
+    renderPage();
+    expect(await screen.findByTestId('track-next-stop')).toHaveTextContent('Next stop: Stop D');
   });
 
   test('checks waiting trips once a minute, then respects the live interval after departure', async () => {

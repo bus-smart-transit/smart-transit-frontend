@@ -42,7 +42,8 @@ export function busEtaSummary(timeline, nowMs, nearStopId = null) {
     next: describe(next, nowMs),
     destination: describe(stops[stops.length - 1], nowMs),
     nearYou: describe(near, nowMs),
-    finished: !next,
+    // Batch 50: the server says when the bus is at (or the Driver tapped) its final stop.
+    finished: !next || timeline?.refresh?.arrived === true,
   };
 }
 

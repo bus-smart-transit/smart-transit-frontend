@@ -46,8 +46,34 @@ export function busArrival(progress) {
     basis: live ? 'Live estimate' : 'Scheduled',
     scheduled: live && progress.scheduled_time && progress.scheduled_time !== progress.eta_time ? `Scheduled ${progress.scheduled_time}` : null,
     delay,
-    note: !live && progress.gps_stale ? 'Bus location is old, so this is the scheduled time.' : null,
+    note: !live && progress.gps_stale && !progress.arrived ? 'Bus location is old, so this is the scheduled time.' : null,
   };
+}
+
+/**
+ * Batch 50 (user, 2026-11-08): what an Active buses card says about the trip as a whole, from `trip_progress`:
+ *   departedAt 'HH:MM' or null; destination the last stop's name or null; arrives { time, basis } for the destination
+ *   (live from the bus position when known, else the timetable) or null; arrived true once the bus is at its last stop.
+ */
+export function busTrip(progress) {
+  if (!progress) return { departedAt: null, destination: null, arrives: null, arrived: false };
+  const arrived = progress.arrived === true;
+  return {
+    departedAt: progress.departed_at || null,
+    destination: progress.destination || null,
+    arrives: !arrived && progress.destination_eta_time
+      ? { time: progress.destination_eta_time, basis: progress.destination_eta_basis === 'live' ? 'Live estimate' : 'Scheduled' }
+      : null,
+    arrived,
+  };
+}
+
+/** Batch 50: "in about 12 min" / "now" for a live ETA (an ISO time), or '' when unknown. */
+export function minutesUntil(iso, nowMs = Date.now()) {
+  const t = Date.parse(iso || '');
+  if (!Number.isFinite(t)) return '';
+  const minutes = Math.max(0, Math.round((t - nowMs) / 60000));
+  return minutes === 0 ? 'now' : `in about ${minutes} min`;
 }
 
 /** "Passengers" on a card: the count on board now, or "Not provided" when unknown (never zero by default). */

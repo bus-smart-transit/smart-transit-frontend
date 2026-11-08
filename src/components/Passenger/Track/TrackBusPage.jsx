@@ -6,13 +6,16 @@ import TrackHeader from './TrackHeader'
 import { useTicketTracking } from '../../../api/hooks/Passenger/useTicketTracking'
 import { formatManilaDate } from '../../../utils/dates'
 
+const NO_STOPS = []
+
 const STATE_STYLE = {
   tracking: { label: 'Live', tone: 'bg-emerald-50 text-emerald-800 ring-emerald-200' },
   stale: { label: 'Bus location may be old', tone: 'bg-amber-50 text-amber-800 ring-amber-200' },
   no_signal: { label: 'Bus location not available yet', tone: 'bg-slate-100 text-slate-700 ring-slate-200' },
   waiting: { label: 'Not departed yet', tone: 'bg-sky-50 text-sky-800 ring-sky-200' },
   not_yet: { label: 'Tracking opens soon', tone: 'bg-sky-50 text-sky-800 ring-sky-200' },
-  arrived: { label: 'Trip completed', tone: 'bg-emerald-50 text-emerald-800 ring-emerald-200' },
+  // Batch 50: also when the bus is at its last stop before the trip is marked completed (the message names the stop).
+  arrived: { label: 'Bus arrived', tone: 'bg-emerald-50 text-emerald-800 ring-emerald-200' },
   ended: { label: 'Tracking closed', tone: 'bg-slate-100 text-slate-700 ring-slate-200' },
   cancelled: { label: 'Trip cancelled', tone: 'bg-red-50 text-red-800 ring-red-200' },
   unavailable: { label: 'Not available', tone: 'bg-slate-100 text-slate-700 ring-slate-200' },
@@ -92,6 +95,12 @@ export default function TrackBusPage() {
               {view.message && <p className="mt-1 text-sm">{view.message}</p>}
               {view.state === 'not_yet' && view.opens_at && <p className="mt-1 text-sm">Opens at {new Date(view.opens_at).toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Manila' })}.</p>}
               {view.state === 'stale' && bus && <p className="mt-1 text-sm">Last update {Math.max(1, Math.round(bus.age_seconds / 60))} min ago.</p>}
+              {/* Batch 50: where the bus goes next, and when (live from its position when known). */}
+              {view.next_stop && view.state !== 'arrived' && (
+                <p className="mt-1 text-sm font-semibold" data-testid="track-next-stop">
+                  Next stop: {view.next_stop.name}{view.next_stop.eta_time ? ` · ${etaText(view.next_stop, view.refresh?.generated_at)}${view.next_stop.eta_source === 'live' ? '' : ' scheduled'}` : ''}
+                </p>
+              )}
               {refreshFailed && <p className="mt-1 text-sm" role="status">{error}</p>}
             </section>
 
@@ -117,6 +126,7 @@ export default function TrackBusPage() {
                   direction={view.route.direction}
                   vehicle={bus ? { latitude: bus.latitude, longitude: bus.longitude, recordedAt: bus.recorded_at } : null}
                   highlight={highlight}
+                  acknowledgedStopIds={view.passed_stop_ids || NO_STOPS}
                 />
               </section>
             )}

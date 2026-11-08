@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { busArrival, busesNear, distanceMeters, formatKm, passengersText } from '../nearbyBuses';
+import { busArrival, busesNear, busTrip, distanceMeters, formatKm, minutesUntil, passengersText } from '../nearbyBuses';
 
 const me = { lat: 7.0731, lng: 125.6128 }; // Davao City
 const bus = (id, lat, lng, extra = {}) => ({ fleet_id: id, latitude: lat, longitude: lng, ...extra });
@@ -49,5 +49,33 @@ describe('nearbyBuses (Batch 45 Feature C)', () => {
     expect(formatKm(420)).toBe('420 m away');
     expect(formatKm(2345)).toBe('2.3 km away');
     expect(formatKm(null)).toBe('');
+  });
+});
+
+// Batch 50 (user, 2026-11-08): an Active buses card shows when the bus left, where it goes and when it gets there.
+describe('busTrip', () => {
+  it('reads departed at, the destination and its arrival time', () => {
+    expect(busTrip({ departed_at: '15:26', destination: 'Last Stop', destination_eta_time: '16:10', destination_eta_basis: 'live', arrived: false }))
+      .toEqual({ departedAt: '15:26', destination: 'Last Stop', arrives: { time: '16:10', basis: 'Live estimate' }, arrived: false });
+    expect(busTrip({ destination: 'Last Stop', destination_eta_time: '16:40', destination_eta_basis: 'scheduled' }).arrives)
+      .toEqual({ time: '16:40', basis: 'Scheduled' });
+  });
+
+  it('says arrived, with no arrival time, at the last stop, and drops the old-location note', () => {
+    expect(busTrip({ destination: 'Last Stop', destination_eta_time: null, arrived: true })).toMatchObject({ arrived: true, arrives: null });
+    expect(busArrival({ eta_time: '15:26', eta_basis: 'scheduled', gps_stale: true, arrived: true }).note).toBeNull();
+  });
+
+  it('gives nothing when unknown, never a guess', () => {
+    expect(busTrip(null)).toEqual({ departedAt: null, destination: null, arrives: null, arrived: false });
+  });
+});
+
+describe('minutesUntil', () => {
+  it('says how long until a live time', () => {
+    const now = Date.parse('2026-11-08T08:00:00Z');
+    expect(minutesUntil('2026-11-08T08:12:00Z', now)).toBe('in about 12 min');
+    expect(minutesUntil('2026-11-08T07:59:00Z', now)).toBe('now');
+    expect(minutesUntil(null, now)).toBe('');
   });
 });

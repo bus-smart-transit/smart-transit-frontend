@@ -40,3 +40,12 @@ describe('busEtaSummary', () => {
     expect(etaMinutesLabel(null)).toBe('');
   });
 });
+
+// Batch 50: at its last stop the trip is finished even before the Driver ends it.
+describe('busEtaSummary at the last stop', () => {
+  it('is finished when the server says the bus has arrived', () => {
+    const timeline = { refresh: { arrived: true }, stops: [stop(1, 'First', 'passed', null), stop(2, 'Last', 'current', null)] };
+    expect(busEtaSummary(timeline, now).finished).toBe(true);
+    expect(busEtaSummary(timeline, now).destination.name).toBe('Last');
+  });
+});

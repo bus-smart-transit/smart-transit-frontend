@@ -90,7 +90,8 @@ export function renderRouteLayers(map, maplibregl, routeData, { highlight = null
         'circle-color': [
           'case',
           ['==', ['get', 'state'], 'outside'], '#cbd5e1',
-          ['==', ['get', 'state'], 'done'], '#14b8a6',
+          // Batch 50 (user): a stop the bus has passed is gray on every map.
+          ['==', ['get', 'state'], 'done'], '#94a3b8',
           ['==', ['get', 'type'], 'terminal'], '#153a6b',
           ['==', ['get', 'type'], 'pass_through'], '#ffffff',
           '#0284c7',
