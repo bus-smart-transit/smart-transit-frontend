@@ -30,7 +30,7 @@ test.beforeAll(async () => {
 });
 
 for (const width of [1280, 390]) {
-  test(`buses near the passenger, with next stop, arrival and passengers (${width} px)`, async ({ browser }) => {
+  test(`buses near the passenger, with destination, arrival and passengers (${width} px)`, async ({ browser }) => {
     test.skip(!bus, 'No running bus on the local backend (start gps:simulate on a boarding or departed trip).');
     const context = await browser.newContext({
       viewport: { width, height: 900 },
@@ -50,7 +50,8 @@ for (const width of [1280, 390]) {
     await expect(panel.getByText('Buses near you')).toBeVisible({ timeout: 30000 });
     await expect(panel.getByText(/Within \d+(\.\d+)? km of you/)).toBeVisible();
     const details = panel.getByTestId('nearby-bus-details').first();
-    await expect(details).toContainText('Next stop');
+    // Batch 50 (user): the card shows the destination (not the next stop), when it arrives, and the passengers.
+    await expect(details).toContainText('Destination');
     await expect(details).toContainText(/Arrives(\d{2}:\d{2} · (Live estimate|Scheduled)|Not provided)/);
     await expect(details.getByTestId('nearby-bus-passengers')).toHaveText(/^(\d+|Not provided)$/);
     await panel.scrollIntoViewIfNeeded();
