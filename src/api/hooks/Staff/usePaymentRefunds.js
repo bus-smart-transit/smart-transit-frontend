@@ -7,6 +7,8 @@ import OperatorService from '../../StaffService/OperatorService';
  * this hook sends the filter, the page and the note the Operator types. "Loading" is derived (the result in hand is for
  * another request) so no effect sets state synchronously.
  */
+export const CANCELLED_TRIPS = 'cancelled_trips';
+
 export default function usePaymentRefunds({ service = OperatorService } = {}) {
   const [status, setStatusState] = useState('needs_refund');
   const [page, setPage] = useState(1);
@@ -20,7 +22,11 @@ export default function usePaymentRefunds({ service = OperatorService } = {}) {
   useEffect(() => {
     let cancelled = false;
     const params = JSON.parse(key);
-    service.getUnfulfilledPayments({ status: params.status, page: params.page })
+    // 2026-11-08: "Cancelled trips" lists the ticket refunds of cancelled trips (a different list on the server).
+    const load = params.status === CANCELLED_TRIPS
+      ? service.getTicketRefunds({ page: params.page })
+      : service.getUnfulfilledPayments({ status: params.status, page: params.page });
+    load
       .then((res) => { if (!cancelled) setResult({ key, data: res?.data ?? null, error: '' }); })
       .catch((err) => { if (!cancelled) setResult({ key, data: null, error: err?.message || 'The payments could not be loaded.' }); });
     return () => { cancelled = true; };

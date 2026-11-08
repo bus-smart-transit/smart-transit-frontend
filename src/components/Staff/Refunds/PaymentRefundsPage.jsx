@@ -1,12 +1,44 @@
 import { useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import Card from '../../ui/Card';
-import usePaymentRefunds from '../../../api/hooks/Staff/usePaymentRefunds';
+import usePaymentRefunds, { CANCELLED_TRIPS } from '../../../api/hooks/Staff/usePaymentRefunds';
 import { formatCount, formatPaidAt, formatPeso } from '../../../utils/financials';
 
 const FIELD = 'w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500';
 
-const FILTERS = [['needs_refund', 'Needs refund'], ['outcome_unknown', 'Unknown checkout'], ['refunded', 'Refunded'], ['all', 'All']];
+const FILTERS = [['needs_refund', 'Needs refund'], ['outcome_unknown', 'Unknown checkout'], ['refunded', 'Refunded'], ['all', 'All'], [CANCELLED_TRIPS, 'Cancelled trips']];
+
+// 2026-11-08 (user): the refund of each ticket on a cancelled trip, from PayMongo or in cash.
+const TICKET_REFUND_STATUS = {
+  pending: ['Refund in progress', 'bg-sky-100 text-sky-700'],
+  succeeded: ['Refunded', 'bg-emerald-100 text-emerald-700'],
+  failed: ['Refund failed', 'bg-red-100 text-red-700'],
+  needs_review: ['Needs review', 'bg-amber-100 text-amber-800'],
+};
+
+function TicketRefundCard({ row }) {
+  const [label, chip] = TICKET_REFUND_STATUS[row.status] || [row.status, 'bg-slate-100 text-slate-600'];
+  const total = Number(row.amount ?? 0) + Number(row.fee_amount ?? 0);
+  return (
+    <Card as="article" data-testid="ticket-refund-card" data-status={row.status} className="space-y-2">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0">
+          <h3 className="truncate text-base font-bold text-slate-900">{row.route_name || 'Route unavailable'}{row.trip_date ? `, ${row.trip_date}` : ''}{row.departure_time ? ` ${row.departure_time}` : ''}</h3>
+          <p className="text-xs text-slate-500">{row.passenger_name || (row.guest_email ? `Guest · ${row.guest_email}` : 'Passenger')}{row.transaction_reference ? ` · ${row.transaction_reference}` : ''} · {row.method === 'cash' ? 'Cash' : 'PayMongo'}</p>
+        </div>
+        <span className="flex items-center gap-2">
+          <span className="font-data text-base font-bold text-slate-900">{formatPeso(total)}</span>
+          <span data-testid="ticket-refund-status" className={`rounded-full px-2.5 py-1 text-xs font-semibold ${chip}`}>{label}</span>
+        </span>
+      </div>
+      <p className="text-xs text-slate-500">
+        Requested {row.requested_at ? formatPaidAt(row.requested_at) : 'Not provided'}
+        {row.completed_at ? ` · Done ${formatPaidAt(row.completed_at)}` : ''}
+        {row.failure_reason ? ` · ${row.failure_reason}` : ''}
+      </p>
+    </Card>
+  );
+}
 
 const STATUS_CHIP = {
   needs_refund: ['Needs refund', 'bg-red-100 text-red-700'],
@@ -151,7 +183,7 @@ export default function PaymentRefundsPage({ service, embedded = false }) {
         <div className="inline-flex max-w-full flex-wrap rounded-lg border border-slate-200 bg-white p-0.5 text-sm font-semibold" role="group" aria-label="Status">
           {FILTERS.map(([key, label]) => (
             <button key={key} type="button" aria-pressed={r.status === key} onClick={() => r.setStatus(key)} className={`rounded-md px-3 py-1.5 ${r.status === key ? 'bg-teal-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`}>
-              {label}{counts && key !== 'all' ? ` (${formatCount(counts[key])})` : ''}
+              {label}{counts && key !== 'all' && key !== CANCELLED_TRIPS ? ` (${formatCount(counts[key])})` : ''}
             </button>
           ))}
         </div>
@@ -166,11 +198,11 @@ export default function PaymentRefundsPage({ service, embedded = false }) {
         <p className="rounded-xl border border-slate-200 bg-slate-50 p-6 text-sm text-slate-500">Loading payments...</p>
       ) : r.rows.length === 0 ? (
         <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-6 text-sm text-slate-600" data-testid="refunds-empty">
-          {r.status === 'needs_refund' ? 'Nothing needs a refund. A payment appears here only when it was charged but no ticket could be made.' : r.status === 'outcome_unknown' ? 'No checkout outcomes need reconciliation.' : 'No payments to show.'}
+          {r.status === CANCELLED_TRIPS ? 'No cancelled-trip refunds yet. A ticket appears here when its trip is cancelled and it is refunded.' : r.status === 'needs_refund' ? 'Nothing needs a refund. A payment appears here only when it was charged but no ticket could be made.' : r.status === 'outcome_unknown' ? 'No checkout outcomes need reconciliation.' : 'No payments to show.'}
         </p>
       ) : (
         <div className={`space-y-3 ${r.loading ? 'opacity-60' : ''}`}>
-          {r.rows.map((row) => (
+          {r.status === CANCELLED_TRIPS ? r.rows.map((row) => <TicketRefundCard key={row.id} row={row} />) : r.rows.map((row) => (
             <RefundCard key={row.payment_id} row={row} busy={r.busyId === row.payment_id} error={r.errors[row.payment_id]} onRecord={r.recordRefund} onReconcile={r.reconcileNotCharged} />
           ))}
         </div>

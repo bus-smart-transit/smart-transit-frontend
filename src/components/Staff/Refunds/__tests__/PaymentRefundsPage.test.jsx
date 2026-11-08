@@ -26,6 +26,9 @@ const reply = (rows, status = 'needs_refund', counts = { needs_refund: rows.leng
 
 const makeService = (rows = [row()]) => ({
   getUnfulfilledPayments: vi.fn().mockResolvedValue(reply(rows)),
+  getTicketRefunds: vi.fn().mockResolvedValue({ data: { data: [
+    { id: 5, ticket_uuid: 'u-1', route_name: 'Davao - Tagum', trip_date: '2026-11-07', departure_time: '08:00', passenger_name: 'Rider One', guest_email: null, transaction_reference: 'TXN-REF1', method: 'gateway', status: 'succeeded', amount: 47, fee_amount: 10, requested_at: '2026-11-07T01:00:00Z', completed_at: '2026-11-07T01:05:00Z', failure_reason: null },
+  ], meta: { page: 1, per_page: 20, total: 1, last_page: 1 } } }),
   recordPaymentRefund: vi.fn().mockResolvedValue({ data: row({ status: 'refunded' }) }),
   reconcileCheckoutNotCharged: vi.fn().mockResolvedValue({ data: { status: 'failed' } }),
 });
@@ -174,5 +177,22 @@ describe('PaymentRefundsPage', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Network down');
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
     expect(await screen.findByTestId('refund-card')).toBeInTheDocument();
+  });
+});
+
+// 2026-11-08 (user): a cancelled-trip refund that succeeded was listed nowhere.
+describe('PaymentRefundsPage: Cancelled trips', () => {
+  it('lists the ticket refunds of cancelled trips, done ones included', async () => {
+    const service = makeService();
+    render(<PaymentRefundsPage service={service} embedded />);
+    await screen.findByTestId('refund-card');
+    fireEvent.click(screen.getByRole('button', { name: 'Cancelled trips' }));
+
+    const card = await screen.findByTestId('ticket-refund-card');
+    expect(service.getTicketRefunds).toHaveBeenCalledWith({ page: 1 });
+    expect(card).toHaveTextContent('Davao - Tagum, 2026-11-07 08:00');
+    expect(card).toHaveTextContent('Rider One');
+    expect(card).toHaveTextContent('57.00');
+    expect(within(card).getByTestId('ticket-refund-status')).toHaveTextContent('Refunded');
   });
 });

@@ -176,6 +176,11 @@ class OperatorService extends StaffBaseService {
     return await this.request('/operator/payments/needs-refund', 'GET', params);
   }
 
+  // 2026-11-08 (user): every refund of a ticket on a cancelled trip (in progress, done or failed), for the Refunds tab.
+  async getTicketRefunds(params = {}) {
+    return await this.request('/operator/ticket-refunds', 'GET', params);
+  }
+
   async recordPaymentRefund(id, payload = {}) {
     return await this.request(`/operator/payments/${id}/refunded`, 'POST', payload);
   }
