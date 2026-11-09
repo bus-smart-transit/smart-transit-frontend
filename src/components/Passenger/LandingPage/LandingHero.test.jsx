@@ -3,7 +3,7 @@ import { describe, expect, test, vi, beforeEach } from 'vitest';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 
 const STOPS = [
-  { stop_id: 1, stop_code: 'alpha-stop', name: 'Alpha Stop', route_ids: [1] },
+  { stop_id: 1, stop_code: 'alpha-stop', name: 'Alpha Stop', route_ids: [1], latitude: 0.5, longitude: 0.5 },
   { stop_id: 2, stop_code: 'beta-stop', name: 'Beta Stop', route_ids: [1] },
   { stop_id: 3, stop_code: 'gamma-stop', name: 'Gamma Stop', route_ids: [1] },
 ];
@@ -33,6 +33,7 @@ vi.mock('../../../services/bookingService', () => ({
 vi.mock('../../../services/regionService', () => ({
   getRegion: vi.fn(async () => ({ name: 'Test Region', bounds: { minLat: 0, maxLat: 1, minLng: 0, maxLng: 1 }, center: null, provinces: {} })),
   regionMapBounds: () => [],
+  getRegionPlace: vi.fn(async () => ({ place: 'Sample City', province: 'North' })),
 }));
 
 import { getTrips } from '../../../services/bookingService';
@@ -229,5 +230,42 @@ describe('booking link helpers', () => {
   test('tripBookingPath uses the trip\'s own stops, date and time', () => {
     expect(tripBookingPath({ origin: alpha, destination: beta, trip_date: '2026-10-02', boarding_time: '06:15' }))
       .toBe('/passenger/book?from=alpha-stop&to=beta-stop&date=2026-10-02&time=06%3A15');
+  });
+});
+
+// Batch 51 items 2 and 3 (user, 2026-11-09): with the location allowed, "Are you in {place}?"; Yes starts the list at
+// the nearest stop within 5 km, No keeps every trip. A refused location asks nothing.
+describe('LandingHero location question', () => {
+  const allow = (lat, lng) => {
+    Object.defineProperty(window.navigator, 'geolocation', {
+      configurable: true,
+      value: { getCurrentPosition: (ok) => ok({ coords: { latitude: lat, longitude: lng } }) },
+    });
+  };
+  beforeEach(() => { try { window.sessionStorage.clear(); } catch { /* none */ } });
+
+  test('asks Are you in {place}? and Yes lists trips from the nearest stop', async () => {
+    allow(0.501, 0.501);
+    renderHero();
+    const question = await screen.findByTestId('location-question');
+    expect(question).toHaveTextContent('Are you in Sample City?');
+    fireEvent.click(within(question).getByRole('button', { name: 'Yes' }));
+    expect(await screen.findByTestId('location-note')).toHaveTextContent('Showing trips from Alpha Stop, the nearest stop to you.');
+    await waitFor(() => expect(getTrips).toHaveBeenLastCalledWith(expect.objectContaining({ from: 'alpha-stop' })));
+  });
+
+  test('No keeps every trip and asks no more', async () => {
+    allow(0.501, 0.501);
+    renderHero();
+    fireEvent.click(within(await screen.findByTestId('location-question')).getByRole('button', { name: 'No' }));
+    expect(screen.queryByTestId('location-question')).toBeNull();
+    expect(screen.queryByTestId('location-note')).toBeNull();
+  });
+
+  test('a refused location asks nothing', async () => {
+    Object.defineProperty(window.navigator, 'geolocation', { configurable: true, value: { getCurrentPosition: (ok, fail) => fail({ code: 1 }) } });
+    renderHero();
+    await screen.findByText('Available trips');
+    expect(screen.queryByTestId('location-question')).toBeNull();
   });
 });

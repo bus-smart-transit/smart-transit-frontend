@@ -6,6 +6,7 @@ import JourneyFields from '../BuyTicket/JourneyFields';
 import TripsPreview from '../Trips/TripsPreview';
 import { useBookingStops } from '../../../api/hooks/Passenger/useBookingSearch';
 import { useRegion } from '../../../api/hooks/useRegion';
+import useHomeLocation from '../../../api/hooks/Passenger/useHomeLocation';
 import { findStopCode, lastBookableDateOf, tripBookingPath } from '../../../utils/bookingQuery';
 
 // 2026-11-06 (passenger redesign): Pexels photo 1178448, saved in public/images (Pexels licence: free to use).
@@ -22,6 +23,8 @@ export default function LandingHero() {
     booking_date: '',
   });
   const stops = useBookingStops(journey.origin_stop_id);
+  // Batch 51 items 2 and 3 (user): "Are you in {place}?"; Yes starts the list at the nearest stop within the radius.
+  const location = useHomeLocation(stops.originGroups, region?.nearbyRadiusKm ?? 5);
   // The journey that was actually searched; the list below belongs to it, not to later edits.
   const [search, setSearch] = useState(null);
   // The date defaults to today in Manila (from the server) until the passenger picks another.
@@ -101,6 +104,21 @@ export default function LandingHero() {
         </div>
       </div>
 
+      {(location.question || location.note) && (
+        <div className="container-page mt-4">
+          {location.question ? (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-teal-200 bg-teal-50 px-4 py-3" data-testid="location-question">
+              <p className="text-sm font-semibold text-navy-950">{location.question}</p>
+              <div className="flex gap-2">
+                <Button type="button" variant="primary" size="sm" onClick={() => { const stop = location.accept(); if (stop) handleChange('origin_stop_id', String(stop.stop_id)); }}>Yes</Button>
+                <Button type="button" variant="secondary" size="sm" onClick={location.decline}>No</Button>
+              </div>
+            </div>
+          ) : (
+            <p role="status" className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600 ring-1 ring-inset ring-slate-200" data-testid="location-note">{location.note}</p>
+          )}
+        </div>
+      )}
       <TripsPreview
         today={stops.today}
         previewLimit={stops.previewLimit}

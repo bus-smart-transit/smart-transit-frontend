@@ -50,3 +50,12 @@ export function getRegion() {
 export function clearRegionCache() {
   cached = null
 }
+
+/**
+ * Batch 51 item 3 (user, 2026-11-09): the region town a point is in, for "Are you in {place}?" on the homepage.
+ * The point is rounded to 2 decimals (about 1 km) before it leaves the device. Resolves to { place, province } or null.
+ */
+export async function getRegionPlace(lat, lng) {
+  const res = await api.get('/region/place', { params: { lat: Number(lat).toFixed(2), lng: Number(lng).toFixed(2) } })
+  return res?.data?.data ?? null
+}
