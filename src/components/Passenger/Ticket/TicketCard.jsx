@@ -29,6 +29,7 @@ export default function TicketCard({
   discountVerified = false,
   trackingToken = '',
   trackingCode = '',
+  ticketId = '',
   onRenewLink = null,
 }) {
   const footer = STATUS_FOOTER[String(statusLabel).toLowerCase()] ?? STATUS_FOOTER.issued;
@@ -108,6 +109,8 @@ export default function TicketCard({
           <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-1.5"><dt className="text-xs text-slate-500">Valid</dt><dd className="text-right text-sm font-bold text-navy-950">{validLabel || '-'}</dd></div>
           <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-1.5"><dt className="text-xs text-slate-500">Expires</dt><dd className="text-right text-sm font-bold text-navy-950">{expiresLabel || '-'}</dd></div>
           <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-1.5"><dt className="text-xs text-slate-500">Status</dt><dd className="text-right text-sm font-bold text-navy-950">{statusLabel || '-'}</dd></div>
+          {/* Batch 51 item 8: typed by the Chauffeur when the QR cannot be shown (separate from the tracking code). */}
+          {ticketId && <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-1.5" data-testid="ticket-id"><dt className="text-xs text-slate-500">Ticket ID</dt><dd className="text-right font-data text-sm font-bold tracking-widest text-navy-950">{ticketId}</dd></div>}
           {discountLabel && Number(discountAmount) > 0 && <>
             <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-1.5"><dt className="text-xs text-slate-500">Original fare</dt><dd className="text-right text-sm font-bold text-navy-950">PHP {Number(originalFare).toFixed(2)}</dd></div>
             <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-1.5"><dt className="text-xs text-slate-500">{discountLabel} discount</dt><dd className="text-right text-sm font-bold text-teal-700">- PHP {Number(discountAmount).toFixed(2)}</dd></div>

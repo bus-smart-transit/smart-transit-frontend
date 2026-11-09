@@ -2,13 +2,11 @@ import { useEffect, useState } from 'react';
 import {
   AlertCircle,
   Bus,
-  Camera,
   CalendarDays,
   CheckCircle2,
   Download,
   Gauge,
   Play,
-  QrCode,
   RefreshCw,
   Ticket,
   UserCheck,
@@ -30,6 +28,7 @@ import { useConductorPairing, useConductorDashboardData } from '../../api/hooks/
 import useOnsiteQuote from '../../api/hooks/Staff/useOnsiteQuote';
 import { getBusinessToday, getBusinessTodayLabel } from '../../utils/dates';
 import { downloadShiftSummary } from '../../utils/shiftSummaryReport';
+import ChauffeurScannerCard from './ChauffeurScannerCard';
 import { DEFAULT_FILE_TYPE } from '../../utils/tableExport';
 import FileTypeSelect from '../ui/FileTypeSelect';
 import { todaySummary } from '../../utils/assignmentCards';
@@ -173,7 +172,6 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     scannerError,
     scannerStatus,
     scannerPhase,
-    showScannerModal, setShowScannerModal,
     onsiteReceipt,
     onsiteForm, setOnsiteForm,
     cashForm,
@@ -636,31 +634,25 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
               </article>
             ) : (
               <div className="staff-grid lg:grid-cols-[1.1fr_1fr]">
-                <article className="staff-card" data-testid="capacity-card">
-                  <h3 className="mb-3 text-2xl font-bold text-slate-900">Bus Capacity</h3>
-                  <p className="mb-4 text-sm text-slate-500">Passengers sit anywhere once ticketed. Tickets stop being issued when the bus is full.</p>
-                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                    <p className="font-data text-4xl font-bold text-slate-900">
-                      {cashCapacity.onboard}<span className="text-xl font-semibold text-slate-400"> / {cashCapacity.capacity || '-'}</span>
-                    </p>
-                    <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Passengers onboard / bus capacity</p>
-                    <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-slate-200">
-                      <div
-                        className={`h-full rounded-full transition-all ${cashCapacity.isFull ? 'bg-red-500' : 'bg-teal-500'}`}
-                        style={{ width: `${cashCapacity.capacity > 0 ? Math.min(100, Math.round((Math.max(cashCapacity.onboard, cashCapacity.sold) / cashCapacity.capacity) * 100)) : 0}%` }}
-                      />
-                    </div>
-                    <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
-                      <div><p className="text-xs text-slate-500">Tickets sold</p><p className="font-data font-semibold text-slate-900">{cashCapacity.sold}</p></div>
-                      <div><p className="text-xs text-slate-500">Places left</p><p className="font-data font-semibold text-slate-900">{cashCapacity.remaining ?? '-'}</p></div>
-                    </div>
-                    {cashCapacity.isFull && (
-                      <p role="alert" data-testid="bus-full-notice" className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">
-                        The bus is full. No more tickets can be issued.
-                      </p>
-                    )}
-                  </div>
-                </article>
+                {/* Batch 51 item 9 (user's design): the scanner card takes the capacity card's place; the capacity numbers and
+                    the full-bus notice are in the cash ticket card. */}
+                <ChauffeurScannerCard
+                  videoRef={videoRef}
+                  scannerRunning={scannerRunning}
+                  scannerBusy={scannerBusy}
+                  scannerPhase={scannerPhase}
+                  scannerStatus={scannerStatus}
+                  scannerError={scannerError}
+                  canScan={hasOpenShift && isPaired}
+                  blockedReason={!isPaired ? 'Pair with your Driver first to scan tickets.' : !hasOpenShift ? 'Start your shift to scan tickets.' : ''}
+                  onStart={() => void startScanner()}
+                  onStop={stopScanner}
+                  ticketCode={scanUuid}
+                  onTicketCodeChange={(value) => { setScanUuid(value); setScanResult(null); setGroupScanResult(null); }}
+                  onBoardByCode={handleScan}
+                  scanResult={scanResult}
+                  groupScanResult={groupScanResult}
+                />
 
                 <article className="staff-card">
                   <h3 className="mb-4 flex items-center gap-2 text-2xl font-bold text-slate-900">Manual Cash Ticket <ServiceTypeChip serviceType={trip?.service_type} /></h3>
@@ -857,7 +849,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                       )}
                     </div>
 
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid gap-2">
                       <button
                         type="button"
                         className="rounded-lg bg-cyan-700 px-3 py-2 text-sm font-semibold text-white transition hover:bg-cyan-800 disabled:cursor-not-allowed disabled:opacity-60"
@@ -865,14 +857,6 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                         disabled={checkoutInFlight || !hasActiveTrip || !isPaired || !hasOpenShift || cashCapacity.isFull || onsiteQuote.status !== 'ready' || Boolean(onsiteDiscountTypeKey && !onsiteDiscountIdChecked)}
                       >
                         {checkoutInFlight ? 'Processing...' : 'Make sale'}
-                      </button>
-                      <button
-                        type="button"
-                        className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-                        onClick={() => setShowScannerModal(true)}
-                        disabled={!hasOpenShift}
-                      >
-                        Scan Ticket
                       </button>
                     </div>
                     {ticketingBlocked && <p data-testid="ticketing-reason" className="text-xs text-amber-700">{ticketingBlocked}</p>}
@@ -900,7 +884,11 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                       </button>
                     </div>
 
-                    <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600" data-testid="capacity-summary">
+                      <p className="font-semibold text-slate-800">On board {cashCapacity.onboard} / {cashCapacity.capacity || '-'} · Tickets sold {cashCapacity.sold} · Places left {cashCapacity.remaining ?? '-'}</p>
+                      {cashCapacity.isFull && (
+                        <p role="alert" data-testid="bus-full-notice" className="mt-1 font-semibold text-red-700">The bus is full. No more tickets can be issued.</p>
+                      )}
                       <p>Total capacity: {occTotalCap} seats</p>
                       <p>Seated: {occSeated} / {occSeatedCap}</p>
                       <p>Standing: {occStanding} / {occStandingCap}</p>
@@ -913,138 +901,6 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
               </div>
             )}
 
-            {showScannerModal && (
-              <ModalShell label="Scan ticket" onClose={() => { stopScanner(); setShowScannerModal(false); }}>
-                <div className="w-full max-w-6xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
-                  <div className="mb-4 flex items-center justify-between">
-                    <div>
-                      <h3 className="text-base font-bold text-slate-900">Scan Ticket</h3>
-                      <p className="text-xs text-slate-500">Use the camera scanner, or type the 8-character Ticket ID printed on the ticket (or paste the full ticket code).</p>
-                    </div>
-                    <button
-                      type="button"
-                      className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100"
-                      onClick={() => {
-                        stopScanner();
-                        setShowScannerModal(false);
-                      }}
-                    >
-                      Close
-                    </button>
-                  </div>
-
-                  <div className="rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 p-3">
-                    <div className="mb-3 flex flex-wrap items-center gap-2">
-                      {!scannerRunning ? (
-                        <button
-                          type="button"
-                          className="flex items-center gap-2 rounded-lg bg-teal-500 px-3 py-2 text-xs font-semibold text-white transition hover:bg-teal-600 disabled:cursor-not-allowed disabled:opacity-60"
-                          onClick={() => void startScanner()}
-                          disabled={!hasOpenShift || !isPaired}
-                          title={!isPaired ? 'Pairing is required to scan tickets.' : undefined}
-                        >
-                          <Camera className="h-4 w-4" />
-                          Start Camera Scanner
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          className="flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 transition hover:bg-amber-100"
-                          onClick={stopScanner}
-                        >
-                          <Camera className="h-4 w-4" />
-                          Stop Camera
-                        </button>
-                      )}
-
-                      <span className="text-xs text-slate-500">
-                        {scannerRunning ? 'Live scanner is active' : 'Scanner is idle'}
-                      </span>
-                    </div>
-
-                    <div className="relative overflow-hidden rounded-lg border border-slate-800 bg-slate-950">
-                      <video
-                        ref={videoRef}
-                        className="h-70 w-full bg-slate-950 object-cover sm:h-90 lg:h-110"
-                        muted
-                        playsInline
-                        autoPlay
-                      />
-                      {scannerBusy && (
-                        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-slate-950/80 backdrop-blur-sm">
-                          <div className="h-8 w-8 animate-spin rounded-full border-4 border-slate-700 border-t-sky-400" />
-                          <p className="text-xs font-semibold text-sky-300">Validating...</p>
-                        </div>
-                      )}
-                    </div>
-
-                    {scannerStatus && <p className="mt-2 text-xs text-slate-500">{scannerStatus}</p>}
-                    {scannerError && <p className="mt-2 text-xs text-red-600">{scannerError}</p>}
-                    <div className="mt-2 inline-flex rounded-full border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-600">
-                      {scannerPhase === 'idle' && 'Scanner idle'}
-                      {scannerPhase === 'captured' && 'QR captured'}
-                      {scannerPhase === 'validating' && 'Validating'}
-                      {scannerPhase === 'success' && 'Boarded'}
-                      {scannerPhase === 'failed' && 'Validation failed'}
-                    </div>
-                  </div>
-
-                  <div className="mt-4 flex gap-2">
-                    <input
-                      type="text"
-                      placeholder="Ticket ID, e.g. 3F9A12BC"
-                      value={scanUuid}
-                      onChange={(e) => {
-                        setScanUuid(e.target.value);
-                        setScanResult(null);
-                        setGroupScanResult(null);
-                      }}
-                      className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-teal-500"
-                    />
-                    <button
-                      className="inline-flex items-center gap-2 rounded-xl bg-sky-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-50"
-                      onClick={handleScan}
-                      disabled={scannerBusy || !hasOpenShift}
-                    >
-                      {scannerBusy
-                        ? <><div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-950/30 border-t-slate-950" />Validating...</>
-                        : <><QrCode className="h-4 w-4" />Scan</>}
-                    </button>
-                  </div>
-
-                  {scanResult && (
-                    <div
-                      className={`mt-4 rounded-xl border px-4 py-3 text-sm ${
-                        scanResult.success
-                          ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                          : 'border-red-200 bg-red-50 text-red-700'
-                      }`}
-                    >
-                      <p className="font-semibold">{scanResult.msg}</p>
-                    </div>
-                  )}
-
-                  {groupScanResult && (
-                    <div
-                      className={`mt-4 rounded-xl border px-4 py-3 text-sm ${
-                        groupScanResult.success && groupScanResult.info
-                          ? 'border-sky-200 bg-sky-50 text-sky-700'
-                          : groupScanResult.success
-                          ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                          : 'border-red-200 bg-red-50 text-red-700'
-                      }`}
-                    >
-                      <p className="font-semibold">{groupScanResult.msg || 'Group scan processed.'}</p>
-                      {groupScanResult.success && (
-                        <p className="mt-1 text-xs">
-                          Boarded {groupScanResult?.data?.boarded_count ?? 0} of {groupScanResult?.data?.total_tickets ?? 0} ticket(s).
-                        </p>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </ModalShell>
-            )}
           </section>
         )}
 

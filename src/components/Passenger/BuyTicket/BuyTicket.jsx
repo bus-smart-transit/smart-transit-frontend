@@ -4,6 +4,7 @@ import { AlertCircle, Bus, CalendarDays, CheckCircle, Clock3, CreditCard, Loader
 import useBuyTicket from '../../../api/hooks/Passenger/useBuyTicket';
 import { busLabelText } from '../../../utils/busLabel';
 import TicketCard from '../Ticket/TicketCard';
+import { ticketIdOf } from '../../../utils/ticketId';
 import QrImage from '../Ticket/QrImage';
 import TripTimeline from '../Timeline/TripTimeline';
 import JourneyFields from './JourneyFields';
@@ -272,6 +273,7 @@ export default function BuyTicket({ onTicketPurchased, returnTo = '/' }) {
             discountVerified={Boolean(qrTickets[0]?.discount_id_checked_at)}
             trackingToken={qrTickets[0]?.tracking_token || ''}
             trackingCode={qrTickets[0]?.tracking_code || ''}
+            ticketId={ticketIdOf(qrTickets[0]?.ticket_uuid)}
           />
         )}
 
@@ -681,6 +683,7 @@ export default function BuyTicket({ onTicketPurchased, returnTo = '/' }) {
               expiresLabel={formatDateTime(ticketPreview.ticket.expires_at)}
               trackingToken={ticketPreview.ticket.tracking_token || ''}
               trackingCode={ticketPreview.ticket.tracking_code || ''}
+              ticketId={ticketIdOf(ticketPreview.ticket.ticket_uuid)}
             />
           </>
         )}

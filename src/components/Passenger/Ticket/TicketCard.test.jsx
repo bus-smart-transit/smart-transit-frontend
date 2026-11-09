@@ -13,6 +13,18 @@ const renderCard = (props = {}) => render(
   </MemoryRouter>,
 );
 
+// Batch 51 item 8: the Ticket ID the Chauffeur types when the QR cannot be shown, apart from the tracking code.
+describe('TicketCard: Ticket ID', () => {
+  test('shows the Ticket ID when given, and nothing when not', () => {
+    const { unmount } = renderCard({ ticketId: '3F9A12BC', trackingCode: '7KQ4M2XD' });
+    expect(screen.getByTestId('ticket-id')).toHaveTextContent('Ticket ID3F9A12BC');
+    expect(screen.getByTestId('tracking-code')).toHaveTextContent('7KQ4M2XD');
+    unmount();
+    renderCard();
+    expect(screen.queryByTestId('ticket-id')).toBeNull();
+  });
+});
+
 describe('TicketCard: replacing the tracking link', () => {
   test('shows the original fare, onsite discount, ID verification, and paid fare when present', () => {
     renderCard({
