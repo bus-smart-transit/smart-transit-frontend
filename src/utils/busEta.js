@@ -69,3 +69,13 @@ export function minutesFromNow(iso, nowMs = Date.now()) {
   const at = Date.parse(iso || '');
   return Number.isFinite(at) ? Math.max(0, Math.round((at - nowMs) / 60000)) : null;
 }
+
+/**
+ * Batch 52 item 2 (production test, 2026-11-09): the Driver's minutes to the next stop: the live traffic estimate when
+ * the provider has one, else the stop's time from the trip timeline (the server's `eta`), else null (nothing guessed).
+ */
+export function driverEtaMinutes(trafficStatus, nextStop, nowMs = Date.now()) {
+  const traffic = trafficStatus?.etaMinutes;
+  if (traffic != null && Number.isFinite(Number(traffic))) return Math.max(0, Math.round(Number(traffic)));
+  return minutesFromNow(nextStop?.eta, nowMs);
+}

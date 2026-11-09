@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { busEtaSummary, etaMinutesLabel } from '../busEta';
-import { minutesFromNow, placeInMinutes } from '../busEta';
+import { driverEtaMinutes, minutesFromNow, placeInMinutes } from '../busEta';
 
 const now = Date.parse('2026-10-29T10:00:00+08:00');
 const stop = (id, name, progress, eta, source = 'live') => ({
@@ -59,5 +59,15 @@ describe('placeInMinutes', () => {
     expect(placeInMinutes('Carmen Terminal', null)).toBe('Carmen Terminal');
     expect(minutesFromNow('2026-11-09T06:12:00Z', Date.parse('2026-11-09T06:00:00Z'))).toBe(12);
     expect(minutesFromNow('not a time')).toBeNull();
+  });
+});
+
+// Batch 52 item 2: the Driver's minutes come from live traffic when it has them, else the trip timeline.
+describe('driverEtaMinutes', () => {
+  it('uses live traffic, then the timeline time, then nothing', () => {
+    const now = Date.parse('2026-11-09T12:00:00Z');
+    expect(driverEtaMinutes({ etaMinutes: 7 }, { eta: '2026-11-09T12:20:00Z' }, now)).toBe(7);
+    expect(driverEtaMinutes({ etaMinutes: null }, { eta: '2026-11-09T12:20:00Z' }, now)).toBe(20);
+    expect(driverEtaMinutes({ etaMinutes: null }, { eta: null }, now)).toBeNull();
   });
 });
