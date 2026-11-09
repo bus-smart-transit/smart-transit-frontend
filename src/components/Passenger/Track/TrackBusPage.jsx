@@ -5,6 +5,7 @@ import RouteMap from '../../Map/RouteMap'
 import TrackHeader from './TrackHeader'
 import { useTicketTracking } from '../../../api/hooks/Passenger/useTicketTracking'
 import { formatManilaDate } from '../../../utils/dates'
+import { placeInMinutes } from '../../../utils/busEta'
 
 const NO_STOPS = []
 
@@ -19,6 +20,13 @@ const STATE_STYLE = {
   ended: { label: 'Tracking closed', tone: 'bg-slate-100 text-slate-700 ring-slate-200' },
   cancelled: { label: 'Trip cancelled', tone: 'bg-red-50 text-red-800 ring-red-200' },
   unavailable: { label: 'Not available', tone: 'bg-slate-100 text-slate-700 ring-slate-200' },
+}
+
+// Minutes from the server's clock at the time of the answer to a stop's ETA, so a phone with the wrong time still
+// reads correctly; null when either time is unknown.
+function minutesAfter(etaIso, generatedAt) {
+  const minutes = Math.round((Date.parse(etaIso) - Date.parse(generatedAt)) / 60000)
+  return Number.isFinite(minutes) ? Math.max(0, minutes) : null
 }
 
 // "08:15 (in 12 min)": measured against the server's clock at the time of the answer, so a
@@ -98,7 +106,8 @@ export default function TrackBusPage() {
               {/* Batch 50: where the bus goes next, and when (live from its position when known). */}
               {view.next_stop && view.state !== 'arrived' && (
                 <p className="mt-1 text-sm font-semibold" data-testid="track-next-stop">
-                  Next stop: {view.next_stop.name}{view.next_stop.eta_time ? ` · ${etaText(view.next_stop, view.refresh?.generated_at)}${view.next_stop.eta_source === 'live' ? '' : ' scheduled'}` : ''}
+                  {/* Batch 51 item 1 (user): "{place} in n min", counted against the server's clock. */}
+                  Next stop: {placeInMinutes(view.next_stop.name, view.next_stop.eta_time ? minutesAfter(view.next_stop.eta, view.refresh?.generated_at) : null)}{view.next_stop.eta_time ? ` · ${view.next_stop.eta_time}${view.next_stop.eta_source === 'live' ? '' : ' scheduled'}` : ''}
                 </p>
               )}
               {refreshFailed && <p className="mt-1 text-sm" role="status">{error}</p>}

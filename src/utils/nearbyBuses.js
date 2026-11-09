@@ -1,6 +1,7 @@
 // Batch 45 Feature C (decided 2026-11-04): the "Buses near you" panel on the public map. Pure helpers, unit-tested.
 // The passenger's location never leaves the device: distances are measured here from the public bus list.
 
+import { minutesFromNow } from './busEta';
 import { haversineM } from './geo';
 
 /** Metres between two { lat, lng } points, or null when either is missing (uses the shared haversineM). */
@@ -55,16 +56,19 @@ export function busArrival(progress) {
  *   departedAt 'HH:MM' or null; destination the last stop's name or null; arrives { time, basis } for the destination
  *   (live from the bus position when known, else the timetable) or null; arrived true once the bus is at its last stop.
  */
-export function busTrip(progress) {
-  if (!progress) return { departedAt: null, destination: null, arrives: null, arrived: false };
+export function busTrip(progress, nowMs = Date.now()) {
+  if (!progress) return { departedAt: null, destination: null, arrives: null, arrived: false, full: false };
   const arrived = progress.arrived === true;
   return {
     departedAt: progress.departed_at || null,
     destination: progress.destination || null,
+    // Batch 51 item 1: minutes to the destination too ("{destination} in n min"), null when its full time is unknown.
     arrives: !arrived && progress.destination_eta_time
-      ? { time: progress.destination_eta_time, basis: progress.destination_eta_basis === 'live' ? 'Live estimate' : 'Scheduled' }
+      ? { time: progress.destination_eta_time, basis: progress.destination_eta_basis === 'live' ? 'Live estimate' : 'Scheduled', minutes: minutesFromNow(progress.destination_eta, nowMs) }
       : null,
     arrived,
+    // Batch 51 item 5: every place on the bus is sold (the server's TripCapacity).
+    full: progress.full === true,
   };
 }
 

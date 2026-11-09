@@ -7,7 +7,7 @@ import { haversineM } from '../../../utils/geo';
 import { describeBusPlace } from '../../../utils/busPlace';
 import { fetchRouteMapData } from '../../../services/routeMapService';
 import { getTripTimeline } from '../../../services/bookingService';
-import { busEtaSummary, etaMinutesLabel } from '../../../utils/busEta';
+import { busEtaSummary, etaMinutesLabel, placeInMinutes } from '../../../utils/busEta';
 import { BUS_COLORS, createBusMarkerElement, createYouAreHereElement } from '../../Map/mapMarkers';
 
 // 2026-10-29: the bus icon's colour from the trip status (delayed in amber). 2026-11-08: a bus waiting at its first
@@ -461,7 +461,7 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
                 <p className="text-xs font-semibold uppercase tracking-widest text-teal-600">Track Bus</p>
                 {/* 2026-11-08 (user): no "{n} buses on the road" heading; the "live" chip already counts them. */}
                 {(selectedFleet || fleets.length === 0) && (
-                  <h3 className="text-lg font-semibold text-slate-900">{selectedFleet ? busLabelText(selectedFleet.bus_label) : 'No active bus detected'}{selectedFleet?.is_simulated && <span data-testid="simulated-chip" className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 align-middle text-xs font-semibold text-amber-800">Simulated</span>}</h3>
+                  <h3 className="text-lg font-semibold text-slate-900">{selectedFleet ? busLabelText(selectedFleet.bus_label) : 'No active bus detected'}{selectedFleet?.is_simulated && <span data-testid="simulated-chip" className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 align-middle text-xs font-semibold text-amber-800">Simulated</span>}{selectedTrip.full && <span className="ml-2 rounded-full bg-red-100 px-2 py-0.5 align-middle text-xs font-semibold text-red-800">Full</span>}</h3>
                 )}
                 {selectedFleet && (
                   <button type="button" onClick={showAll} data-testid="show-all-buses" className="mt-1 inline-flex min-h-9 items-center text-xs font-semibold text-teal-700 underline">Show all buses</button>
@@ -519,10 +519,11 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
                   <div data-testid="eta-next">
                     <p className="mt-1 inline-flex items-center gap-1 text-sm font-semibold text-slate-900">
                       <Clock3 className="h-3.5 w-3.5 text-teal-600" />
-                      {eta.next.time ? `Arriving at ${eta.next.name} ${etaMinutesLabel(eta.next.minutes)}` : `Next: ${eta.next.name}`}
+                      {/* Batch 51 item 1 (user): "{place} in n min". */}
+                      {eta.next.time ? placeInMinutes(eta.next.name, eta.next.minutes) : `Next: ${eta.next.name}`}
                     </p>
                     <p className="text-[11px] text-slate-500">{eta.next.time ? `${eta.next.time}${eta.next.live ? ' · live estimate' : ' · scheduled'}` : 'Arrival time: Not provided'}</p>
-                    {eta.destination.time && <p className="text-[11px] text-slate-500">Destination {eta.destination.name} {eta.destination.time}{eta.destination.live ? ' · live estimate' : ''}</p>}
+                    {eta.destination.time && <p className="text-[11px] text-slate-500" data-testid="eta-destination">{placeInMinutes(eta.destination.name, eta.destination.minutes)} · {eta.destination.time}{eta.destination.live ? ' · live estimate' : ''}</p>}
                     {eta.nearYou && (
                       <p className="mt-1 text-[11px] font-semibold text-teal-700" data-testid="eta-near-you">
                         {eta.nearYou.passed
@@ -639,7 +640,7 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
                     className={`w-full rounded-xl border px-3 py-3 text-left transition ${isSelected ? 'border-teal-400 bg-teal-50' : 'border-slate-200 bg-white hover:border-teal-200'}`}
                   >
                     <div className="flex items-start justify-between gap-2">
-                      <p className="font-semibold text-slate-900">{busLabelText(row?.bus_label)}{row?.is_simulated && <span className="ml-1.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-[11px] font-semibold text-amber-800">Simulated</span>}</p>
+                      <p className="font-semibold text-slate-900">{busLabelText(row?.bus_label)}{row?.is_simulated && <span className="ml-1.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-[11px] font-semibold text-amber-800">Simulated</span>}{trip.full && <span data-testid="bus-full-chip" className="ml-1.5 rounded-full bg-red-100 px-1.5 py-0.5 text-[11px] font-semibold text-red-800">Full</span>}</p>
                       <span className="inline-flex max-w-48 items-center gap-1 truncate rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-700">
                         <Bus className="h-3 w-3" />
                         {row?.destination || row?.route_name || 'Destination pending'}
@@ -653,7 +654,8 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
                       <dd className="text-right font-semibold text-slate-800">{trip.destination || 'Not provided'}</dd>
                       <dt className="text-slate-500">Arrives</dt>
                       <dd className="text-right font-semibold text-slate-800" data-testid="nearby-bus-arrives">
-                        {trip.arrived ? 'Arrived' : trip.arrives ? `${trip.arrives.time} · ${trip.arrives.basis}` : 'Not provided'}
+                        {trip.arrived ? 'Arrived' : trip.arrives ? placeInMinutes(trip.destination, trip.arrives.minutes) : 'Not provided'}
+                        {!trip.arrived && trip.arrives && <span className="block font-normal text-slate-500">{trip.arrives.time} · {trip.arrives.basis}</span>}
                         {!trip.arrived && arrival.delay && <span className="block font-normal text-slate-500">{arrival.delay}</span>}
                       </dd>
                       <dt className="text-slate-500">Passengers</dt>

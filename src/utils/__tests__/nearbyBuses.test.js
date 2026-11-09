@@ -56,9 +56,9 @@ describe('nearbyBuses (Batch 45 Feature C)', () => {
 describe('busTrip', () => {
   it('reads departed at, the destination and its arrival time', () => {
     expect(busTrip({ departed_at: '15:26', destination: 'Last Stop', destination_eta_time: '16:10', destination_eta_basis: 'live', arrived: false }))
-      .toEqual({ departedAt: '15:26', destination: 'Last Stop', arrives: { time: '16:10', basis: 'Live estimate' }, arrived: false });
+      .toEqual({ departedAt: '15:26', destination: 'Last Stop', arrives: { time: '16:10', basis: 'Live estimate', minutes: null }, arrived: false, full: false });
     expect(busTrip({ destination: 'Last Stop', destination_eta_time: '16:40', destination_eta_basis: 'scheduled' }).arrives)
-      .toEqual({ time: '16:40', basis: 'Scheduled' });
+      .toEqual({ time: '16:40', basis: 'Scheduled', minutes: null });
   });
 
   it('says arrived, with no arrival time, at the last stop, and drops the old-location note', () => {
@@ -67,7 +67,15 @@ describe('busTrip', () => {
   });
 
   it('gives nothing when unknown, never a guess', () => {
-    expect(busTrip(null)).toEqual({ departedAt: null, destination: null, arrives: null, arrived: false });
+    expect(busTrip(null)).toEqual({ departedAt: null, destination: null, arrives: null, arrived: false, full: false });
+  });
+
+  // Batch 51 items 1 and 5: minutes to the destination from its full time, and the full flag.
+  it('counts minutes to the destination and reads full', () => {
+    const now = Date.parse('2026-11-09T06:00:00Z');
+    const trip = busTrip({ destination: 'Last Stop', destination_eta_time: '14:25', destination_eta: '2026-11-09T06:25:00Z', destination_eta_basis: 'live', full: true }, now);
+    expect(trip.arrives.minutes).toBe(25);
+    expect(trip.full).toBe(true);
   });
 });
 

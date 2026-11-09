@@ -1,3 +1,4 @@
+import { placeInMinutes } from '../../utils/busEta'; // Batch 51 item 1: "{next stop} in n min"
 import { useState } from 'react';
 import {
   AlertTriangle,
@@ -160,7 +161,7 @@ function ActiveTripTrafficCard({ trafficStatus, nextStop }) {
         </div>
         <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Next stop</p>
-          <p className="mt-1 text-sm font-semibold text-slate-900">{nextStop?.stop_name ?? nextStop?.name ?? 'No pending stop'}</p>
+          <p className="mt-1 text-sm font-semibold text-slate-900">{nextStop ? placeInMinutes(nextStop?.stop_name ?? nextStop?.name, trafficStatus.etaMinutes) : 'No pending stop'}</p>
         </div>
       </div>
       <p className="mt-3 text-sm text-slate-700">{trafficStatus.suggestion}</p>
@@ -471,7 +472,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
               <div className="mt-4 grid gap-3 sm:grid-cols-3">
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Next Stop</p>
-                  <p className="mt-1 text-sm font-bold text-slate-900">{nextStop?.stop_name ?? nextStop?.name ?? 'No pending stop'}</p>
+                  <p className="mt-1 text-sm font-bold text-slate-900">{nextStop ? placeInMinutes(nextStop?.stop_name ?? nextStop?.name, trafficStatus.etaMinutes) : 'No pending stop'}</p>
                   <p className="mt-1 inline-flex items-center gap-1 text-xs text-slate-500"><Clock3 className="h-3.5 w-3.5" /> Departs {formatTripSchedule(trip || todayAssignedTrip)}</p>
                 </div>
 
@@ -573,7 +574,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                 </div>
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                   <p className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">Next Stop</p>
-                  <p className="mt-2 text-sm font-semibold text-slate-800 leading-5">{nextStop?.stop_name ?? nextStop?.name ?? 'No pending stop'}</p>
+                  <p className="mt-2 text-sm font-semibold text-slate-800 leading-5">{nextStop ? placeInMinutes(nextStop?.stop_name ?? nextStop?.name, trafficStatus.etaMinutes) : 'No pending stop'}</p>
                 </div>
               </div>
               <p className="mt-3 text-xs text-slate-500">

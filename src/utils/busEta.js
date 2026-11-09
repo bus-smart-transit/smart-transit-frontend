@@ -52,3 +52,20 @@ export function etaMinutesLabel(minutes) {
   if (minutes == null) return '';
   return minutes === 0 ? 'due now' : `in ${minutes} min`;
 }
+
+/**
+ * Batch 51 item 1 (user, 2026-11-09): "{place} in n min" on Track Bus, Track my bus and the Driver's screen. 0 minutes
+ * reads "{place} now"; an unknown time gives just the place (nothing is guessed).
+ */
+export function placeInMinutes(place, minutes) {
+  const name = place || 'Next stop';
+  if (minutes == null || !Number.isFinite(Number(minutes))) return name;
+  const n = Math.max(0, Math.round(Number(minutes)));
+  return n === 0 ? `${name} now` : `${name} in ${n} min`;
+}
+
+/** Whole minutes from now to an ISO time (never below 0), or null when the time is unknown. */
+export function minutesFromNow(iso, nowMs = Date.now()) {
+  const at = Date.parse(iso || '');
+  return Number.isFinite(at) ? Math.max(0, Math.round((at - nowMs) / 60000)) : null;
+}

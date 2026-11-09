@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { busEtaSummary, etaMinutesLabel } from '../busEta';
+import { minutesFromNow, placeInMinutes } from '../busEta';
 
 const now = Date.parse('2026-10-29T10:00:00+08:00');
 const stop = (id, name, progress, eta, source = 'live') => ({
@@ -47,5 +48,16 @@ describe('busEtaSummary at the last stop', () => {
     const timeline = { refresh: { arrived: true }, stops: [stop(1, 'First', 'passed', null), stop(2, 'Last', 'current', null)] };
     expect(busEtaSummary(timeline, now).finished).toBe(true);
     expect(busEtaSummary(timeline, now).destination.name).toBe('Last');
+  });
+});
+
+// Batch 51 item 1 (user, 2026-11-09): "{place} in n min".
+describe('placeInMinutes', () => {
+  it('says the place and the minutes, now at 0, and only the place when the time is unknown', () => {
+    expect(placeInMinutes('Carmen Terminal', 12)).toBe('Carmen Terminal in 12 min');
+    expect(placeInMinutes('Carmen Terminal', 0)).toBe('Carmen Terminal now');
+    expect(placeInMinutes('Carmen Terminal', null)).toBe('Carmen Terminal');
+    expect(minutesFromNow('2026-11-09T06:12:00Z', Date.parse('2026-11-09T06:00:00Z'))).toBe(12);
+    expect(minutesFromNow('not a time')).toBeNull();
   });
 });
