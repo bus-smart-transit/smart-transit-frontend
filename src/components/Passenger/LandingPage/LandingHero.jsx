@@ -25,6 +25,8 @@ export default function LandingHero() {
   const stops = useBookingStops(journey.origin_stop_id);
   // Batch 51 items 2 and 3 (user): "Are you in {place}?"; Yes starts the list at the nearest stop within the radius.
   const location = useHomeLocation(stops.originGroups, region?.nearbyRadiusKm ?? 5);
+  // Batch 52 item 1: the passenger's area after Yes ({ town, province, prefer }), or null.
+  const [area, setArea] = useState(null);
   // The journey that was actually searched; the list below belongs to it, not to later edits.
   const [search, setSearch] = useState(null);
   // The date defaults to today in Manila (from the server) until the passenger picks another.
@@ -110,7 +112,7 @@ export default function LandingHero() {
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-teal-200 bg-teal-50 px-4 py-3" data-testid="location-question">
               <p className="text-sm font-semibold text-navy-950">{location.question}</p>
               <div className="flex gap-2">
-                <Button type="button" variant="primary" size="sm" onClick={() => { const stop = location.accept(); if (stop) handleChange('origin_stop_id', String(stop.stop_id)); }}>Yes</Button>
+                <Button type="button" variant="primary" size="sm" onClick={() => { const answer = location.accept(); if (answer.area) setArea(answer.area); else if (answer.stop) handleChange('origin_stop_id', String(answer.stop.stop_id)); }}>Yes</Button>
                 <Button type="button" variant="secondary" size="sm" onClick={location.decline}>No</Button>
               </div>
             </div>
@@ -123,6 +125,8 @@ export default function LandingHero() {
         today={stops.today}
         previewLimit={stops.previewLimit}
         live={{ date, fromCode, toCode, fromName, toName }}
+        area={area}
+        onClearArea={() => setArea(null)}
         search={search}
         onBook={(trip) => navigate(tripBookingPath(trip), { state: { returnTo: '/' } })}
       />

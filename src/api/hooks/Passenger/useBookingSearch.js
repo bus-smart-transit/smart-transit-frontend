@@ -120,8 +120,10 @@ export function useDepartures({ enabled, originStopId, destinationStopId, date, 
  * Returns { trips, total, page, lastPage, nextAvailableDate, message, loading, error }; idle
  * (no request) until `enabled`. Bad stop codes or dates come back as the server's friendly message.
  */
-export function useAvailableTrips({ enabled = true, from = '', to = '', date = '', page = 1, perPage = null, seatType = 'seated' }) {
-  const key = enabled ? [from, to, date, page, perPage ?? '', seatType].join('|') : null
+// Batch 52 item 1: `town` or `province` lists the trips you can board in that area; `prefer` is its stop ids nearest
+// first, measured on the device (the position itself is never sent).
+export function useAvailableTrips({ enabled = true, from = '', to = '', date = '', page = 1, perPage = null, seatType = 'seated', town = '', province = '', prefer = '' }) {
+  const key = enabled ? [from, to, date, page, perPage ?? '', seatType, town, province, prefer].join('|') : null
   const [result, setResult] = useState({ key: null, data: null, error: '' })
 
   useEffect(() => {
@@ -132,6 +134,9 @@ export function useAvailableTrips({ enabled = true, from = '', to = '', date = '
     if (to) params.to = to
     if (date) params.date = date
     if (perPage) params.per_page = perPage
+    if (town) params.town = town
+    else if (province) params.province = province
+    if ((town || province) && prefer) params.prefer = prefer
     getTrips(params)
       .then((data) => { if (!cancelled) setResult({ key, data, error: '' }) })
       .catch((err) => { if (!cancelled) setResult({ key, data: null, error: readApiError(err, 'We could not look up trips right now.').message }) })
@@ -151,9 +156,72 @@ export function useAvailableTrips({ enabled = true, from = '', to = '', date = '
     date: data?.date ?? '',
     from: data?.from ?? null,
     to: data?.to ?? null,
+    area: data?.area ?? null,
     message: data?.message ?? '',
     error: current ? result.error : '',
     loading: key !== null && !current,
   }
 }
 
+/**
+ * Batch 52 item 1 (user, 2026-11-09): the trips you can board in your area, widened as needed: the town first; with
+ * none there, the province; with none there either, every trip. `shown` says which ({ level: 'town'|'province'|'all',
+ * name }) and `note` says it in plain words when it had to widen. `area` = { town, province, prefer } or null.
+ */
+export function useAreaTrips({ enabled = true, area = null, date = '', perPage = null, seatType = 'seated' }) {
+  const key = enabled && area ? [area.town, area.province, area.prefer, date, perPage ?? '', seatType].join('|') : null
+  const [result, setResult] = useState({ key: null, data: null, shown: null, note: '', error: '' })
+
+  useEffect(() => {
+    if (!key) return undefined
+    let cancelled = false
+    const base = { seat_type: seatType, page: 1 }
+    if (date) base.date = date
+    if (perPage) base.per_page = perPage
+    const steps = [
+      area.town ? { level: 'town', name: area.town, params: { town: area.town, prefer: area.prefer || undefined } } : null,
+      area.province ? { level: 'province', name: area.province, params: { province: area.province, prefer: area.prefer || undefined } } : null,
+      { level: 'all', name: '', params: {} },
+    ].filter(Boolean)
+    ;(async () => {
+      try {
+        for (const step of steps) {
+          const data = await getTrips({ ...base, ...step.params })
+          if (cancelled) return
+          if ((data?.total ?? 0) > 0 || step.level === 'all') {
+            const missed = steps.slice(0, steps.indexOf(step))
+            const first = steps[0]
+            let note = ''
+            if (missed.length > 0 && step.level === 'province') note = `No trips from ${first.name} today. Showing trips from ${step.name}.`
+            else if (missed.length > 0 && step.level === 'all') note = 'No trips from your area today. Showing every trip.'
+            setResult({ key, data, shown: { level: step.level, name: step.name }, note, error: '' })
+            return
+          }
+        }
+      } catch (err) {
+        if (!cancelled) setResult({ key, data: null, shown: null, note: '', error: readApiError(err, 'We could not look up trips right now.').message })
+      }
+    })()
+    return () => { cancelled = true }
+    // key encodes every input used above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key])
+
+  const current = result.key === key
+  const data = current ? result.data : null
+  return {
+    trips: data?.trips ?? [],
+    total: data?.total ?? 0,
+    page: 1,
+    lastPage: data?.last_page ?? 1,
+    nextAvailableDate: data?.next_available_date ?? null,
+    date: data?.date ?? '',
+    from: null,
+    to: null,
+    shown: current ? result.shown : null,
+    note: current ? result.note : '',
+    message: data?.message ?? '',
+    error: current ? result.error : '',
+    loading: key !== null && !current,
+  }
+}

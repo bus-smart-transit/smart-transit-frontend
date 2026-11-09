@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { locationQuestion, nearestStop } from '../homeLocation';
+import { locationQuestion, nearestStop, stopIdsByDistance } from '../homeLocation';
 
 // Batch 51 items 2 and 3: the nearest stop within 5 km (measured on the device) and "Are you in {place}?".
 const groups = [
@@ -25,5 +25,13 @@ describe('locationQuestion', () => {
     expect(locationQuestion({ place: 'Sample City' }, null)).toBe('Are you in Sample City?');
     expect(locationQuestion(null, { stop: { name: 'Stop B' } })).toBe('Are you near Stop B?');
     expect(locationQuestion(null, null)).toBe('');
+  });
+});
+
+// Batch 52 item 1: the area's stops are tried nearest first; the order is worked out here, on the device.
+describe('stopIdsByDistance', () => {
+  it('orders the stops with a position by distance and skips the rest', () => {
+    expect(stopIdsByDistance(groups, { lat: 7.19, lng: 125.0 })).toEqual([4, 2, 1]);
+    expect(stopIdsByDistance(groups, null)).toEqual([]);
   });
 });

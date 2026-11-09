@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 import { ArrowRight } from 'lucide-react'
 import TripResults from './TripResults'
-import { useAvailableTrips } from '../../../api/hooks/Passenger/useBookingSearch'
+import { useAreaTrips, useAvailableTrips } from '../../../api/hooks/Passenger/useBookingSearch'
 import { buildBookingQuery } from '../../../utils/bookingQuery'
 import { formatManilaDate } from '../../../utils/dates'
 
@@ -15,15 +15,21 @@ import { formatManilaDate } from '../../../utils/dates'
  * `live` = { date, fromCode, toCode, fromName, toName } (the card as it is now);
  * `search` = the same shape, frozen at the moment Search was pressed, or null.
  */
-export default function TripsPreview({ today, previewLimit, live, search, onBook }) {
+export default function TripsPreview({ today, previewLimit, live, search, onBook, area = null, onClearArea = null }) {
   const view = search || live
   const listed = Boolean(search) || !live.date || live.date === today
   const queryDate = search ? search.date : today
-  const state = useAvailableTrips({ enabled: Boolean(today) && listed, from: view.fromCode, to: view.toCode, date: queryDate, perPage: previewLimit })
+  // Batch 52 item 1 (user): after "Are you in {place}?" Yes, today's trips you can board in your town (then province,
+  // then all), until a stop is chosen or a search is made.
+  const byArea = Boolean(area) && !search && !view.fromCode && !view.toCode
+  const plain = useAvailableTrips({ enabled: Boolean(today) && listed && !byArea, from: view.fromCode, to: view.toCode, date: queryDate, perPage: previewLimit })
+  const areaState = useAreaTrips({ enabled: Boolean(today) && listed && byArea, area, date: queryDate, perPage: previewLimit })
+  const state = byArea ? areaState : plain
   if (!today) return null // the server's "today" is not known yet
 
   const allTripsLink = (day) => `/passenger/trips?${buildBookingQuery({ from: view.fromCode, to: view.toCode, date: day })}`
-  const journeyLabel = view.fromName && view.toName ? `${view.fromName} \u2192 ${view.toName}` : view.fromName ? `From ${view.fromName}` : view.toName ? `To ${view.toName}` : 'All routes'
+  const areaLabel = byArea && areaState.shown && areaState.shown.level !== 'all' ? `From ${areaState.shown.name}` : ''
+  const journeyLabel = areaLabel ? areaLabel : view.fromName && view.toName ? `${view.fromName} \u2192 ${view.toName}` : view.fromName ? `From ${view.fromName}` : view.toName ? `To ${view.toName}` : 'All routes'
   const dayLabel = search ? formatManilaDate(search.date) : 'today'
   const emptyMessage = search ? 'No trips match this journey on that day.' : 'No more trips today for this journey.'
 
@@ -35,6 +41,12 @@ export default function TripsPreview({ today, previewLimit, live, search, onBook
           <p className="text-sm text-slate-500">{journeyLabel}{listed ? ` \u00b7 ${dayLabel}` : ''}</p>
         </div>
 
+        {byArea && (areaState.note || areaLabel) && (
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-teal-50 px-4 py-2.5 text-sm text-navy-950 ring-1 ring-inset ring-teal-200" data-testid="area-note">
+            <span>{areaState.note || `Trips you can board in ${areaState.shown?.name}.`}</span>
+            {onClearArea && <button type="button" onClick={onClearArea} className="text-sm font-semibold text-navy-800 underline">Show all trips</button>}
+          </div>
+        )}
         {listed ? (
           <TripResults
             state={{ ...state, message: emptyMessage }}

@@ -244,14 +244,25 @@ describe('LandingHero location question', () => {
   };
   beforeEach(() => { try { window.sessionStorage.clear(); } catch { /* none */ } });
 
-  test('asks Are you in {place}? and Yes lists trips from the nearest stop', async () => {
+  // Batch 52 item 1 (user): Yes lists the trips you can board in that town, nearest stops first (measured here).
+  test('asks Are you in {place}? and Yes lists the trips you can board in that town', async () => {
     allow(0.501, 0.501);
     renderHero();
     const question = await screen.findByTestId('location-question');
     expect(question).toHaveTextContent('Are you in Sample City?');
     fireEvent.click(within(question).getByRole('button', { name: 'Yes' }));
-    expect(await screen.findByTestId('location-note')).toHaveTextContent('Showing trips from Alpha Stop, the nearest stop to you.');
-    await waitFor(() => expect(getTrips).toHaveBeenLastCalledWith(expect.objectContaining({ from: 'alpha-stop' })));
+    await waitFor(() => expect(getTrips).toHaveBeenLastCalledWith(expect.objectContaining({ town: 'Sample City', prefer: '1' })));
+    expect(await screen.findByTestId('area-note')).toHaveTextContent('Trips you can board in Sample City.');
+    fireEvent.click(screen.getByRole('button', { name: 'Show all trips' }));
+    await waitFor(() => expect(screen.queryByTestId('area-note')).toBeNull());
+  });
+
+  test('widens to the province, then every trip, when the town has none today', async () => {
+    allow(0.501, 0.501);
+    getTrips.mockImplementation(async (params) => ({ date: '2026-10-01', total: params.province ? 1 : params.town ? 0 : 7, page: 1, last_page: 1, trips: params.town ? [] : [{ trip_id: 9, trip_date: '2026-10-01', boarding_time: '09:15', bus_label: 'BUS - 9', seats_left: 9, fare: 58, origin: { stop_id: 1, stop_code: 'alpha-stop', name: 'Alpha Stop' }, destination: { stop_id: 2, stop_code: 'beta-stop', name: 'Beta Stop' } }] }));
+    renderHero();
+    fireEvent.click(within(await screen.findByTestId('location-question')).getByRole('button', { name: 'Yes' }));
+    expect(await screen.findByTestId('area-note')).toHaveTextContent('No trips from Sample City today. Showing trips from North.');
   });
 
   test('No keeps every trip and asks no more', async () => {

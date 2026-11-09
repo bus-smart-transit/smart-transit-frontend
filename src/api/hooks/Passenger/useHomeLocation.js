@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { getRegionPlace } from '../../../services/regionService';
-import { locationQuestion, nearestStop } from '../../../utils/homeLocation';
+import { locationQuestion, nearestStop, stopIdsByDistance } from '../../../utils/homeLocation';
 
 const ANSWER_KEY = 'st-home-location-answer';
 
@@ -17,7 +17,10 @@ const saveAnswer = (value) => {
  * starts at the nearest stop within `radiusKm` (measured on the device). Refused or unanswered: every trip is listed.
  * The answer is kept for this browser session only.
  *
- * @returns {{ question: string, nearest: object|null, note: string, accept: () => object|null, decline: () => void }}
+ * Batch 52 item 1: when the town is known, Yes gives the area ({ town, province, prefer: stop ids nearest first }) and
+ * the list shows every trip you can board there; without a town, the nearest stop as before.
+ *
+ * @returns {{ question: string, nearest: object|null, note: string, accept: () => { area: object|null, stop: object|null }, decline: () => void }}
  */
 export default function useHomeLocation(groups, radiusKm = 5) {
   const [answered, setAnswered] = useState(() => readAnswer());
@@ -55,8 +58,12 @@ export default function useHomeLocation(groups, radiusKm = 5) {
     accept: () => {
       saveAnswer('yes');
       setAnswered('yes');
+      if (place?.place) {
+        setNote('');
+        return { area: { town: place.place, province: place.province || '', prefer: stopIdsByDistance(groups, coords).join(',') }, stop: null };
+      }
       setNote(nearest ? `Showing trips from ${nearest.stop.name}, the nearest stop to you.` : `No bus stop within ${radiusKm} km of you, so every trip is shown.`);
-      return nearest?.stop ?? null;
+      return { area: null, stop: nearest?.stop ?? null };
     },
     decline: () => {
       saveAnswer('no');

@@ -27,3 +27,15 @@ export function locationQuestion(place, nearest) {
   if (nearest?.stop?.name) return `Are you near ${nearest.stop.name}?`;
   return '';
 }
+
+/** Batch 52 item 1: the stop ids with a position, nearest first from coords (measured here), at most `limit`. */
+export function stopIdsByDistance(groups = [], coords = null, limit = 200) {
+  if (!coords) return [];
+  return groups.flatMap((group) => group?.stops || [])
+    .filter((stop) => stop?.latitude != null && stop?.longitude != null && Number.isFinite(Number(stop.latitude)) && Number.isFinite(Number(stop.longitude)))
+    .map((stop) => ({ id: Number(stop.stop_id), m: haversineM(Number(coords.lat), Number(coords.lng), Number(stop.latitude), Number(stop.longitude)) }))
+    .filter((row) => Number.isFinite(row.m))
+    .sort((a, b) => a.m - b.m)
+    .slice(0, limit)
+    .map((row) => row.id);
+}
