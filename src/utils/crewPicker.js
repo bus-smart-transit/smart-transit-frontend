@@ -5,12 +5,15 @@
 const nameOf = (person) => person?.name || person?.user?.name || person?.user?.username || person?.username || 'Not provided';
 const usernameOf = (person) => person?.user?.username || person?.username || '';
 
-export const isPickable = (person) => Boolean(person?.is_available);
+// Batch 51 item 6 (2026-11-09): a driver already on a trip that day comes with the server's reason (busy_reason) and
+// is shown but cannot be chosen (one trip per person per day).
+export const isPickable = (person) => Boolean(person?.is_available) && !person?.busy_reason;
 
-/** "Juan Dela Cruz (@juan)", with " - Not Available" for someone who cannot be picked now. */
+/** "Juan Dela Cruz (@juan)", with " - Not Available" or " - {busy reason}" for someone who cannot be picked now. */
 export function crewOptionLabel(person) {
   const username = usernameOf(person);
   const base = username ? `${nameOf(person)} (@${username})` : nameOf(person);
+  if (person?.busy_reason) return `${base} - ${person.busy_reason}`;
   return isPickable(person) ? base : `${base} - Not Available`;
 }
 

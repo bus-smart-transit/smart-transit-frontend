@@ -14,7 +14,7 @@ export default function useDateDrivers(tripDate, fallback) {
   useEffect(() => {
     if (!tripDate) return undefined;
     let cancelled = false;
-    OperatorService.getOperatorDrivers({ trip_date: tripDate })
+    OperatorService.getOperatorDrivers({ trip_date: tripDate, include_busy: 1 })
       .then((response) => { if (!cancelled) setAnswer({ date: tripDate, drivers: Array.isArray(response?.data) ? response.data : [], error: '' }); })
       .catch((error) => { if (!cancelled) setAnswer({ date: tripDate, drivers: [], error: error?.message || NO_DRIVERS_ERROR }); });
     return () => { cancelled = true; };

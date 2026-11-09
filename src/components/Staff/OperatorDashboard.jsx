@@ -212,7 +212,7 @@ function ScheduleServiceModal({ state, drivers, conductors }) {
   }, [showModal])
 
   useEffect(() => {
-    if (form.driver_id && !dateDrivers.some((driver) => String(getStaffCompanyUserId(driver)) === String(form.driver_id))) {
+    if (form.driver_id && !dateDrivers.some((driver) => String(getStaffCompanyUserId(driver)) === String(form.driver_id) && !driver.busy_reason)) {
       setForm((previous) => ({ ...previous, driver_id: '' }))
     }
   }, [dateDrivers, form.driver_id, setForm])
@@ -414,7 +414,7 @@ function TripsTab({ drivers, conductors, onRefresh, tripsState, focusTripId = nu
   )
 
   useEffect(() => {
-    if (assignModal?.type === 'driver' && assignId && !dateDrivers.some((driver) => String(getStaffCompanyUserId(driver)) === String(assignId))) {
+    if (assignModal?.type === 'driver' && assignId && !dateDrivers.some((driver) => String(getStaffCompanyUserId(driver)) === String(assignId) && !driver.busy_reason)) {
       setAssignId('')
     }
   }, [assignId, assignModal?.type, dateDrivers, setAssignId])

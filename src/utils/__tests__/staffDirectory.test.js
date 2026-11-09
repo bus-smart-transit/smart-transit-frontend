@@ -87,6 +87,14 @@ describe('crew pickers', () => {
     expect(sortForPicker([ben, ana, abe]).map((p) => p.name)).toEqual(['Abe', 'Ana', 'Ben']);
   });
 
+  // Batch 51 item 6: a driver already on a trip that day is shown with the reason and cannot be picked.
+  test('shows why a driver is busy that day and lists them last', () => {
+    const busy = { ...ana, company_user_id: 4, name: 'Bea', user: { username: 'bea' }, busy_reason: 'Already on a trip that day (14:00, completed)' };
+    expect(crewOptionLabel(busy)).toBe('Bea (@bea) - Already on a trip that day (14:00, completed)');
+    expect(isPickable(busy)).toBe(false);
+    expect(sortForPicker([busy, ana]).map((p) => p.name)).toEqual(['Ana', 'Bea']);
+  });
+
   test('a trip needs crew until it has both', () => {
     expect(needsCrew({ driver_id: 1, conductor_id: null })).toBe(true);
     expect(needsCrew({ driver_id: 1, conductor_id: 2 })).toBe(false);
