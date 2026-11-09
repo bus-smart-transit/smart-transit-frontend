@@ -894,6 +894,7 @@ export default function Dashboard() {
                 trackingToken={renewedTokens[selectedTicket.ticket_uuid] || selectedTicket.tracking_token || ''}
                 trackingCode={selectedTicket.ticket_uuid in renewedCodes ? renewedCodes[selectedTicket.ticket_uuid] : (selectedTicket.tracking_code || '')}
                 ticketId={ticketIdOf(selectedTicket.ticket_uuid)}
+                travellerName={selectedTicket.traveller_name || ''}
                 onRenewLink={selectedTicket.ticket_uuid ? () => renewTrackingLink(selectedTicket.ticket_uuid) : null}
               />
               <p className="mt-3 flex items-center gap-2 text-sm text-slate-600" data-testid="ticket-bus-service">

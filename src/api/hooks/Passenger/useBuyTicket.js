@@ -9,6 +9,7 @@ import useTripTimeline from './useTripTimeline';
 import { findStopCode, withBookingParams } from '../../../utils/bookingQuery';
 import { groupQrPayload, openPrintWindow } from '../../../utils/qr';
 import { manilaDepartureLabel } from '../../../utils/ticketImage';
+import { normalizeContact } from '../../../utils/travellerContact';
 const CHECKOUT_EVENT_KEY = 'smart_transit_checkout_event';
 const CHECKOUT_PENDING_KEY = 'smart_transit_checkout_pending';
 const CHECKOUT_LOOKUP_CACHE_KEY = 'smart_transit_checkout_lookup_cache_v1';
@@ -169,6 +170,10 @@ export default function useBuyTicket({ onTicketPurchased }) {
     use_rewards: false,
     reward_points_to_use: '',
     guest_email: '',
+    // Batch 51 item 7: booking for someone else (their name and an email or mobile number).
+    for_someone_else: false,
+    traveller_name: '',
+    traveller_contact: '',
   }));
   // Apply the checked link once (derived-state update during render, not an effect).
   const [linkApplied, setLinkApplied] = useState(false);
@@ -744,6 +749,10 @@ export default function useBuyTicket({ onTicketPurchased }) {
       if (isGuestCheckout && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(form.guest_email || '').trim())) {
         nextErrors.guest_email = 'Enter your email. Your ticket and tracking code are sent there.';
       }
+      if (form.for_someone_else) {
+        if (!String(form.traveller_name || '').trim()) nextErrors.traveller_name = 'Enter the name of the person you are booking for.';
+        if (!normalizeContact(form.traveller_contact)) nextErrors.traveller_contact = 'Enter their email, or a mobile number like 09171234567.';
+      }
       if (!Number.isFinite(parseInt(form.ticket_quantity, 10)) || parseInt(form.ticket_quantity, 10) < 1) {
         nextErrors.ticket_quantity = 'Ticket quantity must be at least 1.';
       } else if (parseInt(form.ticket_quantity, 10) > maxSeatsPerPurchase) {
@@ -781,6 +790,11 @@ export default function useBuyTicket({ onTicketPurchased }) {
       // Only a guest is asked for an email, and only so we can find their ticket again;
       // the payment page collects everything else.
       if (isGuestCheckout) payload.guest_email = String(form.guest_email).trim();
+      // Batch 51 item 7: the ticket still goes to the buyer's email; the traveller is named on it.
+      if (form.for_someone_else) {
+        payload.traveller_name = String(form.traveller_name).trim();
+        payload.traveller_contact = normalizeContact(form.traveller_contact);
+      }
       if (!isGuestCheckout && form.use_rewards && rewardPointsToApply > 0) {
         payload.reward_points_to_use = rewardPointsToApply;
       }
@@ -829,6 +843,9 @@ export default function useBuyTicket({ onTicketPurchased }) {
     effectiveAlightingStopId,
     form.email_group_qr,
     form.guest_email,
+    form.for_someone_else,
+    form.traveller_name,
+    form.traveller_contact,
     form.origin_stop_id,
     form.payment_channel,
     form.seat_type,

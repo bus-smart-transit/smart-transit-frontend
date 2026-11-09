@@ -17,6 +17,7 @@ import RouteMap from '../../Map/RouteMap';
 import { formatManilaDate } from '../../../utils/dates';
 import { formatDuration } from '../../../utils/tripTimeline';
 import { seatsLeftText, tripProgressText } from '../../../utils/passengerTripProgress';
+import { cleanContactInput, looksLikePhone } from '../../../utils/travellerContact';
 
 // Matches OnlineCheckoutRequest: the passenger picks GCash or Maya (C4). The payment
 // page itself collects whatever else the provider needs.
@@ -274,6 +275,7 @@ export default function BuyTicket({ onTicketPurchased, returnTo = '/' }) {
             trackingToken={qrTickets[0]?.tracking_token || ''}
             trackingCode={qrTickets[0]?.tracking_code || ''}
             ticketId={ticketIdOf(qrTickets[0]?.ticket_uuid)}
+            travellerName={qrTickets[0]?.traveller_name || ''}
           />
         )}
 
@@ -555,6 +557,38 @@ export default function BuyTicket({ onTicketPurchased, returnTo = '/' }) {
                       </label>
                     )}
 
+                    {/* Batch 51 item 7 (user): booking for someone else. Their ticket still goes to the buyer's email until an
+                        SMS service is chosen; their contact is an email or a mobile number (numbers only once a digit is typed). */}
+                    <div className="mt-4 rounded-xl border border-slate-200 px-4 py-3" data-testid="for-someone-else">
+                      <label className="flex items-center gap-2 text-sm font-semibold text-navy-950">
+                        <input type="checkbox" checked={Boolean(form.for_someone_else)} onChange={(e) => handleChange('for_someone_else', e.target.checked)} className="h-4 w-4 rounded border-slate-300 text-teal-600" />
+                        This ticket is for someone else
+                      </label>
+                      {form.for_someone_else && (
+                        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                          <label className="block text-sm font-semibold text-navy-950">
+                            Their name
+                            <input type="text" value={form.traveller_name} onChange={(e) => handleChange('traveller_name', e.target.value)} aria-invalid={Boolean(formErrors.traveller_name)} maxLength={100} className={FIELD} />
+                            {formErrors.traveller_name && <span role="alert" className="mt-1 block text-xs font-medium text-red-600">{formErrors.traveller_name}</span>}
+                          </label>
+                          <label className="block text-sm font-semibold text-navy-950">
+                            Their email or mobile number
+                            <input
+                              type="text"
+                              inputMode={looksLikePhone(form.traveller_contact) ? 'tel' : 'email'}
+                              value={form.traveller_contact}
+                              onChange={(e) => handleChange('traveller_contact', cleanContactInput(e.target.value))}
+                              aria-invalid={Boolean(formErrors.traveller_contact)}
+                              placeholder="name@example.com or 09171234567"
+                              className={FIELD}
+                            />
+                            {formErrors.traveller_contact && <span role="alert" className="mt-1 block text-xs font-medium text-red-600">{formErrors.traveller_contact}</span>}
+                          </label>
+                          <p className="text-xs font-normal text-slate-500 sm:col-span-2">Their ticket is sent to your email. Send it to them, or give them the Ticket ID to show the Chauffeur.</p>
+                        </div>
+                      )}
+                    </div>
+
                     {!isGuestCheckout && (
                       <div className="mt-4 rounded-xl border border-slate-200 px-4 py-2">
                         <p className="pt-1.5 text-sm text-slate-500">
@@ -684,6 +718,7 @@ export default function BuyTicket({ onTicketPurchased, returnTo = '/' }) {
               trackingToken={ticketPreview.ticket.tracking_token || ''}
               trackingCode={ticketPreview.ticket.tracking_code || ''}
               ticketId={ticketIdOf(ticketPreview.ticket.ticket_uuid)}
+              travellerName={ticketPreview.ticket.traveller_name || ''}
             />
           </>
         )}

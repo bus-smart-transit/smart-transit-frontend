@@ -160,3 +160,31 @@ describe('after paying', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('Enter your email. Your ticket and tracking code are sent there.');
   });
 });
+
+// Batch 51 item 7 (user): booking for someone else: their name and an email or a mobile number (numbers only once a
+// digit is typed); the errors come from the form.
+describe('booking for someone else', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('shows the fields when ticked, keeps a number to digits, and shows the errors', () => {
+    const state = bookingState();
+    useBuyTicket.mockReturnValue({ ...state, form: { ...state.form, for_someone_else: true, traveller_name: '', traveller_contact: '0917' }, formErrors: { traveller_name: 'Enter the name of the person you are booking for.' } });
+    render(<MemoryRouter><BuyTicket /></MemoryRouter>);
+
+    const contact = screen.getByLabelText('Their email or mobile number');
+    expect(contact).toHaveAttribute('inputmode', 'tel');
+    fireEvent.change(contact, { target: { value: '0917abc1234567' } });
+    expect(state.handleChange).toHaveBeenCalledWith('traveller_contact', '09171234567');
+    expect(screen.getByText('Enter the name of the person you are booking for.')).toBeInTheDocument();
+    expect(screen.getByText(/Their ticket is sent to your email/)).toBeInTheDocument();
+  });
+
+  it('ticks the option through the form', () => {
+    const state = bookingState();
+    useBuyTicket.mockReturnValue(state);
+    render(<MemoryRouter><BuyTicket /></MemoryRouter>);
+    expect(screen.queryByLabelText('Their name')).toBeNull();
+    fireEvent.click(screen.getByRole('checkbox', { name: 'This ticket is for someone else' }));
+    expect(state.handleChange).toHaveBeenCalledWith('for_someone_else', true);
+  });
+});

@@ -30,6 +30,7 @@ export default function TicketCard({
   trackingToken = '',
   trackingCode = '',
   ticketId = '',
+  travellerName = '',
   onRenewLink = null,
 }) {
   const footer = STATUS_FOOTER[String(statusLabel).toLowerCase()] ?? STATUS_FOOTER.issued;
@@ -110,6 +111,8 @@ export default function TicketCard({
           <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-1.5"><dt className="text-xs text-slate-500">Expires</dt><dd className="text-right text-sm font-bold text-navy-950">{expiresLabel || '-'}</dd></div>
           <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-1.5"><dt className="text-xs text-slate-500">Status</dt><dd className="text-right text-sm font-bold text-navy-950">{statusLabel || '-'}</dd></div>
           {/* Batch 51 item 8: typed by the Chauffeur when the QR cannot be shown (separate from the tracking code). */}
+          {/* Batch 51 item 7: booked for someone else. */}
+          {travellerName && <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-1.5" data-testid="ticket-traveller"><dt className="text-xs text-slate-500">Traveller</dt><dd className="text-right text-sm font-bold text-navy-950">{travellerName}</dd></div>}
           {ticketId && <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-1.5" data-testid="ticket-id"><dt className="text-xs text-slate-500">Ticket ID</dt><dd className="text-right font-data text-sm font-bold tracking-widest text-navy-950">{ticketId}</dd></div>}
           {discountLabel && Number(discountAmount) > 0 && <>
             <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-1.5"><dt className="text-xs text-slate-500">Original fare</dt><dd className="text-right text-sm font-bold text-navy-950">PHP {Number(originalFare).toFixed(2)}</dd></div>
