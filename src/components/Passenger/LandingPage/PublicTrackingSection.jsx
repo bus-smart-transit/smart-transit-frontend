@@ -26,6 +26,8 @@ import TrackMyBusModal from '../Track/TrackMyBusModal';
 import { setGeoJson } from '../../Map/routeLayers';
 // The stops of a bus's route, ordered for its leg direction, are what name its place (routeKeyOf).
 import { busCounts, busStatusText, routeKeyOf, routeLineFeatures } from '../../../utils/publicTrackingView';
+import { useLiveChannels, useLiveConnected, useLiveEvent } from '../../../api/hooks/useLive';
+import { livePositionLngLat, pollEvery } from '../../../utils/liveUpdates';
 
 const POLL_MS = 12000;
 
@@ -215,6 +217,20 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
     }
   }, [flyToFleet, selectedFleetId, mapReady]);
 
+  // Batch 58: live updates move a running bus at once and refresh the list when a trip changes state; while they
+  // arrive the list is polled once a minute (a safety net), else every POLL_MS as before.
+  const liveChannels = useLiveChannels();
+  const liveConnected = useLiveConnected();
+  useLiveEvent(liveChannels?.positions, 'bus.moved', (update) => {
+    const fleetId = Number(update?.fleet_id);
+    const marker = markersRef.current.get(fleetId);
+    const position = livePositionLngLat(update);
+    if (!marker || !position || markerWaitingRef.current.get(fleetId)) return;
+    marker.setLngLat(position);
+    busIconsRef.current.get(fleetId)?.setHeading(headingOf(update));
+  });
+  useLiveEvent(liveChannels?.trip_status, 'trip.status', () => { void refreshFleets(); });
+
   useEffect(() => {
     if (!pollingEnabled) return undefined;
 
@@ -227,13 +243,13 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
     void tick();
     const id = setInterval(() => {
       void tick();
-    }, POLL_MS);
+    }, pollEvery(POLL_MS, liveConnected));
 
     return () => {
       cancelled = true;
       clearInterval(id);
     };
-  }, [pollingEnabled, refreshFleets]);
+  }, [pollingEnabled, refreshFleets, liveConnected]);
 
   const handleRetryFleetFetch = () => {
     setPollingEnabled(true);

@@ -22,6 +22,7 @@ import CalendarSummaryStrip from './CalendarSummaryStrip';
 import DashboardCalendar from './DashboardCalendar';
 import Modal, { ModalShell } from '../ui/Modal';
 import PairWithCrewCard from './PairWithCrewCard';
+import CrewAlertCard from './CrewAlertCard';
 import StaffCalendar from './StaffCalendar';
 import NotificationBellButton from './NotificationBellButton';
 import { useConductorPairing, useConductorDashboardData } from '../../api/hooks/Staff/useConductorDashboard';
@@ -443,6 +444,9 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
         {!loading && ['dashboard', 'occupancy'].includes(activeTab) && (
           <PairWithCrewCard paired={isPaired} reason={pairingReason} partner="Driver" onOpen={() => setPairingOpen(true)} />
         )}
+
+        {/* Batch 58: "Alert operator" while the trip is boarding, delayed or on the road. */}
+        {!loading && activeTab === 'dashboard' && <CrewAlertCard service={ConductorService} trip={trip} />}
 
         {/* Batch 20 Item 2: this "pre-shift review" hero belongs to
             Dashboard ONLY — it was previously also rendered on Ticketing &

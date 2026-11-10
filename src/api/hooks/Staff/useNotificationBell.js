@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useLiveChannels, useLiveEvent } from '../useLive';
 
 /**
  * S1 (Batch 17): shared in-app notification-bell hook for Driver/Conductor
@@ -33,6 +34,11 @@ export function useNotificationBell(service, role) {
       setLoadingNotifications(false);
     }
   }, [service, role]);
+
+  // Batch 58: a new notification for this person (an Operator's message, an assignment change, an alert handled)
+  // shows at once instead of at the next 45 s refresh.
+  const liveChannels = useLiveChannels();
+  useLiveEvent(liveChannels?.user, 'notification', () => { void loadNotifications(); }, { isPrivate: true });
 
   useEffect(() => {
     const timer = setTimeout(() => {

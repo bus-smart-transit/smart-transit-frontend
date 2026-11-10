@@ -245,6 +245,19 @@ class OperatorService extends StaffBaseService {
     return await this.request('/operator/notifications', 'GET');
   }
 
+  // Batch 58: crew alerts ("Alert operator") for the company.
+  async getAlerts() {
+    return await this.request('/operator/alerts', 'GET');
+  }
+
+  async handleAlert(alertId, note = '') {
+    return await this.request(`/operator/alerts/${alertId}/handle`, 'PATCH', note ? { note } : {});
+  }
+
+  async tellPassengersAboutAlert(alertId) {
+    return await this.request(`/operator/alerts/${alertId}/tell-passengers`, 'POST');
+  }
+
   async markNotificationRead(id) {
     return await this.request(`/operator/notifications/${id}/read`, 'PATCH');
   }

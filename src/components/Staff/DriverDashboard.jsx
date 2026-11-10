@@ -21,6 +21,7 @@ import CalendarSummaryStrip from './CalendarSummaryStrip';
 import DashboardCalendar from './DashboardCalendar';
 import Modal, { ModalShell } from '../ui/Modal';
 import PairWithCrewCard from './PairWithCrewCard';
+import CrewAlertCard from './CrewAlertCard';
 import StaffCalendar from './StaffCalendar';
 import DriverNavigationMap from './DriverNavigationMap';
 import RequestedStopRow from './RequestedStopRow';
@@ -434,6 +435,9 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
         {!loading && activeTab === 'dashboard' && (
           <PairWithCrewCard paired={isPaired} reason={pairingReason} partner="Chauffeur" onOpen={() => setPairingOpen(true)} />
         )}
+
+        {/* Batch 58: "Alert operator" while the trip is boarding, delayed or on the road. */}
+        {!loading && activeTab === 'dashboard' && <CrewAlertCard service={DriverService} trip={trip} />}
 
         {!loading && activeTab === 'dashboard' && !showNoCurrentTripState && (
           <section className="staff-grid xl:grid-cols-4 md:grid-cols-2">

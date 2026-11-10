@@ -5,6 +5,7 @@ import { initFcmAndGetToken, stopForegroundListener } from '../../../services/fc
 import { OPERATOR_ROLE, buildLocationSearch, defaultView, resolveOperatorLocation } from '../../../utils/operatorNav';
 import { isRangeSchedule, rangeKey, rangePayload } from '../../../utils/scheduleRange';
 import { planningMessage } from '../../../utils/legPlanning';
+import { useLiveChannels, useLiveEvent } from '../useLive';
 
 // Architecture audit follow-up (CONF-03): OperatorDashboard.jsx's main
 // orchestrator component and its NotificationBell sub-component both called
@@ -90,6 +91,10 @@ export function useOperatorDashboardData() {
       tripsPollInFlightRef.current = false;
     }
   }, []);
+
+  // Batch 58: a trip's status changed (boarding, departed, delayed, ...): reload the trips at once.
+  const liveChannels = useLiveChannels();
+  useLiveEvent(liveChannels?.trip_status, 'trip.status', () => { void loadTripsOnly(); });
 
   useEffect(() => {
     if (hasBootstrappedRef.current) return;

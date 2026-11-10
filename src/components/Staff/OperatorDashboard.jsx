@@ -15,6 +15,8 @@ import { getBookingWindow } from '../../services/bookingService'
 import { bookingWindowWarning } from '../../utils/bookingQuery'
 import { parseAppDate, getBusinessToday, debugLogBusinessTime } from '../../utils/dates'
 import { useOperatorDashboardData, useNotificationBell, useTripRequests, useTripsTab } from '../../api/hooks/Staff/useOperatorDashboard'
+import useOperatorAlerts from '../../api/hooks/Staff/useOperatorAlerts'
+import OperatorAlerts from './Operator/OperatorAlerts'
 import RunInfoChips from '../ui/RunInfoChips'
 import { CancelTripModal, TicketResolutionQueue } from './TripCancellationsPanel'
 import LegTimeSuggestion from './LegTimeSuggestion'
@@ -791,6 +793,7 @@ export default function OperatorDashboard() {
     loadFull,
     handleLogout,
   } = useOperatorDashboardData()
+  const crewAlerts = useOperatorAlerts()
 
   if (loading) {
     return (
@@ -817,6 +820,8 @@ export default function OperatorDashboard() {
     >
         {/* w-0 min-w-full: a wide table inside a page must scroll in its card, not widen the whole portal column. */}
         <div className="w-0 min-w-full">
+        {/* Batch 58: crew alerts on every Operator page. */}
+        <OperatorAlerts alerts={crewAlerts} />
         {activeTab === 'dashboard'  && (
           <OperatorDashboardPage
             trips={trips}

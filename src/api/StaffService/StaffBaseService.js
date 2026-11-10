@@ -114,6 +114,19 @@ export class StaffBaseService extends BaseService {
     return await this.request('/staff/password/skip', 'POST');
   }
 
+  // Batch 58: crew alerts ("Alert operator"), the same for the Driver and the Chauffeur.
+  async getCrewAlerts(tripId) {
+    return await this.request(`/crew/trips/${tripId}/alerts`, 'GET');
+  }
+
+  async raiseCrewAlert(tripId, payload) {
+    return await this.request(`/crew/trips/${tripId}/alerts`, 'POST', payload);
+  }
+
+  async cancelCrewAlert(alertId) {
+    return await this.request(`/crew/alerts/${alertId}/cancel`, 'PATCH');
+  }
+
   // Batch 24 (C8): one role-scoped endpoint shared by Driver, Chauffeur and Operator.
   async getCalendarSummary() {
     return await this.request('/staff/calendar-summary', 'GET');
