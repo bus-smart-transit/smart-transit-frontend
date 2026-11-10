@@ -52,7 +52,8 @@ for (const width of [1280, 390]) {
     const details = panel.getByTestId('nearby-bus-details').first();
     // Batch 50 (user): the card shows the destination (not the next stop), when it arrives, and the passengers.
     await expect(details).toContainText('Destination');
-    await expect(details).toContainText(/Arrives(\d{2}:\d{2} · (Live estimate|Scheduled)|Not provided)/);
+    // Batch 52: the arrival reads "{destination} in n min" (or "now") above the time.
+    await expect(details).toContainText(/Arrives(.+ (in \d+ min|now))?(\d{2}:\d{2} · (Live estimate|Scheduled)|Not provided|Arrived)/);
     await expect(details.getByTestId('nearby-bus-passengers')).toHaveText(/^(\d+|Not provided)$/);
     await panel.scrollIntoViewIfNeeded();
     await page.screenshot({ path: path.join(SHOTS, `1-nearby-${width}.png`) });

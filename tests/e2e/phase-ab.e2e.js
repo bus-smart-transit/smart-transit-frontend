@@ -94,6 +94,7 @@ test('Phase A: a trip two hours ahead cannot board yet, and its Driver sees when
   const notice = page.getByTestId('pairing-not-open');
   await expect(notice).toBeVisible({ timeout: 30000 });
   await expect(notice).toContainText(/Pairing opens at \d{1,2}:\d{2} (AM|PM)/);
+  await page.getByRole('tab', { name: 'Pair now' }).click(); // Batch 53: the camera is on the Pair now tab
   await expect(page.getByRole('button', { name: /Start Camera/ })).toBeDisabled();
   await shot(page, '1-driver-pairing-not-open');
 });

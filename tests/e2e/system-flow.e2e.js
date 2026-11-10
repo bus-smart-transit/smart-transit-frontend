@@ -92,6 +92,9 @@ async function clickSidebar(page, label) {
 // Batch 45 Feature B: the Daily PIN tab is now the "Pair with crew" pop-up, opened from the card on the Dashboard.
 async function openPairWithCrew(page) {
   await clickSidebar(page, 'Dashboard');
+  // Batch 53 (user): the card is hidden once the crew are paired (an earlier run may have paired them).
+  await settle(page);
+  if (await page.getByTestId('pair-with-crew-card').count() === 0) return;
   await page.getByTestId('pair-with-crew-card').getByRole('button').click();
   await expect(page.getByTestId('pair-with-crew-modal')).toBeVisible();
   await settle(page);
