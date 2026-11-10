@@ -1,5 +1,16 @@
 import { describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen } from '@testing-library/react'
+
+vi.mock('../../../services/bookingService', () => ({
+  getTripTimeline: vi.fn(async () => ({ stops: [
+    { stop_id: 3, stop_code: 'stop-d', name: 'Stop D', type: 'stop', eta_time: '08:40', is_boarding: true, selectable: false },
+    { stop_id: 5, stop_code: 'stop-x', name: 'Stop X', type: 'stop', eta_time: '08:55', selectable: true },
+    { stop_id: 4, stop_code: 'stop-e', name: 'Stop E', type: 'terminal', eta_time: '09:10', selectable: true },
+  ] })),
+  readApiError: (error, fallback) => ({ message: error?.message || fallback }),
+}))
+
+import { getTripTimeline } from '../../../services/bookingService'
 import { TripCard } from './TripResults'
 
 const trip = (over = {}) => ({
@@ -31,5 +42,38 @@ describe('TripCard on a trip that has left', () => {
   it('shows no progress before the bus leaves', () => {
     render(<TripCard trip={trip()} onBook={vi.fn()} />)
     expect(screen.queryByTestId('trip-progress')).not.toBeInTheDocument()
+  })
+})
+
+// Batch 54 (user, 2026-11-10): Now boarding, the bus type, and View route stops on All available trips.
+describe('TripCard, Batch 54', () => {
+  it('says NOW BOARDING once the Driver starts boarding, and shows the bus type', () => {
+    render(<TripCard trip={trip({ vehicle_class_label: 'Aircon', progress: { state: 'boarding', label: 'Boarding', next_stop: null } })} onBook={vi.fn()} />)
+    expect(screen.getByTestId('trip-now-boarding')).toHaveTextContent('Now boarding')
+    expect(screen.queryByTestId('trip-progress')).not.toBeInTheDocument()
+    expect(screen.getByTestId('trip-bus-type')).toHaveTextContent('Aircon')
+  })
+
+  it('has no route stops button without a drop-off handler (the homepage preview)', () => {
+    render(<TripCard trip={trip()} onBook={vi.fn()} />)
+    expect(screen.queryByRole('button', { name: 'View route stops' })).not.toBeInTheDocument()
+    expect(screen.queryByTestId('trip-now-boarding')).not.toBeInTheDocument()
+  })
+
+  it('loads the stops only when opened, from the boarding stop, and Get off here picks another drop-off', async () => {
+    const choose = vi.fn()
+    const t = trip({ destination: { stop_id: 4, stop_code: 'stop-e', name: 'Stop E' } })
+    render(<TripCard trip={t} onBook={vi.fn()} onChooseDropOff={choose} />)
+    expect(getTripTimeline).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'View route stops' }))
+    expect(await screen.findAllByTestId('route-stop')).toHaveLength(3)
+    expect(getTripTimeline).toHaveBeenCalledWith(7, { boarding_stop_id: 3 })
+    expect(screen.getByText('You board here')).toBeInTheDocument()
+    expect(screen.getByText('Your drop-off')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Get off at Stop E' })).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Get off at Stop X' }))
+    expect(choose).toHaveBeenCalledWith(t, 'stop-x')
   })
 })

@@ -22,8 +22,9 @@ export function buildBookingQuery({ from, to, date, time } = {}) {
 }
 
 /** The booking page for a trip from the available-trips list: its own stops (codes), date and departure time. */
-export function tripBookingPath(trip) {
-  return `/passenger/book?${buildBookingQuery({ from: trip.origin?.stop_code, to: trip.destination?.stop_code, date: trip.trip_date, time: trip.boarding_time })}`;
+/** Batch 54: `toCode` books to another drop-off on the same trip ("Get off here" in View route stops). */
+export function tripBookingPath(trip, toCode = '') {
+  return `/passenger/book?${buildBookingQuery({ from: trip.origin?.stop_code, to: toCode || trip.destination?.stop_code, date: trip.trip_date, time: trip.boarding_time })}`;
 }
 
 export function bookingReturnPath(state) {

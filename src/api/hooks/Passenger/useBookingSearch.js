@@ -42,6 +42,8 @@ export function useBookingStops(originStopId, originCode = '') {
     // How many trips the home preview shows and how many a page of all trips holds (server config).
     previewLimit: origins.meta?.home_preview_limit ?? null,
     tripsPerPage: origins.meta?.trips_per_page ?? null,
+    // Batch 54 (user): [{ key, label }] for the trips page's bus type filter, from the server.
+    busTypes: Array.isArray(origins.meta?.bus_types) ? origins.meta.bus_types : [],
     destinationGroups: destinationsReady ? destinations.groups : [],
     loadingOrigins: !origins.ready,
     loadingDestinations: destinationKey !== null && !destinationsReady,
@@ -122,8 +124,8 @@ export function useDepartures({ enabled, originStopId, destinationStopId, date, 
  */
 // Batch 52 item 1: `town` or `province` lists the trips you can board in that area; `prefer` is its stop ids nearest
 // first, measured on the device (the position itself is never sent).
-export function useAvailableTrips({ enabled = true, from = '', to = '', date = '', page = 1, perPage = null, seatType = 'seated', town = '', province = '', prefer = '' }) {
-  const key = enabled ? [from, to, date, page, perPage ?? '', seatType, town, province, prefer].join('|') : null
+export function useAvailableTrips({ enabled = true, from = '', to = '', date = '', page = 1, perPage = null, seatType = 'seated', town = '', province = '', prefer = '', busType = '' }) {
+  const key = enabled ? [from, to, date, page, perPage ?? '', seatType, town, province, prefer, busType].join('|') : null
   const [result, setResult] = useState({ key: null, data: null, error: '' })
 
   useEffect(() => {
@@ -134,6 +136,7 @@ export function useAvailableTrips({ enabled = true, from = '', to = '', date = '
     if (to) params.to = to
     if (date) params.date = date
     if (perPage) params.per_page = perPage
+    if (busType) params.bus_type = busType
     if (town) params.town = town
     else if (province) params.province = province
     if ((town || province) && prefer) params.prefer = prefer

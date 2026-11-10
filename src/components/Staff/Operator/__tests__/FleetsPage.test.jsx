@@ -122,6 +122,21 @@ describe('FleetsPage', () => {
     expect(screen.queryByText('PLT-1')).not.toBeInTheDocument();
   });
 
+  // Batch 54 (production test): a bus switched off was in All but in no chip, so the counts did not add up.
+  it('shows an Inactive chip only when a bus is switched off, so the chips add up to All', async () => {
+    const { unmount } = renderPage();
+    await waitFor(() => expect(within(rowFor('PLT-1')).getByText('On route')).toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: /^Inactive \(\d+\)$/ })).not.toBeInTheDocument();
+    unmount();
+
+    renderPage({ fleets: [...fleets, fleet(5, { status: 'inactive', plate_number: 'PLT-5' })] });
+    fireEvent.click(await screen.findByRole('button', { name: 'Inactive (1)' }));
+    expect(screen.getByText('PLT-5')).toBeInTheDocument();
+    expect(screen.queryByText('PLT-1')).not.toBeInTheDocument();
+    const count = (name) => Number(screen.getByRole('button', { name: new RegExp(`^${name} \\((\\d+)\\)$`) }).textContent.match(/\((\d+)\)/)[1]);
+    expect(['On route', 'Active', 'Idle', 'Offline', 'Inactive'].reduce((sum, name) => sum + count(name), 0)).toBe(count('All'));
+  });
+
   it('keeps the fare rules panel', async () => {
     renderPage();
     expect(screen.getByText('fare-rules-panel')).toBeInTheDocument();

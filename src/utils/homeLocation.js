@@ -39,3 +39,24 @@ export function stopIdsByDistance(groups = [], coords = null, limit = 200) {
     .slice(0, limit)
     .map((row) => row.id);
 }
+
+/**
+ * Batch 54 (user, 2026-11-10): "Stops near you" on All available trips. The `limit` nearest stops with a position within
+ * radiusKm of coords (measured on this device), nearest first, as { stop, meters }.
+ */
+export function nearbyStops(groups = [], coords = null, radiusKm = 5, limit = 3) {
+  if (!coords || !Number.isFinite(Number(coords.lat)) || !Number.isFinite(Number(coords.lng))) return [];
+  return groups.flatMap((group) => group?.stops || [])
+    .filter((stop) => stop?.latitude != null && stop?.longitude != null && Number.isFinite(Number(stop.latitude)) && Number.isFinite(Number(stop.longitude)))
+    .map((stop) => ({ stop, meters: haversineM(Number(coords.lat), Number(coords.lng), Number(stop.latitude), Number(stop.longitude)) }))
+    .filter((row) => Number.isFinite(row.meters) && row.meters <= radiusKm * 1000)
+    .sort((a, b) => a.meters - b.meters)
+    .slice(0, limit);
+}
+
+/** "350 m away" under 1 km, else "1.2 km away". */
+export function distanceText(meters) {
+  const m = Number(meters);
+  if (!Number.isFinite(m)) return '';
+  return m < 1000 ? `${Math.round(m / 10) * 10} m away` : `${(m / 1000).toFixed(1)} km away`;
+}

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 
@@ -10,7 +10,7 @@ const STOPS = [
 
 vi.mock('../../../services/bookingService', () => ({
   getBookingStops: vi.fn(async (origin) => ({
-    meta: { today: '2026-10-01', max_advance_days: 30, home_preview_limit: 5, trips_per_page: 2 },
+    meta: { today: '2026-10-01', max_advance_days: 30, home_preview_limit: 5, trips_per_page: 2, bus_types: [{ key: 'ordinary', label: 'Ordinary' }, { key: 'aircon', label: 'Aircon' }] },
     groups: [{ municipality: 'Alpha Town', provinces: ['North'], stops: origin ? STOPS.filter((s) => String(s.stop_id) !== String(origin)) : STOPS }],
   })),
   getTrips: vi.fn(),
@@ -178,4 +178,48 @@ describe('AvailableTripsPage', () => {
     expect(await screen.findByRole('heading', { name: 'All routes' })).toBeInTheDocument();
     await waitFor(() => expect(getTrips).toHaveBeenCalledWith({ seat_type: 'seated', page: 1, per_page: 2 })); // no date: the server uses today in Manila
   });
+
+  // Batch 54 (user, 2026-11-10): bus type filter from the server's list, kept in the address.
+  test('the bus type chips come from the server and ask for that class only', async () => {
+    getTrips.mockResolvedValue(answer());
+    renderAt('/passenger/trips?from=alpha-stop&to=beta-stop&date=2026-10-01');
+    await screen.findByText('3 trips found');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Aircon' }));
+    await waitFor(() => expect(getTrips).toHaveBeenLastCalledWith(expect.objectContaining({ bus_type: 'aircon', page: 1 })));
+    expect(screen.getByTestId('current').textContent).toContain('bus=aircon');
+    expect(screen.getByRole('button', { name: 'Aircon' })).toHaveAttribute('aria-pressed', 'true');
+
+    fireEvent.click(screen.getByRole('button', { name: 'All buses' }));
+    await waitFor(() => expect(getTrips.mock.calls.at(-1)[0]).not.toHaveProperty('bus_type'));
+  });
+
+  // Batch 54 (user): with no boarding stop chosen, a pop-up asks to turn location on; the position is read only after Yes.
+  test('asks to turn location on, then lists the nearest stops, and a stop narrows the list to trips from there', async () => {
+    const getCurrentPosition = vi.fn((ok) => ok({ coords: { latitude: 7.0, longitude: 125.0 } }));
+    vi.stubGlobal('navigator', { ...window.navigator, geolocation: { getCurrentPosition }, permissions: { query: vi.fn(async () => ({ state: 'prompt' })) } });
+    const store = {};
+    vi.stubGlobal('sessionStorage', { getItem: (k) => store[k] ?? null, setItem: (k, v) => { store[k] = String(v); } });
+    STOPS[0].latitude = 7.001; STOPS[0].longitude = 125.0;
+    try {
+      getTrips.mockResolvedValue(answer({ from: null, to: null }));
+      renderAt('/passenger/trips?date=2026-10-01');
+
+      const ask = await screen.findByTestId('nearby-location-ask');
+      expect(ask).toHaveTextContent('Your location stays on this device.');
+      expect(getCurrentPosition).not.toHaveBeenCalled();
+      fireEvent.click(within(ask).getByRole('button', { name: 'Turn on location' }));
+
+      const near = await screen.findAllByTestId('nearby-stop');
+      expect(near[0]).toHaveTextContent('Alpha Stop');
+      expect(near[0]).toHaveTextContent(/m away/);
+      fireEvent.click(screen.getAllByRole('button', { name: 'Trips from here' })[0]);
+      await waitFor(() => expect(screen.getByTestId('current').textContent).toContain('from=alpha-stop'));
+      expect(screen.queryByTestId('nearby-stops')).not.toBeInTheDocument();
+    } finally {
+      delete STOPS[0].latitude; delete STOPS[0].longitude;
+      vi.unstubAllGlobals();
+    }
+  });
 });
+

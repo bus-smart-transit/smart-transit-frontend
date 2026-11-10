@@ -31,6 +31,8 @@ export const FLEET_FILTERS = [
   { value: 'active', label: 'Active' },
   { value: 'idle', label: 'Idle' },
   { value: 'offline', label: 'Offline' },
+  // Batch 54 (production test): a bus switched off is counted in All, so it gets its own chip (shown when there is one).
+  { value: 'inactive', label: 'Inactive' },
 ];
 
 const OPEN_LATER = ['scheduled', 'delayed'];

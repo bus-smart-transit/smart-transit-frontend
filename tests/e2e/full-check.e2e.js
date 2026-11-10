@@ -84,7 +84,7 @@ test.beforeAll(async () => {
   tokens.chauffeur = await staffLogin('conductor5@smarttransit.com', 'conductor');
 
   const p = manila();
-  const departure = Math.min(Math.ceil((Number(p.hour) * 60 + Number(p.minute) + 40) / 5) * 5, 21 * 60); // pairing opens an hour before departure
+  const departure = Math.min(Math.ceil((Number(p.hour) * 60 + Number(p.minute) + 25) / 5) * 5, 21 * 60); // pairing opens an hour before departure, boarding 30 minutes before (TC-15)
   const drivers = list((await call('get', 'operator/drivers', tokens.operator)).body);
   const chauffeurs = list((await call('get', 'operator/conductors', tokens.operator)).body);
   const driver = byEmail(drivers, 'driver5@smarttransit.com');
@@ -296,9 +296,15 @@ test('TC-09 Fleets: cards match the counts, search narrows them, details open', 
   const cards = page.getByTestId('fleet-card');
   await expect(cards.first()).toBeVisible();
   const total = await cards.count();
-  const chip = async (label) => Number((await page.getByRole('button', { name: new RegExp(`^${label} \\(\\d+\\)$`) }).first().innerText()).match(/\((\d+)\)/)[1]);
-  expect(await chip('All')).toBe(total);
-  expect((await chip('On route')) + (await chip('Active')) + (await chip('Idle')) + (await chip('Offline')), 'the status counts add up to All').toBe(total);
+  // One snapshot of every chip (counts move while GPS loads, so reading them one by one can disagree).
+  const CHIPS = /^(All|On route|Active|Idle|Offline|Inactive) \((\d+)\)$/;
+  const tally = async () => {
+    const texts = await page.getByRole('button', { name: CHIPS }).allInnerTexts();
+    const n = Object.fromEntries(texts.map((t) => { const m = t.trim().match(CHIPS); return [m[1], Number(m[2])]; }));
+    return { all: n.All, sum: ['On route', 'Active', 'Idle', 'Offline', 'Inactive'].reduce((acc, key) => acc + (n[key] ?? 0), 0) };
+  };
+  await expect.poll(async () => (await tally()).all).toBe(total);
+  await expect.poll(async () => { const t = await tally(); return t.sum - t.all; }, { message: 'the status counts add up to All' }).toBe(0);
   await shot(page, 'TC-09-fleets');
   const plate = (await cards.first().innerText()).split('\n')[0].trim();
   await page.getByTestId('fleet-search').fill('zz-no-such-bus');
@@ -441,3 +447,81 @@ for (const { who, email, url, home } of [
     expectClean(entry, `TC-13-${who}`);
   });
 }
+
+// ---------------------------------------------------------------- Batch 54: All available trips
+
+test('TC-14 trips page: asks for location, lists stops near you, bus type chips filter, route stops pick a drop-off', async ({ browser }) => {
+  test.skip(!ctx.originStop, 'The first stop of the new trip is not known.');
+  const context = await browser.newContext({ geolocation: { latitude: Number(ctx.originStop.latitude), longitude: Number(ctx.originStop.longitude) }, permissions: [] });
+  // A first-time visitor's browser says "prompt" (headless Edge says "denied" until a test grants it).
+  await context.addInitScript(() => {
+    const query = navigator.permissions.query.bind(navigator.permissions);
+    navigator.permissions.query = (desc) => (desc?.name === 'geolocation' ? Promise.resolve({ state: 'prompt' }) : query(desc));
+  });
+  const page = await context.newPage();
+  const entry = watch(page, 'TC-14');
+  await page.goto(`/passenger/trips?date=${today()}`);
+  // output: the pop-up asks first (the browser has not been allowed)
+  const ask = page.getByTestId('nearby-location-ask');
+  await expect(ask).toContainText('Your location stays on this device.');
+  await shot(page, 'TC-14-ask');
+  await context.grantPermissions(['geolocation']);
+  await ask.getByRole('button', { name: 'Turn on location' }).click();
+  const near = page.getByTestId('nearby-stop');
+  await expect(near.first()).toContainText(ctx.listed.origin.name);
+  await expect(near.first()).toContainText(/(m|km) away/);
+  // request: the position never leaves the device (no request carries it)
+  expect(entry.requests.filter((r) => JSON.stringify(r.query).includes(String(ctx.originStop.latitude)))).toEqual([]);
+  await shot(page, 'TC-14-near');
+
+  // request: a bus type chip asks the server for that class
+  const chips = page.getByRole('group', { name: 'Bus type' }).getByRole('button');
+  await expect(chips.first()).toHaveText('All buses');
+  const second = chips.nth(1);
+  const label = (await second.innerText()).trim();
+  await second.click();
+  await expect.poll(() => sent(entry, 'GET', '/api/booking/trips', (r) => Boolean(r.query.bus_type)).length).toBeGreaterThan(0);
+  await expect(page).toHaveURL(/bus=/);
+  const typed = page.getByTestId('trip-bus-type');
+  if (await typed.count()) await expect(typed.first()).toHaveText(label);
+  await chips.first().click();
+
+  // Trips from here narrows the list to the nearest stop
+  await near.first().getByRole('button', { name: 'Trips from here' }).click();
+  await expect(page).toHaveURL(new RegExp(`from=${ctx.listed.origin.stop_code}`));
+  await expect(page.getByTestId('nearby-stops')).toHaveCount(0);
+
+  // route stops: asked only when opened; Get off here opens booking with that drop-off
+  const card = page.locator('div').filter({ has: page.getByRole('button', { name: 'View route stops' }) }).last();
+  const before = sent(entry, 'GET', '/timeline').length;
+  await page.getByRole('button', { name: 'View route stops' }).first().click();
+  await expect(page.getByTestId('route-stop').first()).toBeVisible();
+  expect(sent(entry, 'GET', '/timeline').length).toBe(before + 1);
+  await expect(page.getByText('You board here').first()).toBeVisible();
+  await shot(page, 'TC-14-route-stops');
+  const getOff = page.getByRole('button', { name: /^Get off at / }).first();
+  if (await getOff.count()) {
+    const name = (await getOff.getAttribute('aria-label')).replace('Get off at ', '');
+    await getOff.click();
+    await expect(page).toHaveURL(/\/passenger\/book\?/);
+    expect(new URL(page.url()).searchParams.get('to')).toBeTruthy();
+    test.info().annotations.push({ type: 'drop-off', description: name });
+  }
+  void card;
+  expectClean(entry, 'TC-14');
+  await context.close();
+});
+
+test('TC-15 NOW BOARDING shows on the trip card once boarding starts', async ({ page }) => {
+  test.skip(!ctx.trip, 'No trip.');
+  const boarding = await call('patch', `operator/trips/${ctx.trip.trip_id}/boarding`, tokens.operator);
+  test.skip(boarding.status >= 300 && !/already/i.test(JSON.stringify(boarding.body)), `Boarding not open yet: ${boarding.body?.message ?? boarding.status}`);
+  const entry = watch(page, 'TC-15');
+  await page.goto(`/passenger/trips?date=${today()}&from=${ctx.listed.origin.stop_code}`);
+  // request + output
+  await expect.poll(() => sent(entry, 'GET', '/api/booking/trips').length).toBeGreaterThan(0);
+  await expect(page.getByTestId('trip-now-boarding').first()).toHaveText(/Now boarding/i);
+  await shot(page, 'TC-15-now-boarding');
+  expectClean(entry, 'TC-15');
+});
+

@@ -305,7 +305,7 @@ export default function FleetsPage({ fleets, routes, trips, onRefresh, companyNa
           <span className="sr-only">Search fleets</span>
           <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search plate or body number..." className={`${INPUT} rounded-full px-4`} data-testid="fleet-search" />
         </label>
-        <FilterTabs options={FLEET_FILTERS.map((option) => ({ ...option, label: `${option.label} (${option.value === 'all' ? rows.length : counts(option.value)})` }))} value={filter} onChange={setFilter} className="mb-2" />
+        <FilterTabs options={FLEET_FILTERS.filter((option) => option.value !== 'inactive' || counts('inactive') > 0).map((option) => ({ ...option, label: `${option.label} (${option.value === 'all' ? rows.length : counts(option.value)})` }))} value={filter} onChange={setFilter} className="mb-2" />
         {shown.length === 0 ? (
           <OpEmpty>{rows.length === 0 ? 'No fleets yet. Use Add fleet to register your first bus.' : 'No fleet matches right now.'}</OpEmpty>
         ) : (

@@ -2,8 +2,13 @@ import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-do
 import { ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react'
 import JourneyFields from '../BuyTicket/JourneyFields'
 import TripResults from './TripResults'
+import NearbyStops from './NearbyStops'
 import Button from '../../ui/Button'
+import FilterTabs from '../../ui/FilterTabs'
 import { useAvailableTrips, useBookingStops } from '../../../api/hooks/Passenger/useBookingSearch'
+import useNearbyLocation from '../../../api/hooks/Passenger/useNearbyLocation'
+import { useRegion } from '../../../api/hooks/useRegion'
+import { nearbyStops } from '../../../utils/homeLocation'
 import { bookingReturnPath, findStopCode, findStopId, tripBookingPath } from '../../../utils/bookingQuery'
 import { formatManilaDate } from '../../../utils/dates'
 
@@ -24,6 +29,11 @@ export default function AvailableTripsPage() {
   const to = read(params, 'to').toLowerCase()
   const date = read(params, 'date')
   const page = Math.max(1, parseInt(read(params, 'page'), 10) || 1)
+  // Batch 54 (user): bus type filter (Ordinary / Aircon, from the server) kept in the address like the rest.
+  const busType = read(params, 'bus').toLowerCase()
+  const region = useRegion()
+  const radiusKm = region?.nearbyRadiusKm ?? 5
+  const nearbyLocation = useNearbyLocation()
 
   const stops = useBookingStops('', from)
   const originId = findStopId(stops.originGroups, from)
@@ -38,7 +48,9 @@ export default function AvailableTripsPage() {
     date,
     page,
     perPage: stops.tripsPerPage,
+    busType,
   })
+  const nearby = nearbyStops(stops.originGroups, nearbyLocation.coords, radiusKm)
 
   const update = (changes, { keepPage = false } = {}) => {
     const next = new URLSearchParams(params)
@@ -84,6 +96,11 @@ export default function AvailableTripsPage() {
           />
         </section>
 
+        {/* Batch 54 (user): stops near the passenger, while no boarding stop is chosen; every trip stays listed. */}
+        {!from && (
+          <NearbyStops location={nearbyLocation} stops={nearby} radiusKm={radiusKm} onShowFrom={(stop) => update({ from: stop.stop_code, to: '' })} />
+        )}
+
         {results.error && (
           <div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800 ring-1 ring-inset ring-amber-200">
             <span>{results.error}</span>
@@ -107,11 +124,22 @@ export default function AvailableTripsPage() {
           </div>
         )}
 
+        {stops.busTypes.length > 0 && (
+          <div role="group" aria-label="Bus type">
+            <FilterTabs
+              options={[{ value: '', label: 'All buses' }, ...stops.busTypes.map((type) => ({ value: type.key, label: type.label }))]}
+              value={busType}
+              onChange={(value) => update({ bus: value })}
+            />
+          </div>
+        )}
+
         {!results.error && !noTrips && (
           <TripResults
             state={{ ...results, loading, message: '' }}
             searchedDate={shownDate}
             onBook={(trip) => navigate(tripBookingPath(trip), { state: { returnTo } })}
+            onChooseDropOff={(trip, toCode) => navigate(tripBookingPath(trip, toCode), { state: { returnTo } })}
             footer={results.lastPage > 1 && (
               <nav aria-label="Trip pages" className="flex items-center justify-center gap-3 pt-2">
                 <Button variant="outline" size="sm" icon={ChevronLeft} disabled={results.page <= 1} onClick={() => update({ page: String(results.page - 1) }, { keepPage: true })}>
