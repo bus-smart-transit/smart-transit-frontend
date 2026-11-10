@@ -44,11 +44,12 @@ export default function JourneyFields({ value, originGroups, destinationGroups, 
             max={maxDate}
             disabled={!today}
             onChange={(e) => onChange('booking_date', e.target.value)}
-            aria-describedby={hint ? `${idPrefix}-date-hint` : undefined}
+            aria-describedby={hint && tooFar ? `${idPrefix}-date-hint` : undefined}
             className="w-full bg-transparent text-sm text-ink focus:outline-none"
           />
         </div>
-        {hint && (
+        {/* Batch 53 item 5 (user): the window sentence shows only when a date is too far ahead. */}
+        {hint && tooFar && (
           <p id={`${idPrefix}-date-hint`} className={`mt-1 text-xs ${tooFar ? 'font-semibold text-red-600' : 'text-slate-500'}`}>
             {tooFar ? `That date is too far ahead. ${hint}` : hint}
           </p>

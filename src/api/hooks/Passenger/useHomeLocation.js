@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { getRegionPlace } from '../../../services/regionService';
+import { getTrips } from '../../../services/bookingService';
 import { locationQuestion, nearestStop, stopIdsByDistance } from '../../../utils/homeLocation';
 
 const ANSWER_KEY = 'st-home-location-answer';
@@ -51,10 +52,24 @@ export default function useHomeLocation(groups, radiusKm = 5) {
   const nearest = useMemo(() => nearestStop(groups, coords, radiusKm), [groups, coords, radiusKm]);
   const question = !answered && coords && placeLoaded ? locationQuestion(place, nearest) : '';
 
+  // Batch 53 item 4: the pop-up shows a loading animation while the place is being found.
+  const locating = !answered && Boolean(coords) && !placeLoaded;
+
   return {
     question,
+    locating,
     nearest,
     note,
+    /** Batch 53 item 4: whether the area has any trip today (town, then province). */
+    hasTrips: async (area, date) => {
+      for (const params of [area?.town ? { town: area.town } : null, area?.province ? { province: area.province } : null].filter(Boolean)) {
+        try {
+          const data = await getTrips({ ...params, date, per_page: 1, seat_type: 'seated', prefer: area.prefer || undefined });
+          if ((data?.total ?? 0) > 0) return true;
+        } catch { return true; /* unknown: let the list try */ }
+      }
+      return false;
+    },
     accept: () => {
       saveAnswer('yes');
       setAnswered('yes');

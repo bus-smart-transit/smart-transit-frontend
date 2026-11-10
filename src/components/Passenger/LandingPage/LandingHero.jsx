@@ -7,7 +7,8 @@ import TripsPreview from '../Trips/TripsPreview';
 import { useBookingStops } from '../../../api/hooks/Passenger/useBookingSearch';
 import { useRegion } from '../../../api/hooks/useRegion';
 import useHomeLocation from '../../../api/hooks/Passenger/useHomeLocation';
-import { findStopCode, lastBookableDateOf, tripBookingPath } from '../../../utils/bookingQuery';
+import LocationPrompt from './LocationPrompt';
+import { buildBookingQuery, findStopCode, lastBookableDateOf, tripBookingPath } from '../../../utils/bookingQuery';
 
 // 2026-11-06 (passenger redesign): Pexels photo 1178448, saved in public/images (Pexels licence: free to use).
 const HERO_IMAGE = '/images/hero-bus.jpg';
@@ -27,6 +28,19 @@ export default function LandingHero() {
   const location = useHomeLocation(stops.originGroups, region?.nearbyRadiusKm ?? 5);
   // Batch 52 item 1: the passenger's area after Yes ({ town, province, prefer }), or null.
   const [area, setArea] = useState(null);
+  const [checking, setChecking] = useState('');
+  const [noTripsIn, setNoTripsIn] = useState('');
+  const promptPhase = checking ? 'checking' : noTripsIn ? 'none' : location.locating ? 'locating' : location.question ? 'question' : null;
+  const answerYes = async () => {
+    const answer = location.accept();
+    if (answer.stop) handleChange('origin_stop_id', String(answer.stop.stop_id));
+    if (!answer.area) return;
+    setChecking(answer.area.town);
+    const found = await location.hasTrips(answer.area, stops.today);
+    setChecking('');
+    if (found) setArea(answer.area);
+    else setNoTripsIn(answer.area.town);
+  };
   // The journey that was actually searched; the list below belongs to it, not to later edits.
   const [search, setSearch] = useState(null);
   // The date defaults to today in Manila (from the server) until the passenger picks another.
@@ -106,21 +120,22 @@ export default function LandingHero() {
         </div>
       </div>
 
-      {(location.question || location.note) && (
+      {location.note && (
         <div className="container-page mt-4">
-          {location.question ? (
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-teal-200 bg-teal-50 px-4 py-3" data-testid="location-question">
-              <p className="text-sm font-semibold text-navy-950">{location.question}</p>
-              <div className="flex gap-2">
-                <Button type="button" variant="primary" size="sm" onClick={() => { const answer = location.accept(); if (answer.area) setArea(answer.area); else if (answer.stop) handleChange('origin_stop_id', String(answer.stop.stop_id)); }}>Yes</Button>
-                <Button type="button" variant="secondary" size="sm" onClick={location.decline}>No</Button>
-              </div>
-            </div>
-          ) : (
-            <p role="status" className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600 ring-1 ring-inset ring-slate-200" data-testid="location-note">{location.note}</p>
-          )}
+          <p role="status" className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600 ring-1 ring-inset ring-slate-200" data-testid="location-note">{location.note}</p>
         </div>
       )}
+      {/* Batch 53 item 4 (user): "Are you in {place}?" as a pop-up, with a loading animation, and Show all trips when
+          the area has no trip today. */}
+      <LocationPrompt
+        phase={promptPhase}
+        question={location.question}
+        place={noTripsIn}
+        onYes={answerYes}
+        onNo={location.decline}
+        onShowAll={() => navigate(`/passenger/trips?${buildBookingQuery({ date: stops.today })}`, { state: { returnTo: '/' } })}
+        onClose={() => { setNoTripsIn(''); if (location.question) location.decline(); }}
+      />
       <TripsPreview
         today={stops.today}
         previewLimit={stops.previewLimit}

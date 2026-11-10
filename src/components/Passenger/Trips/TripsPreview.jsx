@@ -10,7 +10,7 @@ import { formatManilaDate } from '../../../utils/dates'
  * - after Search, the journey that was searched, on the day that was searched;
  * - before any search, today's (Manila) departures, narrowed live by From and To once they are chosen.
  *   A different date is not listed live; it gets a link to the All Available Trips page instead.
- * Either way "See all available trips" opens the All Available Trips page for the same journey and day.
+ * Either way "See all available trips" (a button since Batch 53) opens the All Available Trips page for the same journey and day.
  *
  * `live` = { date, fromCode, toCode, fromName, toName } (the card as it is now);
  * `search` = the same shape, frozen at the moment Search was pressed, or null.
@@ -56,7 +56,7 @@ export default function TripsPreview({ today, previewLimit, live, search, onBook
             onBook={onBook}
             footer={state.total > 0 && (
               <div className="pt-1 text-center">
-                <Link to={allTripsLink(queryDate)} state={{ returnTo: '/' }} className="inline-flex items-center gap-1.5 text-sm font-semibold text-navy-800 hover:text-navy-950">
+                <Link to={allTripsLink(queryDate)} state={{ returnTo: '/' }} className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-full bg-navy-800 px-5 text-sm font-semibold text-white hover:bg-navy-900" data-testid="see-all-trips">
                   See all available trips{state.total > state.trips.length ? ` (${state.total})` : ''} <ArrowRight size={16} aria-hidden="true" />
                 </Link>
               </div>
@@ -70,7 +70,7 @@ export default function TripsPreview({ today, previewLimit, live, search, onBook
         )}
         {listed && state.total === 0 && !state.loading && !state.error && (
           <p className="mt-3 text-center">
-            <Link to={allTripsLink(queryDate)} state={{ returnTo: '/' }} className="text-sm font-semibold text-navy-800 underline">See all available trips</Link>
+            <Link to={allTripsLink(queryDate)} state={{ returnTo: '/' }} className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-full bg-navy-800 px-5 text-sm font-semibold text-white hover:bg-navy-900">See all available trips</Link>
           </p>
         )}
       </div>

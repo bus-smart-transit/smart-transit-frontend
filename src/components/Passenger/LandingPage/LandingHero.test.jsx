@@ -248,9 +248,8 @@ describe('LandingHero location question', () => {
   test('asks Are you in {place}? and Yes lists the trips you can board in that town', async () => {
     allow(0.501, 0.501);
     renderHero();
-    const question = await screen.findByTestId('location-question');
-    expect(question).toHaveTextContent('Are you in Sample City?');
-    fireEvent.click(within(question).getByRole('button', { name: 'Yes' }));
+    expect(await screen.findByTestId('location-question')).toHaveTextContent('Are you in Sample City?');
+    fireEvent.click(within(screen.getByTestId('location-prompt')).getByRole('button', { name: 'Yes' }));
     await waitFor(() => expect(getTrips).toHaveBeenLastCalledWith(expect.objectContaining({ town: 'Sample City', prefer: '1' })));
     expect(await screen.findByTestId('area-note')).toHaveTextContent('Trips you can board in Sample City.');
     fireEvent.click(screen.getByRole('button', { name: 'Show all trips' }));
@@ -261,14 +260,16 @@ describe('LandingHero location question', () => {
     allow(0.501, 0.501);
     getTrips.mockImplementation(async (params) => ({ date: '2026-10-01', total: params.province ? 1 : params.town ? 0 : 7, page: 1, last_page: 1, trips: params.town ? [] : [{ trip_id: 9, trip_date: '2026-10-01', boarding_time: '09:15', bus_label: 'BUS - 9', seats_left: 9, fare: 58, origin: { stop_id: 1, stop_code: 'alpha-stop', name: 'Alpha Stop' }, destination: { stop_id: 2, stop_code: 'beta-stop', name: 'Beta Stop' } }] }));
     renderHero();
-    fireEvent.click(within(await screen.findByTestId('location-question')).getByRole('button', { name: 'Yes' }));
+    await screen.findByTestId('location-question');
+    fireEvent.click(within(screen.getByTestId('location-prompt')).getByRole('button', { name: 'Yes' }));
     expect(await screen.findByTestId('area-note')).toHaveTextContent('No trips from Sample City today. Showing trips from North.');
   });
 
   test('No keeps every trip and asks no more', async () => {
     allow(0.501, 0.501);
     renderHero();
-    fireEvent.click(within(await screen.findByTestId('location-question')).getByRole('button', { name: 'No' }));
+    await screen.findByTestId('location-question');
+    fireEvent.click(within(screen.getByTestId('location-prompt')).getByRole('button', { name: 'No' }));
     expect(screen.queryByTestId('location-question')).toBeNull();
     expect(screen.queryByTestId('location-note')).toBeNull();
   });
@@ -278,5 +279,17 @@ describe('LandingHero location question', () => {
     renderHero();
     await screen.findByText('Available trips');
     expect(screen.queryByTestId('location-question')).toBeNull();
+  });
+  // Batch 53 item 4 (user): no trip in the town or the province today: the pop-up says so and Show all trips opens
+  // All Available Trips.
+  test('says when there are no trips near you and opens all trips', async () => {
+    allow(0.501, 0.501);
+    getTrips.mockImplementation(async () => ({ date: '2026-10-01', total: 0, page: 1, last_page: 1, trips: [] }));
+    renderHero();
+    await screen.findByTestId('location-question');
+    fireEvent.click(within(screen.getByTestId('location-prompt')).getByRole('button', { name: 'Yes' }));
+    expect(await screen.findByText('There are no trips you can board in Sample City today.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Show all trips' }));
+    expect(await screen.findByTestId('where')).toHaveTextContent('/passenger/trips?date=2026-10-01');
   });
 });

@@ -29,7 +29,8 @@ describe('JourneyFields (From, To, Date)', () => {
     const { rerender } = render(<JourneyFields value={value} originGroups={groups} destinationGroups={groups} today="2026-10-01" maxAdvanceDays={30} lastBookableDate="2026-10-31" onChange={() => {}} idPrefix="t" />);
 
     expect(screen.getByLabelText('Date')).toHaveAttribute('max', '2026-10-31');
-    expect(screen.getByText('Tickets open up to 30 days ahead. Latest date: Oct 31, 2026.')).toBeInTheDocument();
+    // Batch 53 item 5 (user): no window sentence under the date unless the date is too far ahead.
+    expect(screen.queryByText(/Tickets open up to/)).toBeNull();
 
     rerender(<JourneyFields value={{ ...value, booking_date: '2026-11-18' }} originGroups={groups} destinationGroups={groups} today="2026-10-01" maxAdvanceDays={30} lastBookableDate="2026-10-31" onChange={() => {}} idPrefix="t" />);
     expect(screen.getByText(/That date is too far ahead\. Tickets open up to 30 days ahead/)).toBeInTheDocument();
