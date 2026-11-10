@@ -51,6 +51,10 @@ export default function DayTrips({ service, date, refreshKey = 0, onOpenFull = n
                     {item.plate_number ? ` \u00b7 ${item.plate_number}` : ''}
                     {` \u00b7 ${ROLE_LABEL[item.role] || item.role}`}
                   </p>
+                  {/* Batch 53 (user): who made the schedule, so a colleague's trip is not a puzzle. */}
+                  <p className="mt-0.5 text-xs text-slate-500" data-testid="day-trip-made-by">
+                    Made by {item.made_by_you ? 'you' : (item.made_by || 'Not provided')}
+                  </p>
                 </div>
                 <span className="shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold" style={statusStyle(item.status)}>
                   {(item.status || 'pending').toUpperCase()}

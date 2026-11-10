@@ -14,7 +14,7 @@ function makeService() {
     getCalendarDay: vi.fn(async ({ date, page = 1 }) => ({
       data: {
         date,
-        items: page === 1 ? [item(1, '06:00'), item(2, '09:30', { origin: 'Beta', destination: 'Alpha', leg_direction: 'reverse', type: 'shift' })] : [item(3, '14:00', { role: 'conductor' })],
+        items: page === 1 ? [item(1, '06:00', { made_by_you: true }), item(2, '09:30', { origin: 'Beta', destination: 'Alpha', leg_direction: 'reverse', type: 'shift', made_by: 'Ana Reyes' })] : [item(3, '14:00', { role: 'conductor' })],
         page, per_page: 2, total: 3, last_page: 2,
       },
     })),
@@ -60,11 +60,14 @@ describe('calendar widget and full calendar', () => {
     expect(within(dialog).getByText(/Beta → Alpha/)).toBeInTheDocument(); // the return leg reads in its own direction
     expect(within(dialog).getByText(/Shift leg/)).toBeInTheDocument();
     expect(within(dialog).getByText(/PL-1 · Driver/)).toBeInTheDocument();
+    // Batch 53 (user): who made each schedule; unknown reads Not provided.
+    expect(within(dialog).getAllByTestId('day-trip-made-by').map((el) => el.textContent)).toEqual(['Made by you', 'Made by Ana Reyes'])
     expect(document.body.style.overflow).toBe('hidden');
 
     fireEvent.click(within(dialog).getByRole('button', { name: /next/i }));
     await waitFor(() => expect(service.getCalendarDay).toHaveBeenLastCalledWith({ date: '2026-10-05', page: 2 }));
     expect(await within(dialog).findByText(/PL-3 · Chauffeur/)).toBeInTheDocument();
+    expect(within(dialog).getByTestId('day-trip-made-by')).toHaveTextContent('Made by Not provided')
     expect(within(dialog).getByText('Page 2 of 2')).toBeInTheDocument();
 
     fireEvent.keyDown(document, { key: 'Escape' });
