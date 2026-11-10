@@ -8,13 +8,30 @@ export const TERMINALS = [
   "Malita Terminal, Malita",
 ];
 
+// DEMO ONLY: the first two sample trips leave 5 and 9 minutes after the page
+// loads (Manila time), so the BOARDING SOON status can be seen on real trip
+// cards. Replace with real departure times when trips come from the backend.
+function manilaClock(minutesFromNow) {
+  const t = new Date(Date.now() + minutesFromNow * 60000);
+  const [h, m] = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Manila",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  })
+    .format(t)
+    .split(":")
+    .map(Number);
+  return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`;
+}
+
 export const SAMPLE_TRIPS = [
   {
     id: "trip-1",
     origin: "Ecoland Terminal",
     destination: "Tagum Terminal",
-    departure: "7:00 AM",
-    arrival: "8:30 AM",
+    departure: manilaClock(5),
+    arrival: manilaClock(5 + 90),
     bus: "Bus 01",
     duration: "1h 30m",
     seatsAvailable: 10,
@@ -24,8 +41,8 @@ export const SAMPLE_TRIPS = [
     id: "trip-2",
     origin: "Ecoland Terminal",
     destination: "Tagum Terminal",
-    departure: "9:30 AM",
-    arrival: "11:00 AM",
+    departure: manilaClock(9),
+    arrival: manilaClock(9 + 90),
     bus: "Bus 04",
     duration: "1h 30m",
     seatsAvailable: 10,

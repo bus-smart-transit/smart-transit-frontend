@@ -6,6 +6,7 @@ import { BookingProvider } from "./context/BookingContext.jsx";
 import { AuthProvider } from "./context/AuthContext.jsx";
 import { RewardsProvider } from "./context/RewardsContext.jsx";
 import { TourProvider } from "./components/tour/TourProvider.jsx";
+import { LocationProvider } from "./context/LocationContext.jsx";
 import "./index.css";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
@@ -14,9 +15,11 @@ ReactDOM.createRoot(document.getElementById("root")).render(
       <AuthProvider>
         <RewardsProvider>
           <BookingProvider>
-            <TourProvider>
-              <App />
-            </TourProvider>
+            <LocationProvider>
+              <TourProvider>
+                <App />
+              </TourProvider>
+            </LocationProvider>
           </BookingProvider>
         </RewardsProvider>
       </AuthProvider>

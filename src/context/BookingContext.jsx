@@ -7,6 +7,7 @@ const initialState = {
   destination: "",
   date: "",
   selectedTrip: null, // the trip card the passenger clicked "Book Trip" on
+  dropOffStop: null, // stop id chosen under "View Route Stops" on that card, if any
   // Filled in on the trip details page: { seatType, quantity, bookingOption, travelDate,
   // paymentMethod, useSmartPoints, dropOffMode, originStop, destinationStop, unitFare, grossTotal }
   details: null,
@@ -20,10 +21,11 @@ export function BookingProvider({ children }) {
     setBooking((prev) => ({ ...prev, origin, destination, date }));
   };
 
-  const selectTrip = (trip) => {
+  const selectTrip = (trip, dropOffStop = null) => {
     setBooking((prev) => ({
       ...prev,
       selectedTrip: trip,
+      dropOffStop,
       details: null,
       receipt: null,
     }));

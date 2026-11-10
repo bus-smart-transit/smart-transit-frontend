@@ -1,6 +1,6 @@
 import BookingWidget from "../../../components/BookingWidget.jsx";
 
-export default function Hero({ onSearch }) {
+export default function Hero({ onSearch, prefill }) {
   return (
     <section className="relative bg-white" data-tour="hero">
       <div
@@ -24,8 +24,8 @@ export default function Hero({ onSearch }) {
       </div>
 
       {/* Search card overlaps the bottom edge of the photo */}
-      <div className="container-page relative z-10 -mt-24 pb-6 sm:-mt-28 sm:pb-8" data-tour="search-trips">
-        <BookingWidget onSearch={onSearch} />
+      <div className="container-page relative z-10 -mt-24 pb-6 sm:-mt-28 sm:pb-8 scroll-mt-28" data-tour="search-trips">
+        <BookingWidget onSearch={onSearch} prefill={prefill} />
       </div>
     </section>
   );

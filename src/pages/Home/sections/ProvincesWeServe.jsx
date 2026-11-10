@@ -40,8 +40,7 @@ const DAVAO_CITY = {
 
 function ProvinceCard({ province, terminal, image, tall }) {
   return (
-    <a
-      href="#trip-search"
+    <div
       className={`group relative block overflow-hidden rounded-2xl bg-navy-950 ${
         tall ? "h-64 sm:h-80" : "h-56 sm:h-72"
       }`}
@@ -54,15 +53,13 @@ function ProvinceCard({ province, terminal, image, tall }) {
       />
       <span className="absolute inset-0 bg-gradient-to-b from-navy-950/70 via-navy-950/10 to-navy-950/50" />
       <span className="relative flex h-full flex-col justify-between p-5 sm:p-6">
-        <span className="font-display text-2xl font-bold text-white drop-shadow sm:text-3xl">
-          {province}
-        </span>
+        <span className="font-display text-2xl font-bold text-white drop-shadow sm:text-3xl">{province}</span>
         <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-white/90 px-3 py-1 text-xs font-medium text-navy-900 backdrop-blur">
           <MapPinIcon size={14} />
           {terminal}
         </span>
       </span>
-    </a>
+    </div>
   );
 }
 
@@ -80,7 +77,7 @@ export default function ProvincesWeServe() {
             Provinces we serve
           </h2>
           <p className="mt-3 text-base leading-relaxed text-slate-500">
-            SmartTransit covers the provinces of Davao Region. Tap one to search for a trip.
+            SmartTransit covers the provinces of Davao Region.
           </p>
         </div>
 

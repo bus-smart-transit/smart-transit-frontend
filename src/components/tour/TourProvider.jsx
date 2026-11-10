@@ -8,6 +8,7 @@ import Button from "../ui/Button.jsx";
 import Logo from "../Logo.jsx";
 import { CheckCircleIcon, InfoIcon } from "../Icons.jsx";
 import { useAuth } from "../../context/AuthContext.jsx";
+import { useUserLocation } from "../../context/LocationContext.jsx";
 import { buildTourSteps } from "./tourSteps.js";
 
 const STORAGE_KEY = "smarttransit:onboarding-tour-seen";
@@ -41,6 +42,7 @@ export function useTour() {
 // Phases: "idle" -> "welcome" -> "touring" -> "complete" -> "idle"
 export function TourProvider({ children }) {
   const { isAuthenticated } = useAuth();
+  const { isBusy: locationBusy } = useUserLocation();
   const location = useLocation();
   const navigate = useNavigate();
   const [phase, setPhase] = useState("idle");
@@ -139,10 +141,10 @@ export function TourProvider({ children }) {
 
   // First-time visitors to the homepage get the welcome modal.
   useEffect(() => {
-    if (location.pathname !== "/" || hasSeenTour()) return undefined;
+    if (location.pathname !== "/" || hasSeenTour() || locationBusy) return undefined;
     const id = window.setTimeout(() => setPhase((p) => (p === "idle" ? "welcome" : p)), 600);
     return () => window.clearTimeout(id);
-  }, [location.pathname]);
+  }, [location.pathname, locationBusy]);
 
   // Leaving the page mid-tour closes it.
   useEffect(() => {

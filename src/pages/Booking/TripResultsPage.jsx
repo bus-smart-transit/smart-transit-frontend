@@ -10,10 +10,9 @@ export default function TripResultsPage() {
 
   const origin = booking.origin || "Ecoland Terminal";
   const destination = booking.destination || "Tagum Terminal";
-  const date = booking.date || "Wed, June 10, 2026";
 
-  const handleBookSeat = (trip) => {
-    selectTrip(trip);
+  const handleBookSeat = (trip, dropOffStop) => {
+    selectTrip(trip, dropOffStop);
     navigate("/booking/details");
   };
 
@@ -25,9 +24,8 @@ export default function TripResultsPage() {
           trips={SAMPLE_TRIPS}
           origin={origin}
           destination={destination}
-          date={date}
+          travelDate={booking.date || undefined}
           onBookSeat={handleBookSeat}
-          onTrackLive={() => navigate("/track-bus")}
         />
       </div>
     </div>

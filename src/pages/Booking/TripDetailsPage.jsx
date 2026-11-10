@@ -45,6 +45,8 @@ export default function TripDetailsPage() {
   const todayISO = toISODate(new Date());
   const searchedLater = booking.date && booking.date > todayISO;
 
+  const customDropOff = booking.dropOffStop && booking.dropOffStop !== LAST_STOP ? booking.dropOffStop : null;
+
   const [form, setForm] = useState(
     () =>
       saved ?? {
@@ -54,9 +56,9 @@ export default function TripDetailsPage() {
         laterDate: searchedLater ? booking.date : "",
         paymentMethod: "gcash",
         useSmartPoints: false,
-        dropOffMode: "terminal",
+        dropOffMode: customDropOff ? "route" : "terminal",
         originStop: FIRST_STOP,
-        destinationStop: LAST_STOP,
+        destinationStop: customDropOff ?? LAST_STOP,
       }
   );
 

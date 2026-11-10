@@ -1,12 +1,29 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { LocationIcon, CalendarIcon, SearchIcon } from "./Icons.jsx";
 import { TERMINALS } from "../data/sampleData.js";
 import Button from "./ui/Button.jsx";
 
-export default function BookingWidget({ onSearch }) {
+// `prefill` ({ origin, destination, key }) lets other parts of the page, like
+// the province cards, fill in the form. A new `key` applies it again.
+export default function BookingWidget({ onSearch, prefill }) {
   const [origin, setOrigin] = useState("");
   const [destination, setDestination] = useState("");
   const [date, setDate] = useState("");
+  const [highlight, setHighlight] = useState(null); // field just filled in for the passenger
+
+  useEffect(() => {
+    if (!prefill) return undefined;
+    setOrigin(prefill.origin ?? "");
+    setDestination(prefill.destination ?? "");
+    setHighlight(prefill.destination ? "destination" : prefill.origin ? "origin" : null);
+    const id = window.setTimeout(() => setHighlight(null), 1800);
+    return () => window.clearTimeout(id);
+  }, [prefill]);
+
+  const fieldClass = (name) =>
+    `flex items-center gap-2 rounded-xl border bg-white px-3 py-2.5 transition-shadow duration-300 focus-within:border-navy-700 focus-within:ring-2 focus-within:ring-navy-700/30 ${
+      highlight === name ? "border-teal-500 ring-4 ring-teal-400/40" : "border-slate-300"
+    }`;
 
   const handleOriginChange = (value) => {
     setOrigin(value);
@@ -38,7 +55,7 @@ export default function BookingWidget({ onSearch }) {
           <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
             From
           </span>
-          <span className="flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 py-2.5 focus-within:border-navy-700 focus-within:ring-2 focus-within:ring-navy-700/30">
+          <span className={fieldClass("origin")}>
             <LocationIcon size={18} className="shrink-0 text-slate-400" />
             <select
               value={origin}
@@ -59,7 +76,7 @@ export default function BookingWidget({ onSearch }) {
           <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
             To
           </span>
-          <span className="flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 py-2.5 focus-within:border-navy-700 focus-within:ring-2 focus-within:ring-navy-700/30">
+          <span className={fieldClass("destination")}>
             <LocationIcon size={18} className="shrink-0 text-slate-400" />
             <select
               value={destination}
