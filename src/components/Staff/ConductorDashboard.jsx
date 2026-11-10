@@ -623,10 +623,13 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Passengers Onboard</p>
                 <p className="font-data mt-1 text-lg font-bold text-slate-900">{passengers?.length ?? earnings?.passenger_count ?? 0}</p>
               </button>
+{/* Batch 53 item 9: hidden once paired. */}
+              {!isPaired && (
               <button type="button" onClick={() => setPairingOpen(true)} className="staff-card staff-card-compact text-left transition hover:bg-slate-50">
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Daily PIN</p>
                 <p className="mt-1 text-sm font-semibold text-teal-600">Pair with crew →</p>
               </button>
+              )}
             </div>
             {!occupancy ? (
               <article className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-6">

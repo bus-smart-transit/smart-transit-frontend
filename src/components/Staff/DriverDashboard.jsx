@@ -23,7 +23,6 @@ import Modal, { ModalShell } from '../ui/Modal';
 import PairWithCrewCard from './PairWithCrewCard';
 import StaffCalendar from './StaffCalendar';
 import DriverNavigationMap from './DriverNavigationMap';
-import QrImage from '../Passenger/Ticket/QrImage';
 import RequestedStopRow from './RequestedStopRow';
 import { groupRequestedStops } from '../../utils/requestedStops';
 import NotificationBellButton from './NotificationBellButton';
@@ -199,10 +198,6 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     trip,
     stops,
     requestedStops,
-    pin,
-    showTripPin, setShowTripPin,
-    pinInput, setPinInput,
-    pinStatus, setPinStatus,
     shiftState,
     tripDetailsModal, setTripDetailsModal,
     loading,
@@ -237,7 +232,6 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     shiftBlocks,
     handleAssignedTripFilterChange,
     loadData,
-    handleVerifyPin,
     handleAcknowledgeStop,
     handleTripAction,
     handleStartShift,
@@ -867,63 +861,10 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                 onPaired={() => void refreshPairingStatus()}
               />
             )}
-            <article className="staff-card staff-card-roomy">
-              <h4 className="mb-3 text-base font-semibold text-slate-900">Daily PIN check</h4>
-              {!isPaired && (
-                <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">{pairingReason}</p>
-              )}
-              {pin && (
-                <>
-                  <div className="font-data mb-2 rounded-xl border border-dashed border-slate-200 bg-slate-50 p-3 text-center text-2xl font-bold tracking-[0.2em] text-slate-900">
-                    {showTripPin ? pin.pin_code : '••••••'}
-                  </div>
-                  <div className="mb-3 flex justify-center">
-                    <button
-                      type="button"
-                      onClick={() => setShowTripPin((prev) => !prev)}
-                      className="rounded-xl border border-slate-200 bg-white p-1 transition hover:scale-[1.01]"
-                      title="Tap QR to show or hide PIN"
-                    >
-                      <QrImage content={pin.pin_code} alt="PIN QR code" size={280} className="h-36 w-36" />
-                    </button>
-                  </div>
-                  <p className="mb-3 text-center text-xs text-slate-500">Tap QR to {showTripPin ? 'hide' : 'show'} PIN code</p>
-                  <div className="mb-3 space-y-2 text-xs">
-                    {pin.fleet_plate_number && (
-                      <div className="flex items-center justify-between">
-                        <span className="text-slate-500">Fleet</span>
-                        <strong className="rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-sky-700">{pin.fleet_plate_number}</strong>
-                      </div>
-                    )}
-                    {pin.route_name && (
-                      <div className="flex items-center justify-between">
-                        <span className="text-slate-500">Route</span>
-                        <strong className="text-slate-700">{pin.route_name}</strong>
-                      </div>
-                    )}
-                    <div className="flex items-center justify-between"><span className="text-slate-500">Driver Verified</span><strong className={pin.driver_verified_at ? 'text-emerald-600' : 'text-slate-400'}>{pin.driver_verified_at ? '✓ Yes' : 'Not yet'}</strong></div>
-                    <div className="flex items-center justify-between"><span className="text-slate-500">Chauffeur Verified</span><strong className={pin.conductor_verified_at ? 'text-emerald-600' : 'text-slate-400'}>{pin.conductor_verified_at ? '✓ Yes' : 'Not yet'}</strong></div>
-                  </div>
-                  {pin.both_verified && (
-                    <div className="mb-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-center text-xs font-semibold text-emerald-700">
-                      ✓ Both verified — trip is cleared for departure
-                    </div>
-                  )}
-                </>
-              )}
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  maxLength={6}
-                  placeholder="Enter 6-digit PIN"
-                  value={pinInput}
-                  onChange={(e) => { setPinInput(e.target.value); setPinStatus(''); }}
-                  className="font-data h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-sky-400"
-                />
-                <button className="rounded-xl bg-sky-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sky-600" onClick={handleVerifyPin}>Verify</button>
-              </div>
-              {pinStatus && <p className={`mt-3 text-sm ${pinStatus === 'PIN verified successfully.' ? 'text-emerald-600' : 'text-red-600'}`}>{pinStatus}</p>}
-            </article>
+            {/* Batch 53 item 9 (user): the Daily PIN check is gone from the Driver; pairing (QR or pairing ID) is enough. */}
+            {isPaired && (
+              <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">You are paired with your Chauffeur for this trip.</p>
+            )}
           </section>
         </Modal>
 

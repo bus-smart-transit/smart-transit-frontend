@@ -14,13 +14,11 @@ describe('PairWithCrewCard (Batch 45 Feature B)', () => {
     expect(onOpen).toHaveBeenCalledTimes(1);
   });
 
-  it('offers the Daily PIN once paired', () => {
-    const onOpen = vi.fn();
-    render(<PairWithCrewCard paired reason="" partner="Driver" onOpen={onOpen} />);
+  // Batch 53 item 9 (user): once paired the card is not shown (it used to offer the Daily PIN).
+  it('is not shown once paired', () => {
+    const { container } = render(<PairWithCrewCard paired reason="" partner="Driver" onOpen={vi.fn()} />);
 
-    expect(screen.getByText('Paired with your Driver')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Show Daily PIN' }));
-    expect(onOpen).toHaveBeenCalledTimes(1);
+    expect(container).toBeEmptyDOMElement();
   });
 
   it('still understands old ?tab=pin links, which now open the pop-up', () => {

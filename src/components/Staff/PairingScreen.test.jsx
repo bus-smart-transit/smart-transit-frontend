@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, test, vi } from 'vitest';
 
 vi.mock('../../api/StaffService/StaffBaseService', () => ({
@@ -18,6 +18,8 @@ describe('PairingScreen', () => {
     render(<PairingScreen role="driver" onPaired={() => {}} onLogout={() => {}} pairingOpensAt={inAnHour} />);
 
     expect(screen.getByTestId('pairing-not-open').textContent).toMatch(/^Pairing opens (at|on) .+\. Your pairing QR and PIN appear then\.$/);
+    // Batch 53 item 9: the camera is on the "Pair now" tab.
+    fireEvent.click(screen.getByRole('tab', { name: 'Pair now' }));
     expect(screen.getByRole('button', { name: /Start Camera/ })).toBeDisabled();
     expect(StaffService.getPairingToken).not.toHaveBeenCalled();
   });

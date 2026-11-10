@@ -10,6 +10,8 @@ import { KeyRound, Link2 } from 'lucide-react';
  *   onOpen    opens the pop-up
  */
 export default function PairWithCrewCard({ paired, reason = '', partner, onOpen }) {
+  // Batch 53 item 9 (user): once paired the card is not shown, so the page is not crowded.
+  if (paired) return null;
   return (
     <section
       className={`mb-4 flex flex-col gap-3 rounded-xl border p-4 sm:flex-row sm:items-center sm:justify-between ${paired ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50'}`}

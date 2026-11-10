@@ -37,6 +37,9 @@ export default function PairingScreen({ role, onPaired, onLogout, paired = false
   const [manualToken, setManualToken] = useState('');
 
   const [result, setResult] = useState(null);
+  // Batch 53 item 9 (user): two tabs instead of two squeezed columns: "QR Code" (this person's code) and "Pair now"
+  // (the camera and the pairing ID).
+  const [tab, setTab] = useState('qr');
 
   const videoRef = useRef(null);
   const scannerRef = useRef(null);
@@ -225,9 +228,25 @@ export default function PairingScreen({ role, onPaired, onLogout, paired = false
         )}
       </div>
 
-      <div className="staff-grid grid-cols-1 md:grid-cols-2">
-        <article className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-          <h4 className="mb-3 text-sm font-semibold text-slate-900">Your pairing QR (primary)</h4>
+      <div role="tablist" aria-label="Pairing" className="mb-3 grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1">
+        {[['qr', 'QR Code'], ['pair', 'Pair now']].map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            role="tab"
+            aria-selected={tab === key}
+            onClick={() => { if (key === 'qr') stopScanner(); setTab(key); }}
+            className={`min-h-11 rounded-lg px-3 text-sm font-semibold transition ${tab === key ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <div className="space-y-3">
+        {tab === 'qr' && (
+        <article className="rounded-xl border border-slate-200 bg-slate-50 p-4" data-testid="pairing-tab-qr">
+          <h4 className="mb-3 text-sm font-semibold text-slate-900">Your pairing QR</h4>
 
           {pairingNotOpen ? (
             <div data-testid="pairing-not-open" className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
@@ -288,7 +307,9 @@ export default function PairingScreen({ role, onPaired, onLogout, paired = false
           ) : null}
         </article>
 
-        <article className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+        )}
+        {tab === 'pair' && (
+        <article className="rounded-xl border border-slate-200 bg-slate-50 p-4" data-testid="pairing-tab-pair">
           <h4 className="mb-3 text-sm font-semibold text-slate-900">Pair now</h4>
 
           {paired && (
@@ -386,6 +407,7 @@ export default function PairingScreen({ role, onPaired, onLogout, paired = false
             </div>
           )}
         </article>
+        )}
       </div>
 
       {!!onLogout && (
