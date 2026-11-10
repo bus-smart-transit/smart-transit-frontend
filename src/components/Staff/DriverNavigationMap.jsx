@@ -21,8 +21,8 @@ const ROUTE_STATUS_TEXT = {
  *   "Location not on route" with the distance. No connecting line is drawn.
  * - Header and progress come from the trip, its route and its acknowledged
  *   stops, never from constants.
- * - Road congestion (TomTom live traffic colours) is a layer the driver can switch on. It is off by default, only
- *   offered when the app uses server-side traffic, and says so when it cannot be loaded.
+ * - Road congestion (TomTom live traffic colours) is always shown when the app uses server-side traffic (Batch 57, user:
+ *   was a toggle, off by default), and says so when it cannot be loaded.
  */
 export default function DriverNavigationMap({ trip, stops = [], lastGpsRef }) {
   const route = trip?.fleet_route?.route;
@@ -35,9 +35,8 @@ export default function DriverNavigationMap({ trip, stops = [], lastGpsRef }) {
   const [vehicle, setVehicle] = useState(null);
   const [routeStatus, setRouteStatus] = useState('loading');
   const [map, setMap] = useState(null);
-  const [congestionOn, setCongestionOn] = useState(false);
   const [congestionProblem, setCongestionProblem] = useState(false);
-  const congestionOffered = isCongestionLayerAvailable();
+  const congestionOn = isCongestionLayerAvailable();
 
   const handleMapReady = useCallback((readyMap) => setMap(readyMap), []);
 
@@ -90,23 +89,6 @@ export default function DriverNavigationMap({ trip, stops = [], lastGpsRef }) {
           {isReturnLeg ? 'Return leg' : 'Outbound leg'}
         </span>
         <span className="ml-auto text-xs text-slate-400">{ROUTE_STATUS_TEXT[routeStatus] || ''}</span>
-        {congestionOffered && (
-          <button
-            type="button"
-            aria-pressed={congestionOn}
-            onClick={() => {
-              setCongestionProblem(false);
-              setCongestionOn((on) => !on);
-            }}
-            className={`rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${
-              congestionOn
-                ? 'border-amber-400 bg-amber-400/15 text-amber-200'
-                : 'border-slate-700 bg-slate-800 text-slate-300 hover:border-slate-500'
-            }`}
-          >
-            Traffic congestion
-          </button>
-        )}
       </div>
       <RouteMap
         routeId={routeId}

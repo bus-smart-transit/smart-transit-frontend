@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import { render, screen, fireEvent, cleanup } from '@testing-library/react'
+import { render, screen, cleanup } from '@testing-library/react'
 import {
   LYR_CONGESTION,
   SRC_CONGESTION,
@@ -29,6 +29,16 @@ function fakeMap(existingLayers = []) {
     getLayer: (id) => layers.get(id),
     addSource(id, spec) { sources.add(id); this.lastSource = spec },
     addLayer(spec, before) { layers.set(spec.id, spec); this.addedBefore = before },
+    // Batch 57: layer order, for placeCongestionLayer.
+    order: [...existingLayers],
+    getStyle() { return { layers: [...this.order, ...[...layers.keys()].filter((id) => !this.order.includes(id))].map((id) => ({ id })) } },
+    moveLayer(id, before) {
+      const rest = this.getStyle().layers.map((l) => l.id).filter((x) => x !== id)
+      const at = before ? rest.indexOf(before) : rest.length
+      rest.splice(at < 0 ? rest.length : at, 0, id)
+      this.order = rest
+      this.moved = (this.moved || 0) + 1
+    },
     removeLayer: (id) => layers.delete(id),
     removeSource: (id) => sources.delete(id),
   }
@@ -78,18 +88,33 @@ describe('congestionTransformRequest', () => {
 })
 
 describe('showCongestionLayer', () => {
-  test('adds a raster layer under the route line and removes it again', () => {
+  // Batch 57 (user): on the route line, under the stops (was under the route line, where it was hidden).
+  test('adds a raster layer on the route line and under the stops, and removes it again', () => {
     const map = fakeMap(['rm-route-line', 'rm-stops-circle'])
     const hide = showCongestionLayer(map)
 
     expect(map.sources.has(SRC_CONGESTION)).toBe(true)
     expect(map.layers.has(LYR_CONGESTION)).toBe(true)
-    expect(map.addedBefore).toBe('rm-route-line')
+    expect(map.addedBefore).toBe('rm-stops-circle')
+    expect(map.getStyle().layers.map((l) => l.id)).toEqual(['rm-route-line', LYR_CONGESTION, 'rm-stops-circle'])
 
     hide()
     expect(map.sources.has(SRC_CONGESTION)).toBe(false)
     expect(map.layers.has(LYR_CONGESTION)).toBe(false)
     expect(map.handlerCount('error')).toBe(0)
+  })
+
+  test('moves back on top of a route line drawn after it, and does not move when the order is right', () => {
+    const map = fakeMap([])
+    showCongestionLayer(map)
+    map.layers.set('rm-route-line', {})
+    map.layers.set('rm-stops-circle', {})
+    map.order = [LYR_CONGESTION, 'rm-route-line', 'rm-stops-circle']
+    map.emit('styledata')
+    expect(map.getStyle().layers.map((l) => l.id)).toEqual(['rm-route-line', LYR_CONGESTION, 'rm-stops-circle'])
+    const moved = map.moved
+    map.emit('styledata')
+    expect(map.moved).toBe(moved)
   })
 
   test('reports a tile problem for its own source only, and recovery', () => {
@@ -142,7 +167,7 @@ vi.mock('../Map/RouteMap', async () => {
   }
 })
 
-describe('DriverNavigationMap congestion toggle', () => {
+describe('DriverNavigationMap congestion layer', () => {
   const trip = { leg_direction: 'outbound', fleet_route: { route: { route_id: 1, origin: 'A', destination: 'B' } } }
 
   test('is hidden unless server-side traffic is on', async () => {
@@ -151,27 +176,20 @@ describe('DriverNavigationMap congestion toggle', () => {
     const { default: DriverNavigationMap } = await import('../Staff/DriverNavigationMap')
     render(<DriverNavigationMap trip={trip} stops={[]} lastGpsRef={{ current: null }} />)
     expect(screen.queryByRole('button', { name: /traffic congestion/i })).toBeNull()
+    expect(screen.queryByText(/compared with free flow/i)).toBeNull()
+    expect(globalThis.__fakeMap.layers.has(LYR_CONGESTION)).toBe(false)
   })
 
-  test('is off by default, shows the layer and legend when switched on, and hides them again', async () => {
+  // Batch 57 (user): always on with server-side traffic (was a toggle, off by default).
+  test('is on by default with its legend, and has no toggle', async () => {
     vi.stubEnv('VITE_TRAFFIC_PROVIDER', 'backend')
     globalThis.__makeFakeMap = () => fakeMap(['rm-route-line'])
     const { default: DriverNavigationMap } = await import('../Staff/DriverNavigationMap')
     render(<DriverNavigationMap trip={trip} stops={[]} lastGpsRef={{ current: null }} />)
 
-    const button = await screen.findByRole('button', { name: /traffic congestion/i })
-    expect(button).toHaveAttribute('aria-pressed', 'false')
-    expect(screen.queryByText(/compared with free flow/i)).toBeNull()
-    expect(globalThis.__fakeMap.layers.has(LYR_CONGESTION)).toBe(false)
-
-    fireEvent.click(button)
-    expect(button).toHaveAttribute('aria-pressed', 'true')
+    expect(await screen.findByText(/compared with free flow, from TomTom/i)).toBeInTheDocument()
     expect(globalThis.__fakeMap.layers.has(LYR_CONGESTION)).toBe(true)
-    expect(screen.getByText(/compared with free flow, from TomTom/i)).toBeInTheDocument()
-
-    fireEvent.click(button)
-    expect(globalThis.__fakeMap.layers.has(LYR_CONGESTION)).toBe(false)
-    expect(screen.queryByText(/compared with free flow/i)).toBeNull()
+    expect(screen.queryByRole('button', { name: /traffic congestion/i })).toBeNull()
   })
 
   test('says the colours are unavailable when the tiles fail', async () => {
@@ -180,7 +198,7 @@ describe('DriverNavigationMap congestion toggle', () => {
     const { default: DriverNavigationMap } = await import('../Staff/DriverNavigationMap')
     render(<DriverNavigationMap trip={trip} stops={[]} lastGpsRef={{ current: null }} />)
 
-    fireEvent.click(await screen.findByRole('button', { name: /traffic congestion/i }))
+    await screen.findByText(/compared with free flow/i)
     const { act } = await import('@testing-library/react')
     act(() => globalThis.__fakeMap.emit('error', { sourceId: SRC_CONGESTION }))
 

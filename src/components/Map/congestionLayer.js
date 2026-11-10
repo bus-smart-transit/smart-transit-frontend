@@ -9,8 +9,10 @@ import { LYR_ROUTE, LYR_SEGMENT, LYR_STOPS, LYR_STOP_NUMBERS } from './routeLaye
  * - Tiles come from GET {api}/traffic/flow/{z}/{x}/{y}.png on our server: the TomTom key never reaches the browser,
  *   and only a signed-in driver may ask (the map adds the staff token to those requests, see
  *   congestionTransformRequest).
- * - The layer sits under the route line and stops, so the driver's route is never hidden by it.
- * - It is off until the driver switches it on, and it only exists when the app uses server-side traffic.
+ * - Batch 57 (user, 2026-11-10): the layer sits ON the route line (under the stops), because TomTom's lines are thinner
+ *   than the route line and lie on the same roads: under it they were hidden. The route reads green, orange or red where
+ *   traffic is known. It is placed again whenever layers change, since the route line may be drawn after it.
+ * - It only exists when the app uses server-side traffic.
  */
 
 export const SRC_CONGESTION = 'rm-congestion'
@@ -46,6 +48,28 @@ export function congestionTransformRequest(url) {
   return { url, headers }
 }
 
+/** The first stops layer, which the congestion colours go under (so stops stay on top); undefined when none yet. */
+const stopsLayerOf = (map) => [LYR_STOPS, LYR_STOP_NUMBERS].find((id) => map.getLayer(id))
+
+/**
+ * Batch 57: keeps the congestion layer above the route lines and under the stops. Moves it only when the order is
+ * wrong, so it never causes a loop of style changes.
+ */
+export function placeCongestionLayer(map) {
+  try {
+    if (!map?.getLayer?.(LYR_CONGESTION) || typeof map.moveLayer !== 'function' || typeof map.getStyle !== 'function') return
+    const order = (map.getStyle()?.layers || []).map((layer) => layer.id)
+    const at = order.indexOf(LYR_CONGESTION)
+    const lines = [LYR_ROUTE, LYR_SEGMENT].map((id) => order.indexOf(id)).filter((i) => i >= 0)
+    const stops = [LYR_STOPS, LYR_STOP_NUMBERS].map((id) => order.indexOf(id)).filter((i) => i >= 0)
+    const aboveLines = lines.every((i) => i < at)
+    const underStops = stops.every((i) => i > at)
+    if (!aboveLines || !underStops) map.moveLayer(LYR_CONGESTION, stopsLayerOf(map))
+  } catch {
+    // The map is being removed: nothing to place.
+  }
+}
+
 const dropLayer = (map) => {
   try {
     if (map.getLayer(LYR_CONGESTION)) map.removeLayer(LYR_CONGESTION)
@@ -74,13 +98,12 @@ export function showCongestionLayer(map, { onProblem, onRecover } = {}) {
     })
   }
   if (!map.getLayer(LYR_CONGESTION)) {
-    // Under the route line and stops when they exist, so the route stays readable on top of the colours.
-    const beforeId = [LYR_ROUTE, LYR_SEGMENT, LYR_STOPS, LYR_STOP_NUMBERS].find((id) => map.getLayer(id))
     map.addLayer(
       { id: LYR_CONGESTION, type: 'raster', source: SRC_CONGESTION, paint: { 'raster-opacity': 0.85 } },
-      beforeId,
+      stopsLayerOf(map),
     )
   }
+  placeCongestionLayer(map)
 
   const handleError = (event) => {
     if (event?.sourceId === SRC_CONGESTION) onProblem?.()
@@ -88,13 +111,16 @@ export function showCongestionLayer(map, { onProblem, onRecover } = {}) {
   const handleSourceData = (event) => {
     if (event?.sourceId === SRC_CONGESTION && event.isSourceLoaded && event.sourceDataType !== 'metadata') onRecover?.()
   }
+  const handleStyleData = () => placeCongestionLayer(map)
   map.on('error', handleError)
   map.on('sourcedata', handleSourceData)
+  map.on('styledata', handleStyleData)
 
   return () => {
     try {
       map.off('error', handleError)
       map.off('sourcedata', handleSourceData)
+      map.off('styledata', handleStyleData)
     } catch {
       // see dropLayer
     }
