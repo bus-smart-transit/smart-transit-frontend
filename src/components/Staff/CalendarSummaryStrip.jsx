@@ -14,6 +14,8 @@ const formatTime = (value) => {
   return match ? match[1] : '';
 };
 
+const countLabel = (n, word) => `${n} ${word}${Number(n) === 1 ? '' : 's'}`;
+
 const Stat = ({ label, children }) => (
   <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
     <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label}</p>
@@ -39,8 +41,9 @@ export default function CalendarSummaryStrip({ service, refreshKey, className = 
 
   return (
     <div className={`grid grid-cols-2 gap-3 ${stacked ? '' : 'md:grid-cols-4'} ${className}`}>
-      <Stat label="Today">{today.trips} trips · {today.shifts} shifts</Stat>
-      <Stat label="This week">{week.trips} trips · {week.shifts} shifts</Stat>
+      {/* Batch 54 (production test): "1 trip", not "1 trips". */}
+      <Stat label="Today">{countLabel(today.trips, 'trip')} · {countLabel(today.shifts, 'shift')}</Stat>
+      <Stat label="This week">{countLabel(week.trips, 'trip')} · {countLabel(week.shifts, 'shift')}</Stat>
       <Stat label={next ? `Next ${next.type}` : 'Next'}>{nextLabel}</Stat>
       {typeof summary.for_approval_count === 'number' && (
         <Stat label="For Approval">{summary.for_approval_count} request(s)</Stat>

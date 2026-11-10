@@ -24,6 +24,14 @@ describe('PairingScreen', () => {
     expect(StaffService.getPairingToken).not.toHaveBeenCalled();
   });
 
+  // Batch 54 (production test): the typed-PIN box and its icon-only button have names screen readers can say.
+  test('names the partner PIN box and its button', () => {
+    render(<PairingScreen role="conductor" onPaired={() => {}} onLogout={() => {}} pairingOpensAt={new Date(Date.now() + 3600000).toISOString()} />);
+    fireEvent.click(screen.getByRole('tab', { name: 'Pair now' }));
+    expect(screen.getByRole('textbox', { name: 'Partner PIN or token' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Pair with this PIN' })).toBeDisabled();
+  });
+
   test('loads the pairing code once the opening time has passed', async () => {
     StaffService.getPairingToken.mockClear();
     const aMinuteAgo = new Date(Date.now() - 60 * 1000).toISOString();

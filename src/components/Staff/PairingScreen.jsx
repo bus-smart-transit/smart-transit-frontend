@@ -371,8 +371,10 @@ export default function PairingScreen({ role, onPaired, onLogout, paired = false
           {!paired && <div className="mt-4">
             <p className="mb-2 text-xs text-slate-500">Enter partner PIN or full token:</p>
             <div className="flex gap-2">
+              {/* Batch 54 (production test): the box and its icon-only button have names for screen readers. */}
               <input
                 type="text"
+                aria-label="Partner PIN or token"
                 placeholder="6-digit PIN or token"
                 value={manualToken}
                 onChange={(e) => {
@@ -384,10 +386,11 @@ export default function PairingScreen({ role, onPaired, onLogout, paired = false
               <button
                 type="button"
                 onClick={() => void submitPairing(manualToken)}
+                aria-label="Pair with this PIN"
                 disabled={!manualToken.trim() || scannerBusy || pairingNotOpen}
                 className="rounded-xl bg-sky-500 px-3 py-2 text-xs font-semibold text-white transition hover:bg-sky-600 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <QrCode className="h-4 w-4" />
+                <QrCode className="h-4 w-4" aria-hidden="true" />
               </button>
             </div>
           </div>}

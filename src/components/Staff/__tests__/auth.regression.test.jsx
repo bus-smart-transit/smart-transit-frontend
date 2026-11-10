@@ -219,7 +219,7 @@ describe('Bug 2 — Successful login does not display lockout/attempt message', 
   test('failed login then successful login clears the error', async () => {
     // First call fails, second call succeeds
     StaffService.login
-      .mockRejectedValueOnce(new Error('Invalid email or password credentials provided.'))
+      .mockRejectedValueOnce(new Error('Wrong email or password. Check them and try again.'))
       .mockResolvedValueOnce({
         data: { token: 'fresh-token', user: { role: 'driver' } },
       });

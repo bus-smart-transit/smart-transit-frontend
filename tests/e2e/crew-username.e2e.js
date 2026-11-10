@@ -25,6 +25,6 @@ for (const { username, url, profile } of [
 
 test('an Operator cannot sign in with a username', async ({ page }) => {
   await signIn(page, 'operator');
-  await expect(page.getByText('Invalid email or password credentials provided.')).toBeVisible({ timeout: 30000 });
+  await expect(page.getByText('Wrong email or password. Check them and try again.')).toBeVisible({ timeout: 30000 });
   await expect(page).toHaveURL(/employee\/login/);
 });

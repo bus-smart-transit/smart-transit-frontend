@@ -218,7 +218,7 @@ export default function FareRulesPanel({ service, fleets = [], routes = [], canC
                   <div className="text-right"><dt className={`text-xs ${t.muted}`}>Rounding</dt><dd className={`text-base font-bold ${t.title}`}>{cap(rule.rounding_mode)}</dd></div>
                 </dl>
                 <p className={`mt-2 text-xs ${t.muted}`}>
-                  Base distance {rule.base_distance_km === null || rule.base_distance_km === undefined ? 'not set' : `${Number(rule.base_distance_km)} km`} · from {rule.effective_from ? String(rule.effective_from).slice(0, 10) : '-'}{rule.effective_to ? ` to ${String(rule.effective_to).slice(0, 10)}` : ''} · updated <span data-testid="fare-rule-updated">{formatUpdatedAt(rule.updated_at)}</span>{rule.note ? ` · ${rule.note}` : ''}
+                  Base distance {rule.base_distance_km === null || rule.base_distance_km === undefined ? 'not set' : `${Number(rule.base_distance_km)} km`} · from {rule.effective_from ? String(rule.effective_from).slice(0, 10) : 'Not provided'}{rule.effective_to ? ` to ${String(rule.effective_to).slice(0, 10)}` : ''} · updated <span data-testid="fare-rule-updated">{formatUpdatedAt(rule.updated_at)}</span>{rule.note ? ` · ${rule.note}` : ''}
                 </p>
                 <div className="mt-3 flex flex-wrap justify-end gap-2">
                   {!readOnly && (

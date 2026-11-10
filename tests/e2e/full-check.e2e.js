@@ -278,10 +278,10 @@ test('TC-08 passenger sign-in: a wrong password sends the passenger portal login
   await expect.poll(() => sent(entry, 'POST', '/api/auth/login').length).toBeGreaterThan(0);
   const body = sent(entry, 'POST', '/api/auth/login')[0].body;
   expect(body.password).toBe('wrong-password-1');
-  await expect(page.getByText(/Invalid email or password/)).toBeVisible();
+  await expect(page.getByText(/Wrong email or password/)).toBeVisible();
   await expect(page).toHaveURL(/passenger\/login/);
   // accessibility: the error should be announced (role="alert")
-  await expect.soft(page.getByRole('alert').filter({ hasText: /Invalid email or password/ }), 'the sign-in error is announced to screen readers').toHaveCount(1, { timeout: 2000 });
+  await expect.soft(page.getByRole('alert').filter({ hasText: /Wrong email or password/ }), 'the sign-in error is announced to screen readers').toHaveCount(1, { timeout: 2000 });
   await shot(page, 'TC-08-wrong-password');
   expect(entry.pageErrors).toEqual([]);
 });
