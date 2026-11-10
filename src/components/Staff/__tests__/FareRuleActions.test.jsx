@@ -103,6 +103,7 @@ describe('fare row into the Add form', () => {
   test('asks before replacing what was typed, keeps it on "Keep", and Clear empties the form', async () => {
     render(<FareRulesPanel service={service} fleets={[{ fleet_id: 1, plate_number: 'DMS-001' }]} tone="light" />)
     await screen.findAllByTestId('fare-rule-row')
+    fireEvent.click(screen.getByRole('button', { name: '+ Add fare rule' })) // Batch 53: the form is a pop-up
     fireEvent.change(screen.getByLabelText('Base fare'), { target: { value: '99' } })
 
     fireEvent.click(screen.getByRole('button', { name: 'Use fare Fleet DMS-001, Seated in the form' }))

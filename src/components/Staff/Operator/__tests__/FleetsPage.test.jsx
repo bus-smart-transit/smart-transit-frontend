@@ -31,7 +31,8 @@ const trips = [trip(1, 1, 'departed'), trip(2, 2, 'scheduled'), trip(4, 4, 'in-p
 const routes = [{ route_id: 10, route_name: 'Davao - Tagum' }];
 
 const renderPage = (props = {}) => render(<FleetsPage fleets={fleets} routes={routes} trips={trips} onRefresh={vi.fn()} {...props} />);
-const rowFor = (plate) => screen.getByText(plate).closest('tr');
+// Batch 53 item 7: one card per bus (was a table row).
+const rowFor = (plate) => screen.getByText(plate).closest('[data-testid="fleet-card"]');
 
 describe('FleetsPage', () => {
   beforeEach(() => {
@@ -116,7 +117,7 @@ describe('FleetsPage', () => {
   it('filters the list by status', async () => {
     renderPage();
     await waitFor(() => expect(within(rowFor('PLT-1')).getByText('On route')).toBeInTheDocument());
-    fireEvent.click(screen.getByRole('button', { name: 'Idle' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Idle \(\d+\)$/ }));
     expect(screen.getByText('PLT-3')).toBeInTheDocument();
     expect(screen.queryByText('PLT-1')).not.toBeInTheDocument();
   });

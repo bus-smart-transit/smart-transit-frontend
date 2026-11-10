@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
-import { RefreshCw, Bus, MapPinned, Pencil, Plus } from 'lucide-react';
-import { OpPageHeader, OpCard, OpChip, OpStat, OpTable, OpEmpty } from './OperatorUI';
+import { RefreshCw, Bus, ChevronRight, MapPinned, Pencil, Plus } from 'lucide-react';
+import { OpPageHeader, OpCard, OpChip, OpStat, OpEmpty } from './OperatorUI';
 import { OP_SPACE } from './operatorUiTokens';
 import Modal from '../../ui/Modal';
 import FilterTabs from '../../ui/FilterTabs';
@@ -250,6 +250,9 @@ export default function FleetsPage({ fleets, routes, trips, onRefresh, companyNa
   const { savingTripId, error, decide } = useDispatchAdvice({ onSaved: onRefresh });
 
   const [filter, setFilter] = useState('all');
+  // Batch 53 item 7 (user's design): search by plate or body number; a card per bus, details on demand.
+  const [query, setQuery] = useState('');
+  const [openDetails, setOpenDetails] = useState(null);
   const [modal, setModal] = useState(null); // 'add' | 'assign' | null
   const [trackedFleetId, setTrackedFleetId] = useState(null);
   const [editingFleet, setEditingFleet] = useState(null);
@@ -257,7 +260,8 @@ export default function FleetsPage({ fleets, routes, trips, onRefresh, companyNa
   const [notice, setNotice] = useState('');
 
   const rows = useMemo(() => buildFleetRows({ fleets, trips, locations: fleetLocations, nowMs }), [fleets, trips, fleetLocations, nowMs]);
-  const shown = filterFleetRows(rows, filter);
+  const needle = query.trim().toLowerCase();
+  const shown = filterFleetRows(rows, filter).filter((row) => !needle || [row.fleet.plate_number, row.fleet.body_no, row.fleet.bus_company_name].some((v) => String(v || '').toLowerCase().includes(needle)));
   const counts = (key) => rows.filter((row) => row.status.key === key).length;
   const dashboard = useMemo(() => buildDashboardView({ trips, fleets, locations: fleetLocations, nowMs }), [trips, fleets, fleetLocations, nowMs]);
   const tracked = rows.find((row) => row.fleetId === trackedFleetId) || null;
@@ -268,39 +272,6 @@ export default function FleetsPage({ fleets, routes, trips, onRefresh, companyNa
   const submitAssign = async (event) => { if (await handleAssignRoute(event)) { setModal(null); setNotice('Route assigned to fleet successfully.'); } };
   const open = (which) => { setNotice(''); clearManageMsg(); setModal(which); };
 
-  const columns = [
-    { key: 'fleet', header: 'Fleet', render: (row) => (
-      <span className="whitespace-nowrap">
-        <strong className="text-slate-900">{row.fleet.plate_number}</strong>
-        {(row.fleet.body_no || row.fleet.bus_company_name) && <span className="block text-xs text-slate-500">{[row.fleet.body_no, row.fleet.bus_company_name].filter(Boolean).join(' - ')}</span>}
-      </span>
-    ) },
-    { key: 'type', header: 'Type', render: (row) => <span className="whitespace-nowrap text-xs">{row.fleet.fleet_type || 'public'}<span className="block text-slate-500">{classLabel(row.fleet.vehicle_class) || 'Bus type not set'}</span></span> },
-    { key: 'capacity', header: 'Capacity', render: (row) => <span className="whitespace-nowrap text-xs">{row.fleet.capacity ?? '-'}<span className="block text-slate-500">{row.fleet.seated_capacity ?? 0} seated, {row.fleet.standing_capacity ?? 0} standing</span></span> },
-    { key: 'routes', header: 'Routes', render: (row) => (row.routes.length ? row.routes.join(', ') : <span className="text-slate-400">No route</span>) },
-    { key: 'status', header: 'Status', render: (row) => <OpChip tone={row.status.tone}>{row.status.label}</OpChip> },
-    { key: 'trip', header: 'Current or next trip', render: (row) => (row.nextTripLabel ?? <span className="text-slate-400">No trip left today</span>), className: 'whitespace-nowrap' },
-    { key: 'gps', header: 'GPS', render: (row) => (row.liveTrip
-      ? <span className="whitespace-nowrap"><OpChip tone={GPS_TONE[row.gps.state]}>{row.gps.state === 'live' ? 'Live' : row.gps.state === 'none' ? 'No GPS' : row.gps.state === 'stale' ? 'Out of date' : row.gps.state === 'weak' ? 'Weak signal' : 'Off route'}</OpChip>{row.lastSeen && <span className="ml-2 text-xs text-slate-500">{row.lastSeen}</span>}</span>
-      : <span className="text-xs text-slate-500">{row.lastSeen ? `Last seen ${row.lastSeen}` : '-'}</span>) },
-    { key: 'action', header: '', render: (row) => (
-      <span className="inline-flex gap-2">
-        <button
-          type="button"
-          disabled={!row.trackable}
-          title={row.trackable ? undefined : 'Tracking is available while a trip is boarding or on the road'}
-          aria-label={`Track fleet ${row.fleet.plate_number}`}
-          onClick={() => setTrackedFleetId(row.fleetId)}
-          className={SECONDARY}
-        >
-          <MapPinned className="h-3.5 w-3.5" aria-hidden="true" /> Track
-        </button>
-        {canManage && <button type="button" aria-label={`Edit fleet ${row.fleet.plate_number}`} onClick={() => { setNotice(''); setEditingFleet(row.fleet); }} className={SECONDARY}>
-          <Pencil className="h-3.5 w-3.5" aria-hidden="true" /> Edit
-        </button>}
-      </span>
-    ) },
-  ];
 
   return (
     <div className={OP_SPACE.stack}>
@@ -330,8 +301,61 @@ export default function FleetsPage({ fleets, routes, trips, onRefresh, companyNa
           </div>
         )}
       >
-        <FilterTabs options={FLEET_FILTERS} value={filter} onChange={setFilter} className="mb-4" />
-        <OpTable caption="Fleets" columns={columns} rows={shown} rowKey={(row) => row.fleetId} empty={rows.length === 0 ? 'No fleets yet. Use Add fleet to register your first bus.' : 'No fleet has this status right now.'} />
+        <label className="mb-3 block">
+          <span className="sr-only">Search fleets</span>
+          <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search plate or body number..." className={`${INPUT} rounded-full px-4`} data-testid="fleet-search" />
+        </label>
+        <FilterTabs options={FLEET_FILTERS.map((option) => ({ ...option, label: `${option.label} (${option.value === 'all' ? rows.length : counts(option.value)})` }))} value={filter} onChange={setFilter} className="mb-2" />
+        {shown.length === 0 ? (
+          <OpEmpty>{rows.length === 0 ? 'No fleets yet. Use Add fleet to register your first bus.' : 'No fleet matches right now.'}</OpEmpty>
+        ) : (
+          <ul className="divide-y divide-slate-200" aria-label="Fleets">
+            {shown.map((row) => {
+              const expanded = openDetails === row.fleetId;
+              return (
+                <li key={row.fleetId} className="py-4" data-testid="fleet-card">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-lg font-bold text-slate-900">{row.fleet.plate_number}</p>
+                      <p className="text-xs text-slate-500">{[row.fleet.body_no, row.fleet.bus_company_name].filter(Boolean).join(' · ') || 'No body number'}</p>
+                    </div>
+                    <OpChip tone={row.status.tone}>{row.status.label}</OpChip>
+                  </div>
+                  <dl className="mt-3 grid grid-cols-2 gap-3">
+                    <div><dt className="text-xs text-slate-500">Capacity</dt><dd className="font-semibold text-slate-900">{row.fleet.capacity ?? '-'} passengers</dd></div>
+                    <div><dt className="text-xs text-slate-500">Current route</dt><dd className="font-semibold text-slate-900">{row.routes.length ? row.routes.join(', ') : 'No route'}</dd></div>
+                  </dl>
+                  {expanded && (
+                    <dl className="mt-3 grid grid-cols-2 gap-3 rounded-lg bg-slate-50 p-3 text-sm" data-testid="fleet-details">
+                      <div><dt className="text-xs text-slate-500">Type</dt><dd className="text-slate-900">{row.fleet.fleet_type || 'public'} · {classLabel(row.fleet.vehicle_class) || 'Bus type not set'}</dd></div>
+                      <div><dt className="text-xs text-slate-500">Seats</dt><dd className="text-slate-900">{row.fleet.seated_capacity ?? 0} seated, {row.fleet.standing_capacity ?? 0} standing</dd></div>
+                      <div><dt className="text-xs text-slate-500">Current or next trip</dt><dd className="text-slate-900">{row.nextTripLabel ?? 'No trip left today'}</dd></div>
+                      <div><dt className="text-xs text-slate-500">GPS</dt><dd className="text-slate-900">{row.liveTrip ? (row.gps.state === 'live' ? 'Live' : row.gps.state === 'none' ? 'No GPS' : row.gps.state === 'stale' ? 'Out of date' : row.gps.state === 'weak' ? 'Weak signal' : 'Off route') : (row.lastSeen ? `Last seen ${row.lastSeen}` : '-')}{row.liveTrip && row.lastSeen ? ` · ${row.lastSeen}` : ''}</dd></div>
+                    </dl>
+                  )}
+                  <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
+                    <button
+                      type="button"
+                      disabled={!row.trackable}
+                      title={row.trackable ? undefined : 'Tracking is available while a trip is boarding or on the road'}
+                      aria-label={`Track fleet ${row.fleet.plate_number}`}
+                      onClick={() => setTrackedFleetId(row.fleetId)}
+                      className={SECONDARY}
+                    >
+                      <MapPinned className="h-3.5 w-3.5" aria-hidden="true" /> Track
+                    </button>
+                    {canManage && <button type="button" aria-label={`Edit fleet ${row.fleet.plate_number}`} onClick={() => { setNotice(''); setEditingFleet(row.fleet); }} className={SECONDARY}>
+                      <Pencil className="h-3.5 w-3.5" aria-hidden="true" /> Edit
+                    </button>}
+                    <button type="button" aria-expanded={expanded} onClick={() => setOpenDetails(expanded ? null : row.fleetId)} className="inline-flex min-h-9 items-center gap-1 px-2 text-sm font-semibold text-slate-700 hover:text-slate-900">
+                      {expanded ? 'Hide details' : 'View details'} <ChevronRight className={`h-4 w-4 transition ${expanded ? 'rotate-90' : ''}`} aria-hidden="true" />
+                    </button>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </OpCard>
 
       <OpCard>

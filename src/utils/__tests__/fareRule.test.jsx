@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from 'vitest'
-import { render, screen, within, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { buildFareRulePayload } from '../fareRule'
 import FareRulesPanel from '../../components/Staff/FareRulesPanel'
 
@@ -41,19 +41,21 @@ describe('FareRulesPanel', () => {
     render(<FareRulesPanel service={service} fleets={[]} routes={[]} canCreateGeneral />)
     const rows = await screen.findAllByTestId('fare-rule-row', {}, { timeout: 5000 })
     expect(rows).toHaveLength(2)
-    expect(within(rows[0]).getByText('Aircon')).toBeInTheDocument()
-    expect(within(rows[0]).getByText('Express')).toBeInTheDocument()
-    expect(within(rows[0]).getByText('2026-10-01')).toBeInTheDocument()
-    expect(within(rows[0]).getByText('SAMPLE')).toBeInTheDocument()
-    expect(within(rows[1]).getByText('Fleet DVO-1234')).toBeInTheDocument()
+    // Batch 53 item 8: a card per rule (was a table row).
+    expect(rows[0]).toHaveTextContent('Aircon')
+    expect(rows[0]).toHaveTextContent('Express')
+    expect(rows[0]).toHaveTextContent('2026-10-01')
+    expect(rows[0]).toHaveTextContent('SAMPLE')
+    expect(rows[1]).toHaveTextContent('DVO-1234')
   })
 
-  test('a filter is sent to the server as a query, and an operator cannot choose a general rule', async () => {
+  // Batch 53 item 8 (user): no filters any more (was: a filter is sent as a query); every rule is loaded and paged.
+  test('loads every rule with no filters, and an operator cannot choose a general rule', async () => {
     const service = { getFareRules: vi.fn().mockResolvedValue({ data: [] }), createFareRule: vi.fn() }
     render(<FareRulesPanel service={service} fleets={[{ fleet_id: 3, plate_number: 'DVO-1234' }]} routes={[]} canCreateGeneral={false} />)
     await waitFor(() => expect(service.getFareRules).toHaveBeenCalledWith({}))
-    fireEvent.change(await screen.findByLabelText('Filter by service type', {}, { timeout: 5000 }), { target: { value: 'express' } })
-    await waitFor(() => expect(service.getFareRules).toHaveBeenLastCalledWith({ service_type: 'express' }))
+    expect(screen.queryByLabelText('Filter by service type')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '+ Add fare rule' }))
     expect(screen.queryByLabelText('Rule applies to')).toBeNull()
     expect(screen.getByLabelText('Fleet')).toBeInTheDocument()
     expect(screen.queryByLabelText('Vehicle class')).toBeNull()
@@ -62,6 +64,7 @@ describe('FareRulesPanel', () => {
   test('saving asks for the password confirmation first and sends nothing until it is given', async () => {
     const service = { getFareRules: vi.fn().mockResolvedValue({ data: [] }), createFareRule: vi.fn() }
     render(<FareRulesPanel service={service} fleets={[]} routes={[]} canCreateGeneral />)
+    fireEvent.click(await screen.findByRole('button', { name: '+ Add fare rule' }, { timeout: 5000 })) // Batch 53: the form is a pop-up
     fireEvent.change(await screen.findByLabelText('Vehicle class', {}, { timeout: 5000 }), { target: { value: 'ordinary' } })
     fireEvent.change(screen.getByLabelText('Base fare'), { target: { value: '12' } })
     fireEvent.change(screen.getByLabelText('Fare per km'), { target: { value: '2' } })

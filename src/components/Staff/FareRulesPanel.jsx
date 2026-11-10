@@ -4,6 +4,11 @@ import StepUpModal from './StepUpModal'
 import { addFormFrom, addFormHasInput, buildFareRulePayload, formatUpdatedAt } from '../../utils/fareRule'
 import { getBusinessToday } from '../../utils/dates'
 import { FareRuleCopyModal, FareRuleEditModal } from './FareRuleActions'
+import Modal from '../ui/Modal'
+import Pagination from '../ui/Pagination'
+
+// Batch 53 item 8 (user's design): rules as cards, five a page; the Add form opens in a pop-up; no filters.
+const RULES_PER_PAGE = 5
 
 // Batch 31: the Operator page uses the light tone; Admin keeps the dark one (the default).
 const TONES = {
@@ -42,7 +47,9 @@ export default function FareRulesPanel({ service, fleets = [], routes = [], canC
   const t = TONES[tone] ?? TONES.dark
   const options = useFareOptions()
   const [rules, setRules] = useState([])
-  const [filters, setFilters] = useState(EMPTY_FILTERS)
+  const filters = EMPTY_FILTERS
+  const [page, setPage] = useState(1)
+  const [formOpen, setFormOpen] = useState(false)
   const [form, setForm] = useState({ ...EMPTY_FORM, scope: canCreateGeneral ? 'general' : 'fleet' })
   const [message, setMessage] = useState('')
   const [loadError, setLoadError] = useState('')
@@ -71,7 +78,6 @@ export default function FareRulesPanel({ service, fleets = [], routes = [], canC
   }, [load])
 
   const set = (field) => (event) => setForm((prev) => ({ ...prev, [field]: event.target.value }))
-  const setFilter = (field) => (event) => setFilters((prev) => ({ ...prev, [field]: event.target.value }))
 
   // 2026-11-06: every fare change (add, copy, edit) needs the extra check. One flow: use the held token, or ask for it
   // and then run the waiting action. Each action resolves to { ok, message }.
@@ -147,10 +153,11 @@ export default function FareRulesPanel({ service, fleets = [], routes = [], canC
     setCopiedFrom(rule)
     setReplacing(null)
     setMessage('')
+    setFormOpen(true)
     formRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
     formRef.current?.querySelector('input, select')?.focus?.({ preventScroll: true })
   }
-  const applyRuleToForm = (rule) => (addFormHasInput(form, emptyForm) ? setReplacing(rule) : fillFrom(rule))
+  const applyRuleToForm = (rule) => { setFormOpen(true); return addFormHasInput(form, emptyForm) ? setReplacing(rule) : fillFrom(rule) }
   const clearForm = () => {
     setForm(emptyForm)
     setCopiedFrom(null)
@@ -173,88 +180,70 @@ export default function FareRulesPanel({ service, fleets = [], routes = [], canC
 
   return (
     <section className={t.section} data-testid="fare-rules-panel">
-      <div>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
         <h3 className={`text-sm font-semibold uppercase tracking-[0.14em] ${t.title}`}>Fare Rules</h3>
         <p className={`mt-1 text-xs ${t.muted}`}>
           A fare is found for the trip&apos;s bus: the fleet&apos;s own rule first, then the general rule for its class and service type. With no rule the fare is unavailable and nothing is sold.
           {!canCreateGeneral && ' General rules are set by the Admin; you can add rules for your own fleets.'}
         </p>
+        </div>
+        {!readOnly && (
+          <button type="button" onClick={() => { setMessage(''); setFormOpen(true) }} className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full bg-teal-600 px-4 text-sm font-semibold text-white hover:bg-teal-500">+ Add fare rule</button>
+        )}
       </div>
+      {message && !formOpen && (
+        <p role="status" className={`rounded-xl border px-3 py-2 text-sm ${message.toLowerCase().startsWith('failed') ? t.bad : t.ok}`}>{message}</p>
+      )}
 
-      <div className="grid gap-2 md:grid-cols-6" role="group" aria-label="Fare rule filters">
-        <select aria-label="Filter by scope" value={filters.scope} onChange={setFilter('scope')} className={t.field}>
-          <option value="">All rules</option><option value="general">General</option><option value="fleet">Fleet override</option>
-        </select>
-        <select aria-label="Filter by vehicle class" value={filters.vehicle_class} onChange={setFilter('vehicle_class')} className={t.field}>
-          <option value="">Any class</option>
-          {options.vehicle_classes.map((entry) => <option key={entry.key} value={entry.key}>{entry.label}</option>)}
-        </select>
-        <select aria-label="Filter by service type" value={filters.service_type} onChange={setFilter('service_type')} className={t.field}>
-          <option value="">Any service</option>
-          {options.service_types.map((type) => <option key={type} value={type}>{cap(type)}</option>)}
-        </select>
-        <select aria-label="Filter by seat type" value={filters.seat_type} onChange={setFilter('seat_type')} className={t.field}>
-          <option value="">Any seat type</option>
-          {options.seat_types.map((type) => <option key={type} value={type}>{cap(type)}</option>)}
-        </select>
-        <select aria-label="Filter by route" value={filters.route_id} onChange={setFilter('route_id')} className={t.field}>
-          <option value="">Any route</option>
-          {routes.map((route) => <option key={route.route_id} value={route.route_id}>{route.route_name}</option>)}
-        </select>
-        <select aria-label="Filter by status" value={filters.status} onChange={setFilter('status')} className={t.field}>
-          <option value="">Any status</option><option value="active">Active</option><option value="inactive">Inactive</option>
-        </select>
-      </div>
-
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[56rem] text-left text-xs ${t.table}" data-testid="fare-rules-table">
-          <thead className={t.muted}>
-            <tr>
-              {['Applies to', 'Class', 'Service', 'Route', 'Seat', 'Base fare', 'Base km', 'Per km', 'Rounding', 'From', 'To', 'Status', 'Updated', 'Note', ''].map((heading) => (
-                <th key={heading} className="px-2 py-1.5 font-semibold">{heading}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rules.length === 0 ? (
-              <tr><td colSpan={15} className={`px-2 py-4 text-left ${t.muted}`}>{loadError || 'No fare rules match.'}</td></tr>
-            ) : rules.map((rule) => (
-              <tr key={rule.fare_rule_id} className={`border-t ${t.row}`} data-testid="fare-rule-row">
-                <td className="px-2 py-1.5">{ruleScope(rule)}</td>
-                <td className="px-2 py-1.5">{rule.vehicle_class_label || classLabel.get(rule.vehicle_class) || classLabel.get(rule.fleet?.vehicle_class) || 'Not specified'}</td>
-                <td className="px-2 py-1.5">{cap(rule.service_type)}</td>
-                <td className="px-2 py-1.5">{rule.route_id ? (routeName.get(Number(rule.route_id)) ?? `#${rule.route_id}`) : 'All routes'}</td>
-                <td className="px-2 py-1.5">{cap(rule.seat_type)}</td>
-                <td className="px-2 py-1.5">{money(rule.base_fare)}</td>
-                <td className="px-2 py-1.5">{rule.base_distance_km === null || rule.base_distance_km === undefined ? '-' : Number(rule.base_distance_km)}</td>
-                <td className="px-2 py-1.5">{money(rule.fare_per_km)}</td>
-                <td className="px-2 py-1.5">{cap(rule.rounding_mode)}</td>
-                <td className="px-2 py-1.5">{rule.effective_from ? String(rule.effective_from).slice(0, 10) : '-'}</td>
-                <td className="px-2 py-1.5">{rule.effective_to ? String(rule.effective_to).slice(0, 10) : '-'}</td>
-                <td className="px-2 py-1.5">{rule.status === 'inactive' ? 'Stopped' : 'Active'}</td>
-                <td className="px-2 py-1.5 whitespace-nowrap" data-testid="fare-rule-updated">{formatUpdatedAt(rule.updated_at)}</td>
-                <td className={`px-2 py-1.5 ${t.muted}`}>{rule.note || ''}</td>
-                <td className="px-2 py-1.5">
+      {rules.length === 0 ? (
+        <p className={`text-sm ${t.muted}`}>{loadError || 'No fare rules yet.'}</p>
+      ) : (
+        <ul className={`divide-y ${t.rule}`} aria-label="Fare rules" data-testid="fare-rules-table">
+          {rules.slice((page - 1) * RULES_PER_PAGE, page * RULES_PER_PAGE).map((rule) => {
+            const cls = rule.vehicle_class_label || classLabel.get(rule.vehicle_class) || classLabel.get(rule.fleet?.vehicle_class) || 'Any class'
+            const active = rule.status !== 'inactive'
+            return (
+              <li key={rule.fare_rule_id} className="py-4" data-testid="fare-rule-row">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className={`text-base font-bold ${t.title}`}>{rule.fleet_id ? (rule.fleet?.plate_number ?? `Fleet #${rule.fleet_id}`) : `General · ${cls}`} · {cap(rule.service_type)}</p>
+                    <p className={`text-xs ${t.muted}`}>{cap(rule.seat_type)} · {rule.route_id ? (routeName.get(Number(rule.route_id)) ?? `Route #${rule.route_id}`) : 'All routes'} · {cls}</p>
+                  </div>
+                  <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold ${active ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-700'}`}>{active ? 'Active' : 'Stopped'}</span>
+                </div>
+                <dl className="mt-3 grid grid-cols-3 gap-3">
+                  <div><dt className={`text-xs ${t.muted}`}>Base fare</dt><dd className={`text-base font-bold ${t.title}`}>{money(rule.base_fare)}</dd></div>
+                  <div><dt className={`text-xs ${t.muted}`}>Per kilometer</dt><dd className={`text-base font-bold ${t.title}`}>{money(rule.fare_per_km)}</dd></div>
+                  <div className="text-right"><dt className={`text-xs ${t.muted}`}>Rounding</dt><dd className={`text-base font-bold ${t.title}`}>{cap(rule.rounding_mode)}</dd></div>
+                </dl>
+                <p className={`mt-2 text-xs ${t.muted}`}>
+                  Base distance {rule.base_distance_km === null || rule.base_distance_km === undefined ? 'not set' : `${Number(rule.base_distance_km)} km`} · from {rule.effective_from ? String(rule.effective_from).slice(0, 10) : '-'}{rule.effective_to ? ` to ${String(rule.effective_to).slice(0, 10)}` : ''} · updated <span data-testid="fare-rule-updated">{formatUpdatedAt(rule.updated_at)}</span>{rule.note ? ` · ${rule.note}` : ''}
+                </p>
+                <div className="mt-3 flex flex-wrap justify-end gap-2">
                   {!readOnly && (
-                    <button type="button" onClick={() => applyRuleToForm(rule)} aria-label={`Use fare ${ruleTitle(rule)} in the form`} className="mb-1.5 min-h-11 whitespace-nowrap rounded-lg border border-navy-300 px-2.5 text-xs font-semibold text-navy-800 hover:bg-navy-50 sm:min-h-9">Use in form</button>
+                    <button type="button" onClick={() => applyRuleToForm(rule)} aria-label={`Use fare ${ruleTitle(rule)} in the form`} className="min-h-9 whitespace-nowrap rounded-full border border-navy-300 px-3 text-xs font-semibold text-navy-800 hover:bg-navy-50">Use in form</button>
                   )}
                   {canChange(rule) && (
-                    <span className="flex gap-1.5">
-                      <button type="button" onClick={() => setCopying(rule)} aria-label={`Copy fare ${ruleTitle(rule)}`} className="min-h-9 rounded-lg border border-teal-300 px-2.5 text-xs font-semibold text-teal-700 hover:bg-teal-50">Copy</button>
-                      <button type="button" onClick={() => setEditing(rule)} aria-label={`Edit fare ${ruleTitle(rule)}`} className="min-h-9 rounded-lg border border-slate-300 px-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-100">Edit</button>
-                    </span>
+                    <>
+                      <button type="button" onClick={() => setCopying(rule)} aria-label={`Copy fare ${ruleTitle(rule)}`} className="min-h-9 rounded-full border border-teal-300 px-3 text-xs font-semibold text-teal-700 hover:bg-teal-50">Copy</button>
+                      <button type="button" onClick={() => setEditing(rule)} aria-label={`Edit fare ${ruleTitle(rule)}`} className="min-h-9 rounded-full border border-slate-300 px-3 text-xs font-semibold text-slate-700 hover:bg-slate-100">Edit</button>
+                    </>
                   )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+                </div>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+      {rules.length > RULES_PER_PAGE && (
+        <Pagination page={page} perPage={RULES_PER_PAGE} total={rules.length} lastPage={Math.ceil(rules.length / RULES_PER_PAGE)} onPageChange={setPage} label="Fare rule pages" />
+      )}
 
       {readOnly ? (
         <p className={`border-t pt-4 text-xs ${t.muted} ${t.rule}`} data-testid="fare-read-only-note">Only your company admin can change fares.</p>
-      ) : <form ref={formRef} onSubmit={onSubmit} className={`space-y-3 border-t pt-4 ${t.rule}`} aria-label="Add fare rule">
-        <p className={`text-xs font-semibold uppercase tracking-[0.14em] ${t.title}`}>Add a rule</p>
+      ) : <Modal open={formOpen} onClose={() => setFormOpen(false)} title="Add fare rule" size="lg">
+      <form ref={formRef} onSubmit={onSubmit} className="space-y-3" aria-label="Add fare rule">
         {replacing && (
           <div role="alertdialog" aria-label="Replace the form" className="flex flex-wrap items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
             <span>Replace what you typed with the {ruleTitle(replacing)} rule?</span>
@@ -313,7 +302,8 @@ export default function FareRulesPanel({ service, fleets = [], routes = [], canC
         {message && (
           <p role="status" className={`rounded-xl border px-3 py-2 text-sm ${message.toLowerCase().startsWith('failed') ? t.bad : t.ok}`}>{message}</p>
         )}
-      </form>}
+      </form>
+      </Modal>}
       {copying && <FareRuleCopyModal rule={copying} today={today} title={ruleTitle(copying)} onClose={() => setCopying(null)} onSubmit={(payload) => copyRule(copying, payload)} />}
       {editing && <FareRuleEditModal rule={editing} today={today} title={ruleTitle(editing)} onClose={() => setEditing(null)} onSubmit={(payload) => editRule(editing, payload)} />}
       <StepUpModal open={stepUpOpen} onClose={onStepUpClosed} onVerified={onVerified} />
