@@ -128,27 +128,33 @@ describe('RoutesPage list', () => {
     renderPage();
     const directory = screen.getByRole('table', { name: 'Stops' });
     expect(within(directory).queryByRole('columnheader', { name: 'Municipality' })).not.toBeInTheDocument();
+    // Batch 56 (user): the City or town column shows the town filled from the pin (was Area or landmark).
+    expect(within(directory).getByRole('columnheader', { name: 'City or town' })).toBeInTheDocument();
+    expect(within(directory).queryByRole('columnheader', { name: 'Area or landmark' })).not.toBeInTheDocument();
+    expect(within(within(directory).getByText('Stop 2').closest('tr')).getByText('Carmen')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Add stop/ }));
     let dialog = await screen.findByRole('dialog');
     fireEvent.change(within(dialog).getByLabelText('Stop name'), { target: { value: 'New stop' } });
-    fireEvent.change(within(dialog).getByLabelText('Area or landmark (optional)'), { target: { value: 'Near the plaza' } });
-    expect(within(dialog).getByText('New stop (Near the plaza)')).toBeInTheDocument();
+    // Batch 56 (user): no Area or landmark box; the town comes from the pin.
+    expect(within(dialog).queryByLabelText('Area or landmark (optional)')).not.toBeInTheDocument();
+    expect(within(dialog).getByTestId('stop-town-note')).toHaveTextContent('The city or town is filled in from the pin when you save.');
     // No pin yet: the form says so and sends nothing.
     fireEvent.click(within(dialog).getByRole('button', { name: 'Create stop' }));
     expect(await within(dialog).findByRole('alert')).toHaveTextContent('Place the pin on the map first.');
     expect(mocks.createOperatorStop).not.toHaveBeenCalled();
     fireEvent.click(within(dialog).getByRole('button', { name: 'Tap map' }));
     fireEvent.click(within(dialog).getByRole('button', { name: 'Create stop' }));
-    await waitFor(() => expect(mocks.createOperatorStop).toHaveBeenCalledWith({ stop_name: 'New stop', location_label: 'Near the plaza', latitude: 7.0712, longitude: 125.6101 }));
+    await waitFor(() => expect(mocks.createOperatorStop).toHaveBeenCalledWith({ stop_name: 'New stop', latitude: 7.0712, longitude: 125.6101 }));
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
 
     fireEvent.click(screen.getByRole('button', { name: 'Edit stop Stop 2' }));
     dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByLabelText('Stop name')).toHaveValue('Stop 2');
     expect(within(dialog).getByText('pin 7.2,125.7')).toBeInTheDocument();
+    expect(within(dialog).getByTestId('stop-town-note')).toHaveTextContent('City or town: Carmen.');
     fireEvent.change(within(dialog).getByLabelText('Stop name'), { target: { value: 'Stop two' } });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Update stop' }));
-    await waitFor(() => expect(mocks.updateOperatorStop).toHaveBeenCalledWith(2, { stop_name: 'Stop two', location_label: null, latitude: 7.2, longitude: 125.7 }));
+    await waitFor(() => expect(mocks.updateOperatorStop).toHaveBeenCalledWith(2, { stop_name: 'Stop two', latitude: 7.2, longitude: 125.7 }));
 
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: 'Delete stop Spare stop' }));

@@ -6,7 +6,7 @@ import Modal from '../../ui/Modal';
 import RouteDetailPage from './RouteDetailPage';
 import PlaceSearch from './PlaceSearch';
 import StopPinPicker from './StopPinPicker';
-import { isPinned, roundCoord, stopDisplayName } from '../../../utils/stopPin';
+import { isPinned, roundCoord } from '../../../utils/stopPin';
 import { useCanManageCompany } from './companyAdmin';
 import { useRoutesTab } from '../../../api/hooks/Staff/useOperatorDashboard';
 import {
@@ -19,7 +19,7 @@ const INPUT = 'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text
 const PRIMARY = 'inline-flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-500 disabled:opacity-60';
 const SECONDARY = 'inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50';
 
-const EMPTY_STOP = { stop_name: '', location_label: '', latitude: '', longitude: '' };
+const EMPTY_STOP = { stop_name: '', latitude: '', longitude: '' };
 
 const isFailure = (text) => /failed|could not/i.test(text);
 
@@ -61,15 +61,17 @@ function StopModal({ open, onClose, editing, needsPin, form, setForm, saving, me
     setForm((prev) => ({ ...prev, latitude: String(roundCoord(place.latitude)), longitude: String(roundCoord(place.longitude)) }));
     setFocusKey((n) => n + 1);
   };
-  const preview = stopDisplayName(form);
   return (
     <Modal open={open} onClose={onClose} title={editing ? 'Edit stop' : 'Add stop'} fullScreenOnMobile>
       <form onSubmit={onSubmit}>
         <div className="grid gap-4">
           {needsPin && <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">This stop was placed from its name, so it may be in the wrong spot. Check the pin and save.</p>}
           <label className="block text-xs font-medium text-slate-600">Stop name<input value={form.stop_name} onChange={set('stop_name')} required maxLength={255} className={`${INPUT} mt-1`} /></label>
-          <label className="block text-xs font-medium text-slate-600">Area or landmark (optional)<input value={form.location_label} onChange={set('location_label')} maxLength={80} placeholder="For example: Downtown / Poblacion" className={`${INPUT} mt-1`} /></label>
-          {form.stop_name.trim() && <p className="text-xs text-slate-500">Full name: <strong className="text-slate-800">{preview}</strong></p>}
+          {/* Batch 56 (user, 2026-11-10): the city or town comes from the pin (filled on the server), not typed here. */}
+          <p className="text-xs text-slate-500" data-testid="stop-town-note">
+            {editing && form.municipality ? <>City or town: <strong className="text-slate-800">{form.municipality}</strong>. </> : null}
+            The city or town is filled in from the pin when you save.
+          </p>
           <PlaceSearch onPick={pickPlace} />
           {open && <StopPinPicker latitude={form.latitude} longitude={form.longitude} onChange={setPin} otherStops={otherStops} focusKey={focusKey} />}
         </div>
@@ -119,7 +121,7 @@ export default function RoutesPage({ routes, stops, trips, fleets, onRefresh, on
     setEditingStopId(stop.stop_id);
     setStopForm({
       stop_name: stop.stop_name || '',
-      location_label: stop.location_label || '',
+      municipality: stop.municipality || '', // shown only; the server fills it from the pin
       latitude: stop.latitude === null || stop.latitude === undefined ? '' : String(stop.latitude),
       longitude: stop.longitude === null || stop.longitude === undefined ? '' : String(stop.longitude),
     });
@@ -166,7 +168,8 @@ export default function RoutesPage({ routes, stops, trips, fleets, onRefresh, on
 
   const stopColumns = [
     { key: 'stop', header: 'Stop', render: (stop) => <span className="whitespace-nowrap"><strong className="text-slate-900">{stop.stop_name}</strong>{stop.stop_code && <span className="block text-xs text-slate-500">{stop.stop_code}</span>}</span> },
-    { key: 'label', header: 'Area or landmark', render: (stop) => (stop.location_label ? <span className="text-xs">{stop.location_label}</span> : <span className="text-xs text-slate-400">Not provided</span>) },
+    // Batch 56 (user): the city or town filled from the pin (was a typed "Area or landmark").
+    { key: 'town', header: 'City or town', render: (stop) => (stop.municipality ? <span className="text-xs">{stop.municipality}</span> : <span className="text-xs text-slate-400">Not provided</span>) },
     { key: 'place', header: 'Place on map', render: (stop) => (
       <span className="whitespace-nowrap text-xs">
         {isPinned(stop) ? <OpChip tone="success">Pinned</OpChip> : <OpChip tone="warning">Placed from name</OpChip>}

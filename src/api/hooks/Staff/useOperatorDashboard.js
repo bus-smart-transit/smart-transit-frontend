@@ -457,7 +457,7 @@ export function useRoutesTab({ onRefresh }) {
   const [manageSaving, setManageSaving] = useState(false);
   const [editingStopId, setEditingStopId] = useState(null);
   // 2026-11-06 (Batch 47 part A): the stop's name, a typed area label, and its map pin.
-  const [stopForm, setStopForm] = useState({ stop_name: '', location_label: '', latitude: '', longitude: '' });
+  const [stopForm, setStopForm] = useState({ stop_name: '', latitude: '', longitude: '' });
   const [routeForm, setRouteForm] = useState({ route_name: '', origin: '', destination: '' });
   const [routeStopForm, setRouteStopForm] = useState({ route_id: '', stop_id: '', stop_order: '' });
   const [assignedStopIds, setAssignedStopIds] = useState([]);
@@ -475,8 +475,8 @@ export function useRoutesTab({ onRefresh }) {
         return false;
       }
       const payload = {
+        // Batch 56 (user): no "Area or landmark" any more; the city or town is filled from the pin on the server.
         stop_name: stopForm.stop_name.trim(),
-        location_label: stopForm.location_label.trim() || null,
         latitude,
         longitude,
       };
@@ -486,7 +486,7 @@ export function useRoutesTab({ onRefresh }) {
         : await OperatorService.createOperatorStop(payload);
       const warnings = saved?.data?.warnings ?? [];
 
-      setStopForm({ stop_name: '', location_label: '', latitude: '', longitude: '' });
+      setStopForm({ stop_name: '', latitude: '', longitude: '' });
       setEditingStopId(null);
       setManageMsg([editingStopId ? 'Stop updated successfully.' : 'Stop created successfully.', ...warnings].join(' '));
       onRefresh();
@@ -507,7 +507,7 @@ export function useRoutesTab({ onRefresh }) {
       await OperatorService.deleteOperatorStop(stopId);
       if (Number(editingStopId) === Number(stopId)) {
         setEditingStopId(null);
-        setStopForm({ stop_name: '', location_label: '', latitude: '', longitude: '' });
+        setStopForm({ stop_name: '', latitude: '', longitude: '' });
       }
       setManageMsg('Stop deleted successfully.');
       onRefresh();

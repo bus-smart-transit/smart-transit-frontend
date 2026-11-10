@@ -33,8 +33,8 @@ for (const [width, height] of [[1280, 900], [390, 844]]) {
     const dialog = page.getByRole('dialog');
     const name = `Pin test ${width} ${Date.now() % 100000}`;
     await dialog.getByLabel('Stop name').fill(name);
-    await dialog.getByLabel('Area or landmark (optional)').fill('Test area');
-    await expect(dialog.getByText(`${name} (Test area)`)).toBeVisible();
+    // Batch 56 (user): no Area or landmark box; the city or town is filled from the pin.
+    await expect(dialog.getByTestId('stop-town-note')).toContainText('The city or town is filled in from the pin when you save.');
 
     // Search helps find a place; when the service answers, picking a result sets the pin.
     await dialog.getByRole('combobox').fill('public market');
@@ -73,10 +73,20 @@ for (const [width, height] of [[1280, 900], [390, 844]]) {
     await expect(dialog).toBeHidden({ timeout: 20000 });
     await expect(page.getByText(/Stop created successfully\. .* is only \d+ m away\. Is this the same stop\?/)).toBeVisible();
 
+    // Batch 56: the server fills the city or town from the pin a few seconds after saving (a queued lookup).
+    const townOf = () => page.evaluate(async (stopName) => {
+      const token = sessionStorage.getItem('staff_token');
+      const res = await fetch('/api/operator/stops', { headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' } });
+      return (await res.json()).data.find((r) => r.stop_name === stopName)?.municipality ?? null;
+    }, name);
+    await expect.poll(townOf, { timeout: 60000, message: 'the town is filled from the pin' }).toBeTruthy();
+    const town = await townOf();
+    await page.reload();
+    await expect(page.getByRole('table', { name: 'Stops' })).toBeVisible({ timeout: 30000 });
     await page.getByRole('searchbox', { name: 'Search stops' }).fill(name);
     const row = page.getByRole('row').filter({ hasText: name });
     await expect(row.getByText('Pinned')).toBeVisible();
-    await expect(row.getByText('Test area')).toBeVisible();
+    await expect(row.getByText(town, { exact: true })).toBeVisible();
 
     page.once('dialog', (confirm) => confirm.accept());
     await page.getByRole('button', { name: `Delete stop ${name}` }).click();
