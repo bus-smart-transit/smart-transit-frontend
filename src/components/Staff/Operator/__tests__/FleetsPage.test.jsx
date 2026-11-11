@@ -110,13 +110,44 @@ describe('FleetsPage', () => {
     expect(within(dialog).queryByText('Live')).not.toBeInTheDocument();
   });
 
-  it('records a decision from the Track Fleet modal when advice exists', async () => {
+  // Batch 60 (user, 2026-11-11): the late bus's own Track popup holds its advice (it used to show in another bus's popup
+  // on the same route, and a late bus could not be tracked at all).
+  it('records a decision from the late bus\'s own Track popup', async () => {
     const delayed = [trip(1, 1, 'departed'), trip(7, 4, 'delayed', { fleet_route: { fleet_id: 4, route_id: 10, fleet: fleet(4), route: { route_id: 10, route_name: 'Davao - Tagum' } } })];
     renderPage({ trips: delayed });
     await waitFor(() => expect(within(rowFor('PLT-1')).getByText('Active')).toBeInTheDocument());
+
     fireEvent.click(screen.getByRole('button', { name: 'Track fleet PLT-1' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Keep current route' }));
+    let dialog = await screen.findByRole('dialog');
+    expect(within(dialog).queryByRole('button', { name: 'Keep current route' })).not.toBeInTheDocument();
+    expect(within(dialog).getByText('No reroute advice for this trip right now.')).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Track fleet PLT-4' }));
+    dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByTestId('track-not-running')).toHaveTextContent('Trip #7 has not left yet');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Keep current route' }));
     await waitFor(() => expect(mocks.saveDispatchDecision).toHaveBeenCalledWith(7, expect.objectContaining({ decision: 'keep', route: 'Davao - Tagum' })));
+  });
+
+  it('opens the Track popup an alert asks for, by trip or by bus, and says so when the trip is not loaded', async () => {
+    const onTrackHandled = vi.fn();
+    const { rerender } = renderPage({ trackRequest: { tripId: 4 }, onTrackHandled });
+    let dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent('Track fleet - PLT-4');
+    expect(onTrackHandled).toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+
+    rerender(<FleetsPage fleets={fleets} routes={routes} trips={trips} onRefresh={vi.fn()} trackRequest={{ tripId: 99, fleetId: 1 }} onTrackHandled={onTrackHandled} />);
+    dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent('Track fleet - PLT-1');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+
+    rerender(<FleetsPage fleets={fleets} routes={routes} trips={trips} onRefresh={vi.fn()} trackRequest={{ tripId: 555 }} onTrackHandled={onTrackHandled} />);
+    expect(await screen.findByText('Trip #555 is not in the loaded list. Choose Refresh and try again.')).toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
   it('filters the list by status', async () => {

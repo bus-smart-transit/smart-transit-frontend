@@ -18,7 +18,7 @@ function Person({ label, person }) {
   )
 }
 
-function OpenAlert({ alert, busy, onHandle, onTell }) {
+function OpenAlert({ alert, busy, onHandle, onTell, onTrackBus }) {
   const [handling, setHandling] = useState(false)
   const [note, setNote] = useState('')
   const map = alertMapLink(alert)
@@ -63,6 +63,16 @@ function OpenAlert({ alert, busy, onHandle, onTell }) {
         </form>
       ) : (
         <div className="mt-3 flex flex-wrap gap-2">
+          {/* Batch 60 (user, 2026-11-11): where the bus is now, on Fleets (the map link above is where it was). */}
+          {onTrackBus && (
+            <button
+              type="button"
+              onClick={() => onTrackBus({ tripId: alert.trip_id, fleetId: alert.trip?.fleet_id ?? null })}
+              className="inline-flex items-center gap-1 rounded-lg border border-rose-300 bg-white px-3 py-2 text-xs font-semibold text-rose-800 hover:bg-rose-100"
+            >
+              <MapPin size={13} aria-hidden="true" /> Track bus
+            </button>
+          )}
           {!told && (
             <button
               type="button"
@@ -92,7 +102,7 @@ function statusText(alert) {
  * phone numbers and where the bus was; "Tell passengers" and "Mark handled" are the Operator's choices (passengers are
  * never told automatically). The last 24 hours' other alerts fold away underneath. Renders only (useOperatorAlerts).
  */
-export default function OperatorAlerts({ alerts }) {
+export default function OperatorAlerts({ alerts, onTrackBus = null }) {
   const [showRecent, setShowRecent] = useState(false)
   if (alerts.open.length === 0 && alerts.recent.length === 0) return null
   return (
@@ -100,7 +110,7 @@ export default function OperatorAlerts({ alerts }) {
       {alerts.open.length > 0 && (
         <ul className="space-y-2" aria-label="Open crew alerts">
           {alerts.open.map((alert) => (
-            <OpenAlert key={alert.alert_id} alert={alert} busy={alerts.busyId === alert.alert_id} onHandle={alerts.handle} onTell={alerts.tellPassengers} />
+            <OpenAlert key={alert.alert_id} alert={alert} busy={alerts.busyId === alert.alert_id} onHandle={alerts.handle} onTell={alerts.tellPassengers} onTrackBus={onTrackBus} />
           ))}
         </ul>
       )}

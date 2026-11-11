@@ -53,12 +53,18 @@ export function buildFleetRows({ fleets = [], trips = [], locations = [], today 
     else key = 'idle';
 
     const next = live || later[0] || null;
+    // Batch 60 (user, 2026-11-11): Track also opens for a trip that is late leaving, so the Operator can answer its
+    // advice from the bus's own popup (no live position until it leaves).
+    const delayed = mine.find((trip) => String(trip.status).toLowerCase() === 'delayed') || null;
+    const trackTrip = live || delayed;
     return {
       fleet,
       fleetId: Number(fleet.fleet_id),
       status: { key, ...FLEET_STATUS[key] },
       liveTrip: live,
-      trackable: Boolean(live),
+      trackable: Boolean(trackTrip),
+      trackTrip,
+      todaysTrips: mine,
       nextTrip: next,
       nextTripLabel: next ? `${routeNameOf(next)} - ${departureLabel(next)}` : null,
       tripsToday: mine.length,

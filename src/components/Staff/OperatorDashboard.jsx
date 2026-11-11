@@ -742,7 +742,7 @@ function TripsTab({ drivers, conductors, onRefresh, tripsState, focusTripId = nu
 // Batch 30: the Schedule page. One page for what used to be three sidebar items (Trips, Calendar, Shift Blocks): the
 // views are Calendar, Blocks (Schedule/ShiftBlocksView.jsx) and Trips, and the one "+ Schedule" button opens the
 // existing create form from any of them. A schedule created from one view refreshes the others.
-function ScheduleTab({ trips, drivers, conductors, onRefresh, view, onViewChange, calendarFocus, createOnOpen = false, onCreateHandled = () => {} }) {
+function ScheduleTab({ trips, drivers, conductors, onRefresh, view, onViewChange, calendarFocus, createOnOpen = false, onCreateHandled = () => {}, openTripId = null, onOpenTripHandled = () => {} }) {
   const [reloadToken, setReloadToken] = useState(0)
   const refreshAll = useCallback(() => {
     onRefresh()
@@ -759,7 +759,15 @@ function ScheduleTab({ trips, drivers, conductors, onRefresh, view, onViewChange
     onCreateHandled()
   }, [createOnOpen, onCreateHandled, setShowModal, setMsg])
   // Batch 46: a trip chosen in the calendar pop-up opens the Trips view with that trip shown (filter set to All).
-  const [focusTripId, setFocusTripId] = useState(null)
+  // Batch 60: a dashboard alert about missing crew opens Schedule on Trips (the portal sets the view) with its trip shown
+  // and highlighted. This page is always opened fresh from the dashboard, so the trip is the starting value.
+  const [focusTripId, setFocusTripId] = useState(() => (openTripId ? Number(openTripId) : null))
+  const { setTripFilter } = tripsState
+  useEffect(() => {
+    if (!openTripId) return
+    setTripFilter('all')
+    onOpenTripHandled()
+  }, [openTripId, onOpenTripHandled, setTripFilter])
   const openTripFromCalendar = (item) => {
     setFocusTripId(Number(item.trip_id))
     tripsState.setTripFilter('all')
@@ -799,6 +807,11 @@ export default function OperatorDashboard() {
   // Batch 60 item 4: set by the dashboard's "Schedule a trip"; the Schedule page opens its form and clears it.
   const [createOnOpen, setCreateOnOpen] = useState(false)
   const clearCreateOnOpen = useCallback(() => setCreateOnOpen(false), [])
+  // Batch 60: an alert opens a bus's Track popup on Fleets, or a trip on Schedule > Trips.
+  const [trackRequest, setTrackRequest] = useState(null)
+  const clearTrackRequest = useCallback(() => setTrackRequest(null), [])
+  const [openTripId, setOpenTripId] = useState(null)
+  const clearOpenTripId = useCallback(() => setOpenTripId(null), [])
   const {
     activeTab, setActiveTab,
     view, setView,
@@ -842,7 +855,7 @@ export default function OperatorDashboard() {
         {/* w-0 min-w-full: a wide table inside a page must scroll in its card, not widen the whole portal column. */}
         <div className="w-0 min-w-full">
         {/* Batch 58: crew alerts on every Operator page. */}
-        <OperatorAlerts alerts={crewAlerts} />
+        <OperatorAlerts alerts={crewAlerts} onTrackBus={(request) => { setTrackRequest(request); setActiveTab('fleets') }} />
         {activeTab === 'dashboard'  && (
           <OperatorDashboardPage
             trips={trips}
@@ -858,6 +871,8 @@ export default function OperatorDashboard() {
             onOpenApprovals={() => setActiveTab('schedule', 'requests')}
             onOpenStaffs={() => setActiveTab('staffs')}
             onOpenFleets={() => setActiveTab('fleets')}
+            onTrackTrip={(tripId) => { setTrackRequest({ tripId }); setActiveTab('fleets') }}
+            onOpenTrip={(tripId) => { setOpenTripId(tripId); setActiveTab('schedule', 'trips') }}
           />
         )}
         {activeTab === 'schedule'   && (
@@ -871,6 +886,8 @@ export default function OperatorDashboard() {
             calendarFocus={calendarFocus}
             createOnOpen={createOnOpen}
             onCreateHandled={clearCreateOnOpen}
+            openTripId={openTripId}
+            onOpenTripHandled={clearOpenTripId}
           />
         )}
         {activeTab === 'staffs'     && (
@@ -881,7 +898,7 @@ export default function OperatorDashboard() {
             <CrewShiftTimes staff={[...drivers, ...conductors]} />
           </div>
         )}
-        {activeTab === 'fleets'     && <FleetsPage fleets={fleets} routes={routes} trips={trips} onRefresh={loadFull} companyName={profile?.company?.company_name ?? null} />}
+        {activeTab === 'fleets'     && <FleetsPage fleets={fleets} routes={routes} trips={trips} onRefresh={loadFull} companyName={profile?.company?.company_name ?? null} trackRequest={trackRequest} onTrackHandled={clearTrackRequest} />}
         {activeTab === 'routes'     && <RoutesPage routes={routes} stops={stops} trips={trips} fleets={fleets} onRefresh={loadFull} onOpenSchedule={() => setActiveTab('schedule')} onOpenFleets={() => setActiveTab('fleets')} />}
         {activeTab === 'finance'    && <FinancePage views={viewsForRole('finance', OPERATOR_ROLE)} view={view} onViewChange={setView} />}
         {activeTab === 'reports'    && <ReportsTab fleets={fleets} />}

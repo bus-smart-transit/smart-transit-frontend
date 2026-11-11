@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { RefreshCw, Bus, ChevronRight, MapPinned, Pencil, Plus, Clock, Pause } from 'lucide-react';
 import { OpPageHeader, OpCard, OpChip, OpStat, OpEmpty } from './OperatorUI';
 import { OP_SPACE } from './operatorUiTokens';
@@ -14,7 +14,7 @@ import { useFleetsTab } from '../../../api/hooks/Staff/useOperatorDashboard';
 import { useDispatchAdvice, useNow } from '../../../api/hooks/Staff/useOperatorDashboardExtras';
 import { buildFleetRows, filterFleetRows, FLEET_FILTERS } from '../../../utils/operatorFleetView';
 import {
-  buildDashboardView, decisionPayload, routeNameOf, departureLabel, ticketsSold, capacityOf, loadPct,
+  buildDashboardView, decisionPayload, routeNameOf, departureLabel, ticketsSold, capacityOf, loadPct, LIVE_STATUSES, fleetIdOf,
 } from '../../../utils/operatorDashboardView';
 
 const INPUT = 'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500';
@@ -191,10 +191,12 @@ function AssignRouteModal({ open, onClose, form, setForm, fleets, routes, saving
   );
 }
 
-function TrackFleetModal({ row, advice, saving, error, onDecide, onClose, onOpenGoogleMaps }) {
-  const trip = row?.liveTrip;
+// Batch 60 (user, 2026-11-11): `trip` is the trip asked for (a dashboard or crew alert), else the bus's running or late
+// trip. The advice shown is this trip's own (it used to be matched by route name, so another bus's late trip showed here).
+function TrackFleetModal({ row, trip, advice, saving, error, onDecide, onClose, onOpenGoogleMaps }) {
   const pct = trip ? loadPct(trip) : null;
-  const tripAdvice = trip ? advice.find((item) => item.route === routeNameOf(trip)) : null;
+  const tripAdvice = trip ? advice.find((item) => Number(item.tripId) === Number(trip.trip_id)) : null;
+  const running = trip ? LIVE_STATUSES.includes(String(trip.status).toLowerCase()) : false;
   return (
     <Modal open={Boolean(row)} onClose={onClose} title={row ? `Track fleet - ${row.fleet.plate_number}` : 'Track fleet'} size="xl" fullScreenOnMobile>
       {row && trip && (
@@ -206,6 +208,11 @@ function TrackFleetModal({ row, advice, saving, error, onDecide, onClose, onOpen
             {row.location?.is_simulated && <OpChip tone="warning">Simulated</OpChip>}
             {row.lastSeen && row.gps.state === 'live' && <span className="text-xs text-slate-500">Last update {row.lastSeen}</span>}
           </div>
+          {!running && (
+            <p role="status" className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800" data-testid="track-not-running">
+              Trip #{trip.trip_id} has not left yet, so there is no live position for it. The map shows the bus&apos;s last known position, if any.
+            </p>
+          )}
           <div className="overflow-hidden rounded-xl border border-slate-200">
             <FleetTrackingMap trip={trip} location={row.location} />
           </div>
@@ -223,7 +230,7 @@ function TrackFleetModal({ row, advice, saving, error, onDecide, onClose, onOpen
             <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Reroute advice</h3>
             {tripAdvice ? (
               <ul><RerouteAdviceItem item={tripAdvice} saving={saving} onDecide={onDecide} /></ul>
-            ) : <OpEmpty>No reroute advice for this route right now.</OpEmpty>}
+            ) : <OpEmpty>No reroute advice for this trip right now.</OpEmpty>}
             {error && <p role="alert" className="mt-2 text-xs text-rose-700">{error}</p>}
             <p className="mt-2 text-xs text-slate-500">The system recommends. The operator decides. Nothing is rerouted automatically.</p>
           </section>
@@ -240,7 +247,7 @@ function TrackFleetModal({ row, advice, saving, error, onDecide, onClose, onOpen
  * Batch 31 Phase 3: the Operator's Fleets page. One row per bus; its status is derived from today's trips and its last
  * GPS report (utils/operatorFleetView.js). There is no maintenance state and no progress bar: neither exists in the data.
  */
-export default function FleetsPage({ fleets, routes, trips, onRefresh, companyName = null }) {
+export default function FleetsPage({ fleets, routes, trips, onRefresh, companyName = null, trackRequest = null, onTrackHandled = () => {} }) {
   const nowMs = useNow();
   const fareOptions = useFareOptions();
   const {
@@ -255,6 +262,8 @@ export default function FleetsPage({ fleets, routes, trips, onRefresh, companyNa
   const [openDetails, setOpenDetails] = useState(null);
   const [modal, setModal] = useState(null); // 'add' | 'assign' | null
   const [trackedFleetId, setTrackedFleetId] = useState(null);
+  // Batch 60: the trip an alert asked about (null: the bus's running or late trip).
+  const [trackedTripId, setTrackedTripId] = useState(null);
   const [editingFleet, setEditingFleet] = useState(null);
   const canManage = useCanManageCompany();
   const [notice, setNotice] = useState('');
@@ -265,6 +274,28 @@ export default function FleetsPage({ fleets, routes, trips, onRefresh, companyNa
   const counts = (key) => rows.filter((row) => row.status.key === key).length;
   const dashboard = useMemo(() => buildDashboardView({ trips, fleets, locations: fleetLocations, nowMs }), [trips, fleets, fleetLocations, nowMs]);
   const tracked = rows.find((row) => row.fleetId === trackedFleetId) || null;
+  const trackedTrip = tracked
+    ? ((trackedTripId && (trips || []).find((trip) => Number(trip.trip_id) === Number(trackedTripId))) || tracked.trackTrip)
+    : null;
+
+  // Batch 60 (user, 2026-11-11): a dashboard alert or a crew alert's "Track bus" opens that bus's Track popup here. Each
+  // click is a new request object; it is taken once (state adjusted while rendering), then the portal clears it.
+  const [takenRequest, setTakenRequest] = useState(null);
+  if (trackRequest && trackRequest !== takenRequest) {
+    setTakenRequest(trackRequest);
+    const tripId = trackRequest.tripId ? Number(trackRequest.tripId) : null;
+    const fromTrip = tripId ? (trips || []).find((trip) => Number(trip.trip_id) === tripId) : null;
+    const fleetId = Number(trackRequest.fleetId) || (fromTrip ? fleetIdOf(fromTrip) : null);
+    if (fleetId && rows.some((row) => row.fleetId === fleetId)) {
+      setTrackedFleetId(fleetId);
+      setTrackedTripId(tripId);
+    } else {
+      setNotice(tripId ? `Trip #${tripId} is not in the loaded list. Choose Refresh and try again.` : 'That bus is not in your fleet list.');
+    }
+  }
+  useEffect(() => {
+    if (trackRequest) onTrackHandled();
+  }, [trackRequest, onTrackHandled]);
   const classLabel = (key) => fareOptions.vehicle_classes.find((entry) => entry.key === key)?.label;
 
   const closeModal = () => setModal(null);
@@ -340,9 +371,9 @@ export default function FleetsPage({ fleets, routes, trips, onRefresh, companyNa
                     <button
                       type="button"
                       disabled={!row.trackable}
-                      title={row.trackable ? undefined : 'Tracking is available while a trip is boarding or on the road'}
+                      title={row.trackable ? undefined : 'Tracking is available while a trip is boarding, on the road or late leaving'}
                       aria-label={`Track fleet ${row.fleet.plate_number}`}
-                      onClick={() => setTrackedFleetId(row.fleetId)}
+                      onClick={() => { setTrackedFleetId(row.fleetId); setTrackedTripId(null); }}
                       className={SECONDARY}
                     >
                       <MapPinned className="h-3.5 w-3.5" aria-hidden="true" /> Track
@@ -382,11 +413,12 @@ export default function FleetsPage({ fleets, routes, trips, onRefresh, companyNa
       <AssignRouteModal open={modal === 'assign'} onClose={closeModal} form={assignForm} setForm={setAssignForm} fleets={fleets} routes={routes} saving={manageSaving} message={manageMsg} onSubmit={submitAssign} />
       <TrackFleetModal
         row={tracked}
+        trip={trackedTrip}
         advice={dashboard.advice}
         saving={savingTripId}
         error={error}
         onDecide={(item, decision, note) => decide(item.tripId, decision, decisionPayload(item, decision, note))}
-        onClose={() => setTrackedFleetId(null)}
+        onClose={() => { setTrackedFleetId(null); setTrackedTripId(null); }}
         onOpenGoogleMaps={() => openFleetMap(trackedFleetId)}
       />
     </div>

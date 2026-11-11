@@ -36,6 +36,16 @@ describe('buildFleetRows', () => {
     expect(rowOf(rows, 2).nextTripLabel).toBe('Davao - Tagum - 08:00');
   });
 
+  // Batch 60: Track opens for a trip that is late leaving, as well as a running one.
+  it('can be tracked while a trip is running or late leaving, not while it is only scheduled', () => {
+    const late = buildFleetRows({ fleets: [fleet(1)], trips: [trip(3, 1, 'delayed')], locations: [], today: TODAY, nowMs: NOW });
+    expect(late[0].trackable).toBe(true);
+    expect(late[0].trackTrip.trip_id).toBe(3);
+    expect(late[0].liveTrip).toBeNull();
+    expect(rowOf(rows, 1).trackTrip.trip_id).toBe(1);
+    expect(rowOf(rows, 2).trackTrip).toBeNull();
+  });
+
   it('is idle when nothing is left to run today (a finished trip does not count)', () => {
     expect(rowOf(rows, 3).status.key).toBe('idle');
     expect(rowOf(rows, 3).nextTripLabel).toBeNull();

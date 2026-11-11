@@ -33,6 +33,19 @@ describe('OperatorAlerts', () => {
     expect(within(card).getByRole('link', { name: 'See where the bus was' })).toHaveAttribute('href', expect.stringContaining('mlat=7.05&mlon=125.01'))
   })
 
+  // Batch 60 (user, 2026-11-11): "Track bus" opens where the bus is now, on Fleets.
+  test('Track bus asks for that bus\'s Track popup, and is only there when the portal offers it', () => {
+    const onTrackBus = vi.fn()
+    const alert = { ...openAlert, trip: { ...openAlert.trip, fleet_id: 5 } }
+    const { unmount } = render(<OperatorAlerts alerts={state({ open: [alert] })} onTrackBus={onTrackBus} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Track bus' }))
+    expect(onTrackBus).toHaveBeenCalledWith({ tripId: 42, fleetId: 5 })
+    unmount()
+
+    render(<OperatorAlerts alerts={state()} />)
+    expect(screen.queryByRole('button', { name: 'Track bus' })).not.toBeInTheDocument()
+  })
+
   test('Tell passengers asks first, and Mark handled sends the note', async () => {
     const alerts = state()
     const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true)

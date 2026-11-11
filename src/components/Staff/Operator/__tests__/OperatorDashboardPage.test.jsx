@@ -69,6 +69,18 @@ describe('OperatorDashboardPage', () => {
     await waitFor(() => expect(mocks.getFleetLocations).toHaveBeenCalled());
   });
 
+  // Batch 60 (user, 2026-11-11): an alert opens where it can be dealt with.
+  it('opens a delay alert on the bus\'s Track popup and a missing-crew alert on its trip', async () => {
+    const onTrackTrip = vi.fn();
+    const onOpenTrip = vi.fn();
+    renderPage({ trips: [trip(7, { status: 'delayed' }), trip(8, { conductor: null })], onTrackTrip, onOpenTrip });
+    fireEvent.click(screen.getByRole('button', { name: /Trip #7 is delayed/ }));
+    expect(onTrackTrip).toHaveBeenCalledWith(7);
+    fireEvent.click(screen.getByRole('button', { name: /Trip #8 still needs a chauffeur/ }));
+    expect(onOpenTrip).toHaveBeenCalledWith(8);
+    await waitFor(() => expect(mocks.getFleetLocations).toHaveBeenCalled());
+  });
+
   it('opens Schedule from the deployment card', async () => {
     const onOpenSchedule = vi.fn();
     renderPage({ onOpenSchedule });

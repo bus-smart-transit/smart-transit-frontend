@@ -58,7 +58,11 @@ function QuickActions({ onCreateSchedule, onOpenApprovals, onOpenStaffs, onOpenF
   );
 }
 
-function AlertsCard({ alerts }) {
+/**
+ * Batch 60 (user, 2026-11-11): each alert opens where it can be dealt with: the bus's Track popup on Fleets (delays,
+ * GPS, near full), or the trip on Schedule > Trips when crew is missing.
+ */
+function AlertsCard({ alerts, onOpen }) {
   return (
     <OpCard
       icon={BellRing}
@@ -69,14 +73,23 @@ function AlertsCard({ alerts }) {
       {alerts.length === 0 ? <OpEmpty icon={CheckCircle2}>No alerts. Today&apos;s trips are running without delays, crew gaps or GPS problems.</OpEmpty> : (
         <ul className="max-h-96 space-y-2.5 overflow-y-auto pr-1">
           {alerts.map((alert) => (
-            <li key={alert.key} className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-3">
-              <span className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${ALERT_STYLE[alert.tone] ?? ALERT_STYLE.info}`} aria-hidden="true">
-                <AlertTriangle className="h-4 w-4" />
-              </span>
-              <div className="min-w-0">
-                <p className="text-sm font-semibold text-slate-900">{alert.title}</p>
-                <p className="mt-0.5 text-xs leading-relaxed text-slate-500">{alert.detail}</p>
-              </div>
+            <li key={alert.key}>
+              <button
+                type="button"
+                onClick={() => onOpen(alert)}
+                data-testid="dashboard-alert"
+                className="flex w-full items-start gap-3 rounded-xl border border-slate-200 bg-white p-3 text-left transition hover:border-teal-300 hover:bg-teal-50"
+              >
+                <span className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${ALERT_STYLE[alert.tone] ?? ALERT_STYLE.info}`} aria-hidden="true">
+                  <AlertTriangle className="h-4 w-4" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-semibold text-slate-900">{alert.title}</span>
+                  <span className="mt-0.5 block text-xs leading-relaxed text-slate-500">{alert.detail}</span>
+                  <span className="mt-1 block text-xs font-semibold text-teal-700">{alert.kind === 'crew' ? 'Open the trip in Schedule' : 'Track this bus'}</span>
+                </span>
+                <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />
+              </button>
             </li>
           ))}
         </ul>
@@ -120,6 +133,7 @@ function SuggestedAssignments({ deployment, onOpenSchedule }) {
 export default function OperatorDashboardPage({
   trips, fleets, operatorName = '', topSlot = null, onRefresh, onOpenCalendar, onOpenSchedule,
   onCreateSchedule = onOpenSchedule, onOpenApprovals = onOpenSchedule, onOpenStaffs = () => {}, onOpenFleets = () => {},
+  onTrackTrip = () => {}, onOpenTrip = () => {},
 }) {
   const nowMs = useNow();
   const { locations, refresh: refreshLocations } = useFleetLocations();
@@ -159,7 +173,7 @@ export default function OperatorDashboardPage({
           <QuickActions onCreateSchedule={onCreateSchedule} onOpenApprovals={onOpenApprovals} onOpenStaffs={onOpenStaffs} onOpenFleets={onOpenFleets} />
 
           <div className="grid gap-6 lg:grid-cols-2">
-            <AlertsCard alerts={view.alerts} />
+            <AlertsCard alerts={view.alerts} onOpen={(alert) => (alert.kind === 'crew' ? onOpenTrip(alert.tripId) : onTrackTrip(alert.tripId))} />
             <OpCard icon={Lightbulb} title="Recommended actions" subtitle="Suggestions only. Nothing here runs by itself.">
               {view.actions.length === 0 ? <OpEmpty icon={Inbox}>No action is needed right now.</OpEmpty> : (
                 <ul className="max-h-96 space-y-2.5 overflow-y-auto pr-1">
