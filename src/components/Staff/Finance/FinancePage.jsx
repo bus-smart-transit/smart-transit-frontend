@@ -74,8 +74,8 @@ export default function FinancePage({ views, view, onViewChange, service }) {
   const active = views.some((v) => v.key === view) ? view : views[0].key;
 
   return (
-    <div className="space-y-4">
-      <h2 className="text-xl font-bold text-slate-900">Finance</h2>
+    <div className="space-y-5">
+      <h2 className="font-display text-2xl font-bold tracking-tight text-slate-900 sm:text-[1.75rem]">Finance</h2>
       <ViewTabs label="Finance views" tabs={views} value={active} onChange={onViewChange} />
       <div role="tabpanel" aria-label={views.find((v) => v.key === active)?.label}>
         {active === 'remittances'

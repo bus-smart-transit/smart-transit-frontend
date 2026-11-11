@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { RefreshCw, Bus, ChevronRight, MapPinned, Pencil, Plus } from 'lucide-react';
+import { RefreshCw, Bus, ChevronRight, MapPinned, Pencil, Plus, Navigation, Clock, Pause, WifiOff } from 'lucide-react';
 import { OpPageHeader, OpCard, OpChip, OpStat, OpEmpty } from './OperatorUI';
 import { OP_SPACE } from './operatorUiTokens';
 import Modal from '../../ui/Modal';
@@ -283,12 +283,12 @@ export default function FleetsPage({ fleets, routes, trips, onRefresh, companyNa
 
       {notice && <p role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{notice}</p>}
 
-      <section aria-label="Fleet summary" className="grid grid-cols-2 gap-4 lg:grid-cols-5">
+      <section aria-label="Fleet summary" className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-5">
         <OpStat icon={Bus} label="Fleets" value={rows.length} />
-        <OpStat label="On route" value={counts('on_route')} tone="success" hint="trip live, GPS fresh" />
-        <OpStat label="Active" value={counts('active')} tone="info" hint="trip still to run today" />
-        <OpStat label="Idle" value={counts('idle')} hint="no trip left today" />
-        <OpStat label="Offline" value={counts('offline')} tone={counts('offline') ? 'warning' : 'neutral'} hint="trip live, no fresh GPS" />
+        <OpStat icon={Navigation} label="On route" value={counts('on_route')} tone="success" hint="trip live, GPS fresh" />
+        <OpStat icon={Clock} label="Active" value={counts('active')} tone="info" hint="trip still to run today" />
+        <OpStat icon={Pause} label="Idle" value={counts('idle')} hint="no trip left today" />
+        <OpStat className="col-span-2 lg:col-span-1" icon={WifiOff} label="Offline" value={counts('offline')} tone={counts('offline') ? 'warning' : 'neutral'} hint="trip live, no fresh GPS" />
       </section>
 
       <OpCard

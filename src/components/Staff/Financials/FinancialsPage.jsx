@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Download, Loader2, RotateCcw } from 'lucide-react';
+import { Download, Loader2, RotateCcw, Wallet, Undo2, Banknote, Ticket, Calculator, Percent, Receipt, ArrowLeftRight } from 'lucide-react';
 import Card from '../../ui/Card';
 import FileTypeSelect from '../../ui/FileTypeSelect';
 import { DEFAULT_FILE_TYPE } from '../../../utils/tableExport';
@@ -10,12 +10,20 @@ import TransactionsTable from './TransactionsTable';
 
 const FIELD = 'w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500';
 
-function Kpi({ label, value, hint, tone = 'text-slate-900', testId }) {
+const ICON_TILE = 'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600 sm:h-10 sm:w-10 sm:rounded-xl';
+
+function Kpi({ label, value, hint, tone = 'text-slate-900', testId, icon: Icon = null }) {
+  const missing = value === 'Not provided';
   return (
-    <Card padding="sm" className="min-w-0" data-testid={testId}>
-      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
-      <p className={`mt-1 truncate font-data text-xl font-bold sm:text-2xl ${tone}`}>{value}</p>
-      {hint && <p className="mt-1 text-xs text-slate-500">{hint}</p>}
+    <Card padding="sm" className="min-w-0 p-4! sm:p-5!" data-testid={testId}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-xs font-medium text-slate-500 sm:text-[13px]">{label}</p>
+          <p className={`mt-1.5 truncate font-display font-bold tracking-tight tabular-nums ${missing ? 'text-lg text-slate-400' : `text-xl leading-tight sm:text-[1.625rem] ${tone}`}`}>{value}</p>
+        </div>
+        {Icon && <span className={ICON_TILE} aria-hidden="true"><Icon className="h-4 w-4 sm:h-5 sm:w-5" /></span>}
+      </div>
+      {hint && <p className="mt-2 text-xs leading-relaxed text-slate-500">{hint}</p>}
     </Card>
   );
 }
@@ -24,8 +32,8 @@ function Section({ title, hint, children }) {
   return (
     <Card as="section" aria-label={title} className="min-w-0 space-y-3">
       <div>
-        <h3 className="text-base font-bold text-slate-900">{title}</h3>
-        {hint && <p className="text-xs text-slate-500">{hint}</p>}
+        <h3 className="font-display text-[1.0625rem] font-semibold text-slate-900">{title}</h3>
+        {hint && <p className="mt-0.5 text-[13px] text-slate-500">{hint}</p>}
       </div>
       {children}
     </Card>
@@ -139,19 +147,20 @@ export default function FinancialsPage({ service, view = 'all', embedded = false
       ) : kpis && (
         <div className={`space-y-4 ${summaryLoading ? 'opacity-60' : ''}`}>
           {kpis.tickets === 0 && kpis.refunds === 0 && (
-            <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-600" data-testid="financial-empty">
+            <p className="rounded-xl bg-white px-4 py-3.5 text-sm text-slate-600 ring-1 ring-slate-200" data-testid="financial-empty">
               No paid tickets in this range. Pending, failed and expired payments are never counted.
             </p>
           )}
 
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4" data-testid="kpis">
-            <Kpi label="Gross revenue" value={formatPeso(kpis.gross)} hint="Paid tickets" testId="kpi-gross" />
-            <Kpi label="Refunds" value={formatPeso(kpis.refunds)} hint={filters.refund_basis === 'sale' ? 'Of tickets sold in this range' : 'Completed in this range'} tone="text-rose-600" testId="kpi-refunds" />
-            <Kpi label="Net revenue" value={formatPeso(kpis.net)} hint="Gross minus refunds" tone="text-teal-700" testId="kpi-net" />
-            <Kpi label="Paid tickets" value={formatCount(kpis.tickets)} hint={`${formatCount(kpis.boarded)} boarded`} testId="kpi-tickets" />
-            <Kpi label="Average fare" value={formatPeso(kpis.average_fare)} hint="Gross per paid ticket" testId="kpi-average" />
-            <Kpi label="Discounts given" value={formatPeso(summary.discounts?.total ?? 0)} hint={`${formatCount(summary.discounts?.tickets ?? 0)} discounted tickets`} tone="text-sky-700" testId="kpi-discounts" />
+            <Kpi icon={Wallet} label="Gross revenue" value={formatPeso(kpis.gross)} hint="Paid tickets" testId="kpi-gross" />
+            <Kpi icon={Undo2} label="Refunds" value={formatPeso(kpis.refunds)} hint={filters.refund_basis === 'sale' ? 'Of tickets sold in this range' : 'Completed in this range'} tone="text-rose-600" testId="kpi-refunds" />
+            <Kpi icon={Banknote} label="Net revenue" value={formatPeso(kpis.net)} hint="Gross minus refunds" tone="text-teal-700" testId="kpi-net" />
+            <Kpi icon={Ticket} label="Paid tickets" value={formatCount(kpis.tickets)} hint={`${formatCount(kpis.boarded)} boarded`} testId="kpi-tickets" />
+            <Kpi icon={Calculator} label="Average fare" value={formatPeso(kpis.average_fare)} hint="Gross per paid ticket" testId="kpi-average" />
+            <Kpi icon={Percent} label="Discounts given" value={formatPeso(summary.discounts?.total ?? 0)} hint={`${formatCount(summary.discounts?.tickets ?? 0)} discounted tickets`} tone="text-sky-700" testId="kpi-discounts" />
             <Kpi
+              icon={Receipt}
               label="Booking fees"
               value={kpis.booking_fees ? formatPeso(kpis.booking_fees.net) : 'Not provided'}
               hint={kpis.booking_fees
@@ -159,8 +168,11 @@ export default function FinancialsPage({ service, view = 'all', embedded = false
                 : 'Online fee, not part of the fares.'}
               testId="kpi-booking-fees"
             />
-            <Card padding="sm" className="col-span-2 min-w-0" data-testid="kpi-split">
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Cash vs online</p>
+            <Card padding="sm" className="col-span-2 min-w-0 p-5!" data-testid="kpi-split">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <p className="text-[13px] font-medium text-slate-500">Cash vs online</p>
+                <span className={ICON_TILE} aria-hidden="true"><ArrowLeftRight className="h-5 w-5" /></span>
+              </div>
               <SplitBar cash={kpis.cash} online={kpis.online} />
             </Card>
           </div>

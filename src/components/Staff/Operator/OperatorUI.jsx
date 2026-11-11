@@ -1,5 +1,5 @@
 import Card from '../../ui/Card';
-import { toneOf, OP_SPACE } from './operatorUiTokens';
+import { toneOf, OP_ICON_TILE, OP_SPACE } from './operatorUiTokens';
 
 /**
  * Batch 31: the building blocks of the reworked Operator pages. They sit on the shared Card and the Operator
@@ -8,11 +8,12 @@ import { toneOf, OP_SPACE } from './operatorUiTokens';
  */
 
 /** Page title with at most ONE action (the Batch 21 header rule). */
-export function OpPageHeader({ title, subtitle, action = null }) {
+export function OpPageHeader({ title, subtitle, eyebrow = null, action = null }) {
   return (
-    <header className="flex flex-wrap items-start justify-between gap-3">
+    <header className="flex flex-wrap items-end justify-between gap-3">
       <div className="min-w-0">
-        <h1 className="text-xl font-bold text-slate-900">{title}</h1>
+        {eyebrow && <div className="mb-1.5 text-sm font-medium text-slate-500">{eyebrow}</div>}
+        <h1 className="font-display text-2xl font-bold tracking-tight text-slate-900 sm:text-[1.75rem]">{title}</h1>
         {subtitle && <p className="mt-1 text-sm text-slate-500">{subtitle}</p>}
       </div>
       {action}
@@ -20,14 +21,21 @@ export function OpPageHeader({ title, subtitle, action = null }) {
   );
 }
 
-export function OpCard({ title, subtitle, badge = null, children, className = '', padding = 'md' }) {
+export function OpCard({ title, subtitle, badge = null, icon: Icon = null, children, className = '', padding = 'md' }) {
   return (
     <Card padding={padding} className={`min-w-0 ${className}`}>
       {(title || badge) && (
-        <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
-          <div className="min-w-0">
-            {title && <h2 className="text-base font-semibold text-slate-900">{title}</h2>}
-            {subtitle && <p className="mt-1 text-xs text-slate-500">{subtitle}</p>}
+        <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+          <div className="flex min-w-0 items-start gap-3">
+            {Icon && (
+              <span className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${OP_ICON_TILE}`} aria-hidden="true">
+                <Icon className="h-[18px] w-[18px]" />
+              </span>
+            )}
+            <div className="min-w-0">
+              {title && <h2 className="font-display text-[1.0625rem] font-semibold leading-snug text-slate-900">{title}</h2>}
+              {subtitle && <p className="mt-0.5 text-[13px] leading-relaxed text-slate-500">{subtitle}</p>}
+            </div>
           </div>
           {badge}
         </div>
@@ -45,15 +53,21 @@ export function OpChip({ tone = 'neutral', children, className = '' }) {
   );
 }
 
-export function OpStat({ label, value, hint = null, tone = 'neutral', icon: Icon = null }) {
+export function OpStat({ label, value, hint = null, tone = 'neutral', icon: Icon = null, className = '' }) {
   return (
-    <Card padding="sm" className="min-w-0 p-4!">
-      <div className="flex items-start justify-between gap-2">
-        <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</p>
-        {Icon && <Icon className="h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />}
+    <Card padding="sm" className={`min-w-0 p-4! transition-shadow hover:shadow-card-hover sm:p-5! ${className}`}>
+      <div className="flex items-start justify-between gap-2 sm:gap-3">
+        <div className="min-w-0">
+          <p className="text-xs font-medium text-slate-500 sm:text-[13px]">{label}</p>
+          <p className="mt-1.5 font-display text-2xl font-bold leading-none tracking-tight text-slate-900 tabular-nums sm:text-[1.875rem]">{value}</p>
+        </div>
+        {Icon && (
+          <span className={`op-stat-icon inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg sm:h-10 sm:w-10 sm:rounded-xl ${OP_ICON_TILE}`} aria-hidden="true">
+            <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
+          </span>
+        )}
       </div>
-      <p className="mt-2 text-2xl font-bold text-slate-900">{value}</p>
-      {hint && <p className="mt-1 flex items-center gap-2 text-xs text-slate-500"><span className={`inline-block h-2 w-2 rounded-full ${toneOf(tone).dot}`} aria-hidden="true" />{hint}</p>}
+      {hint && <p className="mt-2.5 flex items-start gap-1.5 text-xs leading-snug text-slate-500 sm:mt-3"><span className={`mt-[5px] inline-block h-1.5 w-1.5 shrink-0 rounded-full ${toneOf(tone).dot}`} aria-hidden="true" />{hint}</p>}
     </Card>
   );
 }
@@ -105,8 +119,14 @@ export function OpStackedBar({ segments }) {
   );
 }
 
-export function OpEmpty({ children }) {
-  return <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">{children}</p>;
+export function OpEmpty({ children, icon: Icon = null }) {
+  if (!Icon) return <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50/70 px-4 py-6 text-center text-sm text-slate-500">{children}</p>;
+  return (
+    <div className="flex items-center gap-3 rounded-xl bg-slate-50 px-4 py-3.5">
+      <Icon className="h-[18px] w-[18px] shrink-0 text-slate-400" aria-hidden="true" />
+      <p className="min-w-0 text-sm text-slate-500">{children}</p>
+    </div>
+  );
 }
 
 /**
@@ -117,8 +137,8 @@ export function OpEmpty({ children }) {
  * (it stays for screen readers) and every cell shows its column header before its value. The table roles are set
  * explicitly because a table whose display is changed loses them in some browsers.
  */
-export function OpTable({ columns, rows, rowKey, empty = 'Nothing to show.', caption }) {
-  if (!rows.length) return <OpEmpty>{empty}</OpEmpty>;
+export function OpTable({ columns, rows, rowKey, empty = 'Nothing to show.', emptyIcon = null, caption }) {
+  if (!rows.length) return <OpEmpty icon={emptyIcon}>{empty}</OpEmpty>;
   return (
     <div className="overflow-x-auto">
       <table role="table" className="w-full text-sm max-md:block">

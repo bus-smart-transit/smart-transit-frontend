@@ -9,10 +9,10 @@ export default function SchedulePage({ views, view, onViewChange, onCreate, chil
   const active = views.some((v) => v.key === view) ? view : views[0].key;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-xl font-bold text-slate-900">Schedule</h2>
-        <button type="button" onClick={onCreate} className="rounded-lg bg-teal-600 px-3 py-2 text-sm font-semibold text-white hover:bg-teal-700">
+        <h2 className="font-display text-2xl font-bold tracking-tight text-slate-900 sm:text-[1.75rem]">Schedule</h2>
+        <button type="button" onClick={onCreate} className="rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-teal-700">
           + Schedule
         </button>
       </div>

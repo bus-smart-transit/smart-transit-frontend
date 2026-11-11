@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Plus, RefreshCw, Search } from 'lucide-react';
+import { Plus, RefreshCw, Search, Route as RouteIcon, Bus, Ban, MapPin } from 'lucide-react';
 import { OpPageHeader, OpCard, OpChip, OpStat, OpTable, OpPager } from './OperatorUI';
 import { OP_SPACE } from './operatorUiTokens';
 import Modal from '../../ui/Modal';
@@ -193,11 +193,11 @@ export default function RoutesPage({ routes, stops, trips, fleets, onRefresh, on
         <p role="status" className={`rounded-lg border px-3 py-2 text-sm ${isFailure(manageMsg) ?'border-rose-200 bg-rose-50 text-rose-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}>{manageMsg}</p>
       )}
 
-      <section aria-label="Route summary" className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <OpStat label="Routes" value={rows.length} />
-        <OpStat label="With an active fleet" value={withFleet} tone="success" />
-        <OpStat label="No active fleet" value={rows.length - withFleet} tone={rows.length - withFleet ? 'warning' : 'neutral'} />
-        <OpStat label="Stops" value={stops.length} hint="in your directory" />
+      <section aria-label="Route summary" className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+        <OpStat icon={RouteIcon} label="Routes" value={rows.length} />
+        <OpStat icon={Bus} label="With an active fleet" value={withFleet} tone="success" />
+        <OpStat icon={Ban} label="No active fleet" value={rows.length - withFleet} tone={rows.length - withFleet ? 'warning' : 'neutral'} />
+        <OpStat icon={MapPin} label="Stops" value={stops.length} hint="in your directory" />
       </section>
 
       <OpCard
