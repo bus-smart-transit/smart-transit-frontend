@@ -65,6 +65,11 @@ class OperatorService extends StaffBaseService {
     return await this.request(`/operator/stops/${stopId}`, 'DELETE');
   }
 
+  // Batch 59: a route that was never used (no stops, buses or fare rules); the server refuses any other.
+  async deleteOperatorRoute(routeId) {
+    return await this.request(`/operator/routes/${routeId}`, 'DELETE');
+  }
+
   async addOperatorStopToRoute(routeId, stopData) {
     return await this.request(`/operator/routes/${routeId}/stops`, 'POST', stopData);
   }

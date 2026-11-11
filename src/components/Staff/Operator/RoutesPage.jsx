@@ -95,7 +95,7 @@ export default function RoutesPage({ routes, stops, trips, fleets, onRefresh, on
   const canManage = useCanManageCompany();
   const {
     manageMsg, clearManageMsg, manageSaving, editingStopId, setEditingStopId, stopForm, setStopForm,
-    routeForm, handleCreateStop, handleDeleteStop, handleCreateRoute, setRouteForm,
+    routeForm, handleCreateStop, handleDeleteStop, handleCreateRoute, setRouteForm, handleDeleteRoute,
   } = routesTab;
 
   const [query, setQuery] = useState('');
@@ -163,7 +163,15 @@ export default function RoutesPage({ routes, stops, trips, fleets, onRefresh, on
     { key: 'duration', header: 'Travel time', className: 'whitespace-nowrap', render: (row) => formatDuration(row.durationMin) ?? '-' },
     { key: 'fleets', header: 'Active fleets', render: (row) => (row.activeFleets.length ? <span className="text-xs">{row.activeFleets.length}<span className="block text-slate-500">{row.activeFleets.map((item) => item.plate).join(', ')}</span></span> : <span className="text-slate-400">0</span>) },
     { key: 'status', header: 'Status', render: (row) => <span className="inline-flex flex-wrap gap-1"><OpChip tone={row.status.tone}>{row.status.label}</OpChip>{row.geometryIssue && <OpChip tone="warning">Line needs to be redrawn</OpChip>}</span> },
-    { key: 'open', header: '', render: (row) => <button type="button" aria-label={`Open route ${row.route.route_name}`} onClick={() => setSelectedRouteId(row.routeId)} className={SECONDARY}>Open</button> },
+    { key: 'open', header: '', render: (row) => (
+      <span className="inline-flex gap-2">
+        <button type="button" aria-label={`Open route ${row.route.route_name}`} onClick={() => setSelectedRouteId(row.routeId)} className={SECONDARY}>Open</button>
+        {/* Batch 59 (user): only a route never used (no stops, no bus) offers Delete; the server checks fare rules too. */}
+        {canManage && row.stopCount === 0 && row.activeFleets.length === 0 && (
+          <button type="button" aria-label={`Delete route ${row.route.route_name}`} disabled={manageSaving} onClick={() => { void handleDeleteRoute(row.route); }} className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-50">Delete</button>
+        )}
+      </span>
+    ) },
   ];
 
   const stopColumns = [

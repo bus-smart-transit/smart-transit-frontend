@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   createOperatorStop: vi.fn(),
   updateOperatorStop: vi.fn(),
   deleteOperatorStop: vi.fn(),
+  deleteOperatorRoute: vi.fn(),
   addOperatorStopToRoute: vi.fn(),
   removeOperatorStopFromRoute: vi.fn(),
   setOperatorRouteStopExpress: vi.fn(),
@@ -435,4 +436,37 @@ describe('Route line redraw progress', () => {
     expect(outcome).toHaveTextContent('ORS_API_KEY is not configured.');
     expect(outcome).toHaveTextContent('The previous line was kept.');
   }, 15000);
+});
+
+// Batch 59 (user, 2026-11-11): the Company Admin deletes a route that was never used.
+describe('RoutesPage delete route', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    Object.values(mocks).forEach((fn) => fn.mockResolvedValue({ data: { route_stops: [] } }));
+  });
+
+  it('offers Delete only on a route with no stops and no bus, asks first, and refreshes after', async () => {
+    const onRefresh = vi.fn();
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true);
+    renderPage({ onRefresh });
+
+    expect(screen.queryByRole('button', { name: 'Delete route Davao - Tagum' })).toBeNull();
+    const del = screen.getByRole('button', { name: 'Delete route Davao-Mati' });
+
+    fireEvent.click(del);
+    expect(mocks.deleteOperatorRoute).not.toHaveBeenCalled();
+    fireEvent.click(del);
+    await waitFor(() => expect(mocks.deleteOperatorRoute).toHaveBeenCalledWith(5));
+    expect(confirm).toHaveBeenCalledWith('Delete the route "Davao-Mati"? This cannot be undone.');
+    await waitFor(() => expect(onRefresh).toHaveBeenCalled());
+    expect(await screen.findByText('Route deleted.')).toBeInTheDocument();
+  });
+
+  it('says why when the server refuses', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    mocks.deleteOperatorRoute.mockRejectedValueOnce(new Error('This route is still in use (1 fare rule), so it cannot be deleted.'));
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: 'Delete route Davao-Mati' }));
+    expect(await screen.findByText('Could not delete the route. This route is still in use (1 fare rule), so it cannot be deleted.')).toBeInTheDocument();
+  });
 });

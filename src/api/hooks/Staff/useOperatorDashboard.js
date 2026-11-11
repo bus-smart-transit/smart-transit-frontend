@@ -504,6 +504,24 @@ export function useRoutesTab({ onRefresh }) {
     }
   };
 
+  // Batch 59 (user): delete a route that was never used; the server says why when it is still in use.
+  const handleDeleteRoute = async (route) => {
+    if (!window.confirm(`Delete the route "${route?.route_name ?? ''}"? This cannot be undone.`)) return false;
+    setManageSaving(true);
+    setManageMsg('');
+    try {
+      await OperatorService.deleteOperatorRoute(route.route_id);
+      setManageMsg('Route deleted.');
+      onRefresh();
+      return true;
+    } catch (err) {
+      setManageMsg(err?.message ? `Could not delete the route. ${err.message}` : 'Could not delete the route.');
+      return false;
+    } finally {
+      setManageSaving(false);
+    }
+  };
+
   const handleDeleteStop = async (stopId) => {
     if (!window.confirm('Delete this stop?')) return;
     setManageSaving(true);
@@ -650,6 +668,7 @@ export function useRoutesTab({ onRefresh }) {
     suggestedStopOrder,
     handleCreateStop,
     handleDeleteStop,
+    handleDeleteRoute,
     handleRemoveStopFromRoute,
     handleToggleStopExpress,
     handleCreateRoute,
