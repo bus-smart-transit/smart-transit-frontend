@@ -47,7 +47,10 @@ export default function ChauffeurScannerCard({
 
       <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
         <div className="relative mx-auto aspect-square w-full max-w-sm overflow-hidden rounded-2xl border-2 border-teal-600 bg-slate-100">
-          <video ref={videoRef} className={`h-full w-full object-cover ${scannerRunning ? '' : 'invisible'}`} muted playsInline autoPlay />
+          {/* 2026-11-11 (user: no camera picture): never hide this video with CSS. qr-scanner checks it when the scanner is
+              made, and a hidden video is shrunk to 0 x 0 and made transparent for good (it keeps reading frames, so
+              "Scanning..." showed with no picture). Before the camera starts the video is empty; the icon covers it. */}
+          <video ref={videoRef} className="h-full w-full object-cover" muted playsInline autoPlay data-testid="scanner-video" />
           {!scannerRunning && (
             <div className="absolute inset-0 flex items-center justify-center text-slate-400">
               <QrCode className="h-28 w-28" aria-hidden="true" />

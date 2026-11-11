@@ -47,4 +47,16 @@ describe('ChauffeurScannerCard', () => {
     expect(screen.getByTestId('scan-result')).toHaveTextContent('Ticket not found.');
     expect(screen.getByTestId('scanner-chip')).toHaveTextContent('Not boarded');
   });
+
+  // 2026-11-11 (user: no camera picture): qr-scanner shrinks a video that is hidden when the scanner is made, so the
+  // video is never hidden, before or after the camera starts.
+  it('never hides the camera video, so the scanner can show the picture', () => {
+    const { rerender } = render(<ChauffeurScannerCard {...base({ scannerRunning: false })} />);
+    const video = screen.getByTestId('scanner-video');
+    expect(video.className).not.toMatch(/(invisible|hidden)/);
+    expect(video).not.toHaveAttribute('hidden');
+    rerender(<ChauffeurScannerCard {...base({ scannerRunning: true })} />);
+    expect(screen.getByTestId('scanner-video').className).not.toMatch(/(invisible|hidden)/);
+  });
 });
+
