@@ -7,19 +7,18 @@ import {
  * Batch 31 Phase 3: what the Operator's Fleets page shows for each bus.
  *
  * The database stores only `fleets.status` (in practice "active"); there is no maintenance state and none is
- * invented. The four states below are DERIVED from today's trips and the bus's last GPS report:
+ * invented. The states below are DERIVED from today's trips:
  *
- *   on_route  a trip is boarding or on the road AND the bus is reporting a fresh position
- *   offline   a trip is boarding or on the road but there is no fresh position (none, stale, or too weak)
- *   active    in service today: it has a trip still to run, none under way yet
+ *   active    in service today: a trip is under way, or one is still to run
  *   idle      no trip left to run today
+ *
+ * Batch 60 item 4 (user, 2026-11-11): "On route" and "Offline" were folded into Active. A running bus that stopped
+ * sending GPS still shows it on its card (the GPS chip) and in the dashboard Alerts.
  *
  * A fleet whose stored status is not "active" is shown as "inactive" and is never derived into the above.
  */
 
 export const FLEET_STATUS = {
-  on_route: { label: 'On route', tone: 'success' },
-  offline: { label: 'Offline', tone: 'warning' },
   active: { label: 'Active', tone: 'info' },
   idle: { label: 'Idle', tone: 'neutral' },
   inactive: { label: 'Inactive', tone: 'danger' },
@@ -27,10 +26,8 @@ export const FLEET_STATUS = {
 
 export const FLEET_FILTERS = [
   { value: 'all', label: 'All' },
-  { value: 'on_route', label: 'On route' },
   { value: 'active', label: 'Active' },
   { value: 'idle', label: 'Idle' },
-  { value: 'offline', label: 'Offline' },
   // Batch 54 (production test): a bus switched off is counted in All, so it gets its own chip (shown when there is one).
   { value: 'inactive', label: 'Inactive' },
 ];
@@ -52,8 +49,7 @@ export function buildFleetRows({ fleets = [], trips = [], locations = [], today 
 
     let key;
     if (String(fleet.status || 'active').toLowerCase() !== 'active') key = 'inactive';
-    else if (live) key = gps.state === 'live' || gps.state === 'off_route' ? 'on_route' : 'offline';
-    else if (later.length > 0) key = 'active';
+    else if (live || later.length > 0) key = 'active';
     else key = 'idle';
 
     const next = live || later[0] || null;

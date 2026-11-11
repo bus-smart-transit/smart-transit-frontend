@@ -23,8 +23,10 @@ describe('buildFleetRows', () => {
     nowMs: NOW,
   });
 
-  it('is on route when a trip is live and the bus is reporting', () => {
-    expect(rowOf(rows, 1).status.key).toBe('on_route');
+  // Batch 60 item 4: a running bus is Active, reporting or not (its GPS state is still on the row).
+  it('is active when a trip is live and the bus is reporting', () => {
+    expect(rowOf(rows, 1).status.key).toBe('active');
+    expect(rowOf(rows, 1).gps.state).toBe('live');
     expect(rowOf(rows, 1).trackable).toBe(true);
   });
 
@@ -39,13 +41,14 @@ describe('buildFleetRows', () => {
     expect(rowOf(rows, 3).nextTripLabel).toBeNull();
   });
 
-  it('is offline when a trip is live but there is no GPS report', () => {
-    expect(rowOf(rows, 4).status.key).toBe('offline');
+  it('is active when a trip is live but there is no GPS report, and says so', () => {
+    expect(rowOf(rows, 4).status.key).toBe('active');
+    expect(rowOf(rows, 4).gps.state).toBe('none');
   });
 
-  it('is offline when the last report is stale', () => {
+  it('is active when the last report is stale, with the age kept', () => {
     const stale = buildFleetRows({ fleets: [fleet(1)], trips: [trip(1, 1, 'departed')], locations: [gps(1, { recorded_at: new Date(NOW - 600_000).toISOString() })], today: TODAY, nowMs: NOW });
-    expect(stale[0].status.key).toBe('offline');
+    expect(stale[0].status.key).toBe('active');
     expect(stale[0].lastSeen).toBe('10m ago');
   });
 
@@ -61,8 +64,9 @@ describe('buildFleetRows', () => {
     expect(rowOf(rows, 1).routes).toEqual(['Davao - Tagum']);
   });
 
-  it('never produces a maintenance state', () => {
+  it('never produces a maintenance state, nor the old On route and Offline states', () => {
     expect(Object.keys(FLEET_STATUS)).not.toContain('maintenance');
+    expect(Object.keys(FLEET_STATUS)).toEqual(['active', 'idle', 'inactive']);
   });
 });
 
@@ -72,6 +76,6 @@ describe('filterFleetRows', () => {
   it('returns every row for "all" and only the matching status otherwise', () => {
     expect(filterFleetRows(rows, 'all')).toHaveLength(2);
     expect(filterFleetRows(rows, 'idle').map((row) => row.fleetId)).toEqual([3]);
-    expect(filterFleetRows(rows, 'offline')).toEqual([]);
+    expect(filterFleetRows(rows, 'active').map((row) => row.fleetId)).toEqual([1]);
   });
 });

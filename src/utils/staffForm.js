@@ -15,6 +15,12 @@ import { DEFAULT_CALLING_CODE, PHONE_INVALID_MESSAGE, splitPhone, toE164 } from 
 // 2026-11-06: a Company Admin also adds Operators (never Company Admins; only the Super Admin makes those).
 export const ROLE_LABELS = { driver: 'Driver', conductor: 'Chauffeur', operator: 'Operator' };
 
+/**
+ * Batch 60 item 3 (user, 2026-11-11): only crew (Driver, Chauffeur) have a username. An Operator signs in with the email,
+ * which gets the login code, so the form never asks an Operator for one (the server stores none).
+ */
+export const needsUsername = (role) => String(role ?? '').toLowerCase() !== 'operator';
+
 /** "Driver", "Chauffeur" or "Operator" (never the stored word "conductor"); "Not provided" when unknown. */
 export const roleLabel = (role) => ROLE_LABELS[String(role ?? '').toLowerCase()] ?? 'Not provided';
 
@@ -50,7 +56,7 @@ export function editStaffForm(member) {
 /** Field messages for 'add' or 'edit'; an empty object means the form can be sent. */
 export function validateStaffForm(form, mode = 'add') {
   const errors = {
-    username: usernameError(form.username),
+    username: needsUsername(form.role) ? usernameError(form.username) : '',
     email: emailError(form.email),
     phone: !String(form.phoneLocal ?? '').trim()
       ? 'Phone number is required'
@@ -71,7 +77,7 @@ export function toCreatePayload(form) {
   return {
     role: form.role,
     name: `${form.firstName.trim()} ${form.lastName.trim()}`,
-    username: form.username.trim(),
+    ...(needsUsername(form.role) ? { username: form.username.trim() } : {}),
     email: form.email.trim().toLowerCase(),
     phone_num: toE164(form.callingCode, form.phoneLocal),
     birth_date: form.birthDate,
@@ -87,7 +93,7 @@ export function toUpdatePayload(form, member) {
   const username = form.username.trim();
   const email = form.email.trim().toLowerCase();
   const phone = toE164(form.callingCode, form.phoneLocal);
-  if (username !== (member?.username ?? '')) changes.username = username;
+  if (needsUsername(member?.role) && username !== (member?.username ?? '')) changes.username = username;
   if (email !== (member?.email ?? '')) changes.email = email;
   if (phone && phone !== (member?.phone_num ?? '')) changes.phone_num = phone;
   return changes;

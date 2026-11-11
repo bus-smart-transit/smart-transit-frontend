@@ -179,9 +179,9 @@ describe('assignment indicators (in the modal)', () => {
 
 describe('filters', () => {
   const cards = [
-    card({ shift_block_id: 1, route_name: 'Alpha-Omega', status: 'scheduled', section: 'today' }),
-    card({ shift_block_id: 2, route_name: 'Beta-Gamma', status: 'boarding', section: 'today', assignments: { driver: who(8, 'Ben Driver'), conductor: who(9, 'Cora Chauffeur') } }),
-    card({ shift_block_id: 3, route_name: 'Alpha-Omega', status: 'scheduled', section: 'upcoming', scheduled_date: '2026-10-09' }),
+    card({ shift_block_id: 1, route_name: 'Alpha-Omega', status: 'scheduled', section: 'today', block_type: 'morning' }),
+    card({ shift_block_id: 2, route_name: 'Beta-Gamma', status: 'boarding', section: 'today', block_type: 'afternoon', assignments: { driver: who(8, 'Ben Driver'), conductor: who(9, 'Cora Chauffeur') } }),
+    card({ shift_block_id: 3, route_name: 'Alpha-Omega', status: 'scheduled', section: 'upcoming', scheduled_date: '2026-10-09', block_type: 'afternoon' }),
     screenshotCard,
   ];
 
@@ -190,14 +190,17 @@ describe('filters', () => {
     render(<ShiftBlocksView />);
     await screen.findAllByTestId('shift-block-card');
 
-    for (const name of ['Status', 'Route', 'From', 'To']) expect(screen.getByLabelText(name)).toBeInTheDocument();
+    for (const name of ['Shift', 'Route', 'From', 'To']) expect(screen.getByLabelText(name)).toBeInTheDocument();
+    // Batch 60 item 4: Shift replaced Status.
+    expect(screen.queryByLabelText('Status')).not.toBeInTheDocument();
+    expect(within(screen.getByLabelText('Shift')).getAllByRole('option').map((o) => o.textContent)).toEqual(['All shifts', 'Morning shift', 'Afternoon shift']);
     const routes = within(screen.getByLabelText('Route')).getAllByRole('option').map((o) => o.textContent);
     expect(routes).toEqual(['All routes', 'Alpha-Omega', 'Beta-Gamma']);
     // Batch 35: the crew filter is gone; the crew is in the block's modal.
     expect(screen.queryByLabelText('Driver or Chauffeur')).not.toBeInTheDocument();
   });
 
-  it('filters by status and route, and resets', async () => {
+  it('filters by shift and route, and resets', async () => {
     load(cards);
     render(<ShiftBlocksView />);
     await screen.findAllByTestId('shift-block-card');
@@ -207,7 +210,10 @@ describe('filters', () => {
     fireEvent.change(screen.getByLabelText('Route'), { target: { value: 'Alpha-Omega' } });
     expect(shown()).toEqual(['block-1', 'block-3']);
 
-    fireEvent.change(screen.getByLabelText('Status'), { target: { value: 'in_progress' } });
+    fireEvent.change(screen.getByLabelText('Shift'), { target: { value: 'afternoon' } });
+    expect(shown()).toEqual(['block-3']);
+    fireEvent.change(screen.getByLabelText('Route'), { target: { value: 'Beta-Gamma' } });
+    fireEvent.change(screen.getByLabelText('Shift'), { target: { value: 'morning' } });
     expect(screen.queryAllByTestId('shift-block-card')).toHaveLength(0);
     expect(screen.getByTestId('empty-today')).toHaveTextContent('No blocks match these filters.');
 

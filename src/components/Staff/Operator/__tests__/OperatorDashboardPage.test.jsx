@@ -44,89 +44,29 @@ describe('OperatorDashboardPage', () => {
     await waitFor(() => expect(mocks.getFleetLocations).toHaveBeenCalled());
   });
 
-  it('lists today\'s trips with their crew and tickets sold', async () => {
-    renderPage({ trips: [trip(1, { total_occupancy: 8 })] });
-    const table = screen.getByRole('table', { name: "Today's trips" });
-    expect(within(table).getByText(/Dina Driver/)).toBeInTheDocument();
-    expect(within(table).getByText(/8 \/ 40 \(20%\)/)).toBeInTheDocument();
-    await waitFor(() => expect(mocks.getFleetLocations).toHaveBeenCalled());
-  });
-
-  it('says plainly that nothing is automatic', async () => {
-    renderPage();
-    expect(screen.getByText(/The system recommends\. The operator decides\./)).toBeInTheDocument();
-    expect(screen.queryByText(/predictive/i)).not.toBeInTheDocument();
-    await waitFor(() => expect(mocks.getFleetLocations).toHaveBeenCalled());
-  });
-
-  it('records the Operator\'s decision on the trip and refreshes', async () => {
-    const onRefresh = vi.fn();
-    renderPage({ trips: [trip(7, { status: 'delayed' })], onRefresh });
-    fireEvent.click(screen.getByRole('button', { name: 'Acknowledge advice' }));
-    await waitFor(() => expect(mocks.saveDispatchDecision).toHaveBeenCalledWith(7, expect.objectContaining({ decision: 'accept', route: 'Davao - Tagum' })));
-    await waitFor(() => expect(onRefresh).toHaveBeenCalled());
-  });
-
-  it('can keep the current route', async () => {
+  // Batch 60 item 4 (user, 2026-11-11): only quick actions and the important information stay on the dashboard.
+  it('no longer shows the trips table, the charts, route adherence or the dispatch decision board', async () => {
     renderPage({ trips: [trip(7, { status: 'delayed' })] });
-    fireEvent.click(screen.getByRole('button', { name: 'Keep current route' }));
-    await waitFor(() => expect(mocks.saveDispatchDecision).toHaveBeenCalledWith(7, expect.objectContaining({ decision: 'keep' })));
-  });
-
-  it('requires an operator message before contacting assigned crew', async () => {
-    renderPage({ trips: [trip(7, { status: 'delayed' })] });
-    const contact = screen.getByRole('button', { name: 'Contact crew' });
-    expect(contact).toBeDisabled();
-    fireEvent.change(screen.getByLabelText('Operator note or crew message'), { target: { value: 'Please check traffic before the next stop.' } });
-    expect(contact).toBeEnabled();
-    fireEvent.click(contact);
-    await waitFor(() => expect(mocks.saveDispatchDecision).toHaveBeenCalledWith(7, expect.objectContaining({
-      decision: 'contact',
-      note: 'Please check traffic before the next stop.',
-      route: 'Davao - Tagum',
-    })));
-  });
-
-  it('shows a recorded decision instead of the buttons', async () => {
-    renderPage({ trips: [trip(7, { status: 'delayed', dispatch_decision: 'keep', dispatch_decided_at: new Date().toISOString() })] });
-    expect(screen.getAllByText(/Kept current route/).length).toBeGreaterThan(0);
+    for (const title of ["Today's trips", 'Tickets sold against capacity', 'Trips today by status', 'Route adherence', 'Dispatch decision board']) {
+      expect(screen.queryByText(title)).not.toBeInTheDocument();
+    }
     expect(screen.queryByRole('button', { name: 'Acknowledge advice' })).not.toBeInTheDocument();
+    expect(screen.getByText('Alerts')).toBeInTheDocument();
+    expect(screen.getByText('Recommended actions')).toBeInTheDocument();
+    expect(screen.getByRole('table', { name: 'Route delay overview' })).toBeInTheDocument();
     await waitFor(() => expect(mocks.getFleetLocations).toHaveBeenCalled());
+    expect(mocks.getRouteAdherence).not.toHaveBeenCalled();
   });
 
-  it('shows the save error when the decision fails', async () => {
-    mocks.saveDispatchDecision.mockRejectedValue(new Error('Not allowed'));
-    renderPage({ trips: [trip(7, { status: 'delayed' })] });
-    fireEvent.click(screen.getByRole('button', { name: 'Acknowledge advice' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('Not allowed');
-  });
-
-  it('asks the report for each fleet and says when there is no GPS history', async () => {
-    renderPage();
-    expect(await screen.findByText(/No GPS history for the last 7 days/)).toBeInTheDocument();
-    expect(mocks.getRouteAdherence).toHaveBeenCalledWith(1, expect.objectContaining({ start_date: expect.any(String), end_date: today }));
-  });
-
-  it('says the report is unavailable when every fleet fails', async () => {
-    mocks.getRouteAdherence.mockRejectedValue(new Error('Server Error'));
-    renderPage();
-    expect(await screen.findByText(/could not be loaded right now/)).toBeInTheDocument();
-  });
-
-  it('names a fleet whose report failed instead of calling it "no GPS history"', async () => {
-    mocks.getRouteAdherence.mockImplementation(async (id) => {
-      if (id === 2) throw new Error('Server Error');
-      return { data: { summary: { trips_with_gps_data: 0, deviated_trips: 0, adherence_rate_pct: null } } };
-    });
-    renderPage({ fleets: [fleet, { ...fleet, fleet_id: 2, plate_number: 'PLT-2' }] });
-    expect(await screen.findByText(/could not be loaded for PLT-2/)).toBeInTheDocument();
-    expect(screen.queryByText(/No GPS history for the last 7 days/)).not.toBeInTheDocument();
-  });
-
-  it('shows adherence when the report has GPS data', async () => {
-    mocks.getRouteAdherence.mockResolvedValue({ data: { summary: { trips_with_gps_data: 4, deviated_trips: 1, adherence_rate_pct: 75 } } });
-    renderPage();
-    expect(await screen.findByText('75% overall')).toBeInTheDocument();
+  it('opens each quick action', async () => {
+    const handlers = { onCreateSchedule: vi.fn(), onOpenApprovals: vi.fn(), onOpenStaffs: vi.fn(), onOpenFleets: vi.fn() };
+    renderPage(handlers);
+    fireEvent.click(screen.getByRole('button', { name: /Schedule a trip/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Trip approvals/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Staffs/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Fleets/ }));
+    Object.values(handlers).forEach((handler) => expect(handler).toHaveBeenCalledOnce());
+    await waitFor(() => expect(mocks.getFleetLocations).toHaveBeenCalled());
   });
 
   it('opens Schedule from the deployment card', async () => {

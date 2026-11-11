@@ -1,7 +1,8 @@
 import { X } from 'lucide-react';
 import ModalShell from './ModalShell';
 
-const SIZE_CLASS = { md: 'max-w-lg', xl: 'max-w-3xl' };
+// Batch 60: 'wide' for a PC form laid out across the width (Add Staff).
+const SIZE_CLASS = { md: 'max-w-lg', xl: 'max-w-3xl', wide: 'max-w-5xl' };
 
 /**
  * A titled dialog on the shared overlay (see ModalShell). The title row stays put while the body

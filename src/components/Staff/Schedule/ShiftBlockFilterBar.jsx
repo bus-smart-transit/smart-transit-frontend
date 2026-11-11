@@ -1,11 +1,11 @@
 import { RotateCcw } from 'lucide-react';
 import Card from '../../ui/Card';
-import { EMPTY_FILTERS, STATUS_OPTIONS, isFiltering } from '../../../utils/shiftBlockView';
+import { EMPTY_FILTERS, SHIFT_OPTIONS, isFiltering } from '../../../utils/shiftBlockView';
 
 const FIELD = 'mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500';
 
 /**
- * Batch 30 and 35: the named filters of the Shift Blocks view (status, route, date range). The route choices come from the
+ * Batch 30 and 35: the named filters of the Shift Blocks view (shift, route, date range; Batch 60: shift replaced status). The route choices come from the
  * cards that were loaded, never from a fixed list. There is no crew filter: the crew of a block is in its modal.
  */
 export default function ShiftBlockFilterBar({ filters, onChange, options }) {
@@ -14,9 +14,9 @@ export default function ShiftBlockFilterBar({ filters, onChange, options }) {
   return (
     <Card as="section" aria-label="Filters" padding="sm" className="space-y-3">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <label className="text-xs font-medium text-slate-600">Status
-          <select value={filters.status} onChange={(e) => set({ status: e.target.value })} className={FIELD}>
-            {STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+        <label className="text-xs font-medium text-slate-600">Shift
+          <select value={filters.shift} onChange={(e) => set({ shift: e.target.value })} className={FIELD}>
+            {SHIFT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
         </label>
         <label className="text-xs font-medium text-slate-600">Route

@@ -70,9 +70,9 @@ describe('showsAssignmentState (the screenshot case)', () => {
 
 describe('filters', () => {
   const cards = [
-    card({ shift_block_id: 1, route_name: 'Alpha-Omega', status: 'scheduled', scheduled_date: '2026-10-05' }),
-    card({ shift_block_id: 2, route_name: 'Beta-Gamma', status: 'boarding', scheduled_date: '2026-10-06', assignments: { driver: person(8, 'Ben Driver'), conductor: person(7, 'Carl Chauffeur') } }),
-    card({ shift_block_id: 3, route_name: 'Alpha-Omega', status: 'completed', scheduled_date: '2026-10-02', section: 'past', assignments: { driver: person(6, 'Dina Driver'), conductor: { staff_id: null, name: null, needs_replacement: true } } }),
+    card({ shift_block_id: 1, route_name: 'Alpha-Omega', status: 'scheduled', scheduled_date: '2026-10-05', block_type: 'morning' }),
+    card({ shift_block_id: 2, route_name: 'Beta-Gamma', status: 'boarding', scheduled_date: '2026-10-06', block_type: 'afternoon', assignments: { driver: person(8, 'Ben Driver'), conductor: person(7, 'Carl Chauffeur') } }),
+    card({ shift_block_id: 3, route_name: 'Alpha-Omega', status: 'completed', scheduled_date: '2026-10-02', section: 'past', block_type: 'Morning', assignments: { driver: person(6, 'Dina Driver'), conductor: { staff_id: null, name: null, needs_replacement: true } } }),
   ];
   const ids = (list) => list.map((c) => c.shift_block_id);
 
@@ -81,10 +81,11 @@ describe('filters', () => {
     expect(ids(applyFilters(cards, EMPTY_FILTERS))).toEqual([1, 2, 3]);
   });
 
-  test('by status, using the derived groups', () => {
-    expect(ids(applyFilters(cards, { ...EMPTY_FILTERS, status: 'scheduled' }))).toEqual([1]);
-    expect(ids(applyFilters(cards, { ...EMPTY_FILTERS, status: 'in_progress' }))).toEqual([2]);
-    expect(ids(applyFilters(cards, { ...EMPTY_FILTERS, status: 'completed' }))).toEqual([3]);
+  // Batch 60 item 4 (user, 2026-11-11): the filter is by shift (morning or afternoon), not by status.
+  test('by shift, whatever the status', () => {
+    expect(ids(applyFilters(cards, { ...EMPTY_FILTERS, shift: 'morning' }))).toEqual([1, 3]);
+    expect(ids(applyFilters(cards, { ...EMPTY_FILTERS, shift: 'afternoon' }))).toEqual([2]);
+    expect('status' in EMPTY_FILTERS).toBe(false);
   });
 
   test('by route', () => {
@@ -103,7 +104,7 @@ describe('filters', () => {
   });
 
   test('filters combine', () => {
-    expect(ids(applyFilters(cards, { ...EMPTY_FILTERS, route: 'Alpha-Omega', status: 'completed' }))).toEqual([3]);
+    expect(ids(applyFilters(cards, { ...EMPTY_FILTERS, route: 'Alpha-Omega', shift: 'morning', to: '2026-10-02' }))).toEqual([3]);
     expect(isFiltering({ ...EMPTY_FILTERS, route: 'Alpha-Omega' })).toBe(true);
   });
 

@@ -1,36 +1,22 @@
 import { useMemo } from 'react';
 import {
-  RefreshCw, Bus, Route as RouteIcon, AlertTriangle, Ticket, CalendarClock, CalendarDays, ListChecks, BellRing,
-  Lightbulb, Gauge, PieChart, Timer, Navigation, Scale, Shuffle, CheckCircle2, Inbox, MapPinOff, ChevronRight,
+  RefreshCw, Bus, Route as RouteIcon, AlertTriangle, Ticket, CalendarClock, CalendarDays, BellRing,
+  Lightbulb, Timer, Shuffle, CheckCircle2, Inbox, ChevronRight, Zap, CalendarPlus, ClipboardCheck, Users,
 } from 'lucide-react';
-import { OpPageHeader, OpCard, OpChip, OpStat, OpBar, OpStackedBar, OpTable, OpEmpty } from './OperatorUI';
-import { TRIP_STATUS_TONE } from './operatorUiTokens';
-import RunInfoChips from '../../ui/RunInfoChips';
+import { OpPageHeader, OpCard, OpChip, OpStat, OpTable, OpEmpty } from './OperatorUI';
 import CalendarSummaryStrip from '../CalendarSummaryStrip';
 import DashboardCalendar from '../DashboardCalendar';
 import OperatorService from '../../../api/StaffService/OperatorService';
-import { useFleetLocations, useDispatchAdvice, useRouteAdherence, useNow } from '../../../api/hooks/Staff/useOperatorDashboardExtras';
-import {
-  buildDashboardView, capacityOf, ticketsSold, loadPct, departureLabel, routeNameOf, plateOf,
-  locationForTrip, gpsStatus, decisionPayload, HIGH_LOAD_PCT,
-} from '../../../utils/operatorDashboardView';
-import RerouteAdviceItem from './RerouteAdviceItem';
+import { useFleetLocations, useNow } from '../../../api/hooks/Staff/useOperatorDashboardExtras';
+import { buildDashboardView } from '../../../utils/operatorDashboardView';
 import { getBusinessTodayLabel } from '../../../utils/dates';
 
-const STATUS_LABEL = {
-  scheduled: 'Scheduled', delayed: 'Delayed', boarding: 'Boarding', departed: 'On the road', 'in-progress': 'On the road', completed: 'Completed', cancelled: 'Cancelled',
-};
-const GPS_CHIP = {
-  live: ['success', 'GPS live'], stale: ['warning', 'GPS out of date'], weak: ['warning', 'GPS signal weak'], off_route: ['warning', 'Off route'], none: ['neutral', 'No GPS'],
-};
 const PRIORITY_TONE = { high: 'danger', medium: 'warning', low: 'info' };
 const ALERT_STYLE = {
   danger: 'border-rose-200 bg-rose-50/60 text-rose-600',
   warning: 'border-amber-200 bg-amber-50/60 text-amber-600',
   info: 'border-sky-200 bg-sky-50/60 text-sky-600',
 };
-
-const personName = (person) => person?.user?.name || person?.name || person?.user?.username || person?.username || null;
 
 const greetingFor = (nowMs) => {
   const hour = Number(new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Manila', hour: 'numeric', hourCycle: 'h23' }).format(new Date(nowMs)));
@@ -39,31 +25,37 @@ const greetingFor = (nowMs) => {
   return 'Good evening';
 };
 
-function TodaysTrips({ trips, locations, nowMs }) {
-  const columns = [
-    { key: 'time', header: 'Time', render: (trip) => departureLabel(trip), className: 'whitespace-nowrap font-mono text-xs font-semibold text-slate-900' },
-    { key: 'route', header: 'Route', className: 'whitespace-nowrap font-medium text-slate-900', render: (trip) => routeNameOf(trip) },
-    { key: 'fleet', header: 'Fleet', render: (trip) => <span className="whitespace-nowrap">{plateOf(trip)} <RunInfoChips runPattern={trip.run_info?.run_pattern} service={trip.run_info?.service} serviceType={trip.service_type} showRunPattern /></span> },
-    { key: 'crew', header: 'Crew', render: (trip) => (
-      <span className="whitespace-nowrap text-xs leading-relaxed">
-        {personName(trip.driver) ?? <em className="text-amber-700">No driver</em>}
-        <br />
-        {personName(trip.conductor) ?? <em className="text-amber-700">No chauffeur</em>}
-      </span>
-    ) },
-    { key: 'status', header: 'Status', render: (trip) => <OpChip tone={TRIP_STATUS_TONE[trip.status] ?? 'neutral'}>{STATUS_LABEL[trip.status] ?? trip.status}</OpChip> },
-    { key: 'gps', header: 'GPS', render: (trip) => {
-      if (!['departed', 'in-progress'].includes(trip.status)) return <span className="text-slate-400">-</span>;
-      const gps = gpsStatus(locationForTrip(trip, locations), nowMs);
-      const [tone, label] = GPS_CHIP[gps.state] ?? GPS_CHIP.none;
-      return <OpChip tone={tone}>{label}</OpChip>;
-    } },
-    { key: 'sold', header: 'Tickets sold', className: 'whitespace-nowrap tabular-nums', render: (trip) => {
-      const pct = loadPct(trip);
-      return `${ticketsSold(trip)} / ${capacityOf(trip) || '-'}${pct === null ? '' : ` (${pct}%)`}`;
-    } },
+/**
+ * Batch 60 item 4 (user, 2026-11-11): the dashboard keeps only quick actions and the important information. One click
+ * to what an Operator does most often; each button only opens a page or form, nothing runs by itself.
+ */
+function QuickActions({ onCreateSchedule, onOpenApprovals, onOpenStaffs, onOpenFleets }) {
+  const actions = [
+    { key: 'schedule', label: 'Schedule a trip', hint: 'Open the Schedule Service form', icon: CalendarPlus, onClick: onCreateSchedule },
+    { key: 'approvals', label: 'Trip approvals', hint: 'Requests waiting for you', icon: ClipboardCheck, onClick: onOpenApprovals },
+    { key: 'staffs', label: 'Staffs', hint: 'Drivers, Chauffeurs and shifts', icon: Users, onClick: onOpenStaffs },
+    { key: 'fleets', label: 'Fleets', hint: 'Buses and live tracking', icon: Bus, onClick: onOpenFleets },
   ];
-  return <OpTable caption="Today's trips" columns={columns} rows={trips} rowKey={(trip) => trip.trip_id} empty="No trips are scheduled for today." emptyIcon={CalendarClock} />;
+  return (
+    <OpCard icon={Zap} title="Quick actions" subtitle="Go straight to what you do most often.">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {actions.map(({ key, label, hint, icon: Icon, onClick }) => (
+          <button
+            key={key}
+            type="button"
+            onClick={onClick}
+            className="flex min-h-11 items-start gap-3 rounded-xl border border-slate-200 bg-white p-3 text-left transition hover:border-teal-300 hover:bg-teal-50"
+          >
+            <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-teal-50 text-teal-700" aria-hidden="true"><Icon className="h-[18px] w-[18px]" /></span>
+            <span className="min-w-0">
+              <span className="block text-sm font-semibold text-slate-900">{label}</span>
+              <span className="block text-xs text-slate-500">{hint}</span>
+            </span>
+          </button>
+        ))}
+      </div>
+    </OpCard>
+  );
 }
 
 function AlertsCard({ alerts }) {
@@ -89,69 +81,6 @@ function AlertsCard({ alerts }) {
           ))}
         </ul>
       )}
-    </OpCard>
-  );
-}
-
-function RouteAdherenceCard({ fleets }) {
-  const { loading, rows, error } = useRouteAdherence(fleets);
-  const withData = rows.filter((row) => row.ok && row.tripsWithGps > 0);
-  const failed = rows.filter((row) => !row.ok);
-  const total = withData.reduce((sum, row) => sum + row.tripsWithGps, 0);
-  const deviated = withData.reduce((sum, row) => sum + row.deviated, 0);
-  const overall = total > 0 ? Math.round(((total - deviated) / total) * 100) : null;
-  return (
-    <OpCard
-      icon={Navigation}
-      title="Route adherence"
-      subtitle="Last 7 days, from recorded GPS positions. Trips with no GPS history are not counted."
-      badge={overall === null ? null : <OpChip tone={overall >= 90 ? 'success' : 'warning'}>{overall}% overall</OpChip>}
-    >
-      {loading ? <p className="text-sm text-slate-500">Loading GPS history...</p>
-        : error ? <OpEmpty icon={MapPinOff}>The adherence report could not be loaded right now.</OpEmpty>
-          : withData.length === 0 && failed.length === 0 ? <OpEmpty icon={MapPinOff}>No GPS history for the last 7 days yet, so adherence cannot be calculated.</OpEmpty> : (
-            <>
-              {withData.length > 0 && (
-                <OpTable
-                  caption="Route adherence by fleet"
-                  rows={withData}
-                  rowKey={(row) => row.fleetId}
-                  columns={[
-                    { key: 'plate', header: 'Fleet' },
-                    { key: 'tripsWithGps', header: 'Trips with GPS' },
-                    { key: 'deviated', header: 'Off-route trips' },
-                    { key: 'ratePct', header: 'Adherence', render: (row) => (row.ratePct === null ? '-' : `${row.ratePct}%`) },
-                  ]}
-                />
-              )}
-              {failed.length > 0 && (
-                <p role="status" className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                  The adherence report could not be loaded for {failed.map((row) => row.plate).join(', ')}, so it is not included.
-                </p>
-              )}
-            </>
-          )}
-    </OpCard>
-  );
-}
-
-function DispatchDecisionBoard({ advice, saving, error, onDecide }) {
-  const open = advice.filter((item) => !item.decision).length;
-  return (
-    <OpCard
-      icon={Scale}
-      title="Dispatch decision board"
-      subtitle="The system recommends. The operator decides. Bus assignments and routes are never changed automatically."
-      badge={<OpChip tone={open ? 'warning' : 'success'}>{open ? `${open} awaiting decision` : 'No open advice'}</OpChip>}
-    >
-      <h3 className="mb-2.5 text-xs font-semibold uppercase tracking-wider text-slate-400">Operational advice</h3>
-      {advice.length === 0 ? <OpEmpty icon={CheckCircle2}>No route needs review right now.</OpEmpty> : (
-        <ul className="space-y-3">
-          {advice.map((item) => <RerouteAdviceItem key={item.key} item={item} saving={saving} onDecide={onDecide} />)}
-        </ul>
-      )}
-      {error && <p role="alert" className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">{error}</p>}
-      {/* 2026-10-29: the decision history list was removed; every decision stays in the audit log. */}
     </OpCard>
   );
 }
@@ -184,16 +113,19 @@ function SuggestedAssignments({ deployment, onOpenSchedule }) {
  * Batch 31 Phase 2: the Operator Dashboard. Every figure is computed from today's trips, the fleet list and the fleets'
  * last GPS positions (utils/operatorDashboardView.js). There is no revenue here (it lives in Finance), no trend arrows,
  * and no map: those either have no real data behind them or belong to other pages.
+ * Batch 60 item 4 (user, 2026-11-11): Today's trips, Tickets sold against capacity, Trips today by status, Route
+ * adherence and the Dispatch decision board were removed; the trips are on Schedule, and a decision on a running bus is
+ * still made from Fleets (Track). What stays: today's figures, quick actions, alerts, recommended actions, route delays.
  */
-export default function OperatorDashboardPage({ trips, fleets, operatorName = '', topSlot = null, onRefresh, onOpenCalendar, onOpenSchedule }) {
+export default function OperatorDashboardPage({
+  trips, fleets, operatorName = '', topSlot = null, onRefresh, onOpenCalendar, onOpenSchedule,
+  onCreateSchedule = onOpenSchedule, onOpenApprovals = onOpenSchedule, onOpenStaffs = () => {}, onOpenFleets = () => {},
+}) {
   const nowMs = useNow();
   const { locations, refresh: refreshLocations } = useFleetLocations();
-  const { savingTripId, error, decide } = useDispatchAdvice({ onSaved: onRefresh });
   const view = useMemo(() => buildDashboardView({ trips, fleets, locations, nowMs }), [trips, fleets, locations, nowMs]);
   const { kpis } = view;
   const firstName = String(operatorName || '').trim().split(/\s+/)[0];
-
-  const handleDecide = (item, decision, note) => decide(item.tripId, decision, decisionPayload(item, decision, note));
 
   return (
     <div className="space-y-6">
@@ -224,12 +156,9 @@ export default function OperatorDashboardPage({ trips, fleets, operatorName = ''
 
       <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_20rem] 2xl:grid-cols-[minmax(0,1fr)_22rem]">
         <div className="min-w-0 space-y-6">
+          <QuickActions onCreateSchedule={onCreateSchedule} onOpenApprovals={onOpenApprovals} onOpenStaffs={onOpenStaffs} onOpenFleets={onOpenFleets} />
 
-          <OpCard icon={ListChecks} title="Today's trips" subtitle="Scheduled, live and finished trips for the business day">
-            <TodaysTrips trips={view.todays} locations={locations} nowMs={nowMs} />
-          </OpCard>
-
-          <div className="grid gap-6 2xl:grid-cols-2">
+          <div className="grid gap-6 lg:grid-cols-2">
             <AlertsCard alerts={view.alerts} />
             <OpCard icon={Lightbulb} title="Recommended actions" subtitle="Suggestions only. Nothing here runs by itself.">
               {view.actions.length === 0 ? <OpEmpty icon={Inbox}>No action is needed right now.</OpEmpty> : (
@@ -248,47 +177,22 @@ export default function OperatorDashboardPage({ trips, fleets, operatorName = ''
             </OpCard>
           </div>
 
-          <div className="grid gap-6 2xl:grid-cols-2">
-            <OpCard icon={Gauge} title="Tickets sold against capacity" subtitle={`By route, today. This counts tickets sold, not people on board. ${HIGH_LOAD_PCT}% or more is called near full.`}>
-              {view.loadByRoute.length === 0 ? <OpEmpty icon={Ticket}>No tickets or trips to measure today.</OpEmpty> : (
-                <div className="space-y-4">
-                  {view.loadByRoute.map((row) => (
-                    <OpBar key={row.route} label={row.route} value={row.sold} max={row.capacity} valueLabel={`${row.sold} of ${row.capacity} (${row.pct}%)`} tone={row.pct >= HIGH_LOAD_PCT ? 'warning' : 'info'} />
-                  ))}
-                </div>
-              )}
-            </OpCard>
-            <OpCard icon={PieChart} title="Trips today by status" subtitle="Tickets sold by scheduled departure hour is shown below.">
-              <OpStackedBar segments={view.statusBreakdown} />
-              <div className="mt-6 space-y-3">
-                {view.soldByHour.length === 0 ? <p className="text-sm text-slate-500">No tickets sold for today&apos;s trips yet.</p> : view.soldByHour.map((row) => (
-                  <OpBar key={row.hour} label={row.hour} value={row.sold} max={Math.max(...view.soldByHour.map((r) => r.sold))} valueLabel={`${row.sold} ticket${row.sold === 1 ? '' : 's'}`} tone="info" />
-                ))}
-              </div>
-            </OpCard>
-          </div>
-
-          <div className="grid gap-6 2xl:grid-cols-2">
-            <OpCard icon={Timer} title="Route delay overview" subtitle="From today's schedule: a trip is delayed when its departure time has passed without departing.">
-              <OpTable
-                caption="Route delay overview"
-                rows={view.delayByRoute}
-                rowKey={(row) => row.route}
-                empty="No trips on any route today."
-                emptyIcon={Timer}
-                columns={[
-                  { key: 'route', header: 'Route', className: 'font-medium text-slate-900' },
-                  { key: 'scheduled', header: 'Scheduled' },
-                  { key: 'live', header: 'Live' },
-                  { key: 'delayed', header: 'Delayed' },
-                  { key: 'status', header: 'Status', render: (row) => <OpChip tone={row.delayed ? 'danger' : 'success'}>{row.status}</OpChip> },
-                ]}
-              />
-            </OpCard>
-            <RouteAdherenceCard fleets={fleets} />
-          </div>
-
-          <DispatchDecisionBoard advice={view.advice} saving={savingTripId} error={error} onDecide={handleDecide} />
+          <OpCard icon={Timer} title="Route delay overview" subtitle="From today's schedule: a trip is delayed when its departure time has passed without departing.">
+            <OpTable
+              caption="Route delay overview"
+              rows={view.delayByRoute}
+              rowKey={(row) => row.route}
+              empty="No trips on any route today."
+              emptyIcon={Timer}
+              columns={[
+                { key: 'route', header: 'Route', className: 'font-medium text-slate-900' },
+                { key: 'scheduled', header: 'Scheduled' },
+                { key: 'live', header: 'Live' },
+                { key: 'delayed', header: 'Delayed' },
+                { key: 'status', header: 'Status', render: (row) => <OpChip tone={row.delayed ? 'danger' : 'success'}>{row.status}</OpChip> },
+              ]}
+            />
+          </OpCard>
         </div>
 
         <aside aria-label="Schedule side panel" className="grid min-w-0 content-start gap-6 md:grid-cols-2 xl:grid-cols-1">

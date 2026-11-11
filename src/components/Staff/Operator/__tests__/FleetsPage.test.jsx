@@ -43,12 +43,17 @@ describe('FleetsPage', () => {
     mocks.saveDispatchDecision.mockResolvedValue({});
   });
 
-  it('derives each fleet\'s status from its trips and GPS', async () => {
+  // Batch 60 item 4: a running bus is Active (On route and Offline were folded in); its GPS chip still says the GPS state.
+  it('derives each fleet\'s status from its trips, with the GPS state on the card', async () => {
     renderPage();
-    await waitFor(() => expect(within(rowFor('PLT-1')).getByText('On route')).toBeInTheDocument());
+    await waitFor(() => expect(within(rowFor('PLT-1')).getByText('Active')).toBeInTheDocument());
     expect(within(rowFor('PLT-2')).getByText('Active')).toBeInTheDocument();
     expect(within(rowFor('PLT-3')).getByText('Idle')).toBeInTheDocument();
-    expect(within(rowFor('PLT-4')).getByText('Offline')).toBeInTheDocument();
+    expect(within(rowFor('PLT-4')).getByText('Active')).toBeInTheDocument();
+    expect(within(rowFor('PLT-4')).getByText('No GPS')).toBeInTheDocument();
+    const summary = screen.getByRole('region', { name: 'Fleet summary' });
+    expect(within(summary).queryByText('On route')).toBeNull();
+    expect(within(summary).queryByText('Offline')).toBeNull();
   });
 
   it('has no maintenance state and no progress bar', async () => {
@@ -60,7 +65,7 @@ describe('FleetsPage', () => {
 
   it('enables Track only for a fleet with a trip under way', async () => {
     renderPage();
-    await waitFor(() => expect(within(rowFor('PLT-1')).getByText('On route')).toBeInTheDocument());
+    await waitFor(() => expect(within(rowFor('PLT-1')).getByText('Active')).toBeInTheDocument());
     expect(screen.getByRole('button', { name: 'Track fleet PLT-1' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Track fleet PLT-2' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Track fleet PLT-3' })).toBeDisabled();
@@ -68,7 +73,7 @@ describe('FleetsPage', () => {
 
   it('opens the Track Fleet modal with the map, the trip and the last update', async () => {
     renderPage();
-    await waitFor(() => expect(within(rowFor('PLT-1')).getByText('On route')).toBeInTheDocument());
+    await waitFor(() => expect(within(rowFor('PLT-1')).getByText('Active')).toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: 'Track fleet PLT-1' }));
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByText('map-for-trip-1')).toBeInTheDocument();
@@ -80,7 +85,7 @@ describe('FleetsPage', () => {
 
   it('shows how many are on board now next to the tickets sold (§4.7)', async () => {
     renderPage({ trips: [trip(1, 1, 'departed', { onboard_count: 7 })] });
-    await waitFor(() => expect(within(rowFor('PLT-1')).getByText('On route')).toBeInTheDocument());
+    await waitFor(() => expect(within(rowFor('PLT-1')).getByText('Active')).toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: 'Track fleet PLT-1' }));
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByTestId('onboard-now')).toHaveTextContent('7 of 40');
@@ -89,7 +94,7 @@ describe('FleetsPage', () => {
 
   it('says "Not provided" when the trip carries no on-board count', async () => {
     renderPage();
-    await waitFor(() => expect(within(rowFor('PLT-1')).getByText('On route')).toBeInTheDocument());
+    await waitFor(() => expect(within(rowFor('PLT-1')).getByText('Active')).toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: 'Track fleet PLT-1' }));
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByTestId('onboard-now')).toHaveTextContent('Not provided');
@@ -98,7 +103,7 @@ describe('FleetsPage', () => {
   it('shows the stale state instead of calling an old position live', async () => {
     mocks.getFleetLocations.mockResolvedValue({ data: [fresh(1, { recorded_at: new Date(Date.now() - 20 * 60 * 1000).toISOString() })] });
     renderPage();
-    await waitFor(() => expect(within(rowFor('PLT-1')).getByText('Offline')).toBeInTheDocument());
+    await waitFor(() => expect(within(rowFor('PLT-1')).getByText('Active')).toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: 'Track fleet PLT-1' }));
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByText(/Last seen 20m ago/)).toBeInTheDocument();
@@ -108,7 +113,7 @@ describe('FleetsPage', () => {
   it('records a decision from the Track Fleet modal when advice exists', async () => {
     const delayed = [trip(1, 1, 'departed'), trip(7, 4, 'delayed', { fleet_route: { fleet_id: 4, route_id: 10, fleet: fleet(4), route: { route_id: 10, route_name: 'Davao - Tagum' } } })];
     renderPage({ trips: delayed });
-    await waitFor(() => expect(within(rowFor('PLT-1')).getByText('On route')).toBeInTheDocument());
+    await waitFor(() => expect(within(rowFor('PLT-1')).getByText('Active')).toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: 'Track fleet PLT-1' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Keep current route' }));
     await waitFor(() => expect(mocks.saveDispatchDecision).toHaveBeenCalledWith(7, expect.objectContaining({ decision: 'keep', route: 'Davao - Tagum' })));
@@ -116,7 +121,7 @@ describe('FleetsPage', () => {
 
   it('filters the list by status', async () => {
     renderPage();
-    await waitFor(() => expect(within(rowFor('PLT-1')).getByText('On route')).toBeInTheDocument());
+    await waitFor(() => expect(within(rowFor('PLT-1')).getByText('Active')).toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: /^Idle \(\d+\)$/ }));
     expect(screen.getByText('PLT-3')).toBeInTheDocument();
     expect(screen.queryByText('PLT-1')).not.toBeInTheDocument();
@@ -125,7 +130,7 @@ describe('FleetsPage', () => {
   // Batch 54 (production test): a bus switched off was in All but in no chip, so the counts did not add up.
   it('shows an Inactive chip only when a bus is switched off, so the chips add up to All', async () => {
     const { unmount } = renderPage();
-    await waitFor(() => expect(within(rowFor('PLT-1')).getByText('On route')).toBeInTheDocument());
+    await waitFor(() => expect(within(rowFor('PLT-1')).getByText('Active')).toBeInTheDocument());
     expect(screen.queryByRole('button', { name: /^Inactive \(\d+\)$/ })).not.toBeInTheDocument();
     unmount();
 
@@ -134,7 +139,7 @@ describe('FleetsPage', () => {
     expect(screen.getByText('PLT-5')).toBeInTheDocument();
     expect(screen.queryByText('PLT-1')).not.toBeInTheDocument();
     const count = (name) => Number(screen.getByRole('button', { name: new RegExp(`^${name} \\((\\d+)\\)$`) }).textContent.match(/\((\d+)\)/)[1]);
-    expect(['On route', 'Active', 'Idle', 'Offline', 'Inactive'].reduce((sum, name) => sum + count(name), 0)).toBe(count('All'));
+    expect(['Active', 'Idle', 'Inactive'].reduce((sum, name) => sum + count(name), 0)).toBe(count('All'));
   });
 
   it('keeps the fare rules panel', async () => {

@@ -69,10 +69,11 @@ const NAV = navForRole(OPERATOR_ROLE).map((item) => ({ ...item, icon: NAV_ICONS[
 const getStaffFullName = (row) => row?.name || row?.user?.name || row?.user?.username || row?.username || '-'
 const getStaffCompanyUserId = (row) => row?.company_user_id || row?.user_id || row?.id
 
-function Modal({ title, onClose, children }) {
+// Batch 60 item 4: `wide` lays a form out across a PC screen (Schedule Service).
+function Modal({ title, onClose, children, wide = false }) {
   return (
     <ModalShell label={title} onClose={onClose}>
-      <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
+      <div className={`w-full ${wide ? 'max-w-5xl' : 'max-w-lg'} max-h-[calc(100dvh-2rem)] overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl`}>
         <div className="mb-4 flex items-center justify-between">
           <h3 className="text-lg font-semibold text-slate-900">{title}</h3>
           <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600"><X className="h-5 w-5" /></button>
@@ -243,8 +244,10 @@ function ScheduleServiceModal({ state, drivers, conductors }) {
     )
   }
 
-  return (    <Modal title="Schedule Service" onClose={closeScheduleModal}>
-      <form className="space-y-4" onSubmit={handleSchedule}>
+  return (    <Modal title="Schedule Service" onClose={closeScheduleModal} wide>
+      {/* Batch 60 item 4 (user, 2026-11-11): two columns on a PC: the service on the left, the crew on the right. */}
+      <form className="grid gap-x-6 gap-y-4 lg:grid-cols-2" onSubmit={handleSchedule}>
+        <div className="min-w-0 space-y-4">
         <Field label="Fleet Route" required>
           <select value={form.fleet_route_id} onChange={e => setForm(p => ({...p, fleet_route_id: e.target.value}))} required className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500">
             <option value="">Select a fleet route...</option>
@@ -344,6 +347,8 @@ function ScheduleServiceModal({ state, drivers, conductors }) {
             />
           </>
         )}
+        </div>
+        <div className="min-w-0 space-y-4">
         {/* Batch 46: a single trip may be scheduled before its crew is chosen; a shift block still needs both. Not
             Available crew are listed but cannot be picked. */}
         <Field label={multiLeg ? 'Driver' : 'Driver (or choose later)'} required={multiLeg}>
@@ -371,6 +376,8 @@ function ScheduleServiceModal({ state, drivers, conductors }) {
         {!multiLeg && (!form.driver_id || !form.conductor_id) && (
           <p role="status" className="text-xs text-amber-700">Without both a Driver and a Chauffeur the trip shows "Crew needed" and cannot start boarding.</p>
         )}
+        </div>
+        <div className="space-y-4 lg:col-span-2">
         {msg && <p className="text-sm text-red-600">{msg}</p>}
         {rangeMode && <ScheduleRangePreview preview={rangePreview} saving={saving} onConfirm={confirmRange} />}
         <div className="flex justify-end gap-2 pt-2">
@@ -378,6 +385,7 @@ function ScheduleServiceModal({ state, drivers, conductors }) {
           <button type="submit" disabled={saving || loadingDateDrivers || Boolean(dateDriversError)} className="flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-60">
             {saving && <Loader2 className="h-4 w-4 animate-spin" />}{rangeMode ? (rangePreview ? 'Preview again' : 'Preview days') : 'Schedule'}
           </button>
+        </div>
         </div>
       </form>
     </Modal>
@@ -734,7 +742,7 @@ function TripsTab({ drivers, conductors, onRefresh, tripsState, focusTripId = nu
 // Batch 30: the Schedule page. One page for what used to be three sidebar items (Trips, Calendar, Shift Blocks): the
 // views are Calendar, Blocks (Schedule/ShiftBlocksView.jsx) and Trips, and the one "+ Schedule" button opens the
 // existing create form from any of them. A schedule created from one view refreshes the others.
-function ScheduleTab({ trips, drivers, conductors, onRefresh, view, onViewChange, calendarFocus }) {
+function ScheduleTab({ trips, drivers, conductors, onRefresh, view, onViewChange, calendarFocus, createOnOpen = false, onCreateHandled = () => {} }) {
   const [reloadToken, setReloadToken] = useState(0)
   const refreshAll = useCallback(() => {
     onRefresh()
@@ -742,6 +750,14 @@ function ScheduleTab({ trips, drivers, conductors, onRefresh, view, onViewChange
   }, [onRefresh])
   const tripsState = useTripsTab({ trips, onRefresh: refreshAll })
   const views = viewsForRole('schedule', OPERATOR_ROLE)
+  // Batch 60 item 4: the dashboard's "Schedule a trip" quick action opens the Schedule Service form here.
+  const { setShowModal, setMsg } = tripsState
+  useEffect(() => {
+    if (!createOnOpen) return
+    setShowModal(true)
+    setMsg('')
+    onCreateHandled()
+  }, [createOnOpen, onCreateHandled, setShowModal, setMsg])
   // Batch 46: a trip chosen in the calendar pop-up opens the Trips view with that trip shown (filter set to All).
   const [focusTripId, setFocusTripId] = useState(null)
   const openTripFromCalendar = (item) => {
@@ -780,6 +796,9 @@ function ReportsTab({ fleets }) {
 export default function OperatorDashboard() {
   // The day the Calendar page opens on when reached from the dashboard widget (null = today).
   const [calendarFocus, setCalendarFocus] = useState(null)
+  // Batch 60 item 4: set by the dashboard's "Schedule a trip"; the Schedule page opens its form and clears it.
+  const [createOnOpen, setCreateOnOpen] = useState(false)
+  const clearCreateOnOpen = useCallback(() => setCreateOnOpen(false), [])
   const {
     activeTab, setActiveTab,
     view, setView,
@@ -835,6 +854,10 @@ export default function OperatorDashboard() {
             onRefresh={loadFull}
             onOpenCalendar={(date) => { setCalendarFocus(date); setActiveTab('schedule', 'calendar') }}
             onOpenSchedule={() => setActiveTab('schedule')}
+            onCreateSchedule={() => { setCreateOnOpen(true); setActiveTab('schedule') }}
+            onOpenApprovals={() => setActiveTab('schedule', 'requests')}
+            onOpenStaffs={() => setActiveTab('staffs')}
+            onOpenFleets={() => setActiveTab('fleets')}
           />
         )}
         {activeTab === 'schedule'   && (
@@ -846,6 +869,8 @@ export default function OperatorDashboard() {
             view={view}
             onViewChange={setView}
             calendarFocus={calendarFocus}
+            createOnOpen={createOnOpen}
+            onCreateHandled={clearCreateOnOpen}
           />
         )}
         {activeTab === 'staffs'     && (

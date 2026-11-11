@@ -5,7 +5,7 @@
 // later, no leg started). This file only groups and filters; it never works a status out for itself. The fallbacks are
 // for a response that predates a field, the same pattern as utils/assignmentCards.js.
 
-import { cardSection, matchesStatusFilter } from './assignmentCards';
+import { cardSection } from './assignmentCards';
 
 export const SECTIONS = [
   { key: 'today', title: 'Today', empty: 'Nothing is scheduled for today.' },
@@ -22,15 +22,15 @@ export const VIEWS = [
   { value: 'all', label: 'All', sections: ['today', 'upcoming', 'overdue', 'past'] },
 ];
 
-export const STATUS_OPTIONS = [
-  { value: 'all', label: 'All statuses' },
-  { value: 'scheduled', label: 'Scheduled' },
-  { value: 'in_progress', label: 'In progress' },
-  { value: 'completed', label: 'Completed' },
-  { value: 'cancelled', label: 'Cancelled' },
+// Batch 60 item 4 (user, 2026-11-11): the Blocks filter is by shift (the stored block type), not by status. The Show
+// tabs (Today and upcoming, Overdue, Past) and each card's status chip still tell where a block stands.
+export const SHIFT_OPTIONS = [
+  { value: 'all', label: 'All shifts' },
+  { value: 'morning', label: 'Morning shift' },
+  { value: 'afternoon', label: 'Afternoon shift' },
 ];
 
-export const EMPTY_FILTERS = { status: 'all', route: '', from: '', to: '' };
+export const EMPTY_FILTERS = { shift: 'all', route: '', from: '', to: '' };
 
 export const isFiltering = (filters) => Object.keys(EMPTY_FILTERS).some((key) => (filters?.[key] ?? EMPTY_FILTERS[key]) !== EMPTY_FILTERS[key]);
 
@@ -49,7 +49,7 @@ export function filterOptions(cards) {
 export function applyFilters(cards, filters = EMPTY_FILTERS) {
   const f = { ...EMPTY_FILTERS, ...filters };
   return (Array.isArray(cards) ? cards : []).filter((card) => {
-    if (!matchesStatusFilter(card?.status, f.status)) return false;
+    if (f.shift !== 'all' && norm(card?.block_type) !== f.shift) return false;
     if (f.route && card?.route_name !== f.route) return false;
     const date = String(card?.scheduled_date || '');
     if (f.from && (!date || date < f.from)) return false;

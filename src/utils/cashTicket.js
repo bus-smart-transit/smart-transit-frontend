@@ -20,6 +20,14 @@ export function orderedStopsForLeg(routeStops, legDirection, serviceType = 'regu
   return String(legDirection ?? 'outbound') === 'reverse' ? sorted.reverse() : sorted;
 }
 
+/**
+ * Batch 60 item 2 (user, 2026-11-11): the boarding stops of a cash ticket. The leg's last stop is its destination:
+ * nobody boards there (no stop is ahead of it), so it is never offered.
+ */
+export function boardingStopsForLeg(orderedStops) {
+  return Array.isArray(orderedStops) ? orderedStops.slice(0, -1) : [];
+}
+
 /** Stops the bus reaches after the boarding stop on this leg: the valid drop-offs. */
 export function destinationsAhead(orderedStops, originStopId) {
   const origin = Number(originStopId);

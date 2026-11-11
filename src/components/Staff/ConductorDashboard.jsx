@@ -34,7 +34,7 @@ import { DEFAULT_FILE_TYPE } from '../../utils/tableExport';
 import FileTypeSelect from '../ui/FileTypeSelect';
 import { todaySummary } from '../../utils/assignmentCards';
 import { shiftActionReason, ticketingReason } from '../../utils/actionReasons';
-import { checkInLabel, destinationsAhead, destinationsNotPassed, isOnsiteFormComplete, orderedStopsForLeg, placesLeft, stopLabel } from '../../utils/cashTicket';
+import { boardingStopsForLeg, checkInLabel, destinationsAhead, destinationsNotPassed, isOnsiteFormComplete, orderedStopsForLeg, placesLeft, stopLabel } from '../../utils/cashTicket';
 import { isExpress } from '../../utils/serviceType';
 import ServiceTypeChip from '../ui/ServiceTypeChip';
 import { deriveTripStatus } from '../../utils/tripStatus';
@@ -275,6 +275,8 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   // them, and only stops ahead of the boarding stop as destinations. The server
   // computes the fare either way.
   const legStops = orderedStopsForLeg(routeStops, trip?.leg_direction, trip?.service_type);
+  // Batch 60 item 2: the leg's destination is never a boarding stop.
+  const boardingStops = boardingStopsForLeg(legStops);
   const tripIsExpress = isExpress(trip?.service_type);
   // Task 6: by bus position the server names the stops ahead of the bus; by stop, the stops after the boarding stop.
   const byBusPosition = cashForm.boarding_mode === 'gps';
@@ -761,7 +763,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                         className="h-11 w-full rounded-lg border border-slate-300 bg-slate-800 px-3 text-sm text-white outline-none focus:border-teal-500"
                       >
                         <option value="">Select boarding stop</option>
-                        {legStops.map((stop) => (
+                        {boardingStops.map((stop) => (
                           <option key={`onsite-origin-${stop.stop_id}`} value={stop.stop_id}>
                             {stopLabel(stop)}
                           </option>

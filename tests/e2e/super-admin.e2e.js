@@ -74,7 +74,8 @@ for (const width of [1280, 390]) {
     const username = `owner${stamp}`;
     await form.getByLabel('First Name').fill('Olive');
     await form.getByLabel('Last Name').fill(`Owner ${stamp}`);
-    await form.getByLabel('Username (for signing in)').fill(username);
+    // Batch 60 item 3: an Operator has no username (they sign in with the email).
+    await expect(form.getByLabel('Username (for signing in)')).toHaveCount(0);
     await form.getByLabel('Email Address').fill(`${username}@example.com`);
     await form.getByLabel('Phone: number').fill('9171234598');
     await form.getByLabel('Birth Date').fill('1990-01-01');

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { RefreshCw, Bus, ChevronRight, MapPinned, Pencil, Plus, Navigation, Clock, Pause, WifiOff } from 'lucide-react';
+import { RefreshCw, Bus, ChevronRight, MapPinned, Pencil, Plus, Clock, Pause } from 'lucide-react';
 import { OpPageHeader, OpCard, OpChip, OpStat, OpEmpty } from './OperatorUI';
 import { OP_SPACE } from './operatorUiTokens';
 import Modal from '../../ui/Modal';
@@ -283,12 +283,11 @@ export default function FleetsPage({ fleets, routes, trips, onRefresh, companyNa
 
       {notice && <p role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{notice}</p>}
 
-      <section aria-label="Fleet summary" className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-5">
+      {/* Batch 60 item 4 (user, 2026-11-11): Fleets, Active and Idle only; a running bus counts as Active. */}
+      <section aria-label="Fleet summary" className="grid grid-cols-3 gap-3 sm:gap-4">
         <OpStat icon={Bus} label="Fleets" value={rows.length} />
-        <OpStat icon={Navigation} label="On route" value={counts('on_route')} tone="success" hint="trip live, GPS fresh" />
-        <OpStat icon={Clock} label="Active" value={counts('active')} tone="info" hint="trip still to run today" />
+        <OpStat icon={Clock} label="Active" value={counts('active')} tone="info" hint="trip under way or still to run today" />
         <OpStat icon={Pause} label="Idle" value={counts('idle')} hint="no trip left today" />
-        <OpStat className="col-span-2 lg:col-span-1" icon={WifiOff} label="Offline" value={counts('offline')} tone={counts('offline') ? 'warning' : 'neutral'} hint="trip live, no fresh GPS" />
       </section>
 
       <OpCard
@@ -319,7 +318,11 @@ export default function FleetsPage({ fleets, routes, trips, onRefresh, companyNa
                       <p className="text-lg font-bold text-slate-900">{row.fleet.plate_number}</p>
                       <p className="text-xs text-slate-500">{[row.fleet.body_no, row.fleet.bus_company_name].filter(Boolean).join(' · ') || 'No body number'}</p>
                     </div>
-                    <OpChip tone={row.status.tone}>{row.status.label}</OpChip>
+                    <span className="flex shrink-0 flex-wrap justify-end gap-1.5">
+                      <OpChip tone={row.status.tone}>{row.status.label}</OpChip>
+                      {/* Batch 60 item 4: Offline is no longer a group, so a running bus without live GPS says so here. */}
+                      {row.liveTrip && row.gps.state !== 'live' && <OpChip tone="warning">{row.gps.state === 'off_route' ? 'Off route' : 'No GPS'}</OpChip>}
+                    </span>
                   </div>
                   <dl className="mt-3 grid grid-cols-2 gap-3">
                     <div><dt className="text-xs text-slate-500">Capacity</dt><dd className="font-semibold text-slate-900">{row.fleet.capacity ?? '-'} passengers</dd></div>

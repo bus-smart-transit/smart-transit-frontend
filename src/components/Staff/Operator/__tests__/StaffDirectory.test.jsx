@@ -136,6 +136,39 @@ describe('StaffDirectory', () => {
     })));
   });
 
+  // Batch 60 item 3 (user, 2026-11-11): crew get a username; an Operator signs in with the email, so none is asked.
+  test('asks for a username only for crew, and adds an Operator without one', async () => {
+    OperatorService.createEmployeeAccount.mockResolvedValue({ data: {} });
+    render(<StaffDirectory fleetCount={0} />);
+    await screen.findByText('Juan Dela Cruz');
+    fireEvent.click(screen.getByRole('button', { name: 'Add Staff' }));
+    const dialog = screen.getByRole('dialog');
+    const set = (id, value) => fireEvent.change(dialog.querySelector(`#${id}`), { target: { value } });
+
+    expect(dialog.querySelector('#staff-username')).not.toBeNull();
+    set('staff-role', 'operator');
+    expect(dialog.querySelector('#staff-username')).toBeNull();
+    set('staff-role', 'driver');
+    expect(dialog.querySelector('#staff-username')).not.toBeNull();
+    set('staff-role', 'operator');
+    expect(within(dialog).getByText('They sign in with this email and get their login code here.')).toBeInTheDocument();
+
+    set('staff-firstName', 'Dina');
+    set('staff-lastName', 'Santos');
+    set('staff-email', 'dina@example.com');
+    set('staff-phone', '917 000 2222');
+    set('staff-birthDate', '1995-02-03');
+    set('staff-address', 'Panabo');
+    set('staff-password', 'Strong-pass1');
+    set('staff-confirm', 'Strong-pass1');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add Staff' }));
+
+    await waitFor(() => expect(OperatorService.createEmployeeAccount).toHaveBeenCalled());
+    const payload = OperatorService.createEmployeeAccount.mock.calls[0][0];
+    expect(payload).toMatchObject({ role: 'operator', name: 'Dina Santos', email: 'dina@example.com' });
+    expect(payload).not.toHaveProperty('username');
+  });
+
   test('shows a dispatcher (not a company admin) the list without Add, Edit or Turn off', async () => {
     render(<CompanyAdminContext.Provider value={false}><StaffDirectory fleetCount={0} /></CompanyAdminContext.Provider>);
 

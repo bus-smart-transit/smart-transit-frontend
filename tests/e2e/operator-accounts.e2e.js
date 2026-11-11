@@ -31,7 +31,8 @@ for (const width of [1280, 390]) {
     await expect(dialog.getByText(/Only the Super Admin can make someone a Company Admin/)).toBeVisible();
     await dialog.getByLabel('First Name').fill('Dina');
     await dialog.getByLabel('Last Name').fill(`Dispatch ${stamp}`);
-    await dialog.getByLabel('Username (for signing in)').fill(username);
+    // Batch 60 item 3: an Operator has no username (they sign in with the email).
+    await expect(dialog.getByLabel('Username (for signing in)')).toHaveCount(0);
     await dialog.getByLabel('Email Address').fill(`${username}@example.com`);
     await dialog.getByLabel('Phone: number').fill('9171234599');
     await dialog.getByLabel('Birth Date').fill('1995-05-05');

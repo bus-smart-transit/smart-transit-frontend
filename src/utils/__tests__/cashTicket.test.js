@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { boardingPointView, buildOnsiteItem, capacityFromServer, checkInLabel, capacitySummary, destinationsAhead, destinationsNotPassed, isMidTripBoardingAvailable, isOnsiteFormComplete, isStandingOpen, orderedStopsForLeg, placesLeft, stopLabel } from '../cashTicket';
+import { boardingPointView, boardingStopsForLeg, buildOnsiteItem, capacityFromServer, checkInLabel, capacitySummary, destinationsAhead, destinationsNotPassed, isMidTripBoardingAvailable, isOnsiteFormComplete, isStandingOpen, orderedStopsForLeg, placesLeft, stopLabel } from '../cashTicket';
 import { formatManilaDateTime } from '../dates';
 
 const rs = (id, order, type = 'stop', name = `Stop ${id}`) => ({ stop_id: id, stop_order: order, stop_type: type, stop: { stop_id: id, stop_name: name } });
@@ -201,5 +201,20 @@ describe('Passenger In check-ins (2026-10-26)', () => {
   test('labels a check-in by its time and the stop the fare counts from', () => {
     expect(checkInLabel({ checked_in_at: '10:42', stop_name: 'Stop B' })).toBe('10:42 · after Stop B');
     expect(checkInLabel(null)).toBe('');
+  });
+});
+
+// Batch 60 item 2 (user, 2026-11-11): the leg's destination is never a boarding stop of a cash ticket.
+describe('boardingStopsForLeg', () => {
+  test('offers every stop of the leg except its last one, in leg order', () => {
+    const outbound = orderedStopsForLeg([{ stop_id: 1, stop_order: 1 }, { stop_id: 2, stop_order: 2 }, { stop_id: 3, stop_order: 3 }], 'outbound');
+    expect(boardingStopsForLeg(outbound).map((s) => s.stop_id)).toEqual([1, 2]);
+    const reverse = orderedStopsForLeg([{ stop_id: 1, stop_order: 1 }, { stop_id: 2, stop_order: 2 }, { stop_id: 3, stop_order: 3 }], 'reverse');
+    expect(boardingStopsForLeg(reverse).map((s) => s.stop_id)).toEqual([3, 2]);
+  });
+
+  test('offers nothing when there are no stops', () => {
+    expect(boardingStopsForLeg([])).toEqual([]);
+    expect(boardingStopsForLeg(null)).toEqual([]);
   });
 });
