@@ -250,7 +250,7 @@ export default function OperatorReportsPage({ fleets = [] }) {
   return (
     <div className="space-y-5">
       <header>
-        <h1 className="text-xl font-bold text-slate-900">Fleet Reports</h1>
+        <h1 className="font-display text-2xl font-bold tracking-tight text-slate-900 sm:text-[1.75rem]">Fleet Reports</h1>
       </header>
 
       <div role="tablist" aria-label="Report type" className="flex flex-wrap gap-2 border-b border-slate-200">

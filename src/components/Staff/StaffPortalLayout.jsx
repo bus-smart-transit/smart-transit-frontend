@@ -22,6 +22,7 @@ export default function StaffPortalLayout({
   profileInitialFallback = '?',
   onLogout,
   profileAction = null,
+  mainClassName = 'bg-white',
   children,
 }) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -58,14 +59,14 @@ export default function StaffPortalLayout({
             </button>
           </div>
           <div className="mb-6 space-y-2 px-2 pt-2">
-            <BrandLogo light className="h-9" />
-            <p className="flex items-center gap-1.5 truncate text-xs text-slate-400">
-              {BrandIcon && <BrandIcon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />}
+            <BrandLogo light className="h-10" />
+            <p className="flex items-center gap-2 truncate text-sm text-slate-400">
+              {BrandIcon && <BrandIcon className="h-4 w-4 shrink-0" aria-hidden="true" />}
               {brandLabel}
             </p>
           </div>
 
-          <nav className="flex flex-col gap-0.5">
+          <nav className="flex flex-col gap-1">
             {navItems.map((item) => {
               const Icon = item.icon;
               const isActive = activeTab === item.key;
@@ -73,17 +74,17 @@ export default function StaffPortalLayout({
                 <button
                   key={item.key}
                   type="button"
-                  className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+                  className={`flex items-center gap-3.5 rounded-xl px-3.5 py-2.5 text-[15px] lg:py-3 font-medium transition-colors ${
                     isActive
                       ? 'bg-teal-500 text-white'
-                      : 'text-slate-400 hover:bg-white/10 hover:text-white'
+                      : 'text-slate-300 hover:bg-white/10 hover:text-white'
                   }`}
                   onClick={() => {
                     onTabChange(item.key);
                     setMobileNavOpen(false);
                   }}
                 >
-                  <Icon className="h-4 w-4 shrink-0" />
+                  <Icon className="h-5 w-5 shrink-0" />
                   {item.label}
                 </button>
               );
@@ -98,13 +99,13 @@ export default function StaffPortalLayout({
             <div className="flex items-center gap-3 rounded-xl bg-white/10 px-3 py-2.5">
               {profile && (
                 <>
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-teal-500 text-sm font-bold text-white">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-teal-500 text-base font-bold text-white">
                     {(profile.name || profileInitialFallback)[0].toUpperCase()}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold text-white">{profile.name}</p>
+                    <p className="line-clamp-2 break-words text-sm font-semibold leading-snug text-white">{profile.name}</p>
                     {/* Batch 46: the company this person works for, next to the role. */}
-                    <p className="truncate text-xs text-slate-400" data-testid="profile-company-line">
+                    <p className="truncate text-[13px] text-slate-400" data-testid="profile-company-line">
                       {profile.company?.company_name ? `${profileRoleLabel} · ${profile.company.company_name}` : profileRoleLabel}
                     </p>
                   </div>
@@ -115,19 +116,19 @@ export default function StaffPortalLayout({
           )}
           <button
             type="button"
-            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-red-400 transition hover:bg-white/10 hover:text-red-300"
+            className="flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-[15px] font-medium text-red-400 transition hover:bg-white/10 hover:text-red-300"
             onClick={() => {
               setMobileNavOpen(false);
               onLogout();
             }}
           >
-            <LogOut className="h-4 w-4" />
+            <LogOut className="h-5 w-5" />
             Sign Out
           </button>
         </div>
       </aside>
 
-      <main className="min-h-screen bg-white p-4 sm:p-6">
+      <main className={`min-h-screen p-4 sm:p-6 ${mainClassName}`}>
         <div className="mb-4 flex items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm lg:hidden">
           <div className="min-w-0">
             <BrandLogo className="h-8" />

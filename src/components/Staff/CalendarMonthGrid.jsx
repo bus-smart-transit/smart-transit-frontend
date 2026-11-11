@@ -12,6 +12,63 @@ const countLabel = (marker) => {
   return parts.join(', ');
 };
 
+const navButton = 'inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-500 transition hover:bg-slate-100 hover:text-slate-900';
+
+function CompactMonth({ month, onMonthChange, selectedDate, onSelectDate, cells, loading, error, footer }) {
+  return (
+    <div>
+      <div className="mb-4 flex items-center justify-between gap-2">
+        <button type="button" aria-label="Previous month" className={navButton} onClick={() => onMonthChange(shiftMonth(month, -1))}>
+          <ChevronLeft className="h-4 w-4" />
+        </button>
+        <div className="flex min-w-0 flex-col items-center">
+          <h4 className="font-display text-base font-semibold text-slate-900">
+            {month.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+          </h4>
+          <button type="button" className="text-xs font-semibold text-teal-700 hover:text-teal-900 hover:underline" onClick={() => onMonthChange(monthStartOf(null))}>
+            Today
+          </button>
+        </div>
+        <button type="button" aria-label="Next month" className={navButton} onClick={() => onMonthChange(shiftMonth(month, 1))}>
+          <ChevronRight className="h-4 w-4" />
+        </button>
+      </div>
+
+      <div className="grid grid-cols-7 border-b border-slate-100 pb-2 text-center text-[11px] font-semibold uppercase text-slate-400" aria-hidden="true">
+        {WEEKDAYS_COMPACT.map((d, i) => <div key={i}>{d}</div>)}
+      </div>
+      <div className="mt-2 grid grid-cols-7 gap-y-1" aria-busy={loading}>
+        {cells.map((cell) => {
+          const selected = selectedDate === cell.dateKey;
+          const tone = cell.isToday
+            ? 'bg-teal-600 text-white shadow-sm hover:bg-teal-700'
+            : selected
+              ? 'bg-teal-50 text-teal-800 ring-2 ring-teal-500'
+              : cell.isCurrentMonth ? 'text-slate-700 hover:bg-slate-100' : 'text-slate-300 hover:bg-slate-50';
+          return (
+            <div key={cell.dateKey} className="flex justify-center">
+              <button
+                type="button"
+                onClick={() => onSelectDate(cell.dateKey)}
+                aria-pressed={selected}
+                aria-label={`${formatDayLabel(cell.dateKey)}${cell.marker ? `, ${countLabel(cell.marker)}` : ''}`}
+                className={`relative flex h-9 w-9 items-center justify-center rounded-full text-[13px] font-semibold tabular-nums transition ${tone}`}
+              >
+                {cell.date.getDate()}
+                {cell.marker && (
+                  <span className={`absolute bottom-0.5 h-1 w-1 rounded-full ${cell.isToday ? 'bg-white' : 'bg-teal-500'}`} aria-hidden="true" />
+                )}
+              </button>
+            </div>
+          );
+        })}
+      </div>
+      {error && <p className="mt-2 text-xs text-red-600" role="alert">{error}</p>}
+      {footer}
+    </div>
+  );
+}
+
 /**
  * One month, one page at a time, with the server's day markers (trips and shifts of the caller's
  * own scope, Manila days). `compact` is the dashboard widget: a fixed, small grid that never grows
@@ -21,6 +78,10 @@ const countLabel = (marker) => {
 export default function CalendarMonthGrid({ service, month, onMonthChange, selectedDate = null, onSelectDate, compact = false, refreshKey = 0, footer = null }) {
   const { cells, loading, error } = useCalendarMonth(service, month, refreshKey);
   const weekdays = compact ? WEEKDAYS_COMPACT : WEEKDAYS_FULL;
+
+  if (compact) {
+    return <CompactMonth {...{ month, onMonthChange, selectedDate, onSelectDate, cells, loading, error, footer }} />;
+  }
 
   return (
     <div>

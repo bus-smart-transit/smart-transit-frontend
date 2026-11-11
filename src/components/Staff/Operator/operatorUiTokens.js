@@ -20,6 +20,8 @@ export const OP_TONES = {
 
 export const toneOf = (tone) => OP_TONES[tone] ?? OP_TONES.neutral;
 
+export const OP_ICON_TILE = 'bg-slate-100 text-slate-600';
+
 // The trip statuses the backend stores, mapped to a tone.
 export const TRIP_STATUS_TONE = {
   scheduled: 'neutral',

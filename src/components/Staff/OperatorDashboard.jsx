@@ -33,6 +33,7 @@ import ProfilePage from '../Account/ProfilePage'
 import SchedulePage from './Schedule/SchedulePage'
 import ShiftBlocksView from './Schedule/ShiftBlocksView'
 import FinancePage from './Finance/FinancePage'
+import { OpPageHeader } from './Operator/OperatorUI'
 import { OPERATOR_ROLE, navForRole, viewsForRole } from '../../utils/operatorNav'
 import {
   LayoutDashboard, Bus, MapPin, PieChart, Users, Settings, Wallet, CalendarDays,
@@ -817,6 +818,7 @@ export default function OperatorDashboard() {
       profileInitialFallback="O"
       onLogout={handleLogout}
       profileAction={<NotificationBell />}
+      mainClassName="bg-slate-50"
     >
         {/* w-0 min-w-full: a wide table inside a page must scroll in its card, not widen the whole portal column. */}
         <div className="w-0 min-w-full">
@@ -828,6 +830,7 @@ export default function OperatorDashboard() {
             drivers={drivers}
             conductors={conductors}
             fleets={fleets}
+            operatorName={profile?.name || profile?.user?.name || ''}
             topSlot={<TripRequestsPanel onDecided={loadFull} />}
             onRefresh={loadFull}
             onOpenCalendar={(date) => { setCalendarFocus(date); setActiveTab('schedule', 'calendar') }}
@@ -846,7 +849,8 @@ export default function OperatorDashboard() {
           />
         )}
         {activeTab === 'staffs'     && (
-          <div className="space-y-4">
+          <div className="space-y-6">
+            <OpPageHeader title="Staffs" subtitle="Your Drivers and Chauffeurs, and when their shifts started and ended" />
             {/* Batch 46: the directory pages and counts on the server; a change also refreshes the scheduling pickers. */}
             <StaffDirectory fleetCount={fleets.length} onChanged={loadFull} />
             <CrewShiftTimes staff={[...drivers, ...conductors]} />
@@ -856,7 +860,12 @@ export default function OperatorDashboard() {
         {activeTab === 'routes'     && <RoutesPage routes={routes} stops={stops} trips={trips} fleets={fleets} onRefresh={loadFull} onOpenSchedule={() => setActiveTab('schedule')} onOpenFleets={() => setActiveTab('fleets')} />}
         {activeTab === 'finance'    && <FinancePage views={viewsForRole('finance', OPERATOR_ROLE)} view={view} onViewChange={setView} />}
         {activeTab === 'reports'    && <ReportsTab fleets={fleets} />}
-        {activeTab === 'account'    && <ProfilePage role="operator" profile={profile} loading={loading} onSignOut={handleLogout} />}
+        {activeTab === 'account'    && (
+          <div className="space-y-6">
+            <OpPageHeader title="Account" subtitle="Your profile, sign-in security and password" />
+            <ProfilePage role="operator" profile={profile} loading={loading} onSignOut={handleLogout} />
+          </div>
+        )}
         </div>
     </StaffPortalLayout>
     </CompanyAdminContext.Provider>

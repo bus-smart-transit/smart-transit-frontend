@@ -18,7 +18,7 @@ export default function DashboardCalendar({ service, onOpenFull, refreshKey = 0,
 
   return (
     <>
-      <section className={`staff-card ${className}`} aria-label="Calendar widget">
+      <section className={`rounded-2xl border border-slate-200 bg-white p-5 shadow-card ${className}`} aria-label="Calendar widget">
         <CalendarMonthGrid
           service={service}
           month={month}
@@ -29,8 +29,8 @@ export default function DashboardCalendar({ service, onOpenFull, refreshKey = 0,
           refreshKey={refreshKey}
           footer={(
             <button type="button" onClick={() => onOpenFull(null)}
-              className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-teal-600 px-3 py-2 text-xs font-semibold text-white hover:bg-teal-700">
-              <CalendarDays className="h-3.5 w-3.5" /> Full calendar
+              className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-teal-600 px-3 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-teal-700">
+              <CalendarDays className="h-4 w-4" /> Full calendar
             </button>
           )}
         />
