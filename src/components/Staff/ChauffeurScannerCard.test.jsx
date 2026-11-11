@@ -53,10 +53,10 @@ describe('ChauffeurScannerCard', () => {
   it('never hides the camera video, so the scanner can show the picture', () => {
     const { rerender } = render(<ChauffeurScannerCard {...base({ scannerRunning: false })} />);
     const video = screen.getByTestId('scanner-video');
-    expect(video.className).not.toMatch(/(invisible|hidden)/);
+    expect(video.className).not.toMatch(/\b(invisible|hidden)\b/);
     expect(video).not.toHaveAttribute('hidden');
     rerender(<ChauffeurScannerCard {...base({ scannerRunning: true })} />);
-    expect(screen.getByTestId('scanner-video').className).not.toMatch(/(invisible|hidden)/);
+    expect(screen.getByTestId('scanner-video').className).not.toMatch(/\b(invisible|hidden)\b/);
   });
 });
 
