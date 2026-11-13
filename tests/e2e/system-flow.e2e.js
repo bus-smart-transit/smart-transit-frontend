@@ -258,7 +258,7 @@ test('Driver: accepts today\'s trip, sees the pairing code, and opens every tab'
   if (minutes > 20 * 60 + 55 || minutes < 5 * 60 + 30) {
     test.info().annotations.push({ type: 'outside bus hours', description: 'No trip made; pages opened only.' });
     await staffSignIn(page, 'driver5@smarttransit.com', /driver\/dashboard/);
-    for (const label of ['Dashboard', 'Active Trip', 'Schedule', 'Account']) {
+    for (const label of ['Home', 'Trip', 'Schedule', 'Account']) {
       await clickSidebar(page, label);
       await settle(page);
     }
@@ -285,7 +285,7 @@ test('Driver: accepts today\'s trip, sees the pairing code, and opens every tab'
   await api.patch(`driver/trips/${trip.trip_id}/accept`, as(driverToken));
 
   await staffSignIn(page, 'driver5@smarttransit.com', /driver\/dashboard/);
-  for (const label of ['Dashboard', 'Active Trip', 'Schedule', 'Account']) {
+  for (const label of ['Home', 'Trip', 'Schedule', 'Account']) {
     await clickSidebar(page, label);
     await settle(page);
   }
@@ -303,7 +303,7 @@ test('Chauffeur: pairs, starts a shift with no opening cash, sells, drops off by
   if (!trip) {
     test.info().annotations.push({ type: 'outside bus hours', description: 'No trip; pages opened only.' });
     await staffSignIn(page, 'conductor5@smarttransit.com', /conductor\/dashboard/);
-    for (const label of ['Dashboard', 'Ticketing & Fares', 'Active Shift', 'Schedule', 'Account']) {
+    for (const label of ['Home', 'Tickets', 'Shift', 'Schedule', 'Account']) {
       await clickSidebar(page, label);
       await settle(page);
     }
@@ -333,7 +333,7 @@ test('Chauffeur: pairs, starts a shift with no opening cash, sells, drops off by
   const boarding = await api.patch(`operator/trips/${trip.trip_id}/boarding`, as(operatorToken));
   expect(boarding.status() < 500, await boarding.text()).toBeTruthy();
 
-  await clickSidebar(page, 'Ticketing & Fares');
+  await clickSidebar(page, 'Tickets');
   const origin = page.locator('#onsite-origin');
   await expect(origin).toBeVisible();
   await origin.selectOption({ index: 1 });
@@ -345,7 +345,7 @@ test('Chauffeur: pairs, starts a shift with no opening cash, sells, drops off by
   await page.getByRole('button', { name: 'Confirm Payment' }).click();
   await shot(page, 'c2-sale');
 
-  await clickSidebar(page, 'Active Shift');
+  await clickSidebar(page, 'Shift');
   const groups = page.getByTestId('drop-off-groups');
   await expect(groups).toBeVisible();
   await groups.getByRole('button', { name: /^Confirm \d+ got off at / }).first().click();

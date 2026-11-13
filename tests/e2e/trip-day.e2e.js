@@ -160,7 +160,7 @@ test('2. Crew accept, pair and start their shifts; boarding opens; the Chauffeur
   expect(boarding.status, JSON.stringify(boarding.body)).toBeLessThan(300);
 
   await staffSignIn(page, 'conductor3@smarttransit.com', /conductor\/dashboard/);
-  await clickSidebar(page, 'Ticketing & Fares');
+  await clickSidebar(page, 'Tickets');
   const origin = page.locator('#onsite-origin');
   await expect(origin).toBeVisible();
   await origin.selectOption({ index: 1 });
@@ -185,7 +185,7 @@ test('3. The Driver\'s map shows the bus icon at the phone\'s position', async (
   const entry = watch(page, 'driver-map');
 
   await staffSignIn(page, 'driver3@smarttransit.com', /driver\/dashboard/);
-  await clickSidebar(page, 'Active Trip');
+  await clickSidebar(page, 'Trip');
   await expect(page.locator('.st-bus-marker').first()).toBeVisible({ timeout: 120000 });
   await shot(page, '2-driver-map-bus-icon');
   expectClean(entry, 'driver-map');
@@ -246,7 +246,7 @@ test('6. The Driver acknowledges the stops and ends the trip; the Chauffeur\'s s
   // (TripService::closeShiftLogsForTrip). The Chauffeur's remittance opens with no cash declared, for the Operator.
   const entry = watch(page, 'end-of-shift');
   await staffSignIn(page, 'conductor3@smarttransit.com', /conductor\/dashboard/);
-  await clickSidebar(page, 'Active Shift');
+  await clickSidebar(page, 'Shift');
   await expect(page.getByText('No shift is open, so there is nothing to end.')).toBeVisible({ timeout: 60000 });
   await expect(page.getByRole('button', { name: /End Shift/ }).first()).toBeDisabled();
   await shot(page, '5-chauffeur-shift-closed');

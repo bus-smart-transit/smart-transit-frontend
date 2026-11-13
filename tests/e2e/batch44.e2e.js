@@ -196,7 +196,7 @@ test('Chauffeur: a discounted cash sale shows the regular fare and the discount,
   expect(boarding.ok() || trip.status === 'boarding', await boarding.text()).toBeTruthy();
 
   await signIn(page, 'conductor3@smarttransit.com', /conductor\/dashboard/);
-  await page.getByRole('button', { name: 'Ticketing & Fares' }).first().click();
+  await page.getByRole('button', { name: 'Tickets', exact: true }).first().click();
 
   const origin = page.locator('#onsite-origin');
   await expect(origin).toBeVisible({ timeout: 30000 });
@@ -220,7 +220,7 @@ test('Chauffeur: a discounted cash sale shows the regular fare and the discount,
   await page.getByRole('button', { name: 'Confirm Payment' }).click();
   await expect(page.getByText(/Discount|discount/).first()).toBeVisible({ timeout: 30000 });
 
-  await page.getByRole('button', { name: 'Active Shift' }).first().click();
+  await page.getByRole('button', { name: 'Shift', exact: true }).first().click();
   const groups = page.getByTestId('drop-off-groups');
   await expect(groups).toBeVisible({ timeout: 30000 });
   await shot(page, '6-chauffeur-drop-off-groups');
