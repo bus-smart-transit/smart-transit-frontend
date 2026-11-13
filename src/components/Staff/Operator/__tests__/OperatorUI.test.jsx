@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
-import { OpPageHeader, OpCard, OpChip, OpStat, OpBar, OpStackedBar, OpTable, OpEmpty } from '../OperatorUI';
+import { OpPageHeader, OpCard, OpChip, OpStat, OpBar, OpStackedBar, OpTable, OpEmpty, OpDelta, OpSparkline } from '../OperatorUI';
 import { toneOf, OP_TONES } from '../operatorUiTokens';
 
 describe('Operator UI primitives', () => {
@@ -69,5 +69,44 @@ describe('Operator UI primitives', () => {
 
   it('unknown tones fall back to neutral', () => {
     expect(toneOf('nope')).toBe(OP_TONES.neutral);
+  });
+});
+
+// 2026-11-13: change against an earlier period, and the stat card's trend line.
+describe('OpDelta', () => {
+  it('shows the rise in green with the period it is compared with', () => {
+    render(<OpDelta current={12} previous={10} label="vs yesterday" />);
+    expect(screen.getByLabelText('Up 20% vs yesterday').className).toMatch(/emerald/);
+    expect(screen.getByTestId('op-delta').textContent).toBe('20%vs yesterday');
+  });
+
+  it('shows a fall in rose, and in green when less is better', () => {
+    const { rerender } = render(<OpDelta current={5} previous={10} label="vs yesterday" />);
+    expect(screen.getByLabelText('Down 50% vs yesterday').className).toMatch(/rose/);
+    rerender(<OpDelta current={5} previous={10} label="vs yesterday" upIsGood={false} />);
+    expect(screen.getByLabelText('Down 50% vs yesterday').className).toMatch(/emerald/);
+  });
+
+  it('shows nothing when there is nothing to compare with', () => {
+    const { container } = render(<OpDelta current={5} previous={0} label="vs yesterday" />);
+    expect(container.firstChild).toBeNull();
+  });
+});
+
+describe('OpSparkline', () => {
+  it('names every point for screen readers', () => {
+    render(<OpSparkline label="Trips per day" points={[{ label: 'Mon', value: 3 }, { label: 'Tue', value: 5 }]} />);
+    expect(screen.getByRole('img', { name: 'Trips per day. Mon: 3, Tue: 5' })).toBeInTheDocument();
+  });
+
+  it('draws nothing with fewer than two points', () => {
+    const { container } = render(<OpSparkline label="x" points={[{ label: 'Mon', value: 3 }]} />);
+    expect(container.firstChild).toBeNull();
+  });
+
+  it('sits beside the figure in a stat card', () => {
+    render(<OpStat label="Trips today" value={8} chart={<OpSparkline label="Trips per day" points={[{ label: 'a', value: 1 }, { label: 'b', value: 2 }]} />} />);
+    expect(screen.getByTestId('op-sparkline')).toBeInTheDocument();
+    expect(screen.getByText('8')).toBeInTheDocument();
   });
 });

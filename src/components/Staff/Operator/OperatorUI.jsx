@@ -1,5 +1,7 @@
+import { useId, useState } from 'react';
+import { ArrowDown, ArrowUp } from 'lucide-react';
 import Card from '../../ui/Card';
-import { toneOf, OP_ICON_TILE, OP_SPACE } from './operatorUiTokens';
+import { toneOf, accentOf, OP_SPACE } from './operatorUiTokens';
 
 /**
  * Batch 31: the building blocks of the reworked Operator pages. They sit on the shared Card and the Operator
@@ -21,17 +23,14 @@ export function OpPageHeader({ title, subtitle, eyebrow = null, action = null })
   );
 }
 
-export function OpCard({ title, subtitle, badge = null, icon: Icon = null, children, className = '', padding = 'md' }) {
+export function OpCard({ title, subtitle, badge = null, icon: Icon = null, accent = 'teal', children, className = '', padding = 'md' }) {
   return (
     <Card padding={padding} className={`min-w-0 ${className}`}>
       {(title || badge) && (
         <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
           <div className="flex min-w-0 items-start gap-3">
-            {Icon && (
-              <span className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${OP_ICON_TILE}`} aria-hidden="true">
-                <Icon className="h-[18px] w-[18px]" />
-              </span>
-            )}
+            {/* 2026-11-13: a thin outline icon in the card's colour, no grey tile (the reference design). */}
+            {Icon && <Icon className={`mt-0.5 h-6 w-6 shrink-0 ${accentOf(accent)}`} strokeWidth={1.5} aria-hidden="true" />}
             <div className="min-w-0">
               {title && <h2 className="font-display text-[1.0625rem] font-semibold leading-snug text-slate-900">{title}</h2>}
               {subtitle && <p className="mt-0.5 text-[13px] leading-relaxed text-slate-500">{subtitle}</p>}
@@ -53,21 +52,133 @@ export function OpChip({ tone = 'neutral', children, className = '' }) {
   );
 }
 
-export function OpStat({ label, value, hint = null, tone = 'neutral', icon: Icon = null, className = '' }) {
+/**
+ * 2026-11-13: change against a named earlier period, e.g. "▲ 20% vs yesterday". Green when the number went up, rose
+ * when it went down (pass upIsGood={false} where more is worse). Nothing is shown when there is nothing to compare.
+ */
+export function OpDelta({ current, previous, label, upIsGood = true }) {
+  const now = Number(current);
+  const before = Number(previous);
+  if (!Number.isFinite(now) || !Number.isFinite(before) || before <= 0) return null;
+  const pct = Math.round(((now - before) / before) * 100);
+  const Arrow = pct > 0 ? ArrowUp : pct < 0 ? ArrowDown : null;
+  const tone = pct === 0 ? 'neutral' : (pct > 0) === upIsGood ? 'success' : 'danger';
+  const text = `${pct > 0 ? 'Up' : pct < 0 ? 'Down' : 'No change,'} ${Math.abs(pct)}% ${label}`;
+  return (
+    <span className="inline-flex items-center gap-1.5 text-xs text-slate-500" data-testid="op-delta" title={`${before} ${label}`}>
+      <span className={`inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 font-semibold tabular-nums ${toneOf(tone).chip}`} aria-label={text}>
+        {Arrow && <Arrow className="h-3 w-3" strokeWidth={2.5} aria-hidden="true" />}
+        <span aria-hidden="true">{Math.abs(pct)}%</span>
+      </span>
+      <span aria-hidden="true">{label}</span>
+    </span>
+  );
+}
+
+/** Monotone cubic path through the points (no overshoot below zero or above a peak). */
+function smoothPath(pts) {
+  if (pts.length < 2) return '';
+  const n = pts.length;
+  const d = [];
+  for (let i = 0; i < n - 1; i += 1) d.push((pts[i + 1].y - pts[i].y) / (pts[i + 1].x - pts[i].x));
+  const m = [d[0], ...d.slice(1).map((s, i) => (s * d[i] <= 0 ? 0 : (s + d[i]) / 2)), d[n - 2]];
+  for (let i = 0; i < n - 1; i += 1) {
+    if (d[i] === 0) { m[i] = 0; m[i + 1] = 0; continue; }
+    const a = m[i] / d[i];
+    const b = m[i + 1] / d[i];
+    const h = Math.hypot(a, b);
+    if (h > 3) { m[i] = (3 * a * d[i]) / h; m[i + 1] = (3 * b * d[i]) / h; }
+  }
+  let path = `M${pts[0].x},${pts[0].y}`;
+  for (let i = 0; i < n - 1; i += 1) {
+    const dx = (pts[i + 1].x - pts[i].x) / 3;
+    path += ` C${pts[i].x + dx},${pts[i].y + m[i] * dx} ${pts[i + 1].x - dx},${pts[i + 1].y - m[i + 1] * dx} ${pts[i + 1].x},${pts[i + 1].y}`;
+  }
+  return path;
+}
+
+/**
+ * 2026-11-13: a small trend line for a stat card, in the card's colour, with a soft fill under it. Hovering shows the
+ * point's label and value; screen readers get every point in the accessible name. Needs at least two points.
+ */
+export function OpSparkline({ points, accent = 'slate', label, format = (point) => `${point.label}: ${point.value}` }) {
+  const gradientId = useId();
+  const [active, setActive] = useState(null);
+  if (!Array.isArray(points) || points.length < 2) return null;
+  const W = 100;
+  const H = 40;
+  const PAD = 3;
+  const max = Math.max(...points.map((p) => Number(p.value) || 0), 1);
+  const pts = points.map((p, i) => ({
+    x: (i / (points.length - 1)) * W,
+    y: H - PAD - ((Number(p.value) || 0) / max) * (H - PAD * 2),
+  }));
+  const line = smoothPath(pts);
+  const area = `${line} L${W},${H} L0,${H} Z`;
+  const onMove = (event) => {
+    const box = event.currentTarget.getBoundingClientRect();
+    const ratio = box.width > 0 ? (event.clientX - box.left) / box.width : 0;
+    setActive(Math.max(0, Math.min(points.length - 1, Math.round(ratio * (points.length - 1)))));
+  };
+  const at = active === null ? null : pts[active];
+  return (
+    <div
+      className={`relative h-12 w-full ${accentOf(accent)}`}
+      role="img"
+      aria-label={`${label}. ${points.map(format).join(', ')}`}
+      data-testid="op-sparkline"
+      onPointerMove={onMove}
+      onPointerLeave={() => setActive(null)}
+    >
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="h-full w-full overflow-visible" aria-hidden="true">
+        <defs>
+          <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="currentColor" stopOpacity="0.28" />
+            <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <path d={area} fill={`url(#${gradientId})`} />
+        <path d={line} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+        {at && <line x1={at.x} x2={at.x} y1="0" y2={H} stroke="currentColor" strokeOpacity="0.35" strokeWidth="1" vectorEffect="non-scaling-stroke" />}
+      </svg>
+      {at && (
+        <>
+          <span
+            className="pointer-events-none absolute h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-current shadow"
+            style={{ left: `${at.x}%`, top: `${(at.y / H) * 100}%` }}
+            aria-hidden="true"
+          />
+          <span
+            className="pointer-events-none absolute bottom-full z-10 mb-1 -translate-x-1/2 whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-[11px] font-medium text-white shadow-lg"
+            style={{ left: `${Math.min(85, Math.max(15, at.x))}%` }}
+            aria-hidden="true"
+          >
+            {format(points[active])}
+          </span>
+        </>
+      )}
+    </div>
+  );
+}
+
+export function OpStat({ label, value, hint = null, tone = 'neutral', icon: Icon = null, accent = 'slate', delta = null, chart = null, className = '' }) {
   return (
     <Card padding="sm" className={`min-w-0 p-4! transition-shadow hover:shadow-card-hover sm:p-5! ${className}`}>
-      <div className="flex items-start justify-between gap-2 sm:gap-3">
-        <div className="min-w-0">
-          <p className="text-xs font-medium text-slate-500 sm:text-[13px]">{label}</p>
-          <p className="mt-1.5 font-display text-2xl font-bold leading-none tracking-tight text-slate-900 tabular-nums sm:text-[1.875rem]">{value}</p>
+      <div className="min-w-0">
+        <p className="flex min-w-0 items-center gap-2 text-xs font-medium text-slate-500 sm:text-[13px]">
+          {Icon && <Icon className={`op-stat-icon h-5 w-5 shrink-0 sm:h-6 sm:w-6 ${accentOf(accent)}`} strokeWidth={1.5} aria-hidden="true" />}
+          <span className="min-w-0">{label}</span>
+        </p>
+        {/* 2026-11-13: the figure on the left, an optional trend line on the right (the reference design). */}
+        <div className="mt-2.5 flex items-start justify-between gap-3">
+          <div className="min-w-0 shrink-0">
+            <p className="font-display text-2xl font-bold leading-none tracking-tight text-slate-900 tabular-nums sm:text-[1.875rem]">{value}</p>
+            {delta && <div className="mt-2">{delta}</div>}
+          </div>
+          {chart && <div className="min-w-0 max-w-32 flex-1">{chart}</div>}
         </div>
-        {Icon && (
-          <span className={`op-stat-icon inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg sm:h-10 sm:w-10 sm:rounded-xl ${OP_ICON_TILE}`} aria-hidden="true">
-            <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
-          </span>
-        )}
       </div>
-      {hint && <p className="mt-2.5 flex items-start gap-1.5 text-xs leading-snug text-slate-500 sm:mt-3"><span className={`mt-[5px] inline-block h-1.5 w-1.5 shrink-0 rounded-full ${toneOf(tone).dot}`} aria-hidden="true" />{hint}</p>}
+      {hint && <p className="mt-2.5 flex items-start gap-1.5 text-xs leading-snug text-slate-500 sm:mt-3"><span className={`mt-[4px] inline-block h-2 w-2 shrink-0 rounded-full ${toneOf(tone).dot}`} aria-hidden="true" />{hint}</p>}
     </Card>
   );
 }

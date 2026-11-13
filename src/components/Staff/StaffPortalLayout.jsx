@@ -79,7 +79,7 @@ export default function StaffPortalLayout({
                   type="button"
                   className={`flex items-center gap-3.5 rounded-xl px-3.5 py-2.5 text-[15px] lg:py-3 font-medium transition-colors ${
                     isActive
-                      ? 'bg-teal-500 text-white'
+                      ? 'bg-teal-700 text-white'
                       : 'text-slate-300 hover:bg-white/10 hover:text-white'
                   }`}
                   onClick={() => {
@@ -102,7 +102,7 @@ export default function StaffPortalLayout({
             <div className="flex items-center gap-3 rounded-xl bg-white/10 px-3 py-2.5">
               {profile && (
                 <>
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-teal-500 text-base font-bold text-white">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-teal-600 text-base font-bold text-white">
                     {(profile.name || profileInitialFallback)[0].toUpperCase()}
                   </div>
                   <div className="min-w-0 flex-1">

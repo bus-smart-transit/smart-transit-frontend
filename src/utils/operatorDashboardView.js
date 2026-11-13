@@ -268,6 +268,9 @@ export function buildDashboardView({ trips = [], fleets = [], locations = [], to
       decidedAt: trip.dispatch_decided_at || null,
     }));
 
+  // 2026-11-13: the most urgent first (high, medium, low); the order within one priority is kept.
+  const PRIORITY_RANK = { high: 0, medium: 1, low: 2 };
+  actions.sort((a, b) => PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority]);
   return { todays, kpis, statusBreakdown, loadByRoute, soldByHour, delayByRoute, alerts, actions, advice, deployment, decisions };
 }
 

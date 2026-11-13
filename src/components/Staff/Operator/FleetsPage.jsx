@@ -321,9 +321,9 @@ export default function FleetsPage({ fleets, routes, trips, onRefresh, companyNa
       {showFleets && (<>
       {/* Batch 60 item 4 (user, 2026-11-11): Fleets, Active and Idle only; a running bus counts as Active. */}
       <section aria-label="Fleet summary" className="grid grid-cols-3 gap-3 sm:gap-4">
-        <OpStat icon={Bus} label="Fleets" value={rows.length} />
-        <OpStat icon={Clock} label="Active" value={counts('active')} tone="info" hint="trip under way or still to run today" />
-        <OpStat icon={Pause} label="Idle" value={counts('idle')} hint="no trip left today" />
+        <OpStat icon={Bus} accent="blue" label="Fleets" value={rows.length} />
+        <OpStat icon={Clock} accent="green" label="Active" value={counts('active')} tone="info" hint="trip under way or still to run today" />
+        <OpStat icon={Pause} accent="orange" label="Idle" value={counts('idle')} hint="no trip left today" />
       </section>
 
       <OpCard

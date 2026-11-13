@@ -30,21 +30,21 @@ describe('Operator sidebar in the shared staff layout', () => {
 
   it('highlights only the active item', () => {
     const { aside } = setup('finance');
-    expect(sidebarButton(aside, 'Finance').className).toMatch(/bg-teal-500/);
-    expect(sidebarButton(aside, 'Schedule').className).not.toMatch(/bg-teal-500/);
-    expect([...aside.querySelectorAll('nav button')].filter((b) => /bg-teal-500/.test(b.className))).toHaveLength(1);
+    expect(sidebarButton(aside, 'Finance').className).toMatch(/bg-teal-700/);
+    expect(sidebarButton(aside, 'Schedule').className).not.toMatch(/bg-teal-700/);
+    expect([...aside.querySelectorAll('nav button')].filter((b) => /bg-teal-700/.test(b.className))).toHaveLength(1);
   });
 
   it('moves the highlight when the active item changes', () => {
     const { aside, rerender, onTabChange } = setup('schedule');
-    expect(sidebarButton(aside, 'Schedule').className).toMatch(/bg-teal-500/);
+    expect(sidebarButton(aside, 'Schedule').className).toMatch(/bg-teal-700/);
     rerender(
       <StaffPortalLayout brandLabel="Operator Portal" brandIcon={Bus} navItems={items} activeTab="reports" onTabChange={onTabChange} profile={{ name: 'Olive Operator' }} profileRoleLabel="Operator" onLogout={vi.fn()}>
         <p>page body</p>
       </StaffPortalLayout>,
     );
-    expect(sidebarButton(aside, 'Reports').className).toMatch(/bg-teal-500/);
-    expect(sidebarButton(aside, 'Schedule').className).not.toMatch(/bg-teal-500/);
+    expect(sidebarButton(aside, 'Reports').className).toMatch(/bg-teal-700/);
+    expect(sidebarButton(aside, 'Schedule').className).not.toMatch(/bg-teal-700/);
   });
 
   it('calls onTabChange with the item key', () => {

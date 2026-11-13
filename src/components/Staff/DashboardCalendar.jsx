@@ -29,7 +29,7 @@ export default function DashboardCalendar({ service, onOpenFull, refreshKey = 0,
           refreshKey={refreshKey}
           footer={(
             <button type="button" onClick={() => onOpenFull(null)}
-              className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-teal-600 px-3 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-teal-700">
+              className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-teal-300 hover:bg-teal-50 hover:text-teal-800">
               <CalendarDays className="h-4 w-4" /> Full calendar
             </button>
           )}

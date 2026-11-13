@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   getFleetLocations: vi.fn(),
   getRouteAdherence: vi.fn(),
   saveDispatchDecision: vi.fn(),
+  getCalendarDays: vi.fn(),
 }));
 
 vi.mock('../../../../api/StaffService/OperatorService', () => ({ default: mocks }));
@@ -32,6 +33,26 @@ describe('OperatorDashboardPage', () => {
     mocks.getFleetLocations.mockResolvedValue({ data: [] });
     mocks.getRouteAdherence.mockResolvedValue({ data: { summary: { trips_with_gps_data: 0, deviated_trips: 0, adherence_rate_pct: null } } });
     mocks.saveDispatchDecision.mockResolvedValue({});
+    mocks.getCalendarDays.mockResolvedValue({ data: { days: [] } });
+  });
+
+  // 2026-11-13: trend lines on the stat cards, from real data only.
+  it('shows trips per day for the last 7 days and the change against yesterday on Trips today', async () => {
+    const day = (offset) => { const d = new Date(`${today}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + offset); return d.toISOString().slice(0, 10); };
+    mocks.getCalendarDays.mockResolvedValue({ data: { days: [{ date: day(-1), trips: 10 }, { date: today, trips: 12 }] } });
+    renderPage({ trips: [trip(1), trip(2, { departure_time: '10:00:00' })] });
+    await waitFor(() => expect(mocks.getCalendarDays).toHaveBeenCalledWith({ from: day(-6), to: today }));
+    expect(await screen.findByLabelText('Up 20% vs yesterday')).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: /^Trips per day, last 7 days/ })).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'Tickets sold today by departure hour. 08:00 trips: 8 sold, 10:00 trips: 8 sold' })).toBeInTheDocument();
+  });
+
+  it('shows no change chip when yesterday had no trips, and keeps the card when the calendar fails', async () => {
+    mocks.getCalendarDays.mockRejectedValue(new Error('offline'));
+    renderPage({ trips: [trip(1)] });
+    await waitFor(() => expect(mocks.getCalendarDays).toHaveBeenCalled());
+    expect(screen.queryByTestId('op-delta')).toBeNull();
+    expect(within(screen.getByRole('region', { name: 'Today at a glance' })).getByText('Trips today')).toBeInTheDocument();
   });
 
   it('shows the real figures and never a revenue card or a peso amount of zero', async () => {
@@ -87,5 +108,20 @@ describe('OperatorDashboardPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Open Schedule' }));
     expect(onOpenSchedule).toHaveBeenCalled();
     await waitFor(() => expect(mocks.getFleetLocations).toHaveBeenCalled());
+  });
+
+  // 2026-11-13 (user): Refresh shows that it is loading, then that it is done.
+  it('spins while refreshing and then says Updated', async () => {
+    let finish;
+    const onRefresh = vi.fn(() => new Promise((resolve) => { finish = resolve; }));
+    renderPage({ onRefresh });
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    const busy = screen.getByRole('button', { name: 'Refreshing…' });
+    expect(busy).toBeDisabled();
+    expect(onRefresh).toHaveBeenCalledTimes(1);
+    fireEvent.click(busy);
+    expect(onRefresh).toHaveBeenCalledTimes(1);
+    finish();
+    expect(await screen.findByRole('button', { name: 'Updated' }, { timeout: 2000 })).toBeEnabled();
   });
 });

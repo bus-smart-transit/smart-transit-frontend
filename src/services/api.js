@@ -1,4 +1,5 @@
 import axios from "axios";
+import { installMockApi } from "../dev/mockApi.js";
 
 const API_BASE_OVERRIDE_KEY = 'smart_transit_api_base_url';
 
@@ -70,5 +71,11 @@ const api = axios.create({
     "ngrok-skip-browser-warning": "1",
   },
 });
+
+// 2026-11-13: UI preview mode (src/dev/mockApi.js). Dev server only; `import.meta.env.DEV` is false in a build,
+// so this branch and the sample data are dropped from production.
+if (import.meta.env.DEV && import.meta.env.VITE_MOCK_API === 'true') {
+  installMockApi(api);
+}
 
 export default api;

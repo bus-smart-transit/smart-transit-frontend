@@ -191,3 +191,10 @@
 ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
 
+
+/* 2026-11-13: the check mark on the Operator dashboard's Refresh button pops in once the data is back. */
+@keyframes op-pop {
+  0% { transform: scale(0.4); opacity: 0; }
+  70% { transform: scale(1.2); opacity: 1; }
+  100% { transform: scale(1); }
+}

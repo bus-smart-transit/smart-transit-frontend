@@ -49,4 +49,4 @@ describe('Employee Admin route', () => {
     await screen.findByText(/./);
     expect(screen.queryByTestId('super-admin-portal')).toBeNull();
   });
-});
+});
