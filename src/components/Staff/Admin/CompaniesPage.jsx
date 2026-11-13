@@ -6,6 +6,7 @@ import Modal from '../../ui/Modal';
 import StaffFormModal from '../Operator/StaffFormModal';
 import { adminErrorText } from '../../../api/hooks/Staff/useSuperAdmin';
 
+import { SkeletonTable } from '../../ui/Skeleton';
 const BUTTON = 'inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50';
 
 /** Add or rename: one field. */
@@ -92,7 +93,7 @@ export default function CompaniesPage({ companiesTab }) {
       {error && <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>}
       <OpCard title="Company list">
         {loading && companies.length === 0
-          ? <p role="status" className="text-sm text-slate-500">Loading...</p>
+          ? <SkeletonTable label="Loading..." cols={4} />
           : <OpTable caption="Companies" columns={columns} rows={companies} rowKey={(row) => row.company_id} empty="No companies yet. Use Add company." />}
       </OpCard>
 

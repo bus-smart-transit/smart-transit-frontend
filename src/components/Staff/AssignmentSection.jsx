@@ -5,6 +5,7 @@ import { describeAssignmentFocus, describeBlockFocus } from '../../utils/notific
 import { getBusinessToday, formatManilaDate } from '../../utils/dates';
 import { sectionCards } from '../../utils/assignmentCards';
 
+import { SkeletonCards } from '../ui/Skeleton';
 /**
  * The "Assigned Routes" body of the Driver and Chauffeur dashboards (Batch 28, item 1): the focus
  * notice from a notification, today's and upcoming block cards, and the decline dialog. Accept and
@@ -43,7 +44,7 @@ export default function AssignmentSection({ role, assignments, assignedTrips, fi
       )}
       {assignments.error && <p role="alert" className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{assignments.error}</p>}
       {!loaded ? (
-        <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-5 text-sm text-slate-500">Loading your assignments...</div>
+        <SkeletonCards label="Loading your assignments..." count={2} />
       ) : (
         <div className="space-y-5">
           {overdue.length > 0 && (

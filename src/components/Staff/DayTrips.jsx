@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useCalendarDay } from '../../api/hooks/Staff/useStaffCalendar';
 import { ROLE_LABEL, STATUS_COLOR, formatDayLabel, formatTime } from '../../utils/staffSchedule';
 
+import { SkeletonList } from '../ui/Skeleton';
 const statusStyle = (status) => {
   const color = STATUS_COLOR[status] || '#153a6b';
   return { background: `${color}20`, color };
@@ -28,7 +29,7 @@ export default function DayTrips({ service, date, refreshKey = 0, onOpenFull = n
         </div>
       )}
 
-      {day.loading && <p className="py-4 text-sm text-slate-500" role="status">Loading...</p>}
+      {day.loading && <SkeletonList label="Loading..." rows={3} />}
       {day.error && <p className="py-4 text-sm text-red-600" role="alert">{day.error}</p>}
 
       {!day.loading && !day.error && day.items.length === 0 && (

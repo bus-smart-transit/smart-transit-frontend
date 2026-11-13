@@ -4,6 +4,7 @@ import Pagination from '../../ui/Pagination';
 import { formatPeso, formatCount, monthTotals, presetRange, PRESETS } from '../../../utils/financials';
 import { formatManilaDate, formatManilaDateTime } from '../../../utils/dates';
 
+import { SkeletonStats } from '../../ui/Skeleton';
 const FIELD = 'min-h-11 rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-teal-500';
 
 /**
@@ -51,7 +52,7 @@ export default function PaymentsPage({ paymentsTab, today }) {
       </div>
 
       {error && <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>}
-      {loading && !report && <p role="status" className="text-sm text-slate-500">Loading...</p>}
+      {loading && !report && <SkeletonStats label="Loading..." />}
 
       {kpis && (
         <>

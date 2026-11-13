@@ -2,6 +2,7 @@ import { Suspense, lazy } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { StaffGuestRoute, StaffProtectedRoute } from '../../components/StaffAuthGuard';
 
+import { SkeletonPage } from '../../components/ui/Skeleton';
 const StaffLoginPage = lazy(() => import('../../components/Staff/StaffLoginPage'));
 const StaffForgotPasswordPage = lazy(() => import('../../components/Staff/StaffForgotPasswordPage'));
 const StaffResetPasswordPage = lazy(() => import('../../components/Staff/StaffResetPasswordPage'));
@@ -12,9 +13,7 @@ const SuperAdminPortal = lazy(() => import('../../components/Staff/Admin/SuperAd
 
 function EmployeeRouteFallback() {
 	return (
-		<div className="flex min-h-screen items-center justify-center bg-slate-950 px-4 text-slate-300">
-			<div className="rounded-xl border border-slate-800 bg-slate-900/70 px-4 py-3 text-sm">Loading staff portal...</div>
-		</div>
+		<SkeletonPage variant="portal" label="Loading staff portal..." />
 	);
 }
 

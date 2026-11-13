@@ -8,6 +8,7 @@ import { PRESETS, formatCount, formatPercent, formatPeso, paymentFilterPatch, pa
 import { BarList, HourChart, SplitBar } from './FinancialCharts';
 import TransactionsTable from './TransactionsTable';
 
+import { SkeletonStats } from '../../ui/Skeleton';
 const FIELD = 'w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500';
 
 const ICON_TILE = 'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600 sm:h-10 sm:w-10 sm:rounded-xl';
@@ -143,7 +144,7 @@ export default function FinancialsPage({ service, view = 'all', embedded = false
           <button type="button" onClick={f.retry} className="font-semibold underline">Try again</button>
         </div>
       ) : summaryLoading && !summary ? (
-        <p className="rounded-xl border border-slate-200 bg-slate-50 p-6 text-sm text-slate-500">Loading the figures...</p>
+        <SkeletonStats label="Loading the figures..." count={8} />
       ) : kpis && (
         <div className={`space-y-4 ${summaryLoading ? 'opacity-60' : ''}`}>
           {kpis.tickets === 0 && kpis.refunds === 0 && (

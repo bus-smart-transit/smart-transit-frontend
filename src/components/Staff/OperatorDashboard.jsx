@@ -41,6 +41,7 @@ import {
   Eye, RefreshCw,
   X, Loader2, AlertTriangle, Bell,
 } from 'lucide-react'
+import { SkeletonList, SkeletonPage } from '../ui/Skeleton'
 const fmt = (v) => {
   if (v == null) return '-'
   const n = Number(v)
@@ -125,7 +126,7 @@ function NotificationBell() {
           </div>
           <div className="max-h-96 space-y-2 overflow-y-auto">
             {loadingNotifications && notifications.length === 0 ? (
-              <p className="py-6 text-center text-sm text-slate-400">Loading...</p>
+              <SkeletonList label="Loading..." rows={3} />
             ) : notifications.length === 0 ? (
               <p className="py-6 text-center text-sm text-slate-400">No notifications yet.</p>
             ) : (
@@ -171,7 +172,7 @@ function TripRequestsPanel({ onDecided, showEmpty = false }) {
     <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
       <h2 className="text-sm font-bold text-amber-800">For Approval ({requests.length})</h2>
       {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
-      {loading && requests.length === 0 ? <p className="mt-3 text-sm text-slate-600">Loading approval requests...</p>
+      {loading && requests.length === 0 ? <SkeletonList label="Loading approval requests..." rows={2} className="mt-3" />
         : requests.length === 0 ? <p className="mt-3 text-sm text-slate-600">No pending approval requests.</p>
           : <ul className="mt-3 space-y-2">
         {requests.map((r) => {
@@ -832,9 +833,7 @@ export default function OperatorDashboard() {
 
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-slate-50">
-        <div className="flex items-center gap-2 text-slate-500"><Loader2 className="h-5 w-5 animate-spin" /> Loading dashboard...</div>
-      </div>
+      <SkeletonPage variant="portal" label="Loading dashboard..." />
     )
   }
 

@@ -5,6 +5,7 @@ import usePaymentRefunds, { STATUS_FILTERS } from '../../../api/hooks/Staff/useP
 import Modal from '../../ui/Modal';
 import { formatCount, formatPaidAt, formatPeso } from '../../../utils/financials';
 
+import { SkeletonTable } from '../../ui/Skeleton';
 const FIELD = 'w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500';
 
 // 2026-11-08 (user): the refund of each ticket on a cancelled trip, from PayMongo or in cash.
@@ -213,7 +214,7 @@ export default function PaymentRefundsPage({ service, embedded = false }) {
           <button type="button" onClick={r.retry} className="font-semibold underline">Try again</button>
         </div>
       ) : r.loading && !r.hasData ? (
-        <p className="rounded-xl border border-slate-200 bg-slate-50 p-6 text-sm text-slate-500">Loading refunds...</p>
+        <SkeletonTable label="Loading refunds..." cols={6} />
       ) : r.rows.length === 0 ? (
         <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-6 text-sm text-slate-600" data-testid="refunds-empty">
           {r.status === 'needs_action' ? 'Nothing needs you right now.' : r.status === 'all' ? 'No refunds yet. A refund appears here when a payment made no ticket or a trip is cancelled.' : 'No refunds with this status.'}

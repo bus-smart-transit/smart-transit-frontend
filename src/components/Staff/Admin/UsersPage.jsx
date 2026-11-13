@@ -6,6 +6,7 @@ import SearchBar from '../../ui/SearchBar';
 import Pagination from '../../ui/Pagination';
 import { adminErrorText } from '../../../api/hooks/Staff/useSuperAdmin';
 
+import { SkeletonTable } from '../../ui/Skeleton';
 const BUTTON = 'inline-flex min-h-11 items-center gap-1.5 rounded-lg border px-3 text-xs font-semibold';
 
 function StatusChip({ user }) {
@@ -99,7 +100,7 @@ export default function UsersPage({ usersTab }) {
           {notice.text && <p role={notice.failed ? 'alert' : 'status'} className={`rounded-lg border px-4 py-2 text-sm ${notice.failed ? 'border-rose-200 bg-rose-50 text-rose-700' : 'border-teal-200 bg-teal-50 text-teal-800'}`}>{notice.text}</p>}
           {users.error && <p role="alert" className="text-sm text-rose-700">{users.error}</p>}
           {users.loading && users.users.length === 0
-            ? <p role="status" className="text-sm text-slate-500">Loading...</p>
+            ? <SkeletonTable label="Loading..." cols={5} />
             : <OpTable caption="Accounts" columns={columns} rows={users.users} rowKey={(row) => row.user_id} empty="No accounts match your search." />}
           {users.pagination.total > 0 && (
             <Pagination label="Account pages" page={users.pagination.page} perPage={users.pagination.per_page} total={users.pagination.total} lastPage={users.pagination.last_page} onPageChange={users.setPage} />

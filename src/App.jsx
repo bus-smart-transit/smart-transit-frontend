@@ -3,6 +3,8 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './api/hooks/contexts/AuthProvider';
 import ErrorBoundary from './components/Layout/ErrorBoundary';
 
+import { SkeletonPage } from './components/ui/Skeleton';
+import { pageVariantForPath } from './utils/skeletonVariant';
 // DefaultLayout is retained for future public pages but not used by LandingPage,
 // which is now self-contained with its own Navbar and Footer.
 const PassengerBaseRouter = lazy(() => import('./pages/passenger'));
@@ -71,9 +73,7 @@ function AboutWithAuth() {
 
 function RouteFallback() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-950 px-4 text-slate-300">
-      <div className="rounded-xl border border-slate-800 bg-slate-900/70 px-4 py-3 text-sm">Loading transit view...</div>
-    </div>
+    <SkeletonPage variant={pageVariantForPath()} label="Loading transit view..." />
   );
 }
 

@@ -2,6 +2,7 @@ import { RefreshCw } from 'lucide-react';
 import { OpPageHeader, OpCard, OpStat, OpChip } from '../Operator/OperatorUI';
 import { OP_SPACE } from '../Operator/operatorUiTokens';
 
+import { SkeletonStats } from '../../ui/Skeleton';
 const COUNTS = [
   ['companies', 'Companies'],
   ['operators', 'Operators', 'accounts that are on'],
@@ -25,7 +26,7 @@ export default function SuperAdminDashboard({ overview, loading, error, onReload
       />
 
       {error && <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>}
-      {loading && !overview && <p role="status" className="text-sm text-slate-500">Loading...</p>}
+      {loading && !overview && <SkeletonStats label="Loading..." />}
 
       {overview && (
         <>

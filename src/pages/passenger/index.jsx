@@ -3,6 +3,7 @@ import { Routes, Route } from 'react-router-dom';
 import { GuestRoute } from '../../api/hooks/contexts/AuthGuard';
 import { AuthProvider } from '../../api/hooks/contexts/AuthProvider';
 
+import { SkeletonPage } from '../../components/ui/Skeleton';
 const LandingPage = lazy(() => import('../../components/Passenger/LandingPage/LandingPage'));
 const SignUpPage = lazy(() => import('../../components/Passenger/SignupPage/SignupPage'));
 const LoginPage = lazy(() => import('../../components/Passenger/LoginPage/LoginPage'));
@@ -15,9 +16,7 @@ const AddPhonePage = lazy(() => import('../../components/Passenger/Auth/AddPhone
 
 function PassengerRouteFallback() {
     return (
-        <div className="flex min-h-screen items-center justify-center bg-slate-950 px-4 text-slate-300">
-            <div className="rounded-xl border border-slate-800 bg-slate-900/70 px-4 py-3 text-sm">Loading passenger portal...</div>
-        </div>
+        <SkeletonPage label="Loading passenger portal..." />
     );
 }
 

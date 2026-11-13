@@ -6,6 +6,7 @@ import Modal from '../../ui/Modal';
 import RouteMap from '../../Map/RouteMap';
 import { busLabelText } from '../../../utils/busLabel';
 
+import { SkeletonList } from '../../ui/Skeleton';
 const STATUS = {
   running: { tone: 'success', label: 'Running' },
   paused: { tone: 'warning', label: 'Paused' },
@@ -89,7 +90,7 @@ export default function GpsSimulatorPage({ simulatorTab }) {
         action={<button type="button" onClick={reload} className={BUTTON}><RefreshCw className="h-4 w-4" aria-hidden="true" /> Refresh</button>}
       />
       {error && <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>}
-      {loading && !data && <p role="status" className="text-sm text-slate-500">Loading...</p>}
+      {loading && !data && <SkeletonList label="Loading..." rows={3} />}
       {data && !data.enabled && (
         <p data-testid="gps-simulator-off" className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
           The GPS simulator is turned off. It is turned on in the server settings (GPS_SIMULATOR_ENABLED).

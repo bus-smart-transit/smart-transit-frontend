@@ -44,6 +44,7 @@ import { deriveTripStatus } from '../../utils/tripStatus';
 import { FOR_APPROVAL_LABEL, isForApproval } from '../../utils/assignmentRequest';
 import ConductorService from '../../api/StaffService/ConductorService';
 
+import { SkeletonPage } from '../ui/Skeleton';
 // Batch 19 Part A: consolidated sidebar. Ticketing & Fares is the
 // confirmed default landing screen (adviser requirement, Batch 15).
 // "Assigned Routes" folds into Dashboard; Live Passengers, Shift Blocks,
@@ -389,7 +390,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
           </div>
           </div>
         </header>
-        {loading && <div className="rounded-xl border border-slate-200 bg-slate-50 p-6 text-sm text-slate-500">Loading dashboard data...</div>}
+        {loading && <SkeletonPage variant="crew" label="Loading dashboard data..." />}
         {error && (
           <div className="mb-4 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700">
             <AlertCircle className="h-4 w-4 shrink-0" />

@@ -5,6 +5,7 @@ import { useCrewShiftRange } from '../../../api/hooks/Staff/useOperatorDashboard
 import { getBusinessToday } from '../../../utils/dates';
 import { endedOnLabel, hoursWorked, rangeProblem } from '../../../utils/crewShift';
 
+import { SkeletonTable } from '../../ui/Skeleton';
 // §4.8 and Batch 46: Start Shift and End Shift are the crew's time in and time out. Read only: nothing here changes a
 // shift. Breaks are not recorded, so they are not shown or taken off. A shift that ends after midnight shows the day
 // it ended next to the time out.
@@ -33,7 +34,7 @@ const COLUMNS = [
 function CrewShiftList({ from, to, staffId }) {
   const [page, setPage] = useState(1);
   const { loading, error, shifts, totals, pagination } = useCrewShiftRange({ from, to, staffId, page });
-  if (loading) return <p role="status" className="text-xs text-slate-500">Loading crew times...</p>;
+  if (loading) return <SkeletonTable label="Loading crew times..." cols={6} rows={4} />;
   if (error) return <p role="alert" className="text-xs text-rose-700">{error}</p>;
   return (
     <div className="space-y-4">

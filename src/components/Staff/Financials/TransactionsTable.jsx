@@ -2,6 +2,7 @@ import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight } from 'lucide-react';
 import Card from '../../ui/Card';
 import { STATUS_STYLE, formatCount, formatPaidAt, formatPeso } from '../../../utils/financials';
 
+import { SkeletonTable } from '../../ui/Skeleton';
 const COLUMNS = [
   { key: 'paid_at', label: 'Time', sort: 'paid_at' },
   { key: 'transaction_id', label: 'Transaction' },
@@ -36,7 +37,7 @@ export default function TransactionsTable({ log, loading, error, table, onSort, 
           <button type="button" onClick={onRetry} className="font-semibold underline">Try again</button>
         </div>
       ) : loading && !log ? (
-        <p className="text-sm text-slate-500">Loading transactions...</p>
+        <SkeletonTable label="Loading transactions..." cols={6} />
       ) : rows.length === 0 ? (
         <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">No paid tickets match these filters.</p>
       ) : (

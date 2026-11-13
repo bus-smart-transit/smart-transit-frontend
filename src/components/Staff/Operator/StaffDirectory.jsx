@@ -12,6 +12,7 @@ import { roleLabel } from '../../../utils/staffForm';
 import { formatPhone } from '../../../utils/phone';
 import { parseAppDate } from '../../../utils/dates';
 
+import { SkeletonTable } from '../../ui/Skeleton';
 const joined = (value) => {
   const date = value ? parseAppDate(value) : null;
   return date && !Number.isNaN(date.getTime())
@@ -193,7 +194,7 @@ export default function StaffDirectory({ fleetCount, onChanged }) {
           {directory.error && <p role="alert" className="text-sm text-rose-700">{directory.error}</p>}
 
           {directory.loading ? (
-            <p role="status" className="text-sm text-slate-500">Loading your staff...</p>
+            <SkeletonTable label="Loading your staff..." cols={5} />
           ) : noStaffYet ? (
             <OpEmpty>No staff yet. Choose Add Staff to add your first Driver or Chauffeur.</OpEmpty>
           ) : (

@@ -3,6 +3,7 @@ import { ChevronDown } from 'lucide-react';
 import useRouteStops from '../../../api/hooks/Passenger/useRouteStops';
 import { routeStopRows } from '../../../utils/routeStops';
 
+import { SkeletonList } from '../../ui/Skeleton';
 /**
  * Batch 54 (user, 2026-11-10): "View route stops" inside a trip card on All available trips. Every stop with its
  * time; "Get off here" on a stop after the boarding stop opens booking with that drop-off already chosen. The stops
@@ -30,7 +31,7 @@ export default function RouteStops({ trip, onChooseDropOff }) {
 
       {open && (
         <div id={panelId} className="mt-3" data-testid="route-stops">
-          {state.loading && <p role="status" className="text-sm text-slate-500">Loading stops...</p>}
+          {state.loading && <SkeletonList label="Loading stops..." rows={3} />}
           {state.error && <p role="alert" className="text-sm text-red-600">{state.error}</p>}
           {!state.loading && !state.error && rows.length === 0 && <p className="text-sm text-slate-500">No stops listed for this trip.</p>}
           {rows.length > 0 && (

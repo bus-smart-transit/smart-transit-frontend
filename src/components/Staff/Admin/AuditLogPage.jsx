@@ -5,6 +5,7 @@ import Pagination from '../../ui/Pagination';
 import { formatManilaDateTime } from '../../../utils/dates';
 import { detailText } from '../../../utils/auditDetails';
 
+import { SkeletonTable } from '../../ui/Skeleton';
 const FIELD = 'min-h-11 rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-700 outline-none focus:ring-2 focus:ring-teal-500';
 
 /**
@@ -53,7 +54,7 @@ export default function AuditLogPage({ auditTab }) {
           </div>
           {log.error && <p role="alert" className="text-sm text-rose-700">{log.error}</p>}
           {log.loading && log.entries.length === 0
-            ? <p role="status" className="text-sm text-slate-500">Loading...</p>
+            ? <SkeletonTable label="Loading..." cols={4} />
             : <OpTable caption="Audit log" columns={columns} rows={log.entries} rowKey={(row) => row.audit_id} empty="No entries match these filters." />}
           {log.pagination.total > 0 && (
             <Pagination label="Audit log pages" page={log.pagination.page} perPage={log.pagination.per_page} total={log.pagination.total} lastPage={log.pagination.last_page} onPageChange={log.setPage} />

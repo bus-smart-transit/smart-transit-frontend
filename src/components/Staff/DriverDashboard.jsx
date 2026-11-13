@@ -38,6 +38,7 @@ import { deriveTripDurationLabel, deriveTripStatus } from '../../utils/tripStatu
 import { FOR_APPROVAL_LABEL, isForApproval } from '../../utils/assignmentRequest';
 import DriverService from '../../api/StaffService/DriverService';
 
+import { SkeletonPage } from '../ui/Skeleton';
 // Batch 19 Part A: consolidated sidebar. "Assigned Routes" folds into
 // Dashboard (assigned-route/schedule/vehicle data belongs on the landing
 // view per Part B); Calendar + Schedule merge into one Schedule view;
@@ -353,7 +354,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
           </div>
         </header>
 
-        {loading && <div className="rounded-xl border border-slate-200 bg-slate-50 p-6 text-sm text-slate-500">Loading driver workspace...</div>}
+        {loading && <SkeletonPage variant="crew" label="Loading driver workspace..." />}
         {error && (
           <div className="mb-4 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700">
             <AlertTriangle className="h-4 w-4 shrink-0" />

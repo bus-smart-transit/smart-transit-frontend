@@ -1,14 +1,14 @@
 import { Navigate, Outlet } from "react-router-dom";
 import { useAuth } from "../useAuth";
+import { SkeletonPage } from '../../../components/ui/Skeleton';
+import { pageVariantForPath } from '../../../utils/skeletonVariant';
 
 export function ProtectedRoute({ role = "passenger" }) {
     const { isAuthenticated, isLoading } = useAuth();
 
     if (isLoading) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-slate-900 text-slate-200">
-                <p className="animate-pulse">Loading secure session...</p>
-            </div>
+            <SkeletonPage variant={pageVariantForPath()} label="Loading secure session..." />
         );
     }
 

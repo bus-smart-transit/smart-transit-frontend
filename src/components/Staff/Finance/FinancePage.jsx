@@ -5,6 +5,7 @@ import FinancialsPage from '../Financials/FinancialsPage';
 import RemittancesPage from '../Remittances/RemittancesPage';
 import PaymentRefundsPage from '../Refunds/PaymentRefundsPage';
 
+import { SkeletonList } from '../../ui/Skeleton';
 // The Operator dashboard renders the Finance page without a service; like the other finance pages, the panel then
 // uses the Operator service.
 function DiscountTypesPanel({ service = OperatorService }) {
@@ -44,7 +45,7 @@ function DiscountTypesPanel({ service = OperatorService }) {
         <p className="text-xs text-slate-500">Controls which ID-verified discounts Chauffeurs may apply to cash tickets. Online fares use rewards.</p>
       </div>
       {error && <p role="alert" className="mb-2 text-sm text-red-700">{error}</p>}
-      {loading ? <p className="text-sm text-slate-500">Loading discount settings...</p>
+      {loading ? <SkeletonList label="Loading discount settings..." rows={3} />
         : types.length === 0 ? <p className="text-sm text-slate-500">No discount types are configured.</p>
           : <ul className="divide-y divide-slate-100">
             {types.map((type) => (

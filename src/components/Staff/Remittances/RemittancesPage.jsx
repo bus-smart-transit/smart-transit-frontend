@@ -4,6 +4,7 @@ import Card from '../../ui/Card';
 import useRemittances from '../../../api/hooks/Staff/useRemittances';
 import { formatCount, formatPaidAt, formatPeso } from '../../../utils/financials';
 
+import { SkeletonTable } from '../../ui/Skeleton';
 const FIELD = 'w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500';
 
 const FILTERS = [['pending', 'Pending'], ['flagged', 'Flagged'], ['confirmed', 'Confirmed'], ['resolved', 'Resolved'], ['all', 'All']];
@@ -190,7 +191,7 @@ export default function RemittancesPage({ service, embedded = false }) {
           <button type="button" onClick={r.retry} className="font-semibold underline">Try again</button>
         </div>
       ) : r.loading && !r.hasData ? (
-        <p className="rounded-xl border border-slate-200 bg-slate-50 p-6 text-sm text-slate-500">Loading remittances...</p>
+        <SkeletonTable label="Loading remittances..." cols={6} />
       ) : r.rows.length === 0 ? (
         <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-6 text-sm text-slate-600" data-testid="remittances-empty">
           {r.status === 'pending' ? 'Nothing is waiting for you. A batch appears here when a Chauffeur ends a shift.' : r.status === 'flagged' ? 'Nothing is flagged.' : 'No remittances to show.'}

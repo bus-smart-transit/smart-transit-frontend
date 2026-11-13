@@ -27,6 +27,7 @@ import { formatPeso } from '../../../utils/financials';
 import { REWARDS } from '../../../config/rewardsConfig';
 import AccountDeletionNotice from '../../Account/AccountDeletionNotice';
 
+import { SkeletonCards, SkeletonSquare, SkeletonText } from '../../ui/Skeleton';
 const preloadMapView = () =>
   Promise.all([
     import('../../Map/mapDependencies').then((mod) => mod.preloadMapDependencies()),
@@ -455,7 +456,7 @@ export default function Dashboard() {
 
           <div className="mt-6">
             {isLoadingPrivate ? (
-              <Card className="p-8 text-center text-sm text-slate-500">Loading tickets...</Card>
+              <SkeletonCards label="Loading tickets..." count={2} />
             ) : filteredTickets.length === 0 ? (
               <Card className="p-8 text-center text-sm text-slate-500">
                 No {ticketStatusFilterOptions.find((o) => o.value === ticketStatusFilter)?.label.toLowerCase() || ''} tickets found.
@@ -589,7 +590,7 @@ export default function Dashboard() {
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {isLoadingPrivate ? (
-                    <tr><td colSpan={7} className="px-5 py-4 text-slate-500">Loading transaction history...</td></tr>
+                    <tr><td colSpan={7} className="px-5 py-4"><SkeletonText label="Loading transaction history..." lines={3} /></td></tr>
                   ) : filteredTransactions.length === 0 ? (
                     <tr>
                       <td colSpan={7} className="px-5 py-4 text-slate-500">
@@ -870,7 +871,7 @@ export default function Dashboard() {
       <Modal open={ticketModalOpen && Boolean(selectedTicket)} onClose={closeTicketModal} title="Ticket Details">
         {selectedTicket && (
           loadingTicketQr ? (
-            <p className="text-sm text-slate-500">Loading QR ticket...</p>
+            <SkeletonSquare label="Loading QR ticket..." className="h-56 w-56" />
           ) : (
             <>
               {CANCELLED_TRIP_STATUSES.includes(String(selectedTicket.status).toLowerCase()) && (

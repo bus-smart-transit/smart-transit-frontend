@@ -9,6 +9,7 @@ import RunInfoChips from '../../ui/RunInfoChips'
 import RouteStops from './RouteStops'
 import { isDeparted, seatsLeftText, tripProgressText } from '../../../utils/passengerTripProgress'
 
+import { SkeletonCards } from '../../ui/Skeleton'
 /**
  * One departure in the search results. Every value comes from the server: times are the scheduled
  * times at the chosen stops (or "unavailable"), seats are what is left, the fare is the quote from
@@ -82,7 +83,7 @@ export function TripCard({ trip, fromName, toName, showDate = false, onBook, onC
 
 /** The list under a search: loading, error, empty and the trips themselves. */
 export default function TripResults({ state, fromName, toName, searchedDate, onBook, onChooseDropOff = null, footer = null }) {
-  if (state.loading) return <p className="text-sm text-slate-500" role="status">Finding trips...</p>
+  if (state.loading) return <SkeletonCards label="Finding trips..." count={3} />
   if (state.error) return <p className="text-sm text-red-600" role="alert">{state.error}</p>
   if (state.trips.length === 0) {
     return <p className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800 ring-1 ring-inset ring-amber-200">{state.message || 'No trips found for that journey.'}</p>
