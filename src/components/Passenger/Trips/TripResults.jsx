@@ -8,6 +8,7 @@ import { FARE_UNAVAILABLE } from '../../../utils/serviceType'
 import RunInfoChips from '../../ui/RunInfoChips'
 import RouteStops from './RouteStops'
 import { isDeparted, seatsLeftText, tripProgressText } from '../../../utils/passengerTripProgress'
+import { groupTrips } from '../../../utils/tripGroups'
 
 import { SkeletonCards } from '../../ui/Skeleton'
 /**
@@ -15,7 +16,7 @@ import { SkeletonCards } from '../../ui/Skeleton'
  * times at the chosen stops (or "unavailable"), seats are what is left, the fare is the quote from
  * the same fare service the ticket is priced with.
  */
-export function TripCard({ trip, fromName, toName, showDate = false, onBook, onChooseDropOff = null }) {
+export function TripCard({ trip, fromName, toName, showDate = false, onBook, onChooseDropOff = null, otherTimes = [] }) {
   const duration = formatDuration(trip.duration_minutes)
   // The stops of this trip's own journey come from the server; the props are only a fallback.
   const origin = trip.origin?.name || fromName
@@ -56,6 +57,12 @@ export function TripCard({ trip, fromName, toName, showDate = false, onBook, onC
             <User size={15} aria-hidden="true" />
             {seatsLeftText(trip.seats_left)}
           </p>
+          {/* Batch 65 (user): the same journey's other departures that day; the time is chosen on the next page. */}
+          {otherTimes.length > 0 && (
+            <p data-testid="trip-other-times" className="mt-2 text-sm text-slate-600">
+              <span className="font-semibold text-navy-950">Also leaves at {otherTimes.join(', ')}.</span> Choose your time on the next page.
+            </p>
+          )}
           {/* Batch 49 item 2: a bus that has left shows where it is; from a stop it has passed it reads "Departed". */}
           {progressText && !nowBoarding && (
             <p data-testid="trip-progress" className={`mt-2 inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${departed ? 'bg-slate-100 text-slate-600' : 'bg-teal-50 text-teal-700'}`}>
@@ -90,10 +97,12 @@ export default function TripResults({ state, fromName, toName, searchedDate, onB
   }
   return (
     <div className="space-y-3">
-      {state.trips.map((trip) => (
+      {/* Batch 65 (user, 2026-11-13): one card per journey and bus type; its other times are chosen on trip details. */}
+      {groupTrips(state.trips).map(({ key, lead: trip, otherTimes }) => (
         <TripCard
-          key={trip.trip_id}
+          key={key}
           trip={trip}
+          otherTimes={otherTimes}
           fromName={fromName}
           toName={toName}
           showDate={trip.trip_date !== searchedDate}

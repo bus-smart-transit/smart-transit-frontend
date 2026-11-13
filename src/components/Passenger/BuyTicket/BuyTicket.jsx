@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { AlertCircle, Bus, CalendarDays, CheckCircle, Clock3, CreditCard, Loader, MapPin, Pencil, Smartphone, Wallet } from 'lucide-react';
 import useBuyTicket from '../../../api/hooks/Passenger/useBuyTicket';
 import { busLabelText } from '../../../utils/busLabel';
+import { sameTripGroup } from '../../../utils/tripGroups';
 import TicketCard from '../Ticket/TicketCard';
 import { ticketIdOf } from '../../../utils/ticketId';
 import QrImage from '../Ticket/QrImage';
@@ -156,6 +157,10 @@ export default function BuyTicket({ onTicketPurchased, returnTo = '/' }) {
   }, [mustSave]);
 
   const canSubmit = !isSubmitting && canProceedToOnlinePayment && !isRewardRequestInsufficient && Boolean(form.ticket_quantity);
+
+  // Batch 65 (user, 2026-11-13): the times to choose from are the chosen trip's own kind (same journey, bus type and
+  // service, so the same fare and stops); another bus type has its own card on Available trips.
+  const sameKindDepartures = departuresState.departures.filter((departure) => !trip || sameTripGroup(departure, trip));
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 p-4 sm:p-6">
@@ -391,11 +396,11 @@ export default function BuyTicket({ onTicketPurchased, returnTo = '/' }) {
                     )}
                     {resolution.error && <p className="text-sm text-red-600">{resolution.error}</p>}
 
-                    {bookingMode === 'later' && !resolution.loading && departuresState.departures.length > 0 && (
+                    {bookingMode === 'later' && !resolution.loading && sameKindDepartures.length > 0 && (
                       <div>
                         <p className={LABEL}>Departure time at {boardingLabel}</p>
                         <div role="radiogroup" aria-label="Departure time" className="mt-2 flex flex-wrap gap-2">
-                          {departuresState.departures.map((departure) => {
+                          {sameKindDepartures.map((departure) => {
                             const selected = String(trip?.trip_id) === String(departure.trip_id);
                             return (
                               <button

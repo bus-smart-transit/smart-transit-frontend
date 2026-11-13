@@ -37,7 +37,7 @@ import { DEFAULT_FILE_TYPE } from '../../utils/tableExport';
 import FileTypeSelect from '../ui/FileTypeSelect';
 import { todaySummary } from '../../utils/assignmentCards';
 import { ticketingReason } from '../../utils/actionReasons';
-import { boardingStopsForLeg, checkInLabel, destinationsAhead, destinationsNotPassed, isOnsiteFormComplete, orderedStopsForLeg, placesLeft, stopLabel } from '../../utils/cashTicket';
+import { boardingStopsForLeg, cashTicketPhone, checkInLabel, destinationsAhead, destinationsNotPassed, isOnsiteFormComplete, orderedStopsForLeg, placesLeft, stopLabel } from '../../utils/cashTicket';
 import { isExpress } from '../../utils/serviceType';
 import ServiceTypeChip from '../ui/ServiceTypeChip';
 import { deriveTripStatus } from '../../utils/tripStatus';
@@ -745,6 +745,26 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                       {!cashCapacity.standingOpen && (
                         <p className="mt-1 text-xs text-slate-500">Standing is offered once every seat is sold.</p>
                       )}
+                    </div>
+
+                    {/* Batch 64 (user, 2026-11-13): optional; the passenger gets the Ticket ID by text. */}
+                    <div>
+                      <label htmlFor="onsite-phone" className="mb-1 block text-sm font-semibold text-slate-700">Passenger's mobile number (optional)</label>
+                      <input
+                        id="onsite-phone"
+                        type="tel"
+                        inputMode="tel"
+                        autoComplete="off"
+                        placeholder="09XX XXX XXXX"
+                        value={cashForm.traveller_phone ?? ''}
+                        onChange={(e) => setOnsiteForm((prev) => ({ ...prev, traveller_phone: e.target.value.replace(/[^\d+\s-]/g, '').slice(0, 16) }))}
+                        className="h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none focus:border-teal-500"
+                      />
+                      <p className={`mt-1 text-xs ${cashForm.traveller_phone && !cashTicketPhone(cashForm.traveller_phone) ? 'text-amber-700' : 'text-slate-500'}`}>
+                        {cashForm.traveller_phone && !cashTicketPhone(cashForm.traveller_phone)
+                          ? 'Not a mobile number, so no text will be sent. Example: 0917 123 4567.'
+                          : 'We text them the Ticket ID. Leave it blank if they do not want a text.'}
+                      </p>
                     </div>
 
                     <div>

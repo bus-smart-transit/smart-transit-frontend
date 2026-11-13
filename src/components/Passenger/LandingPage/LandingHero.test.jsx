@@ -24,7 +24,8 @@ vi.mock('../../../services/bookingService', () => ({
     message: null,
     trips: [1, 2, 3, 4, 5].map((n) => ({
       trip_id: n, trip_date: '2026-10-01', boarding_time: `0${n + 5}:15`, arrival_time: `0${n + 5}:45`,
-      duration_minutes: 30, bus_label: `BUS - ${n}`, seats_left: 10 + n, fare: 58, leg_direction: 'outbound',
+      // Batch 65: each sample trip is its own bus type, so each keeps its own card.
+      duration_minutes: 30, bus_label: `BUS - ${n}`, seats_left: 10 + n, fare: 58, leg_direction: 'outbound', vehicle_class: `type-${n}`,
       origin: { stop_id: 1, stop_code: 'alpha-stop', name: 'Alpha Stop' }, destination: { stop_id: 2, stop_code: 'beta-stop', name: 'Beta Stop' },
     })),
   })),

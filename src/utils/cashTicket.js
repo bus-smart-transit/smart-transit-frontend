@@ -28,6 +28,15 @@ export function boardingStopsForLeg(orderedStops) {
   return Array.isArray(orderedStops) ? orderedStops.slice(0, -1) : [];
 }
 
+/**
+ * Batch 64 (user, 2026-11-13): the optional mobile number on a cash ticket, for the Ticket ID text. A Philippine
+ * mobile as +639XXXXXXXXX (typed 09..., 639... or +639..., spaces and dashes ignored), or null (blank or not a mobile).
+ */
+export function cashTicketPhone(value) {
+  const match = String(value ?? '').replace(/[\s\-()]/g, '').match(/^(?:\+?63|0)(9\d{9})$/);
+  return match ? `+63${match[1]}` : null;
+}
+
 /** Stops the bus reaches after the boarding stop on this leg: the valid drop-offs. */
 export function destinationsAhead(orderedStops, originStopId) {
   const origin = Number(originStopId);

@@ -9,6 +9,7 @@ import useOnsiteReceiptPrinter from './useOnsiteReceiptPrinter';
 import { isSameBusinessDay, getBusinessToday, getBusinessNowMs, toBusinessScheduleMs, debugLogBusinessTime, formatManilaDateTime } from '../../../utils/dates';
 import { boardingPointView, buildOnsiteItem, capacityFromServer, isMidTripBoardingAvailable, isOnsiteFormComplete, isStandingOpen } from '../../../utils/cashTicket';
 import { readDeepLink } from '../../../utils/notificationTarget';
+import { cashTicketPhone } from '../../../utils/cashTicket';
 import useAssignmentCards from './useAssignmentCards';
 
 // Architecture audit follow-up (CONF-03): ConductorDashboard.jsx previously
@@ -173,6 +174,8 @@ export function useConductorDashboardData({ onLogout, pairing }) {
     origin_stop_id: '',
     destination_stop_id: '',
     seat_type: 'seated',
+    // Batch 64: an optional mobile number; the passenger gets the Ticket ID by text.
+    traveller_phone: '',
   });
   // Task 6: the server's answer to "where is the bus on this route?" (never computed here).
   const [boardingPoint, setBoardingPoint] = useState({ loading: false, response: null, error: '' });
@@ -1074,6 +1077,8 @@ export function useConductorDashboardData({ onLogout, pairing }) {
         onsiteItem.discount_id_checked = Boolean(discount.discount_id_checked);
       }
       const onsitePayload = { items: [onsiteItem] };
+      const phone = cashTicketPhone(cashForm.traveller_phone);
+      if (phone) onsitePayload.traveller_contact = phone;
       const idempotencyKey = checkoutIdempotencyKey('conductor-cash', onsitePayload);
       const res = await ConductorService.checkoutOnsite(onsitePayload, idempotencyKey);
       clearCheckoutIdempotencyKey('conductor-cash');
@@ -1093,6 +1098,7 @@ export function useConductorDashboardData({ onLogout, pairing }) {
         origin_stop_id: '',
         destination_stop_id: '',
         seat_type: 'seated',
+        traveller_phone: '',
       }));
       void loadCheckIns();
       void loadPassengers();

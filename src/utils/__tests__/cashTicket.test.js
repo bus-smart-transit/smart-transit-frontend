@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { boardingPointView, boardingStopsForLeg, buildOnsiteItem, capacityFromServer, checkInLabel, capacitySummary, destinationsAhead, destinationsNotPassed, isMidTripBoardingAvailable, isOnsiteFormComplete, isStandingOpen, orderedStopsForLeg, placesLeft, stopLabel } from '../cashTicket';
+import { boardingPointView, boardingStopsForLeg, cashTicketPhone, buildOnsiteItem, capacityFromServer, checkInLabel, capacitySummary, destinationsAhead, destinationsNotPassed, isMidTripBoardingAvailable, isOnsiteFormComplete, isStandingOpen, orderedStopsForLeg, placesLeft, stopLabel } from '../cashTicket';
 import { formatManilaDateTime } from '../dates';
 
 const rs = (id, order, type = 'stop', name = `Stop ${id}`) => ({ stop_id: id, stop_order: order, stop_type: type, stop: { stop_id: id, stop_name: name } });
@@ -216,5 +216,17 @@ describe('boardingStopsForLeg', () => {
   test('offers nothing when there are no stops', () => {
     expect(boardingStopsForLeg([])).toEqual([]);
     expect(boardingStopsForLeg(null)).toEqual([]);
+  });
+});
+
+// Batch 64 (user, 2026-11-13): an optional mobile number on a cash ticket, for the Ticket ID text.
+describe('cashTicketPhone', () => {
+  test('accepts a Philippine mobile typed any common way, and nothing else', () => {
+    expect(cashTicketPhone('0917 123 4567')).toBe('+639171234567');
+    expect(cashTicketPhone('639171234567')).toBe('+639171234567');
+    expect(cashTicketPhone('+63 917-123-4567')).toBe('+639171234567');
+    expect(cashTicketPhone('')).toBeNull();
+    expect(cashTicketPhone('02 8123 4567')).toBeNull();
+    expect(cashTicketPhone('juan@example.com')).toBeNull();
   });
 });

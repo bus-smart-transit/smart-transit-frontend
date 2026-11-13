@@ -22,9 +22,10 @@ import AvailableTripsPage from './AvailableTripsPage';
 
 const alpha = { stop_id: 1, stop_code: 'alpha-stop', name: 'Alpha Stop' };
 const beta = { stop_id: 2, stop_code: 'beta-stop', name: 'Beta Stop' };
-const trip = (id, date, time) => ({
+// Batch 65: each sample trip is its own bus type, so each keeps its own card (same-kind departures share one card).
+const trip = (id, date, time, over = {}) => ({
   trip_id: id, trip_date: date, boarding_time: time, arrival_time: '09:00', duration_minutes: 30, bus_label: `BUS - ${id}`, seats_left: 12, fare: 58,
-  origin: alpha, destination: beta,
+  origin: alpha, destination: beta, vehicle_class: `type-${id}`, ...over,
 });
 const answer = (over = {}) => ({
   date: '2026-10-01', trips: [trip(1, '2026-10-01', '06:15'), trip(2, '2026-10-01', '08:15')], page: 1, per_page: 2, total: 3, last_page: 2,
@@ -74,6 +75,23 @@ describe('AvailableTripsPage', () => {
     expect(screen.getAllByRole('button', { name: 'Book Seat' })).toHaveLength(2);
     expect(screen.getByText('Page 1 of 2')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /previous/i })).toBeDisabled();
+  });
+
+  // Batch 65 (user, 2026-11-13): the same journey on the same kind of bus is one card; its other times are chosen on
+  // the next page. Book Seat opens the earliest one.
+  test('shows departures of the same journey and bus type as one card with the other times', async () => {
+    getTrips.mockResolvedValue(answer({ total: 3, last_page: 1, trips: [
+      trip(1, '2026-10-01', '06:15', { vehicle_class: 'ordinary' }),
+      trip(2, '2026-10-01', '11:15', { vehicle_class: 'ordinary' }),
+      trip(3, '2026-10-01', '08:15', { vehicle_class: 'aircon' }),
+    ] }));
+    renderAt('/passenger/trips?from=alpha-stop&to=beta-stop&date=2026-10-01');
+
+    expect(await screen.findByTestId('trip-other-times')).toHaveTextContent('Also leaves at 11:15. Choose your time on the next page.');
+    expect(screen.getAllByRole('button', { name: 'Book Seat' })).toHaveLength(2);
+    expect(screen.queryByText('BUS - 2')).not.toBeInTheDocument();
+    fireEvent.click(within(screen.getByText('BUS - 1').closest('div[class*="p-5"]')).getByRole('button', { name: 'Book Seat' }));
+    expect((await screen.findByTestId('where')).textContent).toContain('time=06%3A15');
   });
 
   test('the controls reflect the address, and Next asks the server for the next page', async () => {
