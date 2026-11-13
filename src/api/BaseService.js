@@ -43,6 +43,11 @@ export class BaseService {
     this.tokenKey = tokenKey;
   }
 
+  /** Batch 67: "Send me text messages" on or off for the signed-in person (every portal's service has it). */
+  async setTextMessages(enabled) {
+    return await this.request('/account/text-messages', 'PATCH', { enabled: Boolean(enabled) });
+  }
+
   async request(url, method, params = {}, extraHeaders = {}) {
     const token = this.tokenKey === 'staff_token'
       ? TokenManager.getStaffToken()

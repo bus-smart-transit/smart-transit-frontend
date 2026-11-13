@@ -27,6 +27,7 @@ import NextStepCard from './Crew/NextStepCard';
 import CrewTodayCard from './Crew/CrewTodayCard';
 import TextSizeControl from './Crew/TextSizeControl';
 import useCrewTextSize from '../../api/hooks/Staff/useCrewTextSize';
+import useTextMessages from '../../api/hooks/useTextMessages';
 import { chauffeurNextStep } from '../../utils/crewNextStep';
 import { useConductorPairing, useConductorDashboardData } from '../../api/hooks/Staff/useConductorDashboard';
 import useOnsiteQuote from '../../api/hooks/Staff/useOnsiteQuote';
@@ -37,7 +38,7 @@ import { DEFAULT_FILE_TYPE } from '../../utils/tableExport';
 import FileTypeSelect from '../ui/FileTypeSelect';
 import { todaySummary } from '../../utils/assignmentCards';
 import { ticketingReason } from '../../utils/actionReasons';
-import { boardingStopsForLeg, cashTicketPhone, checkInLabel, destinationsAhead, destinationsNotPassed, isOnsiteFormComplete, orderedStopsForLeg, placesLeft, stopLabel } from '../../utils/cashTicket';
+import { boardingStopsForLeg, checkInLabel, destinationsAhead, destinationsNotPassed, isOnsiteFormComplete, orderedStopsForLeg, placesLeft, stopLabel } from '../../utils/cashTicket';
 import { isExpress } from '../../utils/serviceType';
 import ServiceTypeChip from '../ui/ServiceTypeChip';
 import { deriveTripStatus } from '../../utils/tripStatus';
@@ -330,6 +331,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   const needsAcceptance = Boolean(todayAssignedTrip) && !todayAssignedTrip.conductor_accepted_at;
   // Batch 61 (advisor, 2026-11-13): the Home shows one big button, the next step (it replaces the header's shift button).
   const textSize = useCrewTextSize();
+  const textMessages = useTextMessages(ConductorService, profile); // Batch 67
   const step = chauffeurNextStep({
     hasWork: hasActiveTrip || hasTodayAssignedTrip,
     forApproval: isForApproval(todayAssignedTrip, 'conductor'),
@@ -747,25 +749,6 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                       )}
                     </div>
 
-                    {/* Batch 64 (user, 2026-11-13): optional; the passenger gets the Ticket ID by text. */}
-                    <div>
-                      <label htmlFor="onsite-phone" className="mb-1 block text-sm font-semibold text-slate-700">Passenger's mobile number (optional)</label>
-                      <input
-                        id="onsite-phone"
-                        type="tel"
-                        inputMode="tel"
-                        autoComplete="off"
-                        placeholder="09XX XXX XXXX"
-                        value={cashForm.traveller_phone ?? ''}
-                        onChange={(e) => setOnsiteForm((prev) => ({ ...prev, traveller_phone: e.target.value.replace(/[^\d+\s-]/g, '').slice(0, 16) }))}
-                        className="h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none focus:border-teal-500"
-                      />
-                      <p className={`mt-1 text-xs ${cashForm.traveller_phone && !cashTicketPhone(cashForm.traveller_phone) ? 'text-amber-700' : 'text-slate-500'}`}>
-                        {cashForm.traveller_phone && !cashTicketPhone(cashForm.traveller_phone)
-                          ? 'Not a mobile number, so no text will be sent. Example: 0917 123 4567.'
-                          : 'We text them the Ticket ID. Leave it blank if they do not want a text.'}
-                      </p>
-                    </div>
 
                     <div>
                       <label htmlFor="onsite-discount-type" className="mb-1 block text-sm font-semibold text-slate-700">Onsite discount</label>
@@ -1131,6 +1114,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
             loading={loading}
             twoFactor={{ enabled: twoFactorEnabled, saving: saving2fa, message: actionMsg, onChange: (enabled) => handleTwoFactorToggle({ target: { checked: enabled } }) }}
             availability={{ value: isAvailable, saving: availabilitySaving, onChange: handleToggleAvailability }}
+            textMessages={textMessages}
             assignment={{
               route: todayInfo.route === 'Unavailable' ? null : todayInfo.route,
               fleet: todayInfo.plate === 'Unavailable' ? null : todayInfo.plate,

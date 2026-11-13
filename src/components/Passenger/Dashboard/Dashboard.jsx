@@ -28,6 +28,7 @@ import { REWARDS } from '../../../config/rewardsConfig';
 import AccountDeletionNotice from '../../Account/AccountDeletionNotice';
 
 import { SkeletonCards, SkeletonSquare, SkeletonText } from '../../ui/Skeleton';
+import useTextMessages from '../../../api/hooks/useTextMessages';
 const preloadMapView = () =>
   Promise.all([
     import('../../Map/mapDependencies').then((mod) => mod.preloadMapDependencies()),
@@ -102,6 +103,7 @@ export default function Dashboard() {
 
 
   const [twoFactorOverride, setTwoFactorOverride] = useState(null);
+  const textMessages = useTextMessages(PassengerService, profile); // Batch 67
   const [updating2fa, setUpdating2fa] = useState(false);
   const [twoFactorMsg, setTwoFactorMsg] = useState('');
   const [ticketStatusFilter, setTicketStatusFilter] = useState('scheduled');
@@ -711,6 +713,7 @@ export default function Dashboard() {
           loading={isLoadingPrivate}
           error={privateError}
           twoFactor={{ enabled: twoFactorEnabled, saving: updating2fa, message: twoFactorMsg, onChange: handleTwoFactorToggle }}
+          textMessages={textMessages}
           onSaveProfile={saveProfile}
           onSignOut={handleLogout}
           onDeleteAccount={deleteAccount}

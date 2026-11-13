@@ -35,6 +35,7 @@ import ShiftBlocksView from './Schedule/ShiftBlocksView'
 import FinancePage from './Finance/FinancePage'
 import { OpPageHeader } from './Operator/OperatorUI'
 import ViewTabs from '../ui/ViewTabs'
+import useTextMessages from '../../api/hooks/useTextMessages'
 import { OPERATOR_ROLE, navForRole, viewsForRole } from '../../utils/operatorNav'
 import {
   LayoutDashboard, Bus, MapPin, PieChart, Users, Settings, Wallet, CalendarDays,
@@ -830,6 +831,7 @@ export default function OperatorDashboard() {
     handleLogout,
   } = useOperatorDashboardData()
   const crewAlerts = useOperatorAlerts()
+  const textMessages = useTextMessages(OperatorService, profile) // Batch 67
 
   if (loading) {
     return (
@@ -908,7 +910,7 @@ export default function OperatorDashboard() {
         {activeTab === 'account'    && (
           <div className="space-y-6">
             <OpPageHeader title="Account" subtitle="Your profile, sign-in security and password" />
-            <ProfilePage role="operator" profile={profile} loading={loading} onSignOut={handleLogout} />
+            <ProfilePage role="operator" profile={profile} loading={loading} textMessages={textMessages} onSignOut={handleLogout} />
           </div>
         )}
         </div>

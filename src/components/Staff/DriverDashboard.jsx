@@ -28,6 +28,7 @@ import NextStepCard from './Crew/NextStepCard';
 import CrewTodayCard from './Crew/CrewTodayCard';
 import TextSizeControl from './Crew/TextSizeControl';
 import useCrewTextSize from '../../api/hooks/Staff/useCrewTextSize';
+import useTextMessages from '../../api/hooks/useTextMessages';
 import { driverNextStep } from '../../utils/crewNextStep';
 import { useDriverPairing, useDriverDashboardData } from '../../api/hooks/Staff/useDriverDashboard';
 import { getBusinessTodayLabel } from '../../utils/dates';
@@ -277,6 +278,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   // Batch 61 (advisor, 2026-11-13): the Home shows one big button, the next step (it replaces the header's shift button
   // and the four Quick Actions). The server still checks every action.
   const textSize = useCrewTextSize();
+  const textMessages = useTextMessages(DriverService, profile); // Batch 67
   const nextStopRow = stops.find((stop) => !stop?.is_acknowledged) ?? null;
   const step = driverNextStep({
     hasWork: hasActiveTrip || hasTodayAssignedTrip,
@@ -686,6 +688,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
             loading={loading}
             twoFactor={{ enabled: twoFactorEnabled, saving: saving2fa, message: msg2fa, onChange: handleToggleTwoFactor }}
             availability={{ value: isAvailable, saving: availabilitySaving, onChange: handleToggleAvailability }}
+            textMessages={textMessages}
             assignment={{ route: currentRoute?.route_name ?? null, fleet: currentFleet?.plate_number ?? null }}
             onSignOut={handleLogout}
           />

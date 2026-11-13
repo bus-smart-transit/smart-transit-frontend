@@ -20,11 +20,12 @@ import DeleteAccountSection from './DeleteAccountSection';
  *   onRetry       called by "Try again"
  *   twoFactor     { enabled, saving, message, onChange(enabled) } (omit for a role that cannot switch it)
  *   availability  { value, saving, onChange(next) } (Driver and Chauffeur)
+ *   textMessages  Batch 67: { value, saving, message, phone, onChange(next) } "Send me text messages" (every role)
  *   assignment    { route, fleet } for today (Driver and Chauffeur)
  *   onSignOut     ends the session
  *   onDeleteAccount  2026-11-05: passengers only; deletes their own account (DeleteAccountSection)
  */
-export default function ProfilePage({ role, profile, loading = false, error = '', onRetry, twoFactor = null, availability = null, assignment = null, onSignOut, onSaveProfile = null, onDeleteAccount = null }) {
+export default function ProfilePage({ role, profile, loading = false, error = '', onRetry, twoFactor = null, availability = null, textMessages = null, assignment = null, onSignOut, onSaveProfile = null, onDeleteAccount = null }) {
   if (loading && !profile) {
     return (
       <div role="status" aria-label="Loading your profile" data-testid="profile-loading" className="max-w-3xl space-y-4">
@@ -52,7 +53,7 @@ export default function ProfilePage({ role, profile, loading = false, error = ''
       <SecuritySection view={view} twoFactor={twoFactor} />
       {/* Batch 46: staff change their own password here (passengers use "Forgot password" on the sign-in page). */}
       {['driver', 'conductor', 'operator'].includes(role) && <ChangePasswordSection />}
-      <PreferencesSection availability={availability} />
+      <PreferencesSection availability={availability} textMessages={textMessages} />
       <AccountActionsSection onSignOut={onSignOut} />
       {role === 'passenger' && onDeleteAccount && <DeleteAccountSection onDelete={onDeleteAccount} />}
     </div>

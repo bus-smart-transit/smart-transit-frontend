@@ -163,4 +163,24 @@ describe('ProfilePage passenger edit', () => {
     render(<ProfilePage role="driver" profile={staff()} onSaveProfile={vi.fn()} onSignOut={() => {}} />);
     expect(screen.queryByTestId('profile-edit')).not.toBeInTheDocument();
   });
+
+  // Batch 67 (user, 2026-11-13): every portal has "Send me text messages", off until the person turns it on.
+  it('shows the text messages switch, off by default, with the number it texts', () => {
+    const onChange = vi.fn();
+    render(<ProfilePage role="passenger" profile={passenger()} textMessages={{ value: false, saving: false, message: '', phone: '+639171234567', onChange }} onSignOut={() => {}} />);
+    const box = screen.getByTestId('text-messages-preference');
+    const toggle = within(box).getByRole('switch');
+    expect(toggle).toHaveAttribute('aria-checked', 'false');
+    expect(box).toHaveTextContent('Send me text messages');
+    expect(box).toHaveTextContent('917');
+    fireEvent.click(toggle);
+    expect(onChange).toHaveBeenCalledWith(true);
+  });
+
+  it('cannot turn texts on without a mobile number', () => {
+    render(<ProfilePage role="operator" profile={staff({ phone_num: null })} textMessages={{ value: false, saving: false, message: '', phone: null, onChange: vi.fn() }} onSignOut={() => {}} />);
+    const box = screen.getByTestId('text-messages-preference');
+    expect(within(box).getByRole('switch')).toBeDisabled();
+    expect(box).toHaveTextContent('Add a mobile number to your profile to get text messages.');
+  });
 });
