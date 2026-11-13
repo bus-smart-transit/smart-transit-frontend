@@ -2,6 +2,7 @@ import { Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './api/hooks/contexts/AuthProvider';
 import ErrorBoundary from './components/Layout/ErrorBoundary';
+import DownloadNotice from './components/ui/DownloadNotice';
 
 import { SkeletonPage } from './components/ui/Skeleton';
 import { pageVariantForPath } from './utils/skeletonVariant';
@@ -104,6 +105,8 @@ export default function App() {
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Suspense>
+        {/* 2026-11-13 (user): the pop-up after a report download. */}
+        <DownloadNotice />
       </ErrorBoundary>
     </BrowserRouter>
   );

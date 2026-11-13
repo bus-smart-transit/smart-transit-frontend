@@ -696,8 +696,14 @@ export function useDriverDashboardData({ onLogout, pairing }) {
     setActionInFlight(true);
     try {
       if (action === 'boarding') await DriverService.startBoardingTrip(targetTripId);
-      if (action === 'depart') await DriverService.departTrip(targetTripId);
-      setActionMsg(`Trip ${action} action completed.`);
+      if (action === 'depart') {
+        await DriverService.departTrip(targetTripId);
+        // 2026-11-13 (user): the starting terminal's button is Depart, so leaving it also records it as reached (the
+        // live ETAs start from the last stop reached). Best effort: the trip has departed even if this one fails.
+        const terminalId = stops?.[0]?.stop_id;
+        if (terminalId && !stops[0]?.is_acknowledged) await DriverService.acknowledgeStop(terminalId).catch(() => null);
+      }
+      setActionMsg(action === 'depart' ? 'You have left the terminal.' : action === 'boarding' ? 'Boarding is open.' : `Trip ${action} action completed.`);
       await loadData();
     } catch (err) {
       setActionMsg(err.message);

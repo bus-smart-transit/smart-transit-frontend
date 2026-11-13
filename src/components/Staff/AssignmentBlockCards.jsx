@@ -58,7 +58,7 @@ export default function AssignmentBlockCards({
       {cards.length === 0 ? (
         <div className="rounded-lg border border-dashed border-slate-200 bg-white p-4 text-sm text-slate-500">{emptyMessage}</div>
       ) : (
-        <div className="grid gap-3 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           {cards.map((card) => {
             const busy = busyKey === card.key;
             return (
@@ -68,11 +68,11 @@ export default function AssignmentBlockCards({
                 data-testid="assignment-card"
                 data-card-key={card.key}
                 data-kind={card.kind}
-                className={`rounded-xl border bg-white p-4 shadow-sm ${focusKey === card.key ? 'border-teal-400 ring-2 ring-teal-300' : 'border-slate-200'}`}
+                className={`min-w-0 rounded-xl border bg-white p-4 shadow-sm ${focusKey === card.key ? 'border-teal-400 ring-2 ring-teal-300' : 'border-slate-200'}`}
               >
                 <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <h6 className="truncate text-base font-bold text-slate-900">{card.route_name || `${card.origin || '-'} → ${card.destination || '-'}`}</h6>
+                  <div className="min-w-0 flex-1">
+                    <h6 className="wrap-break-word text-base font-bold text-slate-900">{card.route_name || `${card.origin || '-'} → ${card.destination || '-'}`}</h6>
                     <p className="text-sm text-slate-600">{card.origin || '-'} → {card.destination || '-'}</p>
                   </div>
                   {/* An unfinished card from an earlier day is "Overdue", never "Scheduled". */}

@@ -21,7 +21,8 @@ import Modal, { ModalShell } from '../ui/Modal';
 import CrewAlertCard from './CrewAlertCard';
 import StaffCalendar from './StaffCalendar';
 import DriverNavigationMap from './DriverNavigationMap';
-import RequestedStopRow from './RequestedStopRow';
+import DriverStopCard from './Crew/DriverStopCard';
+import RouteConditions from './Crew/RouteConditions';
 import { groupRequestedStops } from '../../utils/requestedStops';
 import NotificationBellButton from './NotificationBellButton';
 import NextStepCard from './Crew/NextStepCard';
@@ -35,7 +36,8 @@ import { getBusinessTodayLabel } from '../../utils/dates';
 import { isFinalStopAcknowledged, opensGate } from '../../utils/tripActionTiming';
 import { placesLeft } from '../../utils/cashTicket';
 import { useNow } from '../../api/hooks/useNow';
-import { deriveTripDurationLabel, deriveTripStatus } from '../../utils/tripStatus';
+import { deriveTripStatus } from '../../utils/tripStatus';
+import { driverStopFocus } from '../../utils/driverStopFocus';
 import { FOR_APPROVAL_LABEL, isForApproval } from '../../utils/assignmentRequest';
 import DriverService from '../../api/StaffService/DriverService';
 
@@ -128,57 +130,6 @@ const resolveDriverHeaderBadge = ({
   return { label: 'Ready', tone: 'border-emerald-200 bg-emerald-50 text-emerald-700' };
 };
 
-function ActiveTripTrafficCard({ trafficStatus, nextStop }) {
-  const unavailable = trafficStatus.dataSource === 'fallback';
-  const badgeLabel = unavailable
-    ? 'Unavailable'
-    : trafficStatus.level === 'unknown'
-      ? 'Travel time only'
-      : trafficStatus.label;
-  const badgeTone = unavailable || trafficStatus.level === 'unknown'
-    ? 'bg-slate-100 text-slate-700'
-    : trafficStatus.level === 'heavy'
-      ? 'bg-red-100 text-red-700'
-      : trafficStatus.level === 'moderate'
-        ? 'bg-amber-100 text-amber-700'
-        : 'bg-emerald-100 text-emerald-700';
-
-  return (
-    <article className="staff-card">
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Route conditions</p>
-          <h4 className="text-base font-bold text-slate-900">Traffic to next stop</h4>
-        </div>
-        <span className={`rounded-full px-2.5 py-1 text-xs font-bold uppercase tracking-wide ${badgeTone}`}>{badgeLabel}</span>
-      </div>
-      <p className="mb-3 text-xs font-medium text-slate-500">
-        Measured segment: {trafficStatus.segmentLabel || `Current position to ${nextStop?.stop_name ?? nextStop?.name ?? 'next stop'}`}
-      </p>
-      <div className="grid gap-3 sm:grid-cols-3">
-        <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">ETA</p>
-          <p className="mt-1 font-data text-lg font-bold text-slate-900">{driverEtaMinutes(trafficStatus, nextStop) == null ? <span className="text-sm">Not available</span> : `${driverEtaMinutes(trafficStatus, nextStop)} min`}</p>
-        </div>
-        <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Extra time</p>
-          <p className="mt-1 font-data text-lg font-bold text-slate-900">{trafficStatus.delayMinutes == null ? <span className="text-sm">Not available</span> : `${trafficStatus.delayMinutes} min`}</p>
-        </div>
-        <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Next stop</p>
-          <p className="mt-1 text-sm font-semibold text-slate-900">{nextStop ? placeInMinutes(nextStop?.stop_name ?? nextStop?.name, driverEtaMinutes(trafficStatus, nextStop)) : 'No pending stop'}</p>
-        </div>
-      </div>
-      <p className="mt-3 text-sm text-slate-700">{trafficStatus.suggestion}</p>
-      <p className="mt-2 text-xs text-slate-500">
-        {trafficStatus.updatedAt
-          ? `Provider updated ${new Date(trafficStatus.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} | ${String(trafficStatus.dataSource || 'provider').toUpperCase()}`
-          : 'No live provider timestamp'}
-      </p>
-    </article>
-  );
-}
-
 export default function DriverDashboard() {
   const { pairing, refreshPairingStatus, handleLogout } = useDriverPairing();
 
@@ -229,7 +180,6 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     currentRoute,
     currentFleet,
     nextStop,
-    stopProgress,
     tripProgress,
     pageTitle,
     lastGpsRef,
@@ -279,7 +229,9 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   // and the four Quick Actions). The server still checks every action.
   const textSize = useCrewTextSize();
   const textMessages = useTextMessages(DriverService, profile); // Batch 67
-  const nextStopRow = stops.find((stop) => !stop?.is_acknowledged) ?? null;
+  // 2026-11-13: the same stop the Trip page's stop card shows (never the starting terminal once the bus has left).
+  const stopFocus = driverStopFocus({ stops, tripStatus: trip?.status });
+  const nextStopRow = stopFocus.phase === 'onRoad' ? stopFocus.stop : null;
   const step = driverNextStep({
     hasWork: hasActiveTrip || hasTodayAssignedTrip,
     forApproval: isForApproval(todayAssignedTrip, 'driver'),
@@ -515,125 +467,6 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
           </section>
         )}
 
-        {!loading && activeTab === 'activeTrip' && !showNoCurrentTripState && (
-          <section className="staff-grid">
-            <article className="staff-card">
-              <div className="mb-4 flex items-center justify-between">
-                <h4 className="text-base font-bold text-slate-900">Trip Status</h4>
-                <button
-                  className="min-h-12 rounded-xl bg-red-600 px-4 text-base font-bold text-white transition hover:bg-red-700 disabled:opacity-50"
-                  onClick={() => handleTripAction('complete')}
-                  disabled={actionInFlight || !isPaired || !finalStopDone || !['departed', 'in-progress'].includes(trip?.status)}
-                >
-                  End Trip
-                </button>
-              </div>
-              {tripActionReason && <p data-testid="trip-action-reason" className="-mt-2 mb-3 text-xs text-amber-700">{tripActionReason}</p>}
-              <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">Current Trip Summary</p>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                {[{label:'Total Distance', value: `${stops[stops.length-1]?.distance_from_origin_km ?? 0} km`}, {label:'Trip Time', value: deriveTripDurationLabel(trip) ?? 'Not started'}, {label:'Total Stops', value: String(stops.length)}].map(({label, value}) => (
-                  <div key={label} className="rounded-lg bg-slate-50 p-3">
-                    <p className="text-xs text-slate-500">{label}</p>
-                    <p className="mt-1 font-data text-lg font-bold text-slate-900">{value}</p>
-                  </div>
-                ))}
-              </div>
-              <div className="mt-4">
-                <div className="mb-1 flex items-center justify-between text-xs">
-                  <span className="font-medium text-slate-600">Trip Progress</span>
-                  <span className="font-data font-bold text-slate-900">
-                    {stopProgress.totalStops > 0
-                      ? `${stopProgress.completedStops}/${stopProgress.totalStops} stops`
-                      : `${tripProgress}%`}
-                  </span>
-                </div>
-                <div className="h-2.5 overflow-hidden rounded-full bg-slate-100">
-                  <div className="h-full rounded-full bg-teal-500 transition-all" style={{ width: `${tripProgress}%` }} />
-                </div>
-                {stopProgress.nextStopName && (
-                  <p className="mt-2 text-xs text-slate-500">Next stop: {stopProgress.nextStopName}</p>
-                )}
-              </div>
-            </article>
-          </section>
-        )}
-
-        {!loading && activeTab === 'activeTrip' && !showNoCurrentTripState && (
-          <ActiveTripTrafficCard trafficStatus={trafficStatus} nextStop={nextStop} />
-        )}
-
-        {!loading && activeTab === 'activeTrip' && !showNoCurrentTripState && (
-          <section className="staff-grid lg:grid-cols-2">
-            <article className="staff-card">
-              <h4 className="mb-3 text-base font-semibold text-slate-900">Route Navigation</h4>
-              <DriverNavigationMap trip={trip} stops={stops} lastGpsRef={lastGpsRef} />
-            </article>
-
-            <article className="staff-card">
-              <h4 className="mb-3 text-base font-semibold text-slate-900">Route Details</h4>
-              {stops.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-5 text-sm text-slate-500">No route details available.</div>
-              ) : (
-                <div className="space-y-3">
-                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
-                    <div className="mb-2 flex items-center justify-between gap-2">
-                      <p className="text-xs uppercase tracking-widest text-slate-500">Route Progress</p>
-                      <p className="text-xs font-semibold text-slate-600">{stopProgress.completedStops} of {stopProgress.totalStops} Stops Completed — {stopProgress.progressPercent}%</p>
-                    </div>
-                    <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-200">
-                      <div
-                        className="h-full rounded-full bg-linear-to-r from-cyan-400 to-sky-500 transition-all"
-                        style={{ width: `${Math.max(0, Math.min(100, stopProgress.progressPercent))}%` }}
-                      />
-                    </div>
-                    {stopProgress.nextStopName && (
-                      <p className="mt-2 text-xs text-slate-500">Next stop: <span className="font-semibold text-slate-700">{stopProgress.nextStopName}</span></p>
-                    )}
-                  </div>
-
-                  {requestedGroups.before.map((requested) => (
-                    <RequestedStopRow key={`before-${requested.latitude},${requested.longitude}`} requested={requested} note="before the first stop" />
-                  ))}
-
-                  {stops.map((stop, idx) => {
-                    const completed = Boolean(stop.is_acknowledged);
-                    const requestedAfter = requestedGroups.after[stop.sequence_number ?? stop.stop_order ?? idx + 1] ?? [];
-                    return (
-                      <div key={stop.stop_id ?? idx} className="space-y-1.5">
-                      <div className={`flex items-center gap-3 rounded-xl border px-3 py-2 ${completed ? 'border-emerald-200 bg-emerald-50' : 'border-slate-200 bg-slate-50'}`}>
-                        <span className={`inline-flex h-6 w-6 items-center justify-center rounded-full border text-xs font-semibold ${completed ? 'border-emerald-400 text-emerald-700' : 'border-slate-300 text-slate-600'}`}>{idx + 1}</span>
-                        <div>
-                          <p className={`text-sm font-semibold ${completed ? 'text-emerald-700' : 'text-slate-900'}`}>{stop.stop_name ?? stop.name ?? `Stop ${idx + 1}`}</p>
-                          <small className="font-data text-xs text-slate-500">{stop.distance_from_origin_km != null ? `${stop.distance_from_origin_km} km` : ''}</small>
-                        </div>
-                        {completed ? (
-                          <span className="ml-auto text-xs font-semibold text-emerald-700">Reached</span>
-                        ) : (
-                          <button
-                            className="ml-auto min-h-12 rounded-xl bg-sky-600 px-4 text-base font-bold text-white transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
-                            onClick={() => handleAcknowledgeStop(stop.stop_id)}
-                            disabled={actionInFlight || !stop?.stop_id || !isPaired}
-                            title={!isPaired ? 'Pairing is required to acknowledge stops.' : undefined}
-                          >
-                            Acknowledge
-                          </button>
-                        )}
-                      </div>
-                      {requestedAfter.map((requested) => (
-                        <RequestedStopRow key={`${requested.latitude},${requested.longitude}`} requested={requested} />
-                      ))}
-                      </div>
-                    );
-                  })}
-                  {requestedGroups.unknown.map((requested) => (
-                    <RequestedStopRow key={`unknown-${requested.latitude},${requested.longitude}`} requested={requested} note="position on the route unknown" />
-                  ))}
-                </div>
-              )}
-            </article>
-          </section>
-        )}
-
         {/* Batch 20 Item 3: pairing action moved to the Daily PIN page
             (pairing is driven by PIN/QR generation, so that's its
             semantically correct home) — Active Trip only shows a
@@ -650,6 +483,32 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
             >
               Pair with crew
             </button>
+          </section>
+        )}
+
+        {/* 2026-11-13 (user): the Trip page is one stop at a time (its one button: Start boarding / Depart at the
+            terminal, Acknowledge on the road, End Trip at the last stop), then the map with the route conditions inside
+            it. The separate Trip Status card is gone: its End Trip button and progress are on the stop card. */}
+        {!loading && activeTab === 'activeTrip' && !showNoCurrentTripState && (
+          <DriverStopCard
+            stops={stops}
+            tripStatus={trip?.status}
+            step={step}
+            reason={['boarding', 'depart'].includes(step.key) ? '' : tripActionReason}
+            requestedGroups={requestedGroups}
+            isPaired={isPaired}
+            inFlight={actionInFlight}
+            onStep={pressStep}
+            onAcknowledge={(stopId) => void handleAcknowledgeStop(stopId)}
+            onEndTrip={() => void handleTripAction('complete')}
+          />
+        )}
+
+        {!loading && activeTab === 'activeTrip' && !showNoCurrentTripState && (
+          <section className="staff-card" aria-label="Route navigation">
+            <h4 className="mb-3 text-base font-semibold text-slate-900">Route Navigation</h4>
+            <DriverNavigationMap trip={trip} stops={stops} lastGpsRef={lastGpsRef} />
+            <RouteConditions trafficStatus={trafficStatus} nextStop={nextStop} />
           </section>
         )}
 

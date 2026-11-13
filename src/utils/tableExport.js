@@ -4,6 +4,8 @@
  * the same cells as the CSV; nothing is worked out here. jsPDF is loaded only when a PDF is asked for.
  */
 
+import { announceDownload } from './downloadNotice';
+
 export const FILE_TYPES = [
   { value: 'pdf', label: 'PDF' },
   { value: 'csv', label: 'CSV' },
@@ -81,6 +83,7 @@ function saveBlob(blob, fileName) {
   link.click();
   link.remove();
   URL.revokeObjectURL(url);
+  announceDownload(fileName);
 }
 
 /** Builds the PDF document (exported for tests). */
