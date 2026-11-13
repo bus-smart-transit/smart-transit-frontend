@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 
 const VARIANTS = {
@@ -27,29 +28,60 @@ export default function Button({
   className = "",
   disabled = false,
   children,
+  onPointerDown,
   ...props
 }) {
-  const classes = `inline-flex items-center justify-center rounded-full font-semibold transition-colors duration-150 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${VARIANTS[variant]} ${SIZES[size]} ${className}`;
+  const [ripples, setRipples] = useState([]);
+
+  // Ripple: a soft circle that spreads from where the button was pressed.
+  const handlePointerDown = (event) => {
+    onPointerDown?.(event);
+    if (disabled) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const size = Math.max(rect.width, rect.height) * 2;
+    const id = Date.now() + Math.random();
+    setRipples((prev) => [
+      ...prev,
+      { id, size, x: event.clientX - rect.left - size / 2, y: event.clientY - rect.top - size / 2 },
+    ]);
+  };
+
+  const content = (
+    <>
+      {children}
+      {ripples.map((r) => (
+        <span
+          key={r.id}
+          aria-hidden="true"
+          className="pointer-events-none absolute rounded-full bg-current motion-safe:animate-ripple"
+          style={{ left: r.x, top: r.y, width: r.size, height: r.size }}
+          onAnimationEnd={() => setRipples((prev) => prev.filter((x) => x.id !== r.id))}
+        />
+      ))}
+    </>
+  );
+
+  const classes = `relative isolate overflow-hidden inline-flex items-center justify-center rounded-full font-semibold transition-all duration-200 active:scale-[0.98] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${VARIANTS[variant]} ${SIZES[size]} ${className}`;
 
   if (to) {
     return (
-      <Link to={to} className={classes} {...props}>
-        {children}
+      <Link to={to} className={classes} onPointerDown={handlePointerDown} {...props}>
+        {content}
       </Link>
     );
   }
 
   if (href) {
     return (
-      <a href={href} className={classes} {...props}>
-        {children}
+      <a href={href} className={classes} onPointerDown={handlePointerDown} {...props}>
+        {content}
       </a>
     );
   }
 
   return (
-    <button className={classes} disabled={disabled} {...props}>
-      {children}
+    <button className={classes} disabled={disabled} onPointerDown={handlePointerDown} {...props}>
+      {content}
     </button>
   );
 }

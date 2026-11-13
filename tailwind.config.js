@@ -68,10 +68,35 @@ export default {
           "0%": { opacity: "0", transform: "translateY(6px)" },
           "100%": { opacity: "1", transform: "translateY(0)" },
         },
+        "fade-up": {
+          "0%": { opacity: "0", transform: "translateY(16px)" },
+          "100%": { opacity: "1", transform: "translateY(0)" },
+        },
+        "page-in": {
+          "0%": { opacity: "0", transform: "translateY(10px)" },
+          "100%": { opacity: "1", transform: "translateY(0)" },
+        },
+        "pop-in": {
+          "0%": { opacity: "0", transform: "scale(0.95) translateY(8px)" },
+          "100%": { opacity: "1", transform: "scale(1) translateY(0)" },
+        },
+        ripple: {
+          "0%": { transform: "scale(0)", opacity: "0.35" },
+          "100%": { transform: "scale(1)", opacity: "0" },
+        },
+        shake: {
+          "0%, 100%": { transform: "translateX(0)" },
+          "20%, 60%": { transform: "translateX(-6px)" },
+          "40%, 80%": { transform: "translateX(6px)" },
+        },
       },
       animation: {
         "fade-in": "fade-in 0.2s ease-out",
-      },
+        "fade-up": "fade-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) both",
+        "page-in": "page-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) both",
+        "pop-in": "pop-in 0.25s cubic-bezier(0.22, 1, 0.36, 1) both",
+        ripple: "ripple 0.6s ease-out forwards",
+        shake: "shake 0.4s ease-in-out",      },
     },
   },
   plugins: [],

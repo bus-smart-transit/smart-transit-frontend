@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { BellIcon, ArrowLeftIcon, CoinIcon } from "./Icons.jsx";
+import { BellIcon, ArrowLeftIcon, CoinIcon, MenuIcon } from "./Icons.jsx";
 import { NOTIFICATIONS } from "../data/sampleData.js";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useRewards } from "../context/RewardsContext.jsx";
 import Logo from "./Logo.jsx";
 
-export default function AppTopBar({ backTo, backLabel = "Back" }) {
+export default function AppTopBar({ backTo, backLabel = "Back", onMenuClick }) {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { points } = useRewards();
@@ -15,7 +15,16 @@ export default function AppTopBar({ backTo, backLabel = "Back" }) {
 
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-slate-200 bg-white/95 px-4 backdrop-blur sm:h-20 sm:px-8">
-      <div className="flex items-center">
+      <div className="flex items-center gap-2">
+        {onMenuClick && (
+          <button
+            className="-ml-2 rounded-lg p-2 text-navy-900 transition-colors hover:bg-slate-100 lg:hidden"
+            onClick={onMenuClick}
+            aria-label="Open menu"
+          >
+            <MenuIcon size={24} />
+          </button>
+        )}
         {backTo ? (
           <button
             onClick={() => navigate(backTo)}
@@ -46,14 +55,14 @@ export default function AppTopBar({ backTo, backLabel = "Back" }) {
             aria-label="Notifications"
             onClick={() => setNotificationsOpen((open) => !open)}
           >
-            <BellIcon size={19} />
+            <BellIcon size={20} />
             {unreadCount > 0 && (
               <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white" />
             )}
           </button>
 
           {notificationsOpen && (
-            <div className="absolute right-0 z-40 mt-2 w-72 overflow-hidden rounded-2xl border border-slate-200 bg-white py-2 shadow-xl animate-fade-in sm:w-80">
+            <div className="absolute right-0 z-40 mt-2 w-72 origin-top-right overflow-hidden rounded-2xl border border-slate-200 bg-white py-2 shadow-xl motion-safe:animate-pop-in sm:w-80">
               <p className="px-4 py-2 text-sm font-semibold text-navy-950">Notifications</p>
               {NOTIFICATIONS.map((note) => (
                 <div

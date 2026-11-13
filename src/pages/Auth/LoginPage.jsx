@@ -5,14 +5,15 @@ import GoogleButton from "../../components/auth/GoogleButton.jsx";
 import Button from "../../components/ui/Button.jsx";
 import FormInput from "../../components/ui/FormInput.jsx";
 import Modal from "../../components/ui/Modal.jsx";
-import { EyeIcon, EyeOffIcon, InfoIcon } from "../../components/Icons.jsx";
+import { EyeIcon, EyeOffIcon, LockIcon, MailIcon } from "../../components/Icons.jsx";
 import { useAuth } from "../../context/AuthContext.jsx";
 
 export default function LoginPage() {
   const navigate = useNavigate();
   const { login } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
-  const [form, setForm] = useState({ email: "", password: "", rememberMe: true });
+  const [form, setForm] = useState({ email: "", password: "", rememberMe: false });
+  const [goToDashboard, setGoToDashboard] = useState(false);
   const [error, setError] = useState("");
   const [forgotOpen, setForgotOpen] = useState(false);
   const [forgotEmail, setForgotEmail] = useState("");
@@ -31,33 +32,20 @@ export default function LoginPage() {
       setError(result.error);
       return;
     }
-    navigate("/");
+    navigate(goToDashboard ? "/dashboard" : "/");
   };
 
   return (
-    <AuthCard
-      photoSide="right"
-      title={<>Your commute,<br />simplified.</>}
-      text="Sign in to manage your tickets, follow your bus live, and keep track of every trip across Davao Region XI."
-      tagline="Your next trip starts here."
-    >
-      <span className="inline-flex items-center gap-1.5 rounded-full bg-navy-50 px-3 py-1 text-xs font-semibold text-navy-700">
-        Passenger Login
-      </span>
-      <h1 className="mt-4 font-display text-3xl font-bold text-navy-950">Welcome back</h1>
+    <AuthCard>
+      <h1 className="font-display text-3xl font-bold text-navy-950 sm:text-4xl">Welcome back</h1>
       <p className="mt-2 text-sm text-slate-500">Sign in to access your trips and tickets.</p>
 
-      <div className="mt-5 flex items-start gap-2.5 rounded-xl bg-white px-3.5 py-3 text-xs text-teal-800 ring-1 ring-teal-100">
-        <InfoIcon size={16} className="mt-0.5 shrink-0" />
-        <span className="min-w-0 break-words">
-          Demo account: <strong>joshua@example.com</strong> / <strong>Passenger123</strong>
-        </span>
-      </div>
-
-      <form className="mt-6 space-y-4" onSubmit={handleSubmit} noValidate>
+      <form className="mt-8 space-y-5" onSubmit={handleSubmit} noValidate>
         <FormInput
-          label="Email"
+          label="Email Address"
           type="email"
+          icon={MailIcon}
+          autoComplete="email"
           required
           placeholder="you@email.com"
           value={form.email}
@@ -68,6 +56,8 @@ export default function LoginPage() {
           label="Password"
           type={showPassword ? "text" : "password"}
           required
+          icon={LockIcon}
+          autoComplete="current-password"
           placeholder="Enter your password"
           value={form.password}
           onChange={handleChange("password")}
@@ -76,7 +66,7 @@ export default function LoginPage() {
               type="button"
               onClick={() => setShowPassword((v) => !v)}
               aria-label={showPassword ? "Hide password" : "Show password"}
-              className="text-slate-400 hover:text-slate-600"
+              className="text-slate-400 transition-colors hover:text-slate-600"
             >
               {showPassword ? <EyeOffIcon size={18} /> : <EyeIcon size={18} />}
             </button>
@@ -84,34 +74,44 @@ export default function LoginPage() {
         />
 
         {error && (
-          <p className="rounded-lg bg-red-50 px-3.5 py-2.5 text-sm font-medium text-red-700">{error}</p>
+          <p key={error} role="alert" className="rounded-lg bg-red-50 px-3.5 py-2.5 text-sm font-medium text-red-700 motion-safe:animate-shake">{error}</p>
         )}
 
         <div className="flex items-center justify-between text-sm">
-          <label className="flex items-center gap-2 text-slate-600">
+          <label className="flex cursor-pointer items-center gap-2 text-slate-700">
             <input
               type="checkbox"
               checked={form.rememberMe}
               onChange={handleChange("rememberMe")}
-              className="h-4 w-4 rounded border-slate-300 text-navy-800 focus:ring-navy-700/30"
+              className="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
             />
             Remember me
           </label>
           <button
             type="button"
             onClick={() => setForgotOpen(true)}
-            className="font-semibold text-navy-800 hover:underline"
+            className="font-medium text-teal-600 transition-colors hover:text-teal-700"
           >
-            Forgot Password?
+            Forgot password?
           </button>
         </div>
+
+        <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 transition-colors hover:border-slate-300">
+          <input
+            type="checkbox"
+            checked={goToDashboard}
+            onChange={(e) => setGoToDashboard(e.target.checked)}
+            className="mt-0.5 h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
+          />
+          Go directly to passenger dashboard after login
+        </label>
 
         <Button type="submit" variant="primary" className="w-full" size="lg">
           Log In
         </Button>
       </form>
 
-      <p className="mt-6 text-center text-sm text-slate-500">
+      <p className="mt-6 text-center text-sm text-slate-600">
         Don&apos;t have an account?{" "}
         <Link to="/signup" className="font-semibold text-navy-800 hover:underline">
           Sign Up

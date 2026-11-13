@@ -5,7 +5,13 @@ import { signInWithGoogle } from "../../utils/googleAuth.js";
 
 // "Or continue with" divider plus a Google button. Signs in (or creates the account on
 // first use) and sends the user home; errors are passed back through onError.
-export default function GoogleButton({ label = "Continue with Google", rememberMe = true, onError }) {
+export default function GoogleButton({
+  label = "Continue with Google",
+  rememberMe = true,
+  onError,
+  divider = true,
+  className = "",
+}) {
   const navigate = useNavigate();
   const { loginWithGoogle } = useAuth();
   const [loading, setLoading] = useState(false);
@@ -26,16 +32,18 @@ export default function GoogleButton({ label = "Continue with Google", rememberM
 
   return (
     <>
-      <div className="my-6 flex items-center gap-3 text-xs text-slate-400">
-        <span className="h-px flex-1 bg-slate-200" />
-        Or continue with
-        <span className="h-px flex-1 bg-slate-200" />
-      </div>
+      {divider && (
+        <div className="my-6 flex items-center gap-3 text-xs text-slate-400">
+          <span className="h-px flex-1 bg-slate-200" />
+          Or continue with
+          <span className="h-px flex-1 bg-slate-200" />
+        </div>
+      )}
       <button
         type="button"
         onClick={handleClick}
         disabled={loading}
-        className="flex w-full items-center justify-center gap-3 rounded-full border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50 disabled:cursor-wait disabled:opacity-70"
+        className={`flex w-full items-center justify-center gap-3 rounded-full border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition-all duration-200 active:scale-[0.98] hover:border-slate-400 hover:bg-slate-50 disabled:cursor-wait disabled:opacity-70 ${className}`}
       >
         <GoogleIcon />
         {loading ? "Connecting to Google…" : label}

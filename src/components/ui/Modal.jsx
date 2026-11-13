@@ -22,7 +22,7 @@ export default function Modal({ open, onClose, title, children, className = "" }
       onClick={onClose}
     >
       <div
-        className={`w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl sm:p-8 ${className}`}
+        className={`w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl motion-safe:animate-pop-in sm:p-8 ${className}`}
         onClick={(event) => event.stopPropagation()}
       >
         <div className="mb-4 flex items-start justify-between gap-4">
@@ -31,7 +31,7 @@ export default function Modal({ open, onClose, title, children, className = "" }
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="ml-auto rounded-full p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+            className="ml-auto rounded-full p-1.5 text-slate-400 transition-all hover:rotate-90 hover:bg-slate-100 hover:text-slate-600"
           >
             <CloseIcon size={20} />
           </button>

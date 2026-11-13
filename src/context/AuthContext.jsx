@@ -100,7 +100,7 @@ export function AuthProvider({ children }) {
   };
 
   // register: returns { ok: true } or { ok: false, error }
-  const register = ({ fullName, email, phone, password }) => {
+  const register = ({ fullName, email, phone, password, birthdate = "", gender = "", address = "" }) => {
     const users = loadUsers();
     const exists = users.some(
       (u) => u.email.toLowerCase() === email.trim().toLowerCase()
@@ -116,6 +116,9 @@ export function AuthProvider({ children }) {
       name: fullName.trim(),
       email: email.trim(),
       phone,
+      birthdate,
+      gender,
+      address: address.trim(),
       password,
     };
     saveUsers([...users, newUser]);

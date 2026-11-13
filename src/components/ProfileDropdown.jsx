@@ -69,7 +69,7 @@ export default function ProfileDropdown({ variant = "light" }) {
       {open && (
         <div
           role="menu"
-          className="absolute right-0 z-50 mt-2 w-60 overflow-hidden rounded-2xl border border-slate-200 bg-white py-2 shadow-xl animate-fade-in"
+          className="absolute right-0 z-50 mt-2 w-60 overflow-hidden rounded-2xl border border-slate-200 bg-white py-2 shadow-xl origin-top-right motion-safe:animate-pop-in"
         >
           <div className="border-b border-slate-100 px-4 py-3">
             <p className="text-sm font-semibold text-navy-900">{user.name}</p>

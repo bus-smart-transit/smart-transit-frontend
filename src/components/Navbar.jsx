@@ -34,8 +34,8 @@ export default function Navbar() {
   };
 
   const linkClasses = ({ isActive }) =>
-    `text-sm font-medium transition-colors ${
-      isActive ? "text-navy-800 font-semibold" : "text-slate-600 hover:text-navy-800"
+    `nav-underline text-sm font-medium transition-colors ${
+      isActive ? "active text-navy-800 font-semibold" : "text-slate-600 hover:text-navy-800"
     }`;
 
   const drawerLinkClasses = ({ isActive }) =>
@@ -65,7 +65,7 @@ export default function Navbar() {
           ) : (
             <Link
               to="/login"
-              className="inline-flex min-h-11 items-center rounded-full bg-navy-800 px-6 text-sm font-semibold text-white transition hover:bg-navy-700"
+              className="inline-flex min-h-11 items-center rounded-full bg-navy-800 px-6 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-navy-700 hover:shadow-md active:translate-y-0 active:scale-[0.98]"
             >
               Log In
             </Link>
@@ -74,7 +74,7 @@ export default function Navbar() {
 
         <button
           type="button"
-          className="inline-flex h-11 w-11 items-center justify-center rounded-lg text-navy-900 lg:hidden"
+          className="inline-flex h-11 w-11 items-center justify-center rounded-lg text-navy-900 transition-colors hover:bg-slate-100 lg:hidden"
           data-tour="nav-menu"
           onClick={() => setMenuOpen(true)}
           aria-label="Open menu"

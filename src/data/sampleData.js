@@ -98,17 +98,27 @@ export const UPCOMING_TRIPS = [
 export const RECENT_BOOKINGS = [
   {
     id: "booking-1",
-    route: "Ecoland Terminal → Digos Terminal",
-    date: "May 28, 2026",
-    amount: 45,
-    status: "Completed",
+    origin: "Ecoland Terminal",
+    destination: "Carmen Terminal",
+    paidAt: "2026-11-07T13:38:00",
+    amount: 102,
+    status: "paid",
   },
   {
     id: "booking-2",
-    route: "Ecoland Terminal → Panabo Terminal",
-    date: "May 20, 2026",
+    origin: "Ecoland Terminal",
+    destination: "Digos Terminal",
+    paidAt: "2026-10-28T08:15:00",
+    amount: 45,
+    status: "paid",
+  },
+  {
+    id: "booking-3",
+    origin: "Ecoland Terminal",
+    destination: "Panabo Terminal",
+    paidAt: "2026-10-20T16:02:00",
     amount: 40,
-    status: "Completed",
+    status: "paid",
   },
 ];
 

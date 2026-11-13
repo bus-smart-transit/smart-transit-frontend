@@ -28,8 +28,8 @@ export default function ConfirmationPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4 py-10">
-      <div className="w-full max-w-md rounded-2xl bg-white p-6 text-center shadow-card sm:p-8">
-        <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-teal-50 text-teal-600">
+      <div className="w-full max-w-md rounded-2xl bg-white p-6 text-center shadow-card motion-safe:animate-pop-in sm:p-8">
+        <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-teal-50 text-teal-600 ring-8 ring-teal-50/60 motion-safe:animate-pop-in">
           <CheckCircleIcon size={36} />
         </span>
         <h1 className="mt-4 font-display text-2xl font-bold text-navy-950">Booking Confirmed!</h1>
