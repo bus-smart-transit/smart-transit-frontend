@@ -5,7 +5,6 @@ import {
   Bus,
   CalendarDays,
   CheckCircle2,
-  Clock3,
   Gauge,
   RefreshCw,
   User,
@@ -16,17 +15,20 @@ import ProfilePage from '../Account/ProfilePage';
 import FirstPasswordPrompt from '../Account/FirstPasswordPrompt';
 import AssignmentSection from './AssignmentSection';
 import MyScheduleList from './MyScheduleList';
-import { shiftActionReason, driverTripActionReason } from '../../utils/actionReasons';
+import { driverTripActionReason } from '../../utils/actionReasons';
 import CalendarSummaryStrip from './CalendarSummaryStrip';
-import DashboardCalendar from './DashboardCalendar';
 import Modal, { ModalShell } from '../ui/Modal';
-import PairWithCrewCard from './PairWithCrewCard';
 import CrewAlertCard from './CrewAlertCard';
 import StaffCalendar from './StaffCalendar';
 import DriverNavigationMap from './DriverNavigationMap';
 import RequestedStopRow from './RequestedStopRow';
 import { groupRequestedStops } from '../../utils/requestedStops';
 import NotificationBellButton from './NotificationBellButton';
+import NextStepCard from './Crew/NextStepCard';
+import CrewTodayCard from './Crew/CrewTodayCard';
+import TextSizeControl from './Crew/TextSizeControl';
+import useCrewTextSize from '../../api/hooks/Staff/useCrewTextSize';
+import { driverNextStep } from '../../utils/crewNextStep';
 import { useDriverPairing, useDriverDashboardData } from '../../api/hooks/Staff/useDriverDashboard';
 import { getBusinessTodayLabel } from '../../utils/dates';
 import { isFinalStopAcknowledged, opensGate } from '../../utils/tripActionTiming';
@@ -43,9 +45,10 @@ import DriverService from '../../api/StaffService/DriverService';
 // Active Trip (Shift Blocks is live operational state, not a planning
 // view, so it groups here rather than with Schedule). Daily PIN had its own
 // item until Batch 45 Feature B moved it into the Dashboard's "Pair with crew" pop-up.
+// Batch 61 (advisor): short labels for the phone's bottom bar.
 const NAV_ITEMS = [
-  { key: 'dashboard', label: 'Dashboard', icon: Gauge },
-  { key: 'activeTrip', label: 'Active Trip', icon: Bus },
+  { key: 'dashboard', label: 'Home', icon: Gauge },
+  { key: 'activeTrip', label: 'Trip', icon: Bus },
   { key: 'schedule', label: 'Schedule', icon: CalendarDays },
   // Batch 45 Feature B: the Daily PIN tab is now the "Pair with crew" pop-up on the Dashboard.
   { key: 'account', label: 'Account', icon: User },
@@ -187,8 +190,8 @@ export default function DriverDashboard() {
 }
 
 function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
-  // The day the full calendar opens on when reached from the dashboard widget (null = today).
-  const [calendarFocus, setCalendarFocus] = useState(null);
+  // The day the full calendar opens on (null = today). Batch 61: the Home calendar widget is gone, so it stays today.
+  const [calendarFocus] = useState(null);
   const {
     activeTab, setActiveTab, pairingOpen, setPairingOpen,
     focusTripId, openTripFromNotification, dismissTripFocus,
@@ -226,8 +229,6 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     nextStop,
     stopProgress,
     tripProgress,
-    notifications,
-    journeyStatusLabel,
     pageTitle,
     lastGpsRef,
     shiftBlocks,
@@ -243,10 +244,6 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     availabilitySaving,
     handleToggleAvailability,
   } = useDriverDashboardData({ onLogout, pairing });
-  const openFullCalendar = (date) => {
-    setCalendarFocus(date);
-    setActiveTab('schedule');
-  };
   const requestedGroups = groupRequestedStops(requestedStops);
 
   const derivedTripStatus = deriveTripStatus(trip || todayAssignedTrip);
@@ -263,7 +260,6 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     tripStatus: derivedTripStatus,
   });
 
-  const busRouteLabel = `${currentFleet?.plate_number || 'Fleet pending'} · ${currentRoute?.route_name || 'Route pending'}`;
 
   // Header rule (one button): Start Shift, then End Trip while a leg is under way. A shift block is one
   // shift (Batch 27 Part 2, Task 1): between and after its legs the same button is End Shift, which the
@@ -277,40 +273,37 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   // Batch 29: the shift (and the pairing key) unlock only after the assignment is accepted.
   const needsAcceptance = Boolean(todayAssignedTrip) && !todayAssignedTrip.driver_accepted_at;
   const showEndShift = hasOpenShift && shiftState?.isBlockShift === true && !tripIsLive;
-  const shiftAction = showEndShift
-    ? {
-      label: 'End Shift',
-      onClick: handleEndShift,
-      disabled: actionInFlight || Boolean(shiftState?.endBlockedReason),
-      title: shiftState?.endBlockedReason || undefined,
-      className: 'inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 transition hover:bg-rose-100 disabled:opacity-60',
-    }
-    : hasOpenShift
-    ? {
-      label: 'End Trip',
-      onClick: () => handleTripAction('complete'),
-      disabled: actionInFlight || !isPaired || !tripIsLive || !finalStopDone,
-      title: tripIsLive && !finalStopDone ? 'Acknowledge the final stop first.' : undefined,
-      className: 'inline-flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 transition hover:bg-rose-100 disabled:opacity-60',
-    }
-    : {
-      label: 'Start Shift',
-      onClick: handleStartShift,
-      disabled: actionInFlight || needsAcceptance || !isPaired || !(hasActiveTrip || hasTodayAssignedTrip),
-      className: 'inline-flex items-center gap-2 rounded-xl border border-teal-200 bg-teal-50 px-3 py-2 text-xs font-semibold text-teal-700 transition hover:bg-teal-100 disabled:opacity-60',
-    };
-
-  // Batch 29: every disabled action says why, next to the button.
-  const shiftReason = shiftActionReason({
-    label: shiftAction.label,
-    disabled: shiftAction.disabled,
-    inFlight: actionInFlight,
-    isPaired,
+  // Batch 61 (advisor, 2026-11-13): the Home shows one big button, the next step (it replaces the header's shift button
+  // and the four Quick Actions). The server still checks every action.
+  const textSize = useCrewTextSize();
+  const nextStopRow = stops.find((stop) => !stop?.is_acknowledged) ?? null;
+  const step = driverNextStep({
     hasWork: hasActiveTrip || hasTodayAssignedTrip,
+    forApproval: isForApproval(todayAssignedTrip, 'driver'),
     needsAcceptance,
-    tripIsLive,
-    endBlockedReason: shiftState?.endBlockedReason,
+    isPaired,
+    hasOpenShift,
+    showEndShift,
+    endBlockedReason: shiftState?.endBlockedReason || '',
+    tripStatus: trip?.status,
+    boardingGate,
+    departGate,
+    finalStopDone,
+    nextStopName: nextStopRow?.stop_name ?? nextStopRow?.name ?? null,
+    nextStopId: nextStopRow?.stop_id ?? null,
+    inFlight: actionInFlight,
   });
+  const pressStep = (key) => {
+    if (key === 'accept') setActiveTab('schedule');
+    else if (key === 'pair') setPairingOpen(true);
+    else if (key === 'startShift') void handleStartShift();
+    else if (key === 'endShift') void handleEndShift();
+    else if (key === 'boarding') void handleTripAction('boarding');
+    else if (key === 'depart') void handleTripAction('depart');
+    else if (key === 'arrive' && nextStopRow?.stop_id) void handleAcknowledgeStop(nextStopRow.stop_id);
+    else if (key === 'endTrip') void handleTripAction('complete');
+  };
+
   const tripActionReason = driverTripActionReason({
     isPaired,
     hasOpenShift,
@@ -332,6 +325,8 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
       profileRoleLabel="Driver"
       profileInitialFallback="D"
       onLogout={handleLogout}
+      bottomNav
+      mobileAction={<TextSizeControl compact size={textSize.size} sizes={textSize.sizes} onChange={textSize.setSize} />}
     >
         <FirstPasswordPrompt profile={profile} />
         <header className="crew-header mb-4">
@@ -343,20 +338,9 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-            <span className="crew-chip">
-              {busRouteLabel}
-            </span>
             <span className={`crew-chip ${headerBadge.tone}`}>
               {headerBadge.label}
             </span>
-            <button
-              className={shiftAction.className}
-              onClick={shiftAction.onClick}
-              disabled={shiftAction.disabled}
-              title={shiftAction.title ?? (!isPaired && !hasOpenShift ? 'Pairing is required before starting shift.' : undefined)}
-            >
-              {shiftAction.label}
-            </button>
             <button
               className="crew-chip-button"
               onClick={loadData}
@@ -365,7 +349,6 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
               Refresh
             </button>
             <NotificationBellButton service={DriverService} role="driver" onOpenNotification={openTripFromNotification} />
-            {shiftReason && <p data-testid="shift-action-reason" className="basis-full text-xs text-amber-700 lg:text-right">{shiftReason}</p>}
           </div>
           </div>
         </header>
@@ -403,7 +386,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
           </div>
         )}
 
-        {showNoCurrentTripState && (
+        {showNoCurrentTripState && activeTab === 'activeTrip' && (
           <section className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-6">
             <h3 className="text-lg font-semibold text-slate-900">No Current Trip Available</h3>
             <p className="mt-2 text-sm text-slate-500">
@@ -432,222 +415,44 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
             actions (each already disabled individually below with a
             tooltip), not the whole tab. */}
         {/* Batch 45 Feature B: the "Pair with crew" card opens the pairing and Daily PIN pop-up. */}
+        {/* Batch 61 (advisor, 2026-11-13): Home is the next step, the alert button and today's trip, in large text.
+            Traffic, the map and the stops are on Trip; assignments and the calendar are on Schedule. */}
         {!loading && activeTab === 'dashboard' && (
-          <PairWithCrewCard paired={isPaired} reason={pairingReason} partner="Chauffeur" onOpen={() => setPairingOpen(true)} />
+          <NextStepCard step={step} onPress={pressStep}>
+            {step.key === 'none' && upcomingTrip && (
+              <p className="mt-2 text-base text-slate-700">
+                Next trip: {upcomingTrip?.fleet_route?.route?.origin || 'Not provided'} to {upcomingTrip?.fleet_route?.route?.destination || 'Not provided'} on {formatTripSchedule(upcomingTrip)}.
+              </p>
+            )}
+            {step.key === 'pair' && pairingReason && <p className="mt-2 text-base text-slate-700">{pairingReason}</p>}
+          </NextStepCard>
         )}
 
         {/* Batch 58: "Alert operator" while the trip is boarding, delayed or on the road. */}
         {!loading && activeTab === 'dashboard' && <CrewAlertCard service={DriverService} trip={trip} />}
 
-        {!loading && activeTab === 'dashboard' && !showNoCurrentTripState && (
-          <section className="staff-grid xl:grid-cols-4 md:grid-cols-2">
-            {/* S1: consolidated current-trip card — was 4 separate cards
-                (Today's Trip / Next Stop / Trip Progress / Journey Status)
-                describing facets of the same trip; merged into one primary
-                card. No data/logic changes — same bindings and nav actions. */}
-            <article className="staff-card md:col-span-2 xl:col-span-4">
-              <div className="flex flex-wrap items-start justify-between gap-4">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Today's Trip</p>
-                  <h3 className="mt-1 text-lg font-bold text-slate-900">{currentRoute?.route_name || `Route ${trip?.fleet_route_id ?? '-'}`}</h3>
-                  <p className="mt-1 text-sm text-slate-500">{currentRoute?.origin || '-'} → {currentRoute?.destination || '-'}</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  {trip?.status === 'completed' ? (
-                    <CheckCircle2 className="h-6 w-6 text-teal-500" />
-                  ) : (
-                    <div className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-amber-400">
-                      <div className="h-2 w-2 rounded-full bg-amber-400" />
-                    </div>
-                  )}
-                  {/* S3 (Batch 17): fall back to the today-assigned trip's
-                      status so this reads e.g. "Scheduled" pre-shift instead
-                      of the misleading "Idle" placeholder. */}
-                  <span className="text-sm font-bold text-slate-900">{derivedTripStatus.key === 'unknown' ? 'Idle' : derivedTripStatus.label}</span>
-                </div>
-              </div>
-
-              <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Next Stop</p>
-                  <p className="mt-1 text-sm font-bold text-slate-900">{nextStop ? placeInMinutes(nextStop?.stop_name ?? nextStop?.name, driverEtaMinutes(trafficStatus, nextStop)) : 'No pending stop'}</p>
-                  <p className="mt-1 inline-flex items-center gap-1 text-xs text-slate-500"><Clock3 className="h-3.5 w-3.5" /> Departs {formatTripSchedule(trip || todayAssignedTrip)}</p>
-                </div>
-
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Trip Progress</p>
-                  <p className="font-data mt-1 text-2xl font-bold text-slate-900">{tripProgress}%</p>
-                  <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-200">
-                    <div className="h-full rounded-full bg-teal-500 transition-all" style={{ width: `${tripProgress}%` }} />
-                  </div>
-                  <p className="mt-1.5 text-xs text-slate-500">
-                    {stopProgress.totalStops > 0
-                      ? `${stopProgress.completedStops} of ${stopProgress.totalStops} Stops Completed — ${tripProgress}%`
-                      : journeyStatusLabel}
-                  </p>
-                  {stopProgress.nextStopName && (
-                    <p className="mt-1 text-xs text-slate-500">Next stop: {stopProgress.nextStopName}</p>
-                  )}
-                </div>
-
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Journey Status</p>
-                  <p className="mt-1 text-sm font-semibold text-slate-800">{derivedTripStatus.label}</p>
-                  <p className="mt-1 text-xs text-slate-500">{trip?.status === 'completed' ? 'Journey completed' : 'Manage the trip via Quick Actions below'}</p>
-                </div>
-              </div>
-
-              <div className="mt-4 flex flex-wrap gap-4 border-t border-slate-100 pt-3">
-                <button className="text-sm font-semibold text-teal-600 hover:text-teal-700" onClick={() => setActiveTab('activeTrip')}>View Active Trip →</button>
-              </div>
-            </article>
-
-            <article className="staff-card md:col-span-2 xl:col-span-2">
-              <h4 className="mb-3 text-base font-bold text-slate-900">Quick Actions</h4>
-              <div className="flex flex-col gap-2 sm:flex-row">
-                <button className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50" onClick={() => handleTripAction('boarding')} disabled={actionInFlight || !isPaired || !hasOpenShift || !boardingGate.open || !['scheduled', 'delayed'].includes(String(trip?.status || '').toLowerCase())} title={boardingGate.label || undefined}>
-                  ○ Start Boarding
-                </button>
-                <button className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-teal-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-teal-600 disabled:opacity-50" onClick={() => handleTripAction('depart')} disabled={actionInFlight || !isPaired || !hasOpenShift || !departGate.open || !['boarding', 'scheduled', 'delayed'].includes(String(trip?.status || '').toLowerCase())} title={departGate.label || undefined}>
-                  ▶ Depart
-                </button>
-                <button className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50" onClick={loadData}>
-                  ↻ Receive Route Updates
-                </button>
-                <button className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50" onClick={() => handleTripAction('complete')} disabled={actionInFlight || !isPaired || !finalStopDone || !['departed', 'in-progress'].includes(trip?.status)}>
-                  ■ End Trip
-                </button>
-              </div>
-              {tripActionReason && <p data-testid="trip-action-reason" className="mt-2 text-xs text-amber-700">{tripActionReason}</p>}
-            </article>
-
-            <article className="staff-card md:col-span-2 xl:col-span-2">
-              <div className="mb-4 flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Route health</p>
-                  <h4 className="text-base font-bold text-slate-900">Traffic and arrival time</h4>
-                </div>
-                <span className={`rounded-full px-2.5 py-1 text-xs font-bold uppercase tracking-[0.15em] ${
-                  trafficStatus.dataSource === 'fallback' || trafficStatus.level === 'unknown'
-                    ? 'bg-slate-100 text-slate-700'
-                    : trafficStatus.level === 'heavy'
-                    ? 'bg-red-100 text-red-700'
-                    : trafficStatus.level === 'moderate'
-                      ? 'bg-amber-100 text-amber-700'
-                      : 'bg-emerald-100 text-emerald-700'
-                }`}>
-                  {trafficStatus.label}
-                </span>
-              </div>
-
-              <p className="mb-3 text-xs font-medium text-slate-500">
-                Measured segment: {trafficStatus.segmentLabel || `Current position to ${nextStop?.stop_name ?? nextStop?.name ?? 'next stop'}`}
-              </p>
-
-              {trafficStatus.dataSource === 'fallback' && (
-                <p className="mb-3 rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-500">
-                  Live traffic is unavailable. No ETA or delay estimate is shown.
-                </p>
-              )}
-              {trafficStatus.level === 'unknown' && trafficStatus.dataSource !== 'fallback' && (
-                <p className="mb-3 rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-500">
-                  Travel time is available, but the provider did not return enough data to classify congestion.
-                </p>
-              )}
-
-              <div className="grid gap-3 md:grid-cols-4">
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                  <p className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">ETA</p>
-                  <p className="mt-2 font-data text-2xl font-bold text-slate-900">{driverEtaMinutes(trafficStatus, nextStop) == null ? <span className="text-sm">Not available</span> : `${driverEtaMinutes(trafficStatus, nextStop)} min`}</p>
-                  <p className="mt-1 text-xs text-slate-500">to next stop</p>
-                </div>
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                  <p className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">Delay</p>
-                  <p className="mt-2 font-data text-2xl font-bold text-slate-900">{trafficStatus.delayMinutes == null ? <span className="text-sm">Not available</span> : `${trafficStatus.delayMinutes} min`}</p>
-                  <p className="mt-1 text-xs text-slate-500">route impact</p>
-                </div>
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                  <p className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">Advice</p>
-                  <p className="mt-2 text-sm font-semibold text-slate-800 leading-5">{trafficStatus.suggestion}</p>
-                </div>
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                  <p className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">Next Stop</p>
-                  <p className="mt-2 text-sm font-semibold text-slate-800 leading-5">{nextStop ? placeInMinutes(nextStop?.stop_name ?? nextStop?.name, driverEtaMinutes(trafficStatus, nextStop)) : 'No pending stop'}</p>
-                </div>
-              </div>
-              <p className="mt-3 text-xs text-slate-500">
-                {trafficStatus.updatedAt
-                  ? `Provider updated ${new Date(trafficStatus.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} | ${String(trafficStatus.dataSource || 'provider').toUpperCase()}`
-                  : 'No live provider timestamp'}
-              </p>
-            </article>
-
-            <article className="staff-card md:col-span-2 xl:col-span-4">
-              <div className="mb-3 flex items-center justify-between">
-                <h4 className="text-base font-bold text-slate-900">Traffic Alerts</h4>
-                <span className={`rounded-full px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.16em] ${
-                  trafficStatus.dataSource === 'fallback' || trafficStatus.level === 'unknown'
-                    ? 'bg-slate-100 text-slate-700'
-                    : trafficStatus.level === 'heavy'
-                      ? 'bg-red-100 text-red-700'
-                      : trafficStatus.level === 'moderate'
-                        ? 'bg-amber-100 text-amber-700'
-                        : 'bg-emerald-100 text-emerald-700'
-                }`}>
-                  {trafficStatus.dataSource === 'fallback'
-                    ? 'Unavailable'
-                    : trafficStatus.level === 'unknown'
-                      ? 'Travel time only'
-                      : trafficStatus.label}
-                </span>
-              </div>
-              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
-                <p className="text-sm font-semibold text-slate-900">
-                  {trafficStatus.segmentLabel || `Current position to ${nextStop?.stop_name ?? nextStop?.name ?? 'next stop'}`}
-                </p>
-                <p className="mt-1 text-xs text-slate-600">{trafficStatus.suggestion}</p>
-                <p className="mt-2 text-xs font-medium text-slate-700">
-                  {trafficStatus.delayMinutes == null
-                    ? trafficStatus.etaMinutes == null
-                      ? 'ETA and delay unavailable'
-                      : `ETA ${trafficStatus.etaMinutes} min | Delay unavailable`
-                    : `${trafficStatus.delayMinutes} min above free-flow | ETA ${trafficStatus.etaMinutes} min`}
-                </p>
-              </div>
-            </article>
-
-            <article className="staff-card md:col-span-2 xl:col-span-2">
-              <div className="mb-3 flex items-center justify-between">
-                <h4 className="text-base font-bold text-slate-900">Quick Notifications</h4>
-                <button className="text-xs font-medium text-teal-600 hover:text-teal-700">View All</button>
-              </div>
-              <div className="divide-y divide-slate-100">
-                {notifications.map((notice, idx) => (
-                  <div key={idx} className="flex items-start justify-between gap-3 py-2.5">
-                    <div className="flex items-start gap-2.5">
-                      <span className={`mt-0.5 h-2.5 w-2.5 shrink-0 rounded-full ${
-                        notice.tone === 'danger' ? 'bg-red-500' : notice.tone === 'warn' ? 'bg-amber-400' : 'bg-teal-400'
-                      }`} />
-                      <div>
-                        <p className="text-sm font-semibold text-slate-900">{notice.title}</p>
-                        <p className="text-xs text-slate-500">{notice.note}</p>
-                      </div>
-                    </div>
-                    <small className="shrink-0 text-xs text-slate-400">{notice.time}</small>
-                  </div>
-                ))}
-              </div>
-            </article>
-          </section>
+        {!loading && activeTab === 'dashboard' && !showNoCurrentTripState && (hasActiveTrip || hasTodayAssignedTrip) && (
+          <CrewTodayCard
+            route={currentRoute?.route_name}
+            fromTo={currentRoute?.origin && currentRoute?.destination ? `${currentRoute.origin} → ${currentRoute.destination}` : null}
+            rows={[
+              ['Bus', currentFleet?.plate_number],
+              ['Leaves', formatTripSchedule(trip || todayAssignedTrip) === '-' ? null : formatTripSchedule(trip || todayAssignedTrip)],
+              ['Status', derivedTripStatus.key === 'unknown' ? null : derivedTripStatus.label],
+              ['Next stop', nextStop ? placeInMinutes(nextStop?.stop_name ?? nextStop?.name, driverEtaMinutes(trafficStatus, nextStop)) : null],
+            ]}
+            progress={tripIsLive ? tripProgress : null}
+            onOpen={() => setActiveTab('activeTrip')}
+          />
         )}
 
         {/* Batch 19 Part A: folded into Dashboard (was the standalone
             "Assigned Routes" nav item). Accept/decline never depended on
             pairing, so no gating needed here. */}
-        {!loading && activeTab === 'dashboard' && (
-          <section className="mt-4 staff-card">
-            <div className="mb-4 flex items-center justify-between">
-              <h4 className="text-base font-bold text-slate-900">Assigned Routes</h4>
+        {!loading && activeTab === 'schedule' && (
+          <section className="staff-card">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+              <h4 className="text-lg font-bold text-slate-900">My trips</h4>
               <div className="flex items-center gap-2">
                 <label htmlFor="driver-assigned-filter" className="text-xs font-semibold uppercase tracking-wide text-slate-500">Filter</label>
                 <select
@@ -682,20 +487,14 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
           <StaffCalendar key={calendarFocus || 'today'} service={DriverService} initialDate={calendarFocus} />
         )}
 
-        {!loading && activeTab === 'dashboard' && (
-          <div className="mt-4 grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_19rem]">
-            <CalendarSummaryStrip service={DriverService} stacked className="content-start" />
-            <DashboardCalendar service={DriverService} onOpenFull={openFullCalendar} />
-          </div>
-        )}
 
         {/* Batch 18: Shift Block Hand-off System. Independent of pairing —
             a scheduled block's takeover confirmation happens before any
             per-leg pairing is relevant. Batch 19 Part A: grouped under
             "Active Trip" (live operational state), not Schedule. */}
-        {!loading && activeTab === 'activeTrip' && (
+        {!loading && activeTab === 'schedule' && (
           <section className="staff-card">
-            <h3 className="mb-4 text-base font-bold text-slate-900">My Schedule</h3>
+            <h3 className="mb-4 text-lg font-bold text-slate-900">My shifts</h3>
             {/* 2026-10-27: no Confirm Takeover. A shift starts with its first trip and finishes with its last. */}
             <MyScheduleList blocks={shiftBlocks} />
           </section>
@@ -719,7 +518,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
               <div className="mb-4 flex items-center justify-between">
                 <h4 className="text-base font-bold text-slate-900">Trip Status</h4>
                 <button
-                  className="rounded-lg bg-red-500 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-red-600 disabled:opacity-50"
+                  className="min-h-12 rounded-xl bg-red-600 px-4 text-base font-bold text-white transition hover:bg-red-700 disabled:opacity-50"
                   onClick={() => handleTripAction('complete')}
                   disabled={actionInFlight || !isPaired || !finalStopDone || !['departed', 'in-progress'].includes(trip?.status)}
                 >
@@ -808,7 +607,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                           <span className="ml-auto text-xs font-semibold text-emerald-700">Reached</span>
                         ) : (
                           <button
-                            className="ml-auto rounded-lg bg-sky-500 px-2.5 py-1.5 text-xs font-semibold text-white transition hover:bg-sky-600 disabled:cursor-not-allowed disabled:opacity-60"
+                            className="ml-auto min-h-12 rounded-xl bg-sky-600 px-4 text-base font-bold text-white transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
                             onClick={() => handleAcknowledgeStop(stop.stop_id)}
                             disabled={actionInFlight || !stop?.stop_id || !isPaired}
                             title={!isPaired ? 'Pairing is required to acknowledge stops.' : undefined}
@@ -872,6 +671,13 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
           </section>
         </Modal>
 
+        {activeTab === 'account' && (
+          <section className="staff-card" aria-label="Text size setting">
+            <h3 className="text-lg font-bold text-slate-900">Text size</h3>
+            <p className="mb-3 mt-1 text-base text-slate-600">Make the words and buttons bigger or smaller on this phone.</p>
+            <TextSizeControl size={textSize.size} sizes={textSize.sizes} onChange={textSize.setSize} />
+          </section>
+        )}
         {activeTab === 'account' && (
           <ProfilePage
             role="driver"

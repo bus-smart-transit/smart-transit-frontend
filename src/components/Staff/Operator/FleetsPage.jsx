@@ -4,6 +4,7 @@ import { OpPageHeader, OpCard, OpChip, OpStat, OpEmpty } from './OperatorUI';
 import { OP_SPACE } from './operatorUiTokens';
 import Modal from '../../ui/Modal';
 import FilterTabs from '../../ui/FilterTabs';
+import ViewTabs from '../../ui/ViewTabs';
 import FareRulesPanel from '../FareRulesPanel';
 import { useCanManageCompany } from './companyAdmin';
 import FleetTrackingMap from './FleetTrackingMap';
@@ -247,7 +248,9 @@ function TrackFleetModal({ row, trip, advice, saving, error, onDecide, onClose, 
  * Batch 31 Phase 3: the Operator's Fleets page. One row per bus; its status is derived from today's trips and its last
  * GPS report (utils/operatorFleetView.js). There is no maintenance state and no progress bar: neither exists in the data.
  */
-export default function FleetsPage({ fleets, routes, trips, onRefresh, companyName = null, trackRequest = null, onTrackHandled = () => {} }) {
+export default function FleetsPage({ fleets, routes, trips, onRefresh, companyName = null, trackRequest = null, onTrackHandled = () => {}, view = 'fleets', onViewChange = () => {} }) {
+  // Batch 61 (advisor, 2026-11-13): the fare rules were below the fleet list and went unnoticed; they are a tab now.
+  const showFleets = view !== 'fareRules';
   const nowMs = useNow();
   const fareOptions = useFareOptions();
   const {
@@ -309,11 +312,13 @@ export default function FleetsPage({ fleets, routes, trips, onRefresh, companyNa
       <OpPageHeader
         title="Fleets"
         subtitle="Your buses, their status today and where they are"
-        action={canManage ? <button type="button" onClick={() => open('add')} className={PRIMARY}><Plus className="h-4 w-4" aria-hidden="true" /> Add fleet</button> : null}
+        action={canManage && showFleets ? <button type="button" onClick={() => open('add')} className={PRIMARY}><Plus className="h-4 w-4" aria-hidden="true" /> Add fleet</button> : null}
       />
+      <ViewTabs label="Fleets views" tabs={[{ key: 'fleets', label: 'Fleets' }, { key: 'fareRules', label: 'Fare rules' }]} value={showFleets ? 'fleets' : 'fareRules'} onChange={onViewChange} />
 
       {notice && <p role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{notice}</p>}
 
+      {showFleets && (<>
       {/* Batch 60 item 4 (user, 2026-11-11): Fleets, Active and Idle only; a running bus counts as Active. */}
       <section aria-label="Fleet summary" className="grid grid-cols-3 gap-3 sm:gap-4">
         <OpStat icon={Bus} label="Fleets" value={rows.length} />
@@ -392,9 +397,13 @@ export default function FleetsPage({ fleets, routes, trips, onRefresh, companyNa
         )}
       </OpCard>
 
-      <OpCard>
-        <FareRulesPanel service={OperatorService} fleets={fleets} routes={routes} canCreateGeneral={false} tone="light" readOnly={!canManage} />
-      </OpCard>
+      </>)}
+
+      {!showFleets && (
+        <OpCard>
+          <FareRulesPanel service={OperatorService} fleets={fleets} routes={routes} canCreateGeneral={false} tone="light" readOnly={!canManage} />
+        </OpCard>
+      )}
 
       <AddFleetModal companyName={companyName} open={modal === 'add'} onClose={closeModal} form={fleetForm} setForm={setFleetForm} routes={routes} fareOptions={fareOptions} saving={manageSaving} message={manageMsg} onSubmit={submitFleet} />
       {editingFleet && (

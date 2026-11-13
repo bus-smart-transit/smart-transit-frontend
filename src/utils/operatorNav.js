@@ -24,18 +24,35 @@ export const OPERATOR_NAV = [
   { key: 'account', label: 'Account', roles: OPERATOR_ONLY },
 ];
 
+// Batch 61 (advisor, via the user, 2026-11-13): one focus per page, nothing hidden below the fold. A second block that
+// used to sit under a page's main content is now its own tab (Fare rules, Crew time in/out, Stops, Cancelled tickets,
+// Discounts).
 export const OPERATOR_VIEWS = {
+  staffs: [
+    { key: 'directory', label: 'Staff directory', roles: OPERATOR_ONLY },
+    { key: 'shifts', label: 'Crew time in/out', roles: OPERATOR_ONLY },
+  ],
+  fleets: [
+    { key: 'fleets', label: 'Fleets', roles: OPERATOR_ONLY },
+    { key: 'fareRules', label: 'Fare rules', roles: OPERATOR_ONLY },
+  ],
+  routes: [
+    { key: 'routes', label: 'Routes', roles: OPERATOR_ONLY },
+    { key: 'stops', label: 'Stops', roles: OPERATOR_ONLY },
+  ],
   schedule: [
     { key: 'calendar', label: 'Calendar', roles: OPERATOR_ONLY },
     { key: 'blocks', label: 'Blocks', roles: OPERATOR_ONLY },
     { key: 'trips', label: 'Trips', roles: OPERATOR_ONLY },
     { key: 'requests', label: 'Approvals', roles: OPERATOR_ONLY },
+    { key: 'cancelled', label: 'Cancelled tickets', roles: OPERATOR_ONLY },
   ],
   finance: [
     { key: 'overview', label: 'Overview', roles: OPERATOR_ONLY },
     { key: 'transactions', label: 'Transactions', roles: OPERATOR_ONLY },
     { key: 'remittances', label: 'Remittances', roles: OPERATOR_ONLY },
     { key: 'refunds', label: 'Refunds', roles: OPERATOR_ONLY },
+    { key: 'discounts', label: 'Discounts', roles: OPERATOR_ONLY },
   ],
 };
 

@@ -126,7 +126,7 @@ describe('RoutesPage list', () => {
 
   it('adds, edits and deletes stops from the directory', async () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true);
-    renderPage();
+    renderPage({ view: 'stops' });
     const directory = screen.getByRole('table', { name: 'Stops' });
     expect(within(directory).queryByRole('columnheader', { name: 'Municipality' })).not.toBeInTheDocument();
     // Batch 56 (user): the City or town column shows the town filled from the pin (was Area or landmark).
@@ -165,7 +165,7 @@ describe('RoutesPage list', () => {
 
   it('flags stops placed from their name and opens them for a re-pin', async () => {
     const withOld = [...stops.slice(0, 3), { ...stops[3], location_source: 'name' }];
-    renderPage({ stops: withOld });
+    renderPage({ view: 'stops', stops: withOld });
     const row = screen.getByText('Spare stop').closest('tr');
     expect(within(row).getByText('Placed from name')).toBeInTheDocument();
     expect(within(screen.getByText('Stop 1').closest('tr')).getByText('Pinned')).toBeInTheDocument();
@@ -177,7 +177,7 @@ describe('RoutesPage list', () => {
 
   it('shows the near-duplicate warning after saving, and a refused move as a failure', async () => {
     mocks.createOperatorStop.mockResolvedValueOnce({ data: { stop_id: 20, warnings: ['"Stop 1" is only 12 m away. Is this the same stop?'] } });
-    renderPage();
+    renderPage({ view: 'stops' });
     fireEvent.click(screen.getByRole('button', { name: /Add stop/ }));
     let dialog = await screen.findByRole('dialog');
     fireEvent.change(within(dialog).getByLabelText('Stop name'), { target: { value: 'Close one' } });
@@ -349,7 +349,7 @@ describe('Stops directory search and paging', () => {
   const directory = () => screen.getByRole('table', { name: 'Stops' });
 
   it('shows ten stops at a time and moves between pages', () => {
-    renderPage({ stops: manyStops });
+    renderPage({ view: 'stops', stops: manyStops });
     expect(within(directory()).getAllByRole('row')).toHaveLength(11); // header + 10
     expect(screen.getByText('Showing 1-10 of 23 stops')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Previous' })).toBeDisabled();
@@ -366,7 +366,7 @@ describe('Stops directory search and paging', () => {
   });
 
   it('searches by name, code or municipality and goes back to the first page', () => {
-    renderPage({ stops: manyStops });
+    renderPage({ view: 'stops', stops: manyStops });
     fireEvent.click(screen.getByRole('button', { name: 'Next' }));
 
     fireEvent.change(screen.getByPlaceholderText(/Search stops/), { target: { value: 'plaza 07' } });
@@ -381,12 +381,12 @@ describe('Stops directory search and paging', () => {
   });
 
   it('says so when nothing matches, and keeps the "No stops yet" message for an empty directory', () => {
-    const { unmount } = renderPage({ stops: manyStops });
+    const { unmount } = renderPage({ view: 'stops', stops: manyStops });
     fireEvent.change(screen.getByPlaceholderText(/Search stops/), { target: { value: 'zzzz' } });
     expect(screen.getByText('No stop matches this search.')).toBeInTheDocument();
     unmount();
 
-    renderPage({ stops: [] });
+    renderPage({ view: 'stops', stops: [] });
     expect(screen.getByText('No stops yet.')).toBeInTheDocument();
   });
 });

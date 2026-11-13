@@ -165,7 +165,8 @@ describe('Network Fetch Audit - Staff dashboards', () => {
       expect(ConductorService.getConductorTrip).toHaveBeenCalledTimes(1);
     });
 
-    const occupancyTab = await screen.findByRole('button', { name: /Ticketing/i });
+    // Batch 61: the tab is "Tickets", in the sidebar and in the phone's bottom bar.
+    const occupancyTab = (await screen.findAllByRole('button', { name: /^Tickets$/ }))[0];
     fireEvent.click(occupancyTab);
 
     await waitFor(() => {

@@ -14,8 +14,12 @@ describe('Operator sidebar (Batch 30)', () => {
   });
 
   test('Schedule has Calendar, Blocks, Trips, Approvals; Finance has Overview, Transactions, Remittances, Refunds', () => {
-    expect(viewsForRole('schedule', 'operator').map((v) => v.label)).toEqual(['Calendar', 'Blocks', 'Trips', 'Approvals']);
-    expect(viewsForRole('finance', 'operator').map((v) => v.label)).toEqual(['Overview', 'Transactions', 'Remittances', 'Refunds']);
+    expect(viewsForRole('schedule', 'operator').map((v) => v.label)).toEqual(['Calendar', 'Blocks', 'Trips', 'Approvals', 'Cancelled tickets']);
+    expect(viewsForRole('finance', 'operator').map((v) => v.label)).toEqual(['Overview', 'Transactions', 'Remittances', 'Refunds', 'Discounts']);
+    // Batch 61 (advisor): what used to sit under a page is its own tab.
+    expect(viewsForRole('staffs', 'operator').map((v) => v.label)).toEqual(['Staff directory', 'Crew time in/out']);
+    expect(viewsForRole('fleets', 'operator').map((v) => v.label)).toEqual(['Fleets', 'Fare rules']);
+    expect(viewsForRole('routes', 'operator').map((v) => v.label)).toEqual(['Routes', 'Stops']);
   });
 
   test('Reports stays its own item: fleet reports and the forecast are not financial', () => {

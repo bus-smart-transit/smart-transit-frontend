@@ -23,6 +23,9 @@ export default function StaffPortalLayout({
   onLogout,
   profileAction = null,
   mainClassName = 'bg-white',
+  // Batch 61 (advisor, 2026-11-13): the crew portals use a bottom bar on phones instead of the menu button.
+  bottomNav = false,
+  mobileAction = null,
   children,
 }) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -128,25 +131,54 @@ export default function StaffPortalLayout({
         </div>
       </aside>
 
-      <main className={`min-h-screen p-4 sm:p-6 ${mainClassName}`}>
+      <main className={`min-h-screen p-4 sm:p-6 ${bottomNav ? 'pb-28 lg:pb-6' : ''} ${mainClassName}`}>
         <div className="mb-4 flex items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm lg:hidden">
           <div className="min-w-0">
             <BrandLogo className="h-8" />
             <p className="truncate text-xs font-semibold uppercase tracking-wide text-slate-500">{brandLabel}</p>
           </div>
-          <button
-            type="button"
-            aria-label="Open navigation"
-            className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 text-slate-700"
-            onClick={() => setMobileNavOpen(true)}
-          >
-            <Menu className="h-5 w-5" />
-          </button>
+          {bottomNav ? mobileAction : (
+            <button
+              type="button"
+              aria-label="Open navigation"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 text-slate-700"
+              onClick={() => setMobileNavOpen(true)}
+            >
+              <Menu className="h-5 w-5" />
+            </button>
+          )}
         </div>
         <div className="staff-stack">
           {children}
         </div>
       </main>
+
+      {/* Batch 61: on a phone the crew switch pages with big buttons along the bottom, always in reach of a thumb. */}
+      {bottomNav && (
+        <nav aria-label="Bottom navigation" className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_12px_rgba(15,23,42,0.08)] lg:hidden">
+          <ul className="grid" style={{ gridTemplateColumns: `repeat(${navItems.length}, minmax(0, 1fr))` }}>
+            {navItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = activeTab === item.key;
+              return (
+                <li key={item.key}>
+                  <button
+                    type="button"
+                    aria-current={isActive ? 'page' : undefined}
+                    onClick={() => onTabChange(item.key)}
+                    className={`flex min-h-16 w-full flex-col items-center justify-center gap-1 px-1 py-2 text-xs font-bold transition ${isActive ? 'text-teal-700' : 'text-slate-600'}`}
+                  >
+                    <span className={`inline-flex h-8 w-12 items-center justify-center rounded-full ${isActive ? 'bg-teal-100' : ''}`}>
+                      <Icon className="h-6 w-6" aria-hidden="true" />
+                    </span>
+                    <span className="leading-tight">{item.label}</span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </nav>
+      )}
     </div>
   );
 }

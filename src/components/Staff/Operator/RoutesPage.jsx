@@ -3,6 +3,7 @@ import { Plus, RefreshCw, Search, Route as RouteIcon, Bus, Ban, MapPin } from 'l
 import { OpPageHeader, OpCard, OpChip, OpStat, OpTable, OpPager } from './OperatorUI';
 import { OP_SPACE } from './operatorUiTokens';
 import Modal from '../../ui/Modal';
+import ViewTabs from '../../ui/ViewTabs';
 import RouteDetailPage from './RouteDetailPage';
 import PlaceSearch from './PlaceSearch';
 import StopPinPicker from './StopPinPicker';
@@ -90,7 +91,9 @@ function StopModal({ open, onClose, editing, needsPin, form, setForm, saving, me
  * Forms moved into modals with the same fields and handlers; nothing was removed except the "Route Adherence" column,
  * which was really a completion rate and now appears under that name on the route's Overview.
  */
-export default function RoutesPage({ routes, stops, trips, fleets, onRefresh, onOpenSchedule, onOpenFleets }) {
+export default function RoutesPage({ routes, stops, trips, fleets, onRefresh, onOpenSchedule, onOpenFleets, view = 'routes', onViewChange = () => {} }) {
+  // Batch 61 (advisor, 2026-11-13): the stops directory was below the route list; it is its own tab now.
+  const showRoutes = view !== 'stops';
   const routesTab = useRoutesTab({ onRefresh });
   const canManage = useCanManageCompany();
   const {
@@ -197,13 +200,15 @@ export default function RoutesPage({ routes, stops, trips, fleets, onRefresh, on
       <OpPageHeader
         title="Routes"
         subtitle="Where your buses run, the stops on each route and who serves it"
-        action={canManage ? <button type="button" onClick={() => open('route')} className={PRIMARY}><Plus className="h-4 w-4" aria-hidden="true" /> Add route</button> : null}
+        action={canManage && showRoutes ? <button type="button" onClick={() => open('route')} className={PRIMARY}><Plus className="h-4 w-4" aria-hidden="true" /> Add route</button> : null}
       />
+      <ViewTabs label="Routes views" tabs={[{ key: 'routes', label: 'Routes' }, { key: 'stops', label: 'Stops' }]} value={showRoutes ? 'routes' : 'stops'} onChange={onViewChange} />
 
       {manageMsg && !modal && (
         <p role="status" className={`rounded-lg border px-3 py-2 text-sm ${isFailure(manageMsg) ?'border-rose-200 bg-rose-50 text-rose-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}>{manageMsg}</p>
       )}
 
+      {showRoutes && (<>
       <section aria-label="Route summary" className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <OpStat icon={RouteIcon} label="Routes" value={rows.length} />
         <OpStat icon={Bus} label="With an active fleet" value={withFleet} tone="success" />
@@ -229,6 +234,9 @@ export default function RoutesPage({ routes, stops, trips, fleets, onRefresh, on
         <OpTable caption="Routes" columns={columns} rows={shown} rowKey={(row) => row.routeId} empty={rows.length === 0 ? 'No routes yet. Use Add route to create your first one.' : 'No route matches this search.'} />
       </OpCard>
 
+      </>)}
+
+      {!showRoutes && (
       <OpCard
         title="Stops directory"
         subtitle="Stops you can place on routes."
@@ -260,6 +268,7 @@ export default function RoutesPage({ routes, stops, trips, fleets, onRefresh, on
         <OpTable caption="Stops" columns={stopColumns} rows={stopPaging.rows} rowKey={(stop) => stop.stop_id} empty={stops.length === 0 ? 'No stops yet.' : 'No stop matches this search.'} />
         <OpPager paging={stopPaging} onPage={setStopPage} label="Stops pages" noun="stops" />
       </OpCard>
+      )}
 
       <AddRouteModal open={modal === 'route'} onClose={closeModal} form={routeForm} setForm={setRouteForm} saving={manageSaving} message={manageMsg} onSubmit={submitRoute} />
       <StopModal open={modal === 'stop'} onClose={closeModal} editing={Boolean(editingStopId)} needsPin={Boolean(editingStop && !isPinned(editingStop))} otherStops={otherStops} form={stopForm} setForm={setStopForm} saving={manageSaving} message={manageMsg} onSubmit={submitStop} />

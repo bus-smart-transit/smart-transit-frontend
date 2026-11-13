@@ -1136,11 +1136,11 @@ export function useConductorDashboardData({ onLogout, pairing }) {
 
   const pageTitle =
     activeTab === 'dashboard'
-      ? 'Dashboard'
+      ? 'Home' // Batch 61: the tab names of the phone's bottom bar
       : activeTab === 'occupancy'
-        ? 'Ticketing & Fares'
+        ? 'Tickets'
         : activeTab === 'activeShift'
-            ? 'Active Shift'
+            ? 'Shift'
             : activeTab === 'schedule'
               ? 'Schedule'
                 : 'Account';

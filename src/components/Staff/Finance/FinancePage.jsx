@@ -82,9 +82,11 @@ export default function FinancePage({ views, view, onViewChange, service }) {
           ? <RemittancesPage service={service} embedded />
           : active === 'refunds'
             ? <PaymentRefundsPage service={service} embedded />
-            : <FinancialsPage service={service} view={active} embedded />}
+            : active === 'discounts'
+              ? <DiscountTypesPanel service={service} />
+              : <FinancialsPage service={service} view={active} embedded />}
       </div>
-      {active === 'overview' && <DiscountTypesPanel service={service} />}
+      {/* Batch 61 (advisor): the discount settings were under the Overview report; they are the Discounts tab now. */}
     </div>
   );
 }

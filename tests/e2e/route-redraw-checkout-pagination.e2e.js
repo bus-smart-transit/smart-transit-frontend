@@ -180,7 +180,7 @@ test.describe('Operator portal: redraw status and the stops directory', () => {
 
   test('the stops directory is searchable and shows ten stops at a time', async ({ page }) => {
     await signIn(page);
-    await page.goto('/employee/operator/dashboard?tab=routes');
+    await page.goto('/employee/operator/dashboard?tab=routes&view=stops');
     const table = page.getByRole('table', { name: 'Stops' });
     await expect(table).toBeVisible({ timeout: 30000 });
 

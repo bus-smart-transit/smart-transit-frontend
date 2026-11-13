@@ -321,7 +321,8 @@ test('TC-09 Fleets: cards match the counts, search narrows them, details open', 
 test('TC-10 Fare rules: no filters, five a page, the Add form validates, sends the rule and shows a refusal', async ({ page }) => {
   const entry = watch(page, 'TC-10');
   await staffSignIn(page, 'operator@smarttransit.com', /operator\/dashboard/);
-  await page.goto('/employee/operator/dashboard?tab=fleets');
+  // Batch 61: the fare rules are their own tab on Fleets.
+  await page.goto('/employee/operator/dashboard?tab=fleets&view=fareRules');
   await expect.poll(() => sent(entry, 'GET', '/api/operator/fare-rules').length).toBeGreaterThan(0);
   const fareList = sent(entry, 'GET', '/api/operator/fare-rules')[0];
   expect(fareList.query, 'no filter is sent').toEqual({});

@@ -41,10 +41,10 @@ const renderPage = (view, service = makeService(), v = views) => {
 };
 
 describe('FinancePage', () => {
-  it('has one heading and the Overview, Transactions, Remittances and Refunds tabs', async () => {
+  it('has one heading and the Overview, Transactions, Remittances, Refunds and Discounts tabs', async () => {
     renderPage('overview');
     expect(screen.getByRole('heading', { name: 'Finance' })).toBeInTheDocument();
-    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Overview', 'Transactions', 'Remittances', 'Refunds']);
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Overview', 'Transactions', 'Remittances', 'Refunds', 'Discounts']);
     await screen.findByTestId('kpi-gross');
   });
 

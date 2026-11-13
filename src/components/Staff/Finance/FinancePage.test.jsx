@@ -15,8 +15,8 @@ describe('FinancePage onsite discount settings', () => {
     };
 
     render(<FinancePage
-      views={[{ key: 'overview', label: 'Overview' }]}
-      view="overview"
+      views={[{ key: 'overview', label: 'Overview' }, { key: 'discounts', label: 'Discounts' }]}
+      view="discounts"
       onViewChange={vi.fn()}
       service={service}
     />);

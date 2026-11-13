@@ -30,11 +30,12 @@ for (const { role, email, url, home } of [
       await page.goto(home);
 
       await expect(page.locator('aside nav button', { hasText: /^Daily PIN$/ })).toHaveCount(0);
-      const card = page.getByTestId('pair-with-crew-card');
+      // Batch 61: Home's one big next-step button is "Pair with crew" until the crew are paired.
+      const card = page.getByTestId('crew-next-step');
       await expect(card).toBeVisible({ timeout: 30000 });
       await page.screenshot({ path: path.join(SHOTS, `${role}-${width}-1-card.png`) });
 
-      await card.getByRole('button').click();
+      await card.getByRole('button', { name: /Pair with crew/ }).click();
       const dialog = page.getByRole('dialog', { name: 'Pair with crew' });
       await expect(dialog).toBeVisible();
       await expect(dialog.getByTestId('pair-with-crew-modal')).toBeVisible();

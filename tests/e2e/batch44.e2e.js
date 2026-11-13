@@ -60,7 +60,8 @@ test.afterAll(async () => { await api.dispose(); });
 
 test('Discounts: the Operator sees Student, Senior citizen and PWD at 20% and can turn one off and on', async ({ page }) => {
   await signIn(page, 'operator@smarttransit.com', /operator\/dashboard/);
-  await page.goto('/employee/operator/dashboard?tab=finance&view=overview');
+  // Batch 61: the discount settings are the Finance > Discounts tab.
+  await page.goto('/employee/operator/dashboard?tab=finance&view=discounts');
   const panel = page.getByRole('region', { name: 'Onsite discounts' });
   await expect(panel).toBeVisible({ timeout: 30000 });
   for (const label of ['Student', 'Senior citizen', 'Person with disability']) {

@@ -34,6 +34,7 @@ import SchedulePage from './Schedule/SchedulePage'
 import ShiftBlocksView from './Schedule/ShiftBlocksView'
 import FinancePage from './Finance/FinancePage'
 import { OpPageHeader } from './Operator/OperatorUI'
+import ViewTabs from '../ui/ViewTabs'
 import { OPERATOR_ROLE, navForRole, viewsForRole } from '../../utils/operatorNav'
 import {
   LayoutDashboard, Bus, MapPin, PieChart, Users, Settings, Wallet, CalendarDays,
@@ -592,7 +593,6 @@ function TripsTab({ drivers, conductors, onRefresh, tripsState, focusTripId = nu
 
 
       {cancelNotice && <p role="status" className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{cancelNotice}</p>}
-      <TicketResolutionQueue service={OperatorService} />
       {cancelTarget && (
         <CancelTripModal trip={cancelTarget} service={OperatorService} onClose={() => setCancelTarget(null)} onDone={(text) => { setCancelNotice(text); onRefresh() }} />
       )}
@@ -789,6 +789,8 @@ function ScheduleTab({ trips, drivers, conductors, onRefresh, view, onViewChange
             {active === 'blocks' && <ShiftBlocksView reloadToken={reloadToken} />}
             {active === 'trips' && <TripsTab drivers={drivers} conductors={conductors} onRefresh={refreshAll} tripsState={tripsState} focusTripId={focusTripId} onDismissFocus={() => setFocusTripId(null)} />}
             {active === 'requests' && <TripRequestsPanel onDecided={refreshAll} showEmpty />}
+            {/* Batch 61 (advisor): was under the trip tables, easy to miss. */}
+            {active === 'cancelled' && <TicketResolutionQueue service={OperatorService} />}
           </>
         )}
       </SchedulePage>
@@ -893,13 +895,15 @@ export default function OperatorDashboard() {
         {activeTab === 'staffs'     && (
           <div className="space-y-6">
             <OpPageHeader title="Staffs" subtitle="Your Drivers and Chauffeurs, and when their shifts started and ended" />
+            {/* Batch 61 (advisor): the directory and the crew time in/out are two tabs, not one long page. */}
+            <ViewTabs label="Staffs views" tabs={viewsForRole('staffs', OPERATOR_ROLE)} value={view || 'directory'} onChange={setView} />
             {/* Batch 46: the directory pages and counts on the server; a change also refreshes the scheduling pickers. */}
-            <StaffDirectory fleetCount={fleets.length} onChanged={loadFull} />
-            <CrewShiftTimes staff={[...drivers, ...conductors]} />
+            {(view || 'directory') === 'directory' && <StaffDirectory fleetCount={fleets.length} onChanged={loadFull} />}
+            {view === 'shifts' && <CrewShiftTimes staff={[...drivers, ...conductors]} />}
           </div>
         )}
-        {activeTab === 'fleets'     && <FleetsPage fleets={fleets} routes={routes} trips={trips} onRefresh={loadFull} companyName={profile?.company?.company_name ?? null} trackRequest={trackRequest} onTrackHandled={clearTrackRequest} />}
-        {activeTab === 'routes'     && <RoutesPage routes={routes} stops={stops} trips={trips} fleets={fleets} onRefresh={loadFull} onOpenSchedule={() => setActiveTab('schedule')} onOpenFleets={() => setActiveTab('fleets')} />}
+        {activeTab === 'fleets'     && <FleetsPage fleets={fleets} routes={routes} trips={trips} onRefresh={loadFull} companyName={profile?.company?.company_name ?? null} trackRequest={trackRequest} onTrackHandled={clearTrackRequest} view={view || 'fleets'} onViewChange={setView} />}
+        {activeTab === 'routes'     && <RoutesPage routes={routes} stops={stops} trips={trips} fleets={fleets} onRefresh={loadFull} onOpenSchedule={() => setActiveTab('schedule')} onOpenFleets={() => setActiveTab('fleets')} view={view || 'routes'} onViewChange={setView} />}
         {activeTab === 'finance'    && <FinancePage views={viewsForRole('finance', OPERATOR_ROLE)} view={view} onViewChange={setView} />}
         {activeTab === 'reports'    && <ReportsTab fleets={fleets} />}
         {activeTab === 'account'    && (

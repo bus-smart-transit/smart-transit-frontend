@@ -173,9 +173,17 @@ describe('FleetsPage', () => {
     expect(['Active', 'Idle', 'Inactive'].reduce((sum, name) => sum + count(name), 0)).toBe(count('All'));
   });
 
-  it('keeps the fare rules panel', async () => {
-    renderPage();
+  // Batch 61 (advisor): the fare rules are their own tab, not under the fleet list.
+  it('shows the fare rules on their own tab, not under the fleet list', async () => {
+    const onViewChange = vi.fn();
+    const { unmount } = renderPage({ onViewChange });
+    expect(screen.queryByText('fare-rules-panel')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: 'Fare rules' }));
+    expect(onViewChange).toHaveBeenCalledWith('fareRules');
+    unmount();
+    renderPage({ view: 'fareRules' });
     expect(screen.getByText('fare-rules-panel')).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Fleet summary' })).not.toBeInTheDocument();
     await waitFor(() => expect(mocks.getFleetLocations).toHaveBeenCalled());
   });
 

@@ -103,7 +103,8 @@ describe('Network Fetch Audit - BaseService endpoint call counts', () => {
   test('occupancy endpoint is called exactly once when Ticketing tab opens', async () => {
     renderWithRouter(<ConductorDashboard />);
 
-    const occupancyTab = await screen.findByRole('button', { name: /Ticketing/i });
+    // Batch 61: the tab is "Tickets", in the sidebar and in the phone's bottom bar.
+    const occupancyTab = (await screen.findAllByRole('button', { name: /^Tickets$/ }))[0];
     fireEvent.click(occupancyTab);
 
     await waitFor(() => {

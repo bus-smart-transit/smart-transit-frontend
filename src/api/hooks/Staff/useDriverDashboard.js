@@ -869,9 +869,9 @@ export function useDriverDashboardData({ onLogout, pairing }) {
 
   const pageTitle =
     activeTab === 'dashboard'
-      ? 'Dashboard'
+      ? 'Home' // Batch 61: the tab names of the phone's bottom bar
       : activeTab === 'activeTrip'
-        ? 'Active Trip'
+        ? 'Trip'
         : activeTab === 'schedule'
           ? 'Schedule'
           : activeTab === 'earnings'

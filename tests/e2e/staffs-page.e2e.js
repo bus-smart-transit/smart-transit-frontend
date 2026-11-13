@@ -49,6 +49,8 @@ for (const width of [1280, 390]) {
     await page.screenshot({ path: path.join(SHOTS, `add-staff_${width}.png`), fullPage: false });
     await dialog.getByRole('button', { name: 'Cancel' }).click();
 
+    // Batch 61: crew time in / out is its own tab.
+    await page.getByRole('tab', { name: 'Crew time in/out' }).click();
     await expect(page.getByLabel('From', { exact: true })).toBeVisible();
     await expect(page.getByLabel('To', { exact: true })).toBeVisible();
     await expect(page.getByText('Breaks are not recorded.', { exact: false })).toBeVisible();
