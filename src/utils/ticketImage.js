@@ -35,7 +35,8 @@ export function buildTicketImageModel(ticket, { group = false, groupSize = 1 } =
     { label: 'Boarding', value: ticket?.origin || '-' },
     { label: 'Alighting', value: ticket?.destination || '-' },
     { label: 'Bus', value: busLabelText(ticket?.bus_label) },
-    { label: 'Service', value: serviceLabel(ticket?.run_info?.service, ticket?.service_type ?? ticket?.trip?.service_type) },
+    // Batch 62: never a blank line on the saved ticket.
+    { label: 'Service', value: serviceLabel(ticket?.run_info?.service, ticket?.service_type ?? ticket?.trip?.service_type) || 'Not provided' },
     ...(servedStopsText(ticket?.run_info?.service) ? [{ label: 'Stops', value: servedStopsText(ticket.run_info.service).replace(/^[^:]+: /, '') }] : []),
     { label: 'Departs', value: manilaDepartureLabel(ticket) },
   ];

@@ -199,7 +199,7 @@ export default function FinancialsPage({ service, view = 'all', embedded = false
             </Section>
             <Section title="By bus" hint="Plate number, with the bus label when one is set.">
               <BarList
-                rows={summary.by_bus.map((b) => ({ key: b.fleet_id, label: b.plate_number, value: b.gross, sublabel: b.bus_label || 'Bus label unavailable', detail: `${formatCount(b.tickets)} tickets${b.refunds > 0 ? ` · Net ${formatPeso(b.net)}` : ''}` }))}
+                rows={summary.by_bus.map((b) => ({ key: b.fleet_id, label: b.plate_number, value: b.gross, sublabel: b.bus_label || 'Not provided', detail: `${formatCount(b.tickets)} tickets${b.refunds > 0 ? ` · Net ${formatPeso(b.net)}` : ''}` }))}
               />
             </Section>
             <Section title="Discounts by type" hint="Onsite discounts from ticket snapshots; online tickets use rewards instead.">
