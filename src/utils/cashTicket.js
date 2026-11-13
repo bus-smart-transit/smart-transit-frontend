@@ -3,6 +3,7 @@
 // The server stays the authority: it computes the fare and refuses a full bus.
 // These only decide what the pickers offer and when to disable the button.
 import { isServedOnService } from './serviceType';
+import { normalizeContact } from './travellerContact';
 
 /** Stops a bus really stops at. Pass-through points are never boarding or drop-off choices. */
 export const isStoppingType = (routeStop) => String(routeStop?.stop_type ?? 'stop') !== 'pass_through';
@@ -33,8 +34,9 @@ export function boardingStopsForLeg(orderedStops) {
  * mobile as +639XXXXXXXXX (typed 09..., 639... or +639..., spaces and dashes ignored), or null (blank or not a mobile).
  */
 export function cashTicketPhone(value) {
-  const match = String(value ?? '').replace(/[\s\-()]/g, '').match(/^(?:\+?63|0)(9\d{9})$/);
-  return match ? `+63${match[1]}` : null;
+  // The one rule for a contact (utils/travellerContact.js, mirroring the server's TravellerContact); here only a mobile.
+  const contact = normalizeContact(value);
+  return contact && contact.startsWith('+63') ? contact : null;
 }
 
 /** Stops the bus reaches after the boarding stop on this leg: the valid drop-offs. */
