@@ -225,5 +225,24 @@ describe('PaymentRefundsPage: Cancelled trips', () => {
     expect(card).toHaveTextContent('Rider One');
     expect(card).toHaveTextContent('57.00');
     expect(within(card).getByTestId('ticket-refund-status')).toHaveTextContent('Refunded');
+    expect(screen.queryByTestId('ticket-refund-review')).not.toBeInTheDocument(); // a finished refund has no action
+  });
+
+  it('handles a refund waiting for review in the Review pop-up, filled in with the 90 percent amount (2026-11-14)', async () => {
+    const review = {
+      ...ticketRow, key: 'ticket-16', status: 'needs_review', needs_action: true, amount: 10,
+      detail: { ...ticketRow.detail, id: 16, status: 'needs_review', amount: null, fare_paid: 138, suggested_amount: 124, completed_at: null },
+    };
+    const service = { ...makeService([], [review]), reviewRefund: vi.fn().mockResolvedValue({}) };
+    render(<PaymentRefundsPage service={service} embedded />);
+
+    const rows = await screen.findAllByTestId('refund-row');
+    fireEvent.click(within(rows[0]).getByRole('button', { name: 'Review' }));
+    const form = await screen.findByTestId('ticket-refund-review');
+    expect(form).toHaveTextContent('PHP 138.00');
+    expect(within(form).getByLabelText(/Refund amount/)).toHaveValue(124);
+    fireEvent.click(within(form).getByRole('button', { name: 'Save and refund' }));
+    await waitFor(() => expect(service.reviewRefund).toHaveBeenCalledWith(16, 124, expect.stringContaining('10%')));
+    await waitFor(() => expect(service.getRefunds).toHaveBeenCalledTimes(2)); // the table reloads
   });
 });

@@ -3,7 +3,8 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import Card from '../../ui/Card';
 import usePaymentRefunds, { STATUS_FILTERS } from '../../../api/hooks/Staff/usePaymentRefunds';
 import Modal from '../../ui/Modal';
-import { TicketResolutionQueue } from '../TripCancellationsPanel';
+import { TicketRefundActions, TicketResolutionQueue } from '../TripCancellationsPanel';
+import OperatorService from '../../../api/StaffService/OperatorService';
 import { formatCount, formatPaidAt, formatPeso } from '../../../utils/financials';
 
 import { SkeletonTable } from '../../ui/Skeleton';
@@ -184,10 +185,15 @@ const ROW_ACTION = { needs_refund: 'Record refund', check_paymongo: 'Check' };
  * when someone has to act. `embedded` (inside the Finance page) drops the heading, which the Finance tab provides.
  */
 export default function PaymentRefundsPage({ service, embedded = false }) {
-  const r = usePaymentRefunds(service ? { service } : undefined);
+  // 2026-11-14: the Finance page passes no service, so the Operator's is the default (as usePaymentRefunds does).
+  const api = service ?? OperatorService;
+  const r = usePaymentRefunds({ service: api });
   const counts = r.meta?.counts;
   const [openKey, setOpenKey] = useState(null);
+  const [queueKey, setQueueKey] = useState(0);
   const open = r.rows.find((row) => row.key === openKey) ?? null;
+  // After an action in the modal: close it, reload the table and the list of tickets needing attention.
+  const ticketDone = () => { setOpenKey(null); r.retry(); setQueueKey((n) => n + 1); };
 
   const record = async (paymentId, body) => { if (await r.recordRefund(paymentId, body)) setOpenKey(null); };
   const reconcile = async (paymentId, body) => { if (await r.reconcileNotCharged(paymentId, body)) setOpenKey(null); };
@@ -195,7 +201,7 @@ export default function PaymentRefundsPage({ service, embedded = false }) {
   return (
     <div className="space-y-4">
       {/* 2026-11-14 (user): moved here from Schedule > Cancelled tickets; shown only when a ticket needs a person. */}
-      {typeof service?.getTicketResolutions === 'function' && <TicketResolutionQueue service={service} hideWhenEmpty onChanged={r.retry} />}
+      {typeof api.getTicketResolutions === 'function' && <TicketResolutionQueue key={queueKey} service={api} hideWhenEmpty onChanged={r.retry} />}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           {!embedded && <h2 className="text-xl font-bold text-slate-900">Refunds</h2>}
@@ -274,7 +280,8 @@ export default function PaymentRefundsPage({ service, embedded = false }) {
         {open?.kind === 'ticket' && (
           <div className="space-y-3">
             <TicketRefundCard row={open.detail} />
-            {open.needs_action && <p className="text-xs text-slate-600">Handle it in "Cancelled trips: tickets needing attention" at the top of this tab.</p>}
+            {/* 2026-11-14 (user): the action is right here (Set amount, Retry refund, Record cash refund). */}
+            <TicketRefundActions key={open.key} service={api} detail={open.detail} onDone={ticketDone} />
           </div>
         )}
       </Modal>

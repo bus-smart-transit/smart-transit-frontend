@@ -2,6 +2,76 @@ import { useCallback, useEffect, useState } from 'react';
 import Modal from '../ui/Modal';
 import { queueActions, queueStateText } from '../../utils/ticketResolutionQueue';
 
+const REVIEW_NOTE = 'Travelled part unknown: 10% of the fare kept, the rest refunded';
+const ACTION_LABELS = { rebook: 'Rebook for passenger', refund: 'Refund for passenger', review: 'Set amount', cash: 'Record cash refund', retry: 'Retry refund' };
+
+/**
+ * 2026-11-14 (user): the actions for ONE cancelled-trip refund, inside the Finance > Refunds "Review" modal. `detail` is
+ * the refund row from the server (its resolution fields: id, ticket_uuid, status, method, fare_paid, suggested_amount).
+ * Which action applies comes from utils/ticketResolutionQueue (the same rule as the list); the server checks it again.
+ */
+export function TicketRefundActions({ service, detail, onDone }) {
+  const actions = queueActions({ resolution: detail });
+  const suggested = detail?.suggested_amount;
+  const [amount, setAmount] = useState(suggested != null ? String(suggested) : '');
+  const [note, setNote] = useState(suggested != null ? REVIEW_NOTE : '');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  if (actions.length === 0) return null;
+
+  const run = async (call) => {
+    setBusy(true);
+    setError('');
+    try {
+      await call();
+      onDone?.();
+    } catch (err) {
+      setError(err?.message || 'That did not work. Nothing was changed.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (actions.includes('review')) {
+    const fare = detail?.fare_paid;
+    return (
+      <div className="space-y-3 border-t border-slate-100 pt-3 text-sm text-slate-700" data-testid="ticket-refund-review">
+        <p>The part this passenger travelled is not known. Enter the refund{fare != null ? `, at most the fare paid (PHP ${Number(fare).toFixed(2)})` : ''}, and say why. It is recorded with your name. The booking fee is refunded on top.</p>
+        <label className="block font-medium">Refund amount (PHP)
+          <input type="number" min="0" step="1" value={amount} onChange={(e) => setAmount(e.target.value)} className={`mt-1 w-full ${TONES.light.input}`} />
+        </label>
+        <label className="block font-medium">Reason
+          <input value={note} maxLength={255} onChange={(e) => setNote(e.target.value)} className={`mt-1 w-full ${TONES.light.input}`} />
+        </label>
+        {error && <p role="alert" className="text-xs text-red-600">{error}</p>}
+        <div className="flex justify-end">
+          <button type="button" disabled={amount === '' || !note.trim() || busy} onClick={() => run(() => service.reviewRefund(detail.id, Number(amount), note.trim()))} className="rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-60">
+            {busy ? 'Saving...' : 'Save and refund'}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const call = (action) => (action === 'cash'
+    ? () => service.recordCashRefund(detail.id, 'Handed back at the terminal')
+    : () => service.chooseStaffTicketResolution(detail.ticket_uuid, { choice: action === 'rebook' ? 'rebook' : 'refund', note: 'Staff-assisted' }));
+
+  return (
+    <div className="space-y-2 border-t border-slate-100 pt-3" data-testid="ticket-refund-actions">
+      {error && <p role="alert" className="text-xs text-red-600">{error}</p>}
+      <div className="flex flex-wrap justify-end gap-2">
+        {actions.map((action) => (
+          <button key={action} type="button" disabled={busy} onClick={() => run(call(action))} className="rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-60">
+            {busy ? 'Working...' : ACTION_LABELS[action]}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 const TONES = {
   light: { card: 'rounded-2xl border border-slate-200 bg-white p-4', title: 'text-slate-900', muted: 'text-slate-500', head: 'text-slate-500', row: 'border-t border-slate-100 text-slate-700', input: 'rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-900', btn: 'rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-200' },
   dark: { card: 'rounded-2xl border border-slate-700 bg-[#101a30] p-4', title: 'text-white', muted: 'text-slate-400', head: 'text-slate-400', row: 'border-t border-slate-700/70 text-slate-200', input: 'rounded-lg border border-slate-600 bg-[#0B1324] px-2 py-1.5 text-sm text-white', btn: 'rounded-lg bg-slate-700 px-2.5 py-1 text-xs font-semibold text-white hover:bg-slate-600' },
@@ -108,7 +178,9 @@ export function TicketResolutionQueue({ service, tone = 'light', hideWhenEmpty =
     if (action === 'cash') return run(row, 'Cash refund entry', () => service.recordCashRefund(row.resolution.id, 'Handed back at the terminal'));
     if (action === 'review') {
       setReviewing(row);
-      setReview({ amount: '', note: '' });
+      // 2026-11-14 (user): opens with the 90 percent rule's amount from the server; the Operator may change it.
+      const suggested = row.resolution?.suggested_amount;
+      setReview({ amount: suggested != null ? String(suggested) : '', note: suggested != null ? REVIEW_NOTE : '' });
     }
     return undefined;
   };
@@ -118,7 +190,7 @@ export function TicketResolutionQueue({ service, tone = 'light', hideWhenEmpty =
     setReviewing(null);
   });
 
-  const LABELS = { rebook: 'Rebook for passenger', refund: 'Refund for passenger', review: 'Set amount', cash: 'Record cash refund', retry: 'Retry refund' };
+  const LABELS = ACTION_LABELS;
 
   if (hideWhenEmpty && (!loaded || (rows.length === 0 && !message && !error))) return null;
 
