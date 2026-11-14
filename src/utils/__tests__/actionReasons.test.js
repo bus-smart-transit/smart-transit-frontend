@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { driverTripActionReason, shiftActionReason, ticketingReason } from '../actionReasons';
+import { BOARDING_NOT_STARTED, driverTripActionReason, shiftActionReason, ticketingReason } from '../actionReasons';
 
 describe('disabled action reasons (Batch 29)', () => {
   it('says nothing when the action is allowed', () => {
@@ -42,5 +42,16 @@ describe('disabled action reasons (Batch 29)', () => {
     expect(driverTripActionReason({ ...base, status: 'boarding', departLabel: 'Depart opens at 8:00 AM' })).toBe('Boarding is open. Depart opens at 8:00 AM.');
     expect(driverTripActionReason({ ...base, status: 'departed', finalStopDone: false })).toMatch(/Acknowledge the final stop/);
     expect(driverTripActionReason({ ...base, status: 'departed', finalStopDone: true })).toMatch(/Use End Trip/);
+  });
+});
+
+describe('Chauffeur ticketing waits for Start boarding (Batch 74)', () => {
+  it('blocks scanning and cash sales until the trip is boarding or on the road', () => {
+    const base = { isPaired: true, hasOpenShift: true, hasActiveTrip: true };
+    expect(ticketingReason({ ...base, tripStatus: 'scheduled' })).toBe(BOARDING_NOT_STARTED);
+    expect(ticketingReason({ ...base, tripStatus: 'delayed' })).toBe(BOARDING_NOT_STARTED);
+    for (const status of ['boarding', 'departed', 'in-progress']) {
+      expect(ticketingReason({ ...base, tripStatus: status })).toBe('');
+    }
   });
 });

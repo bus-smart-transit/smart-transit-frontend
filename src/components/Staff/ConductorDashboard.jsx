@@ -37,7 +37,7 @@ import ChauffeurScannerCard from './ChauffeurScannerCard';
 import { DEFAULT_FILE_TYPE } from '../../utils/tableExport';
 import FileTypeSelect from '../ui/FileTypeSelect';
 import { todaySummary } from '../../utils/assignmentCards';
-import { ticketingReason } from '../../utils/actionReasons';
+import { BOARDING_NOT_STARTED, BOARDING_OPEN_STATUSES, ticketingReason } from '../../utils/actionReasons';
 import { boardingStopsForLeg, checkInLabel, destinationsAhead, destinationsNotPassed, isOnsiteFormComplete, orderedStopsForLeg, placesLeft, stopLabel } from '../../utils/cashTicket';
 import { isExpress } from '../../utils/serviceType';
 import ServiceTypeChip from '../ui/ServiceTypeChip';
@@ -350,7 +350,9 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     else if (key === 'endShift') { void refreshEndBlockedReason(); setConfirmEnd(true); }
     else if (key === 'tickets') setActiveTab('occupancy');
   };
-  const ticketingBlocked = ticketingReason({ isPaired, hasOpenShift, hasActiveTrip, isFull: cashCapacity.isFull });
+  const ticketingBlocked = ticketingReason({ isPaired, hasOpenShift, hasActiveTrip, isFull: cashCapacity.isFull, tripStatus: trip?.status });
+  // Batch 74: scanning, Passenger In and cash sales wait until the Driver presses Start boarding.
+  const boardingOpen = BOARDING_OPEN_STATUSES.includes(String(trip?.status || '').toLowerCase());
 
   return (
     <>
@@ -596,8 +598,8 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                   scannerPhase={scannerPhase}
                   scannerStatus={scannerStatus}
                   scannerError={scannerError}
-                  canScan={hasOpenShift && isPaired}
-                  blockedReason={!isPaired ? 'Pair with your Driver first to scan tickets.' : !hasOpenShift ? 'Start your shift to scan tickets.' : ''}
+                  canScan={hasOpenShift && isPaired && boardingOpen}
+                  blockedReason={!isPaired ? 'Pair with your Driver first to scan tickets.' : !hasOpenShift ? 'Start your shift to scan tickets.' : !boardingOpen ? BOARDING_NOT_STARTED : ''}
                   onStart={() => void startScanner()}
                   onStop={stopScanner}
                   ticketCode={scanUuid}
@@ -621,7 +623,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                         <button
                           type="button"
                           onClick={handlePassengerIn}
-                          disabled={checkInBusy || !isPaired || !hasOpenShift}
+                          disabled={checkInBusy || !isPaired || !hasOpenShift || !boardingOpen}
                           className="w-full rounded-lg bg-teal-600 px-3 py-2.5 text-sm font-bold text-white transition hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           {checkInBusy ? 'Checking in...' : 'Passenger In'}
@@ -808,7 +810,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                         type="button"
                         className="rounded-lg bg-cyan-700 px-3 py-2 text-sm font-semibold text-white transition hover:bg-cyan-800 disabled:cursor-not-allowed disabled:opacity-60"
                         onClick={requestOnsiteCheckout}
-                        disabled={checkoutInFlight || !hasActiveTrip || !isPaired || !hasOpenShift || cashCapacity.isFull || onsiteQuote.status !== 'ready' || Boolean(onsiteDiscountTypeKey && !onsiteDiscountIdChecked)}
+                        disabled={checkoutInFlight || !hasActiveTrip || !isPaired || !hasOpenShift || !boardingOpen || cashCapacity.isFull || onsiteQuote.status !== 'ready' || Boolean(onsiteDiscountTypeKey && !onsiteDiscountIdChecked)}
                       >
                         {checkoutInFlight ? 'Processing...' : 'Make sale'}
                       </button>

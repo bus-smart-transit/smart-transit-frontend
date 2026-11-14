@@ -20,8 +20,9 @@ export default function TicketCard({
   routeLabel,
   qrContent,
   statusLabel,
+  // Batch 74: the trip's departure (shown as "Departs"). The old end-of-day "Expires" row is gone: a ticket ends when
+  // the bus passes its destination or the trip ends, which the Status row shows.
   validLabel,
-  expiresLabel,
   discountLabel = '',
   discountAmount = null,
   originalFare = null,
@@ -107,8 +108,7 @@ export default function TicketCard({
         </div>
 
         <dl className="grid gap-2">
-          <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-1.5"><dt className="text-xs text-slate-500">Valid</dt><dd className="text-right text-sm font-bold text-navy-950">{validLabel || '-'}</dd></div>
-          <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-1.5"><dt className="text-xs text-slate-500">Expires</dt><dd className="text-right text-sm font-bold text-navy-950">{expiresLabel || '-'}</dd></div>
+          <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-1.5"><dt className="text-xs text-slate-500">Departs</dt><dd className="text-right text-sm font-bold text-navy-950">{validLabel || 'Not provided'}</dd></div>
           <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-1.5"><dt className="text-xs text-slate-500">Status</dt><dd className="text-right text-sm font-bold text-navy-950">{statusLabel || '-'}</dd></div>
           {/* Batch 51 item 8: typed by the Chauffeur when the QR cannot be shown (separate from the tracking code). */}
           {/* Batch 51 item 7: booked for someone else. */}

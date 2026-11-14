@@ -20,10 +20,15 @@ export function shiftActionReason({ label, disabled, inFlight = false, isPaired,
 }
 
 /** The Chauffeur's Make sale / Scan Ticket pair. */
-export function ticketingReason({ isPaired, hasOpenShift, hasActiveTrip, isFull = false }) {
+/** Batch 74: the trip statuses in which the Chauffeur may scan, sell and check in (mirrors App\Support\BoardingOpen). */
+export const BOARDING_OPEN_STATUSES = ['boarding', 'departed', 'in-progress'];
+export const BOARDING_NOT_STARTED = 'Boarding has not started yet. Ask the Driver to press Start boarding.';
+
+export function ticketingReason({ isPaired, hasOpenShift, hasActiveTrip, isFull = false, tripStatus }) {
   if (!isPaired) return PAIRING;
   if (!hasOpenShift) return 'Start your shift to issue or scan tickets.';
   if (!hasActiveTrip) return 'There is no active trip right now, so there is nothing to issue tickets for.';
+  if (tripStatus !== undefined && !BOARDING_OPEN_STATUSES.includes(String(tripStatus || '').toLowerCase())) return BOARDING_NOT_STARTED;
   if (isFull) return 'The bus has no places left for cash tickets.';
   return '';
 }
