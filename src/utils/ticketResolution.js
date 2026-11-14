@@ -8,10 +8,27 @@ export const TICKET_STATUS_LABELS = {
   refund_pending: 'Refund pending',
   refund_review: 'Refund under review',
   refunded: 'Refunded',
+  partially_refunded: 'Partly refunded',
   rebooked: 'Rebooked',
 };
 
 export const ticketStatusLabel = (status) => TICKET_STATUS_LABELS[String(status ?? '').toLowerCase()] ?? status;
+
+/**
+ * 2026-11-14 (user): the status a passenger's purchase shows in Transaction History. A refund state from the server
+ * (refund_pending, refunded, partially_refunded) wins over the payment's own "paid"; otherwise the payment status.
+ */
+export function paymentDisplayStatus(payment) {
+  const refund = String(payment?.refund_status ?? '').toLowerCase();
+  if (refund && refund !== 'paid') return refund;
+  return payment?.status || '-';
+}
+
+/** "PHP 124.00 returned" once money actually came back, else ''. */
+export function refundedAmountText(payment) {
+  const amount = Number(payment?.refunded_amount ?? 0);
+  return amount > 0 ? `PHP ${amount.toFixed(2)} returned` : '';
+}
 
 /** Where the money goes, for the refund choice. */
 export function refundMethodText(method) {

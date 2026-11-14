@@ -22,7 +22,7 @@ import { busLabelText } from '../../../utils/busLabel';
 import { buildBookingQuery } from '../../../utils/bookingQuery';
 import RunInfoChips from '../../ui/RunInfoChips';
 import TripCancelledChoice from '../Ticket/TripCancelledChoice';
-import { CANCELLED_TRIP_STATUSES } from '../../../utils/ticketResolution';
+import { CANCELLED_TRIP_STATUSES, paymentDisplayStatus, refundedAmountText } from '../../../utils/ticketResolution';
 import { formatPeso } from '../../../utils/financials';
 import { REWARDS } from '../../../config/rewardsConfig';
 import AccountDeletionNotice from '../../Account/AccountDeletionNotice';
@@ -373,7 +373,7 @@ export default function Dashboard() {
                           <td className="py-2.5 text-slate-500">{formatDateTime(payment.paid_at)}</td>
                           <td className="py-2.5 text-slate-500">PHP {Number(payment.amount ?? 0).toFixed(2)}</td>
                           <td className="py-2.5">
-                            <StatusBadge status={payment.status || '-'} />
+                            <StatusBadge status={paymentDisplayStatus(payment)} />
                           </td>
                         </tr>
                       ))}
@@ -609,7 +609,8 @@ export default function Dashboard() {
                         <td className="px-5 py-3.5 font-semibold text-navy-950">PHP {Number(payment.amount ?? 0).toFixed(2)}</td>
                         <td className="px-5 py-3.5 text-slate-500">{Number(payment.reward_points_redeemed ?? 0).toFixed(0)} pts</td>
                         <td className="px-5 py-3.5">
-                          <StatusBadge status={payment.status || '-'} />
+                          <StatusBadge status={paymentDisplayStatus(payment)} />
+                          {refundedAmountText(payment) && <p className="mt-1 text-xs text-slate-500">{refundedAmountText(payment)}</p>}
                         </td>
                       </tr>
                     ))
