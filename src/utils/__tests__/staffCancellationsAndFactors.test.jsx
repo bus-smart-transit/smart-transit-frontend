@@ -78,4 +78,22 @@ describe('TicketResolutionQueue', () => {
     render(<TicketResolutionQueue service={{ getTicketResolutions: vi.fn().mockResolvedValue({ data: [] }) }} />)
     expect(await screen.findByText(/No cancelled-trip tickets need attention/)).toBeInTheDocument()
   })
+
+  test('on Finance > Refunds it shows only when a ticket needs a person, with a count, and reloads the table after an action (2026-11-14)', async () => {
+    const empty = { getTicketResolutions: vi.fn().mockResolvedValue({ data: [] }) }
+    const { unmount } = render(<TicketResolutionQueue service={empty} hideWhenEmpty />)
+    await waitFor(() => expect(empty.getTicketResolutions).toHaveBeenCalled())
+    expect(screen.queryByTestId('ticket-resolution-queue')).not.toBeInTheDocument()
+    unmount()
+
+    const onChanged = vi.fn()
+    const service = {
+      getTicketResolutions: vi.fn().mockResolvedValue({ data: [row()] }),
+      chooseStaffTicketResolution: vi.fn().mockResolvedValue({}),
+    }
+    render(<TicketResolutionQueue service={service} hideWhenEmpty onChanged={onChanged} />)
+    expect(await screen.findByText(/tickets needing attention \(1\)/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Refund for passenger' }))
+    await waitFor(() => expect(onChanged).toHaveBeenCalled())
+  })
 })

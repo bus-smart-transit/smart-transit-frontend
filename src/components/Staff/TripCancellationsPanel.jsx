@@ -56,8 +56,12 @@ export function CancelTripModal({ trip, service, onClose, onDone }) {
  * server could not price (set it, with a reason), a cash refund to hand over and record, or a refund that failed.
  * A digital ticket is always refunded to its original payment method; there is no cash option for it.
  */
-export function TicketResolutionQueue({ service, tone = 'light' }) {
+// 2026-11-14 (user): lives on Finance > Refunds. `hideWhenEmpty` shows nothing once the list is loaded and empty, so the
+// section appears only when a ticket needs a person (cash handed back, a refund PayMongo refused). `onChanged` lets the
+// refunds table reload after an action here.
+export function TicketResolutionQueue({ service, tone = 'light', hideWhenEmpty = false, onChanged }) {
   const t = TONES[tone] || TONES.light;
+  const [loaded, setLoaded] = useState(false);
   const [rows, setRows] = useState([]);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
@@ -72,6 +76,8 @@ export function TicketResolutionQueue({ service, tone = 'light' }) {
       setError('');
     } catch (err) {
       setError(err?.message || 'The list could not be loaded.');
+    } finally {
+      setLoaded(true);
     }
   }, [service]);
 
@@ -88,6 +94,7 @@ export function TicketResolutionQueue({ service, tone = 'light' }) {
       await call();
       setMessage(`${label} done for ticket ${String(row.ticket_uuid).slice(0, 8).toUpperCase()}.`);
       await load();
+      onChanged?.();
     } catch (err) {
       setError(err?.message || `${label} failed. Nothing was changed.`);
     } finally {
@@ -113,10 +120,12 @@ export function TicketResolutionQueue({ service, tone = 'light' }) {
 
   const LABELS = { rebook: 'Rebook for passenger', refund: 'Refund for passenger', review: 'Set amount', cash: 'Record cash refund', retry: 'Retry refund' };
 
+  if (hideWhenEmpty && (!loaded || (rows.length === 0 && !message && !error))) return null;
+
   return (
     <section className={t.card} data-testid="ticket-resolution-queue">
-      <h3 className={`text-sm font-semibold uppercase tracking-[0.14em] ${t.title}`}>Cancelled trips: tickets needing attention</h3>
-      <p className={`mt-1 text-xs ${t.muted}`}>Passengers choose in their app. Use these actions when a passenger asks you at the terminal. A digital ticket is refunded to the original payment method only, never in cash.</p>
+      <h3 className={`text-sm font-semibold uppercase tracking-[0.14em] ${t.title}`}>Cancelled trips: tickets needing attention{rows.length > 0 ? ` (${rows.length})` : ''}</h3>
+      <p className={`mt-1 text-xs ${t.muted}`}>Online tickets are refunded automatically. These need a person: cash handed back at the terminal, or a refund the payment provider did not finish. A digital ticket is refunded to the original payment method only, never in cash.</p>
       {message && <p role="status" className="mt-2 text-sm text-emerald-600">{message}</p>}
       {error && <p role="alert" className="mt-2 text-sm text-red-500">{error}</p>}
 

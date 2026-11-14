@@ -18,7 +18,7 @@ import { useOperatorDashboardData, useNotificationBell, useTripRequests, useTrip
 import useOperatorAlerts from '../../api/hooks/Staff/useOperatorAlerts'
 import OperatorAlerts from './Operator/OperatorAlerts'
 import RunInfoChips from '../ui/RunInfoChips'
-import { CancelTripModal, TicketResolutionQueue } from './TripCancellationsPanel'
+import { CancelTripModal } from './TripCancellationsPanel'
 import LegTimeSuggestion from './LegTimeSuggestion'
 import { addLeg, removeLastLeg } from '../../utils/legPlanning'
 import ScheduleRangePreview from './Schedule/ScheduleRangePreview'
@@ -791,8 +791,7 @@ function ScheduleTab({ trips, drivers, conductors, onRefresh, view, onViewChange
             {active === 'blocks' && <ShiftBlocksView reloadToken={reloadToken} />}
             {active === 'trips' && <TripsTab drivers={drivers} conductors={conductors} onRefresh={refreshAll} tripsState={tripsState} focusTripId={focusTripId} onDismissFocus={() => setFocusTripId(null)} />}
             {active === 'requests' && <TripRequestsPanel onDecided={refreshAll} showEmpty />}
-            {/* Batch 61 (advisor): was under the trip tables, easy to miss. */}
-            {active === 'cancelled' && <TicketResolutionQueue service={OperatorService} />}
+            {/* 2026-11-14 (user): the cancelled-trip tickets needing a person moved to Finance > Refunds. */}
           </>
         )}
       </SchedulePage>

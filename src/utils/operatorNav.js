@@ -45,7 +45,7 @@ export const OPERATOR_VIEWS = {
     { key: 'blocks', label: 'Blocks', roles: OPERATOR_ONLY },
     { key: 'trips', label: 'Trips', roles: OPERATOR_ONLY },
     { key: 'requests', label: 'Approvals', roles: OPERATOR_ONLY },
-    { key: 'cancelled', label: 'Cancelled tickets', roles: OPERATOR_ONLY },
+    // 2026-11-14 (user): "Cancelled tickets" moved to Finance > Refunds (LEGACY_VIEW_REDIRECTS keeps old links working).
   ],
   finance: [
     { key: 'overview', label: 'Overview', roles: OPERATOR_ONLY },
@@ -80,6 +80,11 @@ export const LEGACY_TAB_REDIRECTS = {
   remittances: { tab: 'finance', view: 'remittances' },
 };
 
+/** Old views that moved to another item: `?tab=schedule&view=cancelled` opens Finance > Refunds (2026-11-14). */
+export const LEGACY_VIEW_REDIRECTS = {
+  'schedule/cancelled': { tab: 'finance', view: 'refunds' },
+};
+
 /**
  * Where the page opens for an address (`location.search`): { tab, view, redirected }. An unknown tab, a tab the role
  * cannot see, or a view the role cannot see falls back to the Dashboard / the item's first view.
@@ -94,7 +99,7 @@ export function resolveOperatorLocation(search, role = OPERATOR_ROLE) {
   const asked = params.get('tab');
   const askedView = params.get('view');
 
-  const legacy = LEGACY_TAB_REDIRECTS[asked];
+  const legacy = LEGACY_VIEW_REDIRECTS[`${asked}/${askedView}`] ?? LEGACY_TAB_REDIRECTS[asked];
   const tab = legacy ? legacy.tab : asked;
   if (!navForRole(role).some((item) => item.key === tab)) return { tab: 'dashboard', view: null, redirected: false };
 
