@@ -10,6 +10,7 @@ import { isSameBusinessDay, getBusinessToday, getBusinessNowMs, toBusinessSchedu
 import { boardingPointView, buildOnsiteItem, capacityFromServer, isMidTripBoardingAvailable, isOnsiteFormComplete, isStandingOpen } from '../../../utils/cashTicket';
 import { readDeepLink } from '../../../utils/notificationTarget';
 import useAssignmentCards from './useAssignmentCards';
+import { BOARDING_OPEN_STATUSES } from '../../../utils/actionReasons';
 
 // Architecture audit follow-up (CONF-03): ConductorDashboard.jsx previously
 // called ConductorService directly from ~22 sites spread across the
@@ -565,6 +566,20 @@ export function useConductorDashboardData({ onLogout, pairing }) {
 
     return () => clearInterval(intervalId);
   }, [activeTab, hasActiveTrip, isPaired, loadEarnings]);
+
+  // Batch 74: scanning and selling wait for Start boarding, which the Driver presses on another phone. Until the trip is
+  // boarding, check its status every 10 seconds so the buttons open without a page reload.
+  const waitingForBoarding = hasActiveTrip && isPaired && !BOARDING_OPEN_STATUSES.includes(String(trip?.status || '').toLowerCase());
+  useEffect(() => {
+    if (!waitingForBoarding) return undefined;
+    const intervalId = setInterval(() => {
+      if (document.hidden) return;
+      ConductorService.getConductorTrip().then((res) => {
+        if (res?.data) setTrip(res.data);
+      }).catch(() => {});
+    }, 10000);
+    return () => clearInterval(intervalId);
+  }, [waitingForBoarding]);
 
   useEffect(() => {
     if (showScannerModal) return undefined;
