@@ -2,10 +2,11 @@ import { useState } from 'react';
 import { OpCard } from './OperatorUI';
 import useRouteFareTable from '../../../api/hooks/Staff/useRouteFareTable';
 import { assignmentsOnRoute } from '../../../utils/operatorRouteView';
-import { busLabelText } from '../../../utils/busLabel';
 
 const SELECT = 'mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800';
 const peso = (amount) => `PHP ${Number(amount).toFixed(2)}`;
+// The Operator's fleet list has no passenger label, so a bus is named like on the other Route tabs: body number and plate.
+const busName = (fleet) => [fleet?.body_no, fleet?.plate_number].filter(Boolean).join(' · ') || 'Not provided';
 
 /**
  * Batch 75 (panel, 2026-11-15): the fares this route's stops produce, listed the way passengers see them
@@ -33,7 +34,7 @@ export default function RouteFareTable({ service, routeId, fleets }) {
         <label className="text-xs font-semibold text-slate-600">Bus
           <select className={SELECT} value={fleetRouteId} onChange={change('fleetRouteId')} data-testid="fare-table-bus">
             {buses.map((item) => (
-              <option key={item.key} value={item.fleetRouteId}>{busLabelText(item.fleet?.bus_label) || item.fleet?.plate_number || `Bus ${item.fleet?.fleet_id}`}</option>
+              <option key={item.key} value={item.fleetRouteId}>{busName(item.fleet)}</option>
             ))}
           </select>
         </label>

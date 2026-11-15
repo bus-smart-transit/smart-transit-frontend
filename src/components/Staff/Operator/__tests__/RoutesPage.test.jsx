@@ -325,6 +325,8 @@ describe('Route detail', () => {
     expect(within(rows).getByText('PHP 24.00')).toBeInTheDocument();
     expect(within(rows).getByText('Fare unavailable')).toBeInTheDocument();
     expect(mocks.getRouteFareTable).toHaveBeenCalledWith(4, expect.objectContaining({ fleet_route_id: '1', direction: 'outbound', service_type: 'regular' }));
+    // Production 2026-11-15: every bus read "Not provided"; the list names a bus by body number and plate.
+    expect(within(screen.getByTestId('fare-table-bus')).getByRole('option', { name: 'PLT-1' })).toBeInTheDocument();
   });
 
   it('does not expose custom drop-off controls and keeps travel time scoped to this route', async () => {
