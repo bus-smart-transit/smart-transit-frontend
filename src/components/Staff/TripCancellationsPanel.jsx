@@ -37,7 +37,7 @@ export function TicketRefundActions({ service, detail, onDone }) {
     const fare = detail?.fare_paid;
     return (
       <div className="space-y-3 border-t border-slate-100 pt-3 text-sm text-slate-700" data-testid="ticket-refund-review">
-        <p>The part this passenger travelled is not known. Enter the refund{fare != null ? `, at most the fare paid (PHP ${Number(fare).toFixed(2)})` : ''}, and say why. It is recorded with your name. The booking fee is refunded on top.</p>
+        <p>The part this passenger travelled is not known. Enter the refund{fare != null ? `, at most the fare paid (PHP ${Number(fare).toFixed(2)})` : ''}, and say why. It is recorded with your name. The transaction fee is refunded on top.</p>
         <label className="block font-medium">Refund amount (PHP)
           <input type="number" min="0" step="1" value={amount} onChange={(e) => setAmount(e.target.value)} className={`mt-1 w-full ${TONES.light.input}`} />
         </label>
@@ -217,7 +217,7 @@ export function TicketResolutionQueue({ service, tone = 'light', hideWhenEmpty =
                 <td className="px-2 py-1.5">
                   PHP {Number(row.fare_paid).toFixed(2)}
                   {Number(row.resolution?.fee_amount) > 0 && (
-                    <span className={`block text-xs ${t.muted}`}>+ booking fee PHP {Number(row.resolution.fee_amount).toFixed(2)} refunded</span>
+                    <span className={`block text-xs ${t.muted}`}>+ transaction fee PHP {Number(row.resolution.fee_amount).toFixed(2)} refunded</span>
                   )}
                 </td>
                 <td className="px-2 py-1.5">{row.method === 'cash' ? 'Cash' : 'GCash / Maya / card'}</td>

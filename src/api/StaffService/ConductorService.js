@@ -82,6 +82,11 @@ class ConductorService extends StaffBaseService {
     return await this.request('/conductor/tickets/scan-group', 'POST', { transaction_reference: transactionRef });
   }
 
+  // Batch 75: approve or reject a discount the passenger claimed online, after checking their valid ID.
+  async reviewDiscountClaim(ticketId, decision) {
+    return await this.request(`/conductor/tickets/${ticketId}/discount-claim`, 'POST', { decision });
+  }
+
   async recordAlighting(ticketId) {
     return await this.request(`/conductor/tickets/${ticketId}/alight`, 'POST');
   }

@@ -70,7 +70,7 @@ const DOCUMENTS = {
         items: [
           'A ticket is for the trip, seat type and stops shown on it.',
           'During the test period, online payments use PayMongo\'s test mode: no real money is charged.',
-          'The bus company decides the fares. The booking fee is shown before you pay.',
+          'The bus company decides the fares. The transaction fee is shown before you pay.',
         ],
       },
       {

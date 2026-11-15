@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   removeOperatorStopFromRoute: vi.fn(),
   setOperatorRouteStopExpress: vi.fn(),
   searchPlaces: vi.fn(),
+  getRouteFareTable: vi.fn(),
 }));
 
 vi.mock('../../../../api/StaffService/OperatorService', () => ({ default: mocks }));
@@ -309,12 +310,21 @@ describe('Route detail', () => {
     expect(onOpenFleets).toHaveBeenCalled();
   });
 
-  it('fare tab shows the fare rules, with a note on how rules relate to routes', async () => {
+  // Batch 75 (panel): the Fare tab lists the fares the stops produce, the way passengers see them (SAMPLE values).
+  it('fare tab lists the fares from a stop to each later stop for a bus on the route', async () => {
+    mocks.getRouteFareTable.mockResolvedValue({ data: {
+      bus_label: 'Co / 1', vehicle_class: 'Non-aircon', service_type: 'regular',
+      origins: [{ stop_id: 1, name: 'Stop 1' }], origin: { stop_id: 1, name: 'Stop 1' },
+      rows: [{ stop_id: 2, name: 'Stop 2', fare: 24 }, { stop_id: 3, name: 'Stop 3', fare: null }],
+    } });
     renderPage();
     await openTagum();
     goToTab('Fare');
-    expect(screen.getByText(/fare-panel tone=light/)).toBeInTheDocument();
-    expect(screen.getByText(/A rule either covers every route or one route/)).toBeInTheDocument();
+    const rows = await screen.findByTestId('fare-table-rows');
+    expect(within(rows).getByText('Stop 1 → Stop 2')).toBeInTheDocument();
+    expect(within(rows).getByText('PHP 24.00')).toBeInTheDocument();
+    expect(within(rows).getByText('Fare unavailable')).toBeInTheDocument();
+    expect(mocks.getRouteFareTable).toHaveBeenCalledWith(4, expect.objectContaining({ fleet_route_id: '1', direction: 'outbound', service_type: 'regular' }));
   });
 
   it('does not expose custom drop-off controls and keeps travel time scoped to this route', async () => {

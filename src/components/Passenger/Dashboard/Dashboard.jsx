@@ -896,6 +896,7 @@ export default function Dashboard() {
                 originalFare={selectedTicket.original_amount ?? selectedTicketQr?.original_amount}
                 farePaid={selectedTicket.amount ?? selectedTicketQr?.amount}
                 discountVerified={Boolean(selectedTicket.discount_id_checked_at ?? selectedTicketQr?.discount_id_checked_at)}
+                discountClaimMessage={selectedTicket.discount_claim?.message || ''}
                 trackingToken={renewedTokens[selectedTicket.ticket_uuid] || selectedTicket.tracking_token || ''}
                 trackingCode={selectedTicket.ticket_uuid in renewedCodes ? renewedCodes[selectedTicket.ticket_uuid] : (selectedTicket.tracking_code || '')}
                 ticketId={ticketIdOf(selectedTicket.ticket_uuid)}

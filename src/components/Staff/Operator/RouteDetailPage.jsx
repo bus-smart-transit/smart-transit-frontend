@@ -7,7 +7,7 @@ import ViewTabs from '../../ui/ViewTabs';
 import Modal from '../../ui/Modal';
 import RouteMap from '../../Map/RouteMap';
 import RedrawProgress from './RedrawProgress';
-import FareRulesPanel from '../FareRulesPanel';
+import RouteFareTable from './RouteFareTable';
 import OperatorService from '../../../api/StaffService/OperatorService';
 import { routeActivity, upcomingTripsFor, assignmentsOnRoute, sortedRouteStops, formatDuration } from '../../../utils/operatorRouteView';
 import { departureLabel } from '../../../utils/operatorDashboardView';
@@ -242,7 +242,7 @@ function TravelTimeTab({ route }) {
  * no endpoint for it) and no route status field beyond "has an active fleet".
  */
 export default function RouteDetailPage({
-  row, routes, fleets, stops, trips, routesTab, onBack, onRefresh, onOpenSchedule, onOpenFleets,
+  row, fleets, stops, trips, routesTab, onBack, onRefresh, onOpenSchedule, onOpenFleets,
 }) {
   const [tab, setTab] = useState('overview');
   const [assignOpen, setAssignOpen] = useState(false);
@@ -332,12 +332,7 @@ export default function RouteDetailPage({
         {tab === 'schedule' && <ScheduleTab row={row} fleets={fleets} trips={trips} onOpenSchedule={onOpenSchedule} />}
         {tab === 'fleets' && <FleetsTab row={row} fleets={fleets} onOpenFleets={onOpenFleets} />}
         {tab === 'fare' && (
-          <OpCard>
-            <p className="mb-4 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-              Fares are set per vehicle class and service type. A rule either covers every route or one route, so use the Route filter to see only the rules written for {route.route_name}.
-            </p>
-            <FareRulesPanel service={OperatorService} fleets={fleets} routes={routes} canCreateGeneral={false} tone="light" />
-          </OpCard>
+          <RouteFareTable service={OperatorService} routeId={row.routeId} fleets={fleets} />
         )}
         {tab === 'travel' && <TravelTimeTab route={route} />}
       </div>

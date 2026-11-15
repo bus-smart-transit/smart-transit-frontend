@@ -24,7 +24,7 @@ const tab = (extra = {}) => ({
 describe('PaymentsPage', () => {
   it('shows fares and booking fees apart, by month and by day, and the refund-by-hand list', () => {
     render(<PaymentsPage paymentsTab={tab()} today="2026-11-06" />);
-    expect(within(screen.getByRole('region', { name: 'Booking fees' })).getByText('Booking fees kept').closest('div').parentElement).toHaveTextContent('10.00');
+    expect(within(screen.getByRole('region', { name: 'Transaction fees' })).getByText('Transaction fees kept').closest('div').parentElement).toHaveTextContent('10.00');
     expect(within(screen.getByRole('region', { name: 'Fares' })).getByText('Fares kept').closest('div').parentElement).toHaveTextContent('100.00');
     const months = screen.getByRole('table', { name: 'By month' });
     expect(within(months).getByText('2026-10')).toBeInTheDocument();

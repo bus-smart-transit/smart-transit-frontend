@@ -85,7 +85,7 @@ function RefundCard({ row, busy, error, onRecord, onReconcile }) {
             <span className="block font-data text-base font-bold text-slate-900">{formatPeso(row.total_paid ?? row.amount)}</span>
             {Number(row.fee_amount) > 0 && (
               <span className="block text-xs text-slate-500" data-testid="refund-fee-split">
-                Fares {formatPeso(row.amount)} + booking fee {formatPeso(row.fee_amount)}
+                Fares {formatPeso(row.amount)} + transaction fee {formatPeso(row.fee_amount)}
               </span>
             )}
           </span>

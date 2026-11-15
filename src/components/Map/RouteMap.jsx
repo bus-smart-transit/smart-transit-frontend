@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { loadMapLib } from './mapDependencies'
 import { fetchRouteMapData } from '../../services/routeMapService'
+import { markUnservedStops } from '../../utils/expressTrip'
 import { computeVehicleState } from '../../utils/vehicleState'
 import { haversineM, lerp } from '../../utils/geo'
 import { getRegion, regionMapBounds } from '../../services/regionService'
@@ -63,6 +64,7 @@ function RouteMapInner({
   onMapReady,
   onRetry,
   showStopOffsets = false,
+  servedStopIds = null,
   className = 'relative h-full min-h-64 w-full',
 }) {
   const containerRef = useRef(null)
@@ -89,17 +91,20 @@ function RouteMapInner({
 
   const routeCoords = useMemo(() => routeData?.geometry?.coordinates || [], [routeData])
   const displayedRouteData = useMemo(() => {
-    if (!showStopOffsets || !routeData) return routeData
+    if (!routeData) return routeData
+    // Batch 75: an express trip's skipped stops are pass-through dots (servedStopIds null = every stop).
+    const served = servedStopIds ? { ...routeData, stops: markUnservedStops(routeData.stops, servedStopIds) } : routeData
+    if (!showStopOffsets) return served
 
     return {
-      ...routeData,
-      stops: routeData.stops.map((stop) => ({
+      ...served,
+      stops: served.stops.map((stop) => ({
         ...stop,
         latitude: stop.sourceLatitude ?? stop.latitude,
         longitude: stop.sourceLongitude ?? stop.longitude,
       })),
     }
-  }, [routeData, showStopOffsets])
+  }, [routeData, showStopOffsets, servedStopIds])
 
   const vehicleState = useMemo(
     () => computeVehicleState({ vehicle, routeCoords, nowMs }),

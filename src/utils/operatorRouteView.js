@@ -146,6 +146,7 @@ export function assignmentsOnRoute(routeId, fleets = []) {
     .map((link) => ({
       key: `${fleet.fleet_id}-${link.fleet_route_id ?? routeId}`,
       fleet,
+      fleetRouteId: link.fleet_route_id ?? null,
       start: String(link.start_time || '').slice(0, 5) || null,
       end: String(link.end_time || '').slice(0, 5) || null,
       active: String(link.status || 'active').toLowerCase() === 'active' && String(fleet.status || 'active').toLowerCase() === 'active',

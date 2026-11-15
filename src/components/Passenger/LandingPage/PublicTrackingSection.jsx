@@ -18,14 +18,19 @@ const busColorFor = (row) => {
 };
 const ALL_ROUTES_SOURCE = 'pt-all-routes';
 const ALL_ROUTES_LAYER = 'pt-all-routes-line';
+const STOP_PINS_SOURCE = 'pt-stop-pins';
+const STOP_PINS_LAYER = 'pt-stop-pins-circle';
 const headingOf = (row) => (Number.isFinite(Number(row?.heading)) && row?.heading !== null ? Number(row.heading) : null);
 import { busLabelText } from '../../../utils/busLabel';
+import { journeyLabel, servedStopIdsOf } from '../../../utils/expressTrip';
 import { useRegion } from '../../../api/hooks/useRegion';
 import { busArrival, busesNear, busTrip, formatKm, passengersText } from '../../../utils/nearbyBuses';
 import TrackMyBusModal from '../Track/TrackMyBusModal';
 import { setGeoJson } from '../../Map/routeLayers';
 // The stops of a bus's route, ordered for its leg direction, are what name its place (routeKeyOf).
-import { busCounts, busStatusText, routeKeyOf, routeLineFeatures } from '../../../utils/publicTrackingView';
+import { busCounts, busStatusText, routeKeyOf, routeLineFeatures, stopPlaceFeatures, tripsFromStopHref } from '../../../utils/publicTrackingView';
+import { useBookingStops } from '../../../api/hooks/Passenger/useBookingSearch';
+import { useNavigate } from 'react-router-dom';
 import { useLiveChannels, useLiveConnected, useLiveEvent } from '../../../api/hooks/useLive';
 import { livePositionLngLat, pollEvery } from '../../../utils/liveUpdates';
 
@@ -328,6 +333,54 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
     else map.once?.('idle', apply);
     return undefined;
   }, [mapReady, fleets, geometryByRoute, selectedFleetId]);
+  // Batch 75 (user, 2026-11-15): every passenger place as a pin while no bus is chosen; a click offers the available
+  // trips from that place. The chosen bus's own stops are drawn by RouteMap instead.
+  const { originGroups: stopPlaceGroups } = useBookingStops('');
+  const navigate = useNavigate();
+  const navigateRef = useRef(navigate);
+  useEffect(() => { navigateRef.current = navigate; }, [navigate]);
+  useEffect(() => {
+    const map = mapRef.current;
+    const maplibregl = mapLibRef.current;
+    if (!mapReady || !map) return undefined;
+    const data = { type: 'FeatureCollection', features: selectedFleetId ? [] : stopPlaceFeatures(stopPlaceGroups) };
+    const apply = () => {
+      try {
+        setGeoJson(map, STOP_PINS_SOURCE, data);
+        if (!map.getLayer(STOP_PINS_LAYER)) {
+          map.addLayer({
+            id: STOP_PINS_LAYER,
+            type: 'circle',
+            source: STOP_PINS_SOURCE,
+            paint: { 'circle-radius': 7, 'circle-color': '#ffffff', 'circle-stroke-color': '#0f766e', 'circle-stroke-width': 3 },
+          });
+          map.on('mouseenter', STOP_PINS_LAYER, () => { map.getCanvas().style.cursor = 'pointer'; });
+          map.on('mouseleave', STOP_PINS_LAYER, () => { map.getCanvas().style.cursor = ''; });
+          map.on('click', STOP_PINS_LAYER, (event) => {
+            const feature = event.features?.[0];
+            if (!feature || !maplibregl) return;
+            const { code, name } = feature.properties || {};
+            const box = document.createElement('div');
+            box.style.cssText = 'font-family:sans-serif;padding:4px;min-width:170px;color:#0f172a;';
+            const title = document.createElement('p');
+            title.style.cssText = 'margin:0 0 6px;font-weight:700;font-size:13px;';
+            title.textContent = name;
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.setAttribute('data-testid', 'stop-pin-trips');
+            button.style.cssText = 'width:100%;border:0;border-radius:8px;background:#0f766e;color:#fff;font-weight:700;font-size:12px;padding:8px;cursor:pointer;';
+            button.textContent = `View available trips from ${name}`;
+            button.addEventListener('click', () => navigateRef.current(tripsFromStopHref(code)));
+            box.append(title, button);
+            new maplibregl.Popup({ offset: 12 }).setLngLat(feature.geometry.coordinates).setDOMContent(box).addTo(map);
+          });
+        }
+      } catch { /* the map style is not ready yet; the next change draws it */ }
+    };
+    if (map.isStyleLoaded?.()) apply();
+    else map.once?.('idle', apply);
+    return undefined;
+  }, [mapReady, stopPlaceGroups, selectedFleetId]);
   const counts = busCounts(fleets);
 
   const selectedTripId = Number(selectedFleet?.trip_id) > 0 ? Number(selectedFleet.trip_id) : null;
@@ -384,6 +437,10 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
     };
   }, [selectedFleet, selectedRouteStops, passedStopIds]);
   const selectedTrip = busTrip(selectedFleet?.trip_progress);
+  // Batch 75: "{first stop} → {last stop} · Non-stop", and an express trip's skipped stops drawn faint.
+  const selectedJourney = journeyLabel(selectedFleet?.trip_progress);
+  const selectedServedStopsKey = (servedStopIdsOf(selectedFleet?.trip_progress?.service) || []).join(',');
+  const selectedServedStopIds = useMemo(() => (selectedServedStopsKey ? selectedServedStopsKey.split(',').map(Number) : null), [selectedServedStopsKey]);
 
   const handlePinLocation = () => {
     if (!navigator.geolocation) {
@@ -503,6 +560,7 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
                 showStatus={false}
                 onMapReady={handleMapReady}
                 onRouteData={handleRouteData}
+                servedStopIds={selectedServedStopIds}
                 className="relative h-90 w-full"
               />
             </div>
@@ -558,7 +616,7 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
               <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
                 <p className="text-[11px] uppercase tracking-widest text-slate-500">Next Stop / Destination</p>
                 <p className="mt-1 inline-flex items-center gap-1 text-sm font-semibold text-slate-900"><Navigation className="h-3.5 w-3.5 text-teal-600" />{selectedTrip.arrived ? `Arrived at ${selectedTrip.destination}` : (selectedFleet?.trip_progress?.next_stop || nextStopOrDestinationLabel)}</p>
-                <p className="text-[11px] text-slate-500">{selectedTrip.destination ? `Destination: ${selectedTrip.destination}` : (selectedFleet?.route_name || 'Route sync pending')}</p>
+                <p className="text-[11px] text-slate-500" data-testid="selected-journey">{selectedJourney || (selectedTrip.destination ? `Destination: ${selectedTrip.destination}` : (selectedFleet?.route_name || 'Route sync pending'))}</p>
               </div>
             </div>
             )}
@@ -659,7 +717,7 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
                       <p className="font-semibold text-slate-900">{busLabelText(row?.bus_label)}{row?.is_simulated && <span className="ml-1.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-[11px] font-semibold text-amber-800">Simulated</span>}{trip.full && <span data-testid="bus-full-chip" className="ml-1.5 rounded-full bg-red-100 px-1.5 py-0.5 text-[11px] font-semibold text-red-800">Full</span>}</p>
                       <span className="inline-flex max-w-48 items-center gap-1 truncate rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-700">
                         <Bus className="h-3 w-3" />
-                        {row?.destination || row?.route_name || 'Destination pending'}
+                        {journeyLabel(row?.trip_progress) || row?.destination || row?.route_name || 'Destination pending'}
                       </span>
                     </div>
                     <p className="mt-1 text-xs text-slate-600" data-testid="bus-status">{busStatusText(row, trip)}{nearbyMode ? ` • ${formatKm(row?._distanceM)}` : ''}</p>

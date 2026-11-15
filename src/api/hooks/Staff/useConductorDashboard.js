@@ -151,7 +151,12 @@ export function useConductorDashboardData({ onLogout, pairing }) {
   const [assignedTrips, setAssignedTrips] = useState([]);
   const [assignedTripsForView, setAssignedTripsForView] = useState([]);
   const [occupancy, setOccupancy] = useState(null);
+  const [expectedBoarding, setExpectedBoarding] = useState(null);
   const [passengers, setPassengers] = useState([]);
+  // Batch 75: the discount claimed online that the Chauffeur is checking now ({ ticketId, passengerName, claim }).
+  const [discountReview, setDiscountReview] = useState(null);
+  const [discountReviewBusy, setDiscountReviewBusy] = useState(false);
+  const [discountReviewError, setDiscountReviewError] = useState('');
   const [dropOffGroups, setDropOffGroups] = useState([]);
   const [earnings, setEarnings] = useState(null);
   const [pinInput, setPinInput] = useState('');
@@ -405,7 +410,18 @@ export function useConductorDashboardData({ onLogout, pairing }) {
     } catch (err) {
       setError(err.message);
     }
+    // Batch 75: the next stop and how many paid passengers are still to board there (fail-soft: the card hides).
+    ConductorService.getOccupancyByStop()
+      .then((res) => setExpectedBoarding(res?.data ?? null))
+      .catch(() => setExpectedBoarding(null));
   }, [trip?.trip_id]);
+
+  // Batch 75: online tickets keep arriving while the bus runs, so the expected count refreshes every 15 s on Tickets.
+  useEffect(() => {
+    if (activeTab !== 'occupancy' || !hasActiveTrip || !isPaired) return undefined;
+    const intervalId = setInterval(() => { if (!document.hidden) void loadOccupancy(); }, 15000);
+    return () => clearInterval(intervalId);
+  }, [activeTab, hasActiveTrip, isPaired, loadOccupancy]);
 
   // Task 6: ask the server where the bus is. Called when the Chauffeur switches to "bus position", on
   // demand, and every 15 s while that mode is open (the position is only trusted for ~90 s server-side).
@@ -753,6 +769,11 @@ export function useConductorDashboardData({ onLogout, pairing }) {
     try {
       const res = await ConductorService.scanTicket(ticketUuid);
       setScanResult({ success: true, data: res?.data, msg: res?.message });
+      // Batch 75: a passenger who claimed a discount online: check the ID now.
+      if (res?.data?.discount_claim?.status === 'claimed') {
+        setDiscountReviewError('');
+        setDiscountReview({ ticketId: res.data.ticket_id, passengerName: res.data.passenger_name, claim: res.data.discount_claim });
+      }
       setActionMsg('Ticket scanned successfully.');
       setScanUuid(ticketUuid);
       setScannerPhase('success');
@@ -1016,6 +1037,24 @@ export function useConductorDashboardData({ onLogout, pairing }) {
     }
   };
 
+  const openDiscountReview = (target) => { setDiscountReviewError(''); setDiscountReview(target); };
+  const closeDiscountReview = () => setDiscountReview(null);
+  const decideDiscount = async (decision) => {
+    if (!discountReview) return;
+    setDiscountReviewBusy(true);
+    setDiscountReviewError('');
+    try {
+      const res = await ConductorService.reviewDiscountClaim(discountReview.ticketId, decision);
+      setActionMsg(res?.message || (decision === 'approve' ? 'Discount approved' : 'Discount rejected'));
+      setDiscountReview(null);
+      void loadPassengers();
+    } catch (err) {
+      setDiscountReviewError(err.message || 'Could not save the decision.');
+    } finally {
+      setDiscountReviewBusy(false);
+    }
+  };
+
   const handleAlight = async (ticketId) => {
     if (!isPaired) {
       setActionMsg(pairingReason);
@@ -1186,7 +1225,14 @@ export function useConductorDashboardData({ onLogout, pairing }) {
     profile,
     trip,
     occupancy,
+    expectedBoarding,
     passengers,
+    discountReview,
+    discountReviewBusy,
+    discountReviewError,
+    openDiscountReview,
+    closeDiscountReview,
+    decideDiscount,
     earnings,
     pinInput, setPinInput,
     pinStatus, setPinStatus,

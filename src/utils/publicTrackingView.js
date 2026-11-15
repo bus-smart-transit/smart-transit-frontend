@@ -42,3 +42,20 @@ export function routeLineFeatures(rows = [], geometryByKey = {}) {
   });
   return features;
 }
+
+/**
+ * Batch 75 (user, 2026-11-15): one pin per passenger place (the grouped booking stop list, so a place listed twice in
+ * the data shows once). A place without a position is left out.
+ */
+export function stopPlaceFeatures(groups = []) {
+  return (groups || []).flatMap((group) => (group?.stops || []))
+    .filter((stop) => stop?.latitude != null && stop?.longitude != null && Number.isFinite(Number(stop.latitude)) && Number.isFinite(Number(stop.longitude)) && stop?.stop_code)
+    .map((stop) => ({
+      type: 'Feature',
+      properties: { code: stop.stop_code, name: stop.name || 'Not provided' },
+      geometry: { type: 'Point', coordinates: [Number(stop.longitude), Number(stop.latitude)] },
+    }));
+}
+
+/** Available trips leaving from a place (the same address the homepage search opens). */
+export const tripsFromStopHref = (stopCode) => `/passenger/trips?from=${encodeURIComponent(stopCode)}`;

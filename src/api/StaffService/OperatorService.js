@@ -83,6 +83,11 @@ class OperatorService extends StaffBaseService {
     return await this.request(`/operator/routes/${routeId}/stops/${routeStopId}/express`, 'PATCH', { served_by_express: Boolean(served) });
   }
 
+  // Batch 75: the fares a route's stops produce for one bus (read-only; the same quote passengers are charged).
+  async getRouteFareTable(routeId, params) {
+    return await this.request(`/operator/routes/${routeId}/fares`, 'GET', params);
+  }
+
   async getOperatorFleetRoutes() {
     return await this.request('/operator/fleet-routes', 'GET');
   }

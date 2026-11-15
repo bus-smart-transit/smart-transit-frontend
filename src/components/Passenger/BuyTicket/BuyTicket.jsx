@@ -1,3 +1,4 @@
+import { ratePercent } from '../../../utils/discountClaim';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AlertCircle, Bus, CalendarDays, CheckCircle, Clock3, CreditCard, Loader, MapPin, Pencil, Smartphone, Wallet } from 'lucide-react';
@@ -83,6 +84,9 @@ export default function BuyTicket({ onTicketPurchased, returnTo = '/' }) {
     maxRedeemableRewardPoints,
     netTotal,
     bookingFee,
+    bookingFeeRate,
+    discountTypes = [],
+    setDiscountClaim,
     maxSeatsPerPurchase,
     totalDue,
     printQrTicket,
@@ -519,6 +523,32 @@ export default function BuyTicket({ onTicketPurchased, returnTo = '/' }) {
                     </label>
                   )}
 
+                  {/* Batch 75 (panel): claim a discount online; the Chauffeur checks the ID on the bus. */}
+                  {discountTypes.length > 0 && (
+                    <fieldset data-testid="discount-claims">
+                      <legend className={LABEL}>Student, senior citizen or PWD?</legend>
+                      <p className="mt-1 text-sm text-slate-500">
+                        You pay the full fare now. Show your valid ID to the Chauffeur on the bus. Once they approve it, the {ratePercent(discountTypes[0].rate)} discount goes back to your {form.payment_channel === 'maya' ? 'Maya' : 'GCash'}.
+                      </p>
+                      <div className="mt-3 grid gap-2">
+                        {Array.from({ length: Math.max(1, parseInt(form.ticket_quantity, 10) || 1) }, (_, index) => (
+                          <label key={index} className="flex items-center justify-between gap-3 text-sm text-slate-700">
+                            <span>{(parseInt(form.ticket_quantity, 10) || 1) > 1 ? `Ticket ${index + 1}` : 'This ticket'}</span>
+                            <select
+                              className="w-48 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-navy-950"
+                              value={form.discount_claims?.[index] || ''}
+                              onChange={(e) => setDiscountClaim(index, e.target.value)}
+                              data-testid={`discount-claim-${index}`}
+                            >
+                              <option value="">No discount</option>
+                              {discountTypes.map((type) => <option key={type.key} value={type.key}>{type.label} ({ratePercent(type.rate)})</option>)}
+                            </select>
+                          </label>
+                        ))}
+                      </div>
+                    </fieldset>
+                  )}
+
                   <fieldset>
                     <legend className={`flex items-center gap-2 ${LABEL}`}><CreditCard size={16} aria-hidden="true" /> Payment</legend>
                     <p className="mt-1 text-sm text-slate-500">Online booking is paid online. You finish paying on the provider&apos;s secure page.</p>
@@ -654,7 +684,7 @@ export default function BuyTicket({ onTicketPurchased, returnTo = '/' }) {
               <SummaryRow label="Gross Total">PHP {Number(grossTotal || 0).toFixed(2)}</SummaryRow>
               <SummaryRow label="Rewards Applied">{Number(rewardPointsToApply || 0).toFixed(0)} points</SummaryRow>
               <SummaryRow label="Fare after rewards">PHP {Number(netTotal || 0).toFixed(2)}</SummaryRow>
-              <SummaryRow label="Booking fee">{bookingFee === null ? 'Not provided' : `PHP ${Number(bookingFee).toFixed(2)}`}</SummaryRow>
+              <SummaryRow label={bookingFeeRate ? `Transaction fee (${bookingFeeRate})` : 'Transaction fee'}>{bookingFee === null ? 'Not provided' : `PHP ${Number(bookingFee).toFixed(2)}`}</SummaryRow>
             </dl>
             <div className="mt-2 flex items-center justify-between border-t border-slate-200 pt-4">
               <span className="text-sm font-semibold text-navy-950">Total to pay</span>
@@ -664,7 +694,7 @@ export default function BuyTicket({ onTicketPurchased, returnTo = '/' }) {
             </div>
             {bookingFee > 0 && (
               <p className="mt-1 text-xs text-slate-500">
-                Online bookings have a booking fee of PHP {Number(bookingFee).toFixed(2)} for each payment, however many tickets you buy. Tickets bought with cash on the bus have no fee.
+                Online payments have a transaction fee of {bookingFeeRate} of the fare for {form.payment_channel === 'maya' ? 'Maya' : 'GCash'} (PHP {Number(bookingFee).toFixed(2)} here), once for each payment however many tickets you buy. Tickets bought with cash on the bus have no fee.
               </p>
             )}
             {timeline?.fare?.error && <p className="mt-2 text-xs text-red-600">{timeline.fare.error}</p>}

@@ -28,6 +28,8 @@ export default function TicketCard({
   originalFare = null,
   farePaid = null,
   discountVerified = false,
+  // Batch 75: what happened to a discount claimed online (the server's sentence), or '' when none was claimed.
+  discountClaimMessage = '',
   trackingToken = '',
   trackingCode = '',
   ticketId = '',
@@ -121,6 +123,9 @@ export default function TicketCard({
             {farePaid != null && <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-1.5"><dt className="text-xs text-slate-500">Fare paid</dt><dd className="text-right text-sm font-bold text-navy-950">PHP {Number(farePaid).toFixed(2)}</dd></div>}
           </>}
         </dl>
+        {discountClaimMessage && (
+          <p data-testid="discount-claim-message" className="rounded-lg border border-teal-200 bg-teal-50 px-3 py-2 text-xs font-semibold text-teal-900 sm:col-span-2">{discountClaimMessage}</p>
+        )}
       </div>
 
       {canTrack && trackingCode && (

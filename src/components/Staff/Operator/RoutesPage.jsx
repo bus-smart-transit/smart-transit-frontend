@@ -178,7 +178,7 @@ export default function RoutesPage({ routes, stops, trips, fleets, onRefresh, on
   ];
 
   const stopColumns = [
-    { key: 'stop', header: 'Stop', render: (stop) => <span className="whitespace-nowrap"><strong className="text-slate-900">{stop.stop_name}</strong>{stop.stop_code && <span className="block text-xs text-slate-500">{stop.stop_code}</span>}</span> },
+    { key: 'stop', header: 'Stop', render: (stop) => <span className="whitespace-nowrap"><strong className="text-slate-900">{stop.stop_name}</strong></span> },
     // Batch 56 (user): the city or town filled from the pin (was a typed "Area or landmark").
     { key: 'town', header: 'City or town', render: (stop) => (stop.municipality ? <span className="text-xs">{stop.municipality}</span> : <span className="text-xs text-slate-400">Not provided</span>) },
     { key: 'place', header: 'Place on map', render: (stop) => (

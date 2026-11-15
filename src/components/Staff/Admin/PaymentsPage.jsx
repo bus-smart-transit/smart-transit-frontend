@@ -9,7 +9,7 @@ const FIELD = 'min-h-11 rounded-xl border border-slate-300 bg-white px-3 text-sm
 
 /**
  * Batch 48 Phase 5: the Super Admin's Payments page, across every company, read only. Fares belong to the bus
- * companies; booking fees are the platform's revenue, so they are shown apart. Payments to refund by hand are listed;
+ * companies; transaction fees are the platform's revenue, so they are shown apart. Payments to refund by hand are listed;
  * the bus company's Operator records each refund.
  */
 export default function PaymentsPage({ paymentsTab, today }) {
@@ -23,13 +23,13 @@ export default function PaymentsPage({ paymentsTab, today }) {
     { key: 'date', header: 'Day', render: (row) => formatManilaDate(row.date) || row.date },
     { key: 'tickets', header: 'Tickets', render: (row) => formatCount(row.tickets) },
     { key: 'net', header: 'Fares kept', render: (row) => formatPeso(row.net) },
-    { key: 'fees', header: 'Booking fees kept', render: (row) => formatPeso(row.booking_fees) },
+    { key: 'fees', header: 'Transaction fees kept', render: (row) => formatPeso(row.booking_fees) },
   ];
   const monthColumns = [
     { key: 'month', header: 'Month', render: (row) => row.month },
     { key: 'tickets', header: 'Tickets', render: (row) => formatCount(row.tickets) },
     { key: 'net', header: 'Fares kept', render: (row) => formatPeso(row.net) },
-    { key: 'fees', header: 'Booking fees kept', render: (row) => formatPeso(row.booking_fees) },
+    { key: 'fees', header: 'Transaction fees kept', render: (row) => formatPeso(row.booking_fees) },
   ];
   const refundColumns = [
     { key: 'paid', header: 'Paid', className: 'whitespace-nowrap', render: (row) => <span className="font-data text-xs">{formatManilaDateTime(row.paid_at)}</span> },
@@ -41,7 +41,7 @@ export default function PaymentsPage({ paymentsTab, today }) {
 
   return (
     <div className={OP_SPACE.stack}>
-      <OpPageHeader title="Payments" subtitle="Every company. Fares belong to the bus companies; booking fees are SmartTransit's." />
+      <OpPageHeader title="Payments" subtitle="Every company. Fares belong to the bus companies; transaction fees are SmartTransit's." />
 
       <div className="flex flex-wrap items-end gap-2">
         {PRESETS.map((preset) => (
@@ -62,10 +62,10 @@ export default function PaymentsPage({ paymentsTab, today }) {
             <OpStat label="Fares refunded" value={formatPeso(kpis.refunds)} />
             <OpStat label="Fares kept" value={formatPeso(kpis.net)} hint="the bus companies' revenue" />
           </section>
-          <section aria-label="Booking fees" className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-            <OpStat label="Booking fees collected" value={fees ? formatPeso(fees.collected) : 'Not provided'} hint="online bookings only" />
-            <OpStat label="Booking fees given back" value={fees ? formatPeso(fees.refunded) : 'Not provided'} />
-            <OpStat label="Booking fees kept" value={fees ? formatPeso(fees.net) : 'Not provided'} hint="SmartTransit's revenue" tone="success" />
+          <section aria-label="Transaction fees" className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+            <OpStat label="Transaction fees collected" value={fees ? formatPeso(fees.collected) : 'Not provided'} hint="online bookings only" />
+            <OpStat label="Transaction fees given back" value={fees ? formatPeso(fees.refunded) : 'Not provided'} />
+            <OpStat label="Transaction fees kept" value={fees ? formatPeso(fees.net) : 'Not provided'} hint="SmartTransit's revenue" tone="success" />
           </section>
 
           <OpCard title="By month">

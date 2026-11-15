@@ -38,6 +38,8 @@ import { DEFAULT_FILE_TYPE } from '../../utils/tableExport';
 import FileTypeSelect from '../ui/FileTypeSelect';
 import { todaySummary } from '../../utils/assignmentCards';
 import { BOARDING_NOT_STARTED, BOARDING_OPEN_STATUSES, ticketingReason } from '../../utils/actionReasons';
+import { claimReviewState } from '../../utils/discountClaim';
+import DiscountReviewDialog from './Crew/DiscountReviewDialog';
 import { boardingStopsForLeg, checkInLabel, destinationsAhead, destinationsNotPassed, isOnsiteFormComplete, orderedStopsForLeg, placesLeft, stopLabel } from '../../utils/cashTicket';
 import { isExpress } from '../../utils/serviceType';
 import ServiceTypeChip from '../ui/ServiceTypeChip';
@@ -167,6 +169,13 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     profile,
     trip,
     occupancy,
+    expectedBoarding,
+    discountReview,
+    discountReviewBusy,
+    discountReviewError,
+    openDiscountReview,
+    closeDiscountReview,
+    decideDiscount,
     passengers,
     earnings,
     pinInput, setPinInput,
@@ -353,6 +362,8 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   const ticketingBlocked = ticketingReason({ isPaired, hasOpenShift, hasActiveTrip, isFull: cashCapacity.isFull, tripStatus: trip?.status });
   // Batch 74: scanning, Passenger In and cash sales wait until the Driver presses Start boarding.
   const boardingOpen = BOARDING_OPEN_STATUSES.includes(String(trip?.status || '').toLowerCase());
+  // Batch 75: passengers whose online discount claim still needs the ID check.
+  const pendingClaims = (passengers || []).filter((p) => claimReviewState(p.discount_claim).reviewable);
 
   return (
     <>
@@ -588,6 +599,37 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                 <h3 className="text-lg font-bold text-slate-900">No Occupancy Data</h3>
               </article>
             ) : (
+              <>
+              {/* Batch 75 (panel): discounts claimed online that still need the ID check. */}
+              {pendingClaims.length > 0 && (
+                <article data-testid="discounts-to-check" className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+                  <p className="text-sm font-bold text-amber-900">{pendingClaims.length === 1 ? '1 discount to check' : `${pendingClaims.length} discounts to check`}</p>
+                  <ul className="mt-2 space-y-2">
+                    {pendingClaims.map((p) => (
+                      <li key={p.ticket_id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                        <span className="text-slate-800">{p.passenger_name || 'Guest'} · {p.discount_claim.label}{p.is_boarded ? '' : ' · not scanned yet'}</span>
+                        <button type="button" onClick={() => openDiscountReview({ ticketId: p.ticket_id, passengerName: p.passenger_name, claim: p.discount_claim })} disabled={!boardingOpen} className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-amber-700 disabled:opacity-60" data-testid={`review-discount-${p.ticket_id}`}>
+                          Review discount
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </article>
+              )}
+              {/* Batch 75 (user): who to expect at the next stop: paid tickets not scanned yet, per boarding stop. */}
+              {expectedBoarding?.next_stop && (
+                <article data-testid="expected-boarding" className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-teal-200 bg-teal-50 px-4 py-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-teal-800">Next stop</p>
+                    <p className="text-xl font-bold text-slate-900">{expectedBoarding.next_stop.stop_name || 'Not provided'}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-3xl font-bold text-teal-800" data-testid="expected-boarding-count">{expectedBoarding.next_stop.waiting_count}</p>
+                    <p className="text-xs font-semibold text-teal-900">{expectedBoarding.next_stop.waiting_count === 1 ? 'passenger to board here' : 'passengers to board here'}</p>
+                  </div>
+                  <p className="w-full text-xs text-teal-900">{expectedBoarding.waiting_total === 1 ? '1 paid passenger' : `${expectedBoarding.waiting_total ?? 0} paid passengers`} still to board on this trip.</p>
+                </article>
+              )}
               <div className="staff-grid lg:grid-cols-[1.1fr_1fr]">
                 {/* Batch 51 item 9 (user's design): the scanner card takes the capacity card's place; the capacity numbers and
                     the full-bus notice are in the cash ticket card. */}
@@ -855,6 +897,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                   </div>
                 </article>
               </div>
+              </>
             )}
 
           </section>
@@ -912,8 +955,11 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                                 <td className="py-3 font-data text-slate-500">{p.row_number}</td>
                                 <td className="py-3 text-slate-900">{p.passenger_name ?? p.passenger?.name ?? 'Guest'}</td>
                                 <td className="py-3"><span className="rounded-full border border-slate-200 px-2 py-1 text-xs capitalize text-slate-600">{p.seat_type}</span></td>
-                                <td className="py-3 text-slate-600">{p.destination_display}</td>
+                                <td className="py-3 text-slate-600">{p.destination_display}{p.discount_claim && <span className="block text-xs font-semibold text-amber-800">{claimReviewState(p.discount_claim).text}</span>}</td>
                                 <td className="py-3">
+                                  {claimReviewState(p.discount_claim).reviewable && (
+                                    <button type="button" onClick={() => openDiscountReview({ ticketId: p.ticket_id, passengerName: p.passenger_name, claim: p.discount_claim })} disabled={!boardingOpen} className="mb-1 mr-1 inline-flex rounded-lg bg-amber-600 px-2.5 py-1.5 text-xs font-bold text-white hover:bg-amber-700 disabled:opacity-60">Review discount</button>
+                                  )}
                                   {!p.alighted_at && (
                                     <button
                                       className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
@@ -1125,6 +1171,9 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
           />
         )}
     </StaffPortalLayout>
+
+      {/* Batch 75: the ID check for a discount claimed online. */}
+      <DiscountReviewDialog target={discountReview} busy={discountReviewBusy} error={discountReviewError} onDecide={decideDiscount} onClose={closeDiscountReview} />
 
       {/* End Shift confirmation: the Chauffeur declares the cash handed over (Batch 29). */}
       {confirmEnd && (

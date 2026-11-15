@@ -24,6 +24,12 @@ export async function getBookingStops(originStopId = null) {
 }
 
 /** The booking window ({ today, max_advance_days, last_bookable_date }), the same numbers the passenger date pickers use. */
+/** Batch 75: the discounts a passenger may claim online for this trip (checked by the Chauffeur on the bus). */
+export async function getTripDiscountTypes(tripId) {
+  const response = await api.get('/booking/discount-types', { params: { trip_id: tripId } })
+  return data(response)
+}
+
 export async function getBookingWindow() {
   const response = await api.get('/booking/window')
   return data(response)

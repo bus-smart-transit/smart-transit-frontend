@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import PassengerService from '../../PassengerService/PassengerService';
 import { checkoutIdempotencyKey, clearCheckoutIdempotencyKey, shouldDropCheckoutKey } from '../../../utils/checkoutIdempotency';
-import { getBookingWindow, readApiError } from '../../../services/bookingService';
+import { getBookingWindow, getTripDiscountTypes, readApiError } from '../../../services/bookingService';
+import { itemsWithClaims } from '../../../utils/discountClaim';
 import { useBookingStops, useDepartures, useTripResolution } from './useBookingSearch';
 import useBookingLink from './useBookingLink';
 import useTripTimeline from './useTripTimeline';
@@ -10,6 +11,7 @@ import { findStopCode, withBookingParams } from '../../../utils/bookingQuery';
 import { groupQrPayload, openPrintWindow } from '../../../utils/qr';
 import { manilaDepartureLabel } from '../../../utils/ticketImage';
 import { normalizeContact } from '../../../utils/travellerContact';
+import { ratePercentLabel, transactionFee } from '../../../utils/transactionFee';
 const CHECKOUT_EVENT_KEY = 'smart_transit_checkout_event';
 const CHECKOUT_PENDING_KEY = 'smart_transit_checkout_pending';
 const CHECKOUT_LOOKUP_CACHE_KEY = 'smart_transit_checkout_lookup_cache_v1';
@@ -121,7 +123,8 @@ export default function useBuyTicket({ onTicketPurchased }) {
   const bookingLink = useBookingLink(searchParams);
   const [error, setError] = useState('');
   const [formErrors, setFormErrors] = useState({});
-  const [bookingFee, setBookingFee] = useState(null);
+  // Batch 75: each e-wallet's transaction fee rate (percent) from the server; null until it answers.
+  const [feeRates, setFeeRates] = useState(null);
   // Batch 49 item 1: the most tickets in one purchase comes from the server (it checks it too); 20 until it answers.
   const [maxSeatsPerPurchase, setMaxSeatsPerPurchase] = useState(DEFAULT_MAX_SEATS);
 
@@ -129,13 +132,13 @@ export default function useBuyTicket({ onTicketPurchased }) {
     let cancelled = false;
     getBookingWindow()
       .then((window) => {
-        const fee = Number(window?.online_booking_fee);
+        const rates = window?.transaction_fee_rates;
         const maxSeats = Number(window?.max_seats_per_purchase);
         if (cancelled) return;
-        setBookingFee(Number.isFinite(fee) ? fee : null);
+        setFeeRates(rates && typeof rates === 'object' ? rates : null);
         if (Number.isInteger(maxSeats) && maxSeats > 0) setMaxSeatsPerPurchase(maxSeats);
       })
-      .catch(() => { if (!cancelled) setBookingFee(null); });
+      .catch(() => { if (!cancelled) setFeeRates(null); });
     return () => { cancelled = true; };
   }, []);
   const [success, setSuccess] = useState('');
@@ -174,6 +177,8 @@ export default function useBuyTicket({ onTicketPurchased }) {
     for_someone_else: false,
     traveller_name: '',
     traveller_contact: '',
+    // Batch 75: the discount claimed for each ticket ({ ticketIndex: 'student' }); checked on the bus.
+    discount_claims: {},
   }));
   // Apply the checked link once (derived-state update during render, not an effect).
   const [linkApplied, setLinkApplied] = useState(false);
@@ -234,6 +239,20 @@ export default function useBuyTicket({ onTicketPurchased }) {
       ready: departuresState.ready,
     };
   const trip = resolution.trip;
+  // Batch 75: the discounts this bus's Operator offers, which a passenger may claim online (empty when none or unknown).
+  const [discountTypes, setDiscountTypes] = useState([]);
+  const discountTripId = trip?.trip_id ?? null;
+  useEffect(() => {
+    if (!discountTripId) return undefined;
+    let cancelled = false;
+    getTripDiscountTypes(discountTripId)
+      .then((types) => { if (!cancelled) setDiscountTypes(Array.isArray(types) ? types : []); })
+      .catch(() => { if (!cancelled) setDiscountTypes([]); });
+    return () => { cancelled = true; };
+  }, [discountTripId]);
+  const setDiscountClaim = useCallback((index, key) => {
+    setForm((prev) => ({ ...prev, discount_claims: { ...prev.discount_claims, [index]: key || null } }));
+  }, []);
 
   // The link mirrors the choice: stops, date and (for Book Later) the departure time.
   const linkTime = bookingMode === 'later' && trip ? trip.boarding_time : '';
@@ -272,8 +291,10 @@ export default function useBuyTicket({ onTicketPurchased }) {
   const rewardPointsToApply = form.use_rewards ? Math.min(requestedRewardPoints, maxRedeemableRewardPoints) : 0;
   const isRewardRequestInsufficient = form.use_rewards && requestedRewardPoints > maxRedeemableRewardPoints;
   const netTotal = Number(Math.max(0, grossTotal - rewardPointsToApply).toFixed(2));
-  // Batch 45 Feature A: the online booking fee comes from the server (one per payment, whatever the number of tickets).
-  // null until it has loaded; the page then says it is not known yet instead of showing a made-up amount.
+  // Batch 75: the transaction fee at the chosen e-wallet's rate (one per payment, whatever the number of tickets).
+  // null until the rates have loaded; the page then says it is not known yet instead of showing a made-up amount.
+  const bookingFee = transactionFee(feeRates, form.payment_channel, netTotal);
+  const bookingFeeRate = ratePercentLabel(feeRates, form.payment_channel);
   const totalDue = bookingFee === null ? null : Number((netTotal + bookingFee).toFixed(2));
   const hasRewardPoints = availableRewardPoints > 0;
 
@@ -781,7 +802,7 @@ export default function useBuyTicket({ onTicketPurchased }) {
       };
 
       const payload = {
-        items: Array.from({ length: quantity }, () => ({ ...itemPayload })),
+        items: itemsWithClaims(itemPayload, quantity, form.discount_claims, discountTypes),
         booking_date: trip.trip_date,
         return_base_url: window.location.origin,
         payment_channel: form.payment_channel,
@@ -840,7 +861,9 @@ export default function useBuyTicket({ onTicketPurchased }) {
     }
   }, [
     canProceedToOnlinePayment,
+    discountTypes,
     effectiveAlightingStopId,
+    form.discount_claims,
     form.email_group_qr,
     form.guest_email,
     form.for_someone_else,
@@ -886,6 +909,9 @@ export default function useBuyTicket({ onTicketPurchased }) {
     maxRedeemableRewardPoints,
     netTotal,
     bookingFee,
+    bookingFeeRate,
+    discountTypes,
+    setDiscountClaim,
     maxSeatsPerPurchase,
     totalDue,
     printQrTicket,

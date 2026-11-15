@@ -162,7 +162,7 @@ export default function FinancialsPage({ service, view = 'all', embedded = false
             <Kpi icon={Percent} label="Discounts given" value={formatPeso(summary.discounts?.total ?? 0)} hint={`${formatCount(summary.discounts?.tickets ?? 0)} discounted tickets`} tone="text-sky-700" testId="kpi-discounts" />
             <Kpi
               icon={Receipt}
-              label="Booking fees"
+              label="Transaction fees"
               value={kpis.booking_fees ? formatPeso(kpis.booking_fees.net) : 'Not provided'}
               hint={kpis.booking_fees
                 ? `${formatPeso(kpis.booking_fees.collected)} collected, ${formatPeso(kpis.booking_fees.refunded)} refunded. Online fee, not part of the fares.`
