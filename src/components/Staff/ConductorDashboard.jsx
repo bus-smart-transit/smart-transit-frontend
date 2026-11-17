@@ -593,7 +593,8 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
               </button>
               <button type="button" onClick={() => setActiveTab('activeShift')} className="staff-card staff-card-compact text-left transition hover:bg-slate-50">
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Passengers Onboard</p>
-                <p className="font-data mt-1 text-lg font-bold text-slate-900">{passengers?.length ?? earnings?.passenger_count ?? 0}</p>
+                {/* Batch 77: the same "on board now" as the passenger count (scanned in or sold on the bus, not yet off); it used to count every listed ticket, scanned or not. */}
+                <p className="font-data mt-1 text-lg font-bold text-slate-900" data-testid="onboard-box">{expectedBoarding?.passenger_count?.on_board ?? (passengers ? passengers.filter((p) => p.is_boarded).length : 'Not provided')}</p>
               </button>
 {/* Batch 53 item 9: hidden once paired. */}
               {!isPaired && (
