@@ -473,6 +473,7 @@ export default function usePassengerDashboard({ preloadMapView }) {
       boarded:   'Boarded — You are currently on this trip',
       alighted:  'Trip Completed — Thank you for riding!',
       expired:   'This ticket has expired',
+      missed:    'Missed. The bus left your stop before this ticket was scanned.',
       cancelled: 'Ticket Cancelled',
     };
     const footerText = footerMessages[ticketStatus] ?? 'Valid ticket. Show this QR code when boarding';
@@ -480,6 +481,7 @@ export default function usePassengerDashboard({ preloadMapView }) {
       boarded:   'border:1px solid #7dd3fc;background:#e0f2fe;color:#0369a1;',
       alighted:  'border:1px solid #94a3b8;background:#f1f5f9;color:#475569;',
       expired:   'border:1px solid #fca5a5;background:#fef2f2;color:#991b1b;',
+      missed:    'border:1px solid #fca5a5;background:#fef2f2;color:#991b1b;',
       cancelled: 'border:1px solid #fca5a5;background:#fef2f2;color:#7f1d1d;',
     };
     const footerStyle = footerStyles[ticketStatus] ?? 'border:1px solid #9dd7af;background:#eaf9f0;color:#166534;';

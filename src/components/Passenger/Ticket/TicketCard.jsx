@@ -9,6 +9,8 @@ const STATUS_FOOTER = {
   boarded:   { text: 'Boarded — You are currently on this trip', mod: 'border-sky-300 bg-sky-50 text-sky-700' },
   alighted:  { text: 'Trip Completed — Thank you for riding!', mod: 'border-slate-300 bg-slate-100 text-slate-600' },
   expired:   { text: 'This ticket has expired', mod: 'border-red-300 bg-red-50 text-red-800' },
+  // Batch 76: the bus left the boarding stop before the ticket was scanned; a new ticket is needed.
+  missed:    { text: 'Missed. The bus left your stop before this ticket was scanned. Buy a new ticket to ride.', mod: 'border-red-300 bg-red-50 text-red-800' },
   cancelled: { text: 'Ticket Cancelled', mod: 'border-red-300 bg-red-50 text-red-900' },
 };
 
@@ -30,6 +32,9 @@ export default function TicketCard({
   discountVerified = false,
   // Batch 75: what happened to a discount claimed online (the server's sentence), or '' when none was claimed.
   discountClaimMessage = '',
+  // Batch 76: a priority seat ("Senior citizen") and the baggage compartment fee (0 or null for none).
+  priorityLabel = '',
+  baggageFee = null,
   trackingToken = '',
   trackingCode = '',
   ticketId = '',
@@ -123,6 +128,11 @@ export default function TicketCard({
             {farePaid != null && <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-1.5"><dt className="text-xs text-slate-500">Fare paid</dt><dd className="text-right text-sm font-bold text-navy-950">PHP {Number(farePaid).toFixed(2)}</dd></div>}
           </>}
         </dl>
+        {(priorityLabel || Number(baggageFee) > 0) && (
+          <p data-testid="ticket-extras" className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 sm:col-span-2">
+            {[priorityLabel && `Priority seat: ${priorityLabel}`, Number(baggageFee) > 0 && `Baggage in the compartment: PHP ${Number(baggageFee).toFixed(2)}`].filter(Boolean).join(' · ')}
+          </p>
+        )}
         {discountClaimMessage && (
           <p data-testid="discount-claim-message" className="rounded-lg border border-teal-200 bg-teal-50 px-3 py-2 text-xs font-semibold text-teal-900 sm:col-span-2">{discountClaimMessage}</p>
         )}

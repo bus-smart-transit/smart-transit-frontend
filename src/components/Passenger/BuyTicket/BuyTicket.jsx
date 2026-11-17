@@ -41,20 +41,6 @@ function SummaryRow({ label, children }) {
   );
 }
 
-function RadioPill({ name, checked, onChange, label, disabled = false }) {
-  return (
-    <label
-      className={`flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-medium transition ${
-        disabled ? 'cursor-not-allowed border-slate-200 bg-slate-50 text-slate-400'
-          : checked ? 'cursor-pointer border-navy-700 bg-navy-50 text-navy-900'
-            : 'cursor-pointer border-slate-300 text-slate-600 hover:border-slate-400'
-      }`}
-    >
-      <input type="radio" name={name} checked={checked} disabled={disabled} onChange={onChange} className="h-4 w-4 accent-navy-800" />
-      {label}
-    </label>
-  );
-}
 export default function BuyTicket({ onTicketPurchased, returnTo = '/' }) {
   const [ticketPreview, setTicketPreview] = useState(null);
   const [qrModalDismissedFor, setQrModalDismissedFor] = useState(null);
@@ -87,6 +73,10 @@ export default function BuyTicket({ onTicketPurchased, returnTo = '/' }) {
     bookingFeeRate,
     discountTypes = [],
     setDiscountClaim,
+    priorityTypes = [],
+    baggagePercent = 0,
+    baggage = { count: 0, total: 0 },
+    setTicketExtra = () => {},
     maxSeatsPerPurchase,
     totalDue,
     printQrTicket,
@@ -110,6 +100,7 @@ export default function BuyTicket({ onTicketPurchased, returnTo = '/' }) {
 
   // Summary header: names come from the server's stop lists and timeline, never from literals.
   const [editingJourney, setEditingJourney] = useState(false);
+  const [showMap, setShowMap] = useState(false);
   const stopName = (stopId) => {
     const groups = [...stopsData.originGroups, ...stopsData.destinationGroups];
     for (const group of groups) {
@@ -308,6 +299,37 @@ export default function BuyTicket({ onTicketPurchased, returnTo = '/' }) {
       <form onSubmit={handleSubmit}>
         <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
           <div className="min-w-0 space-y-6">
+            {/* Batch 51 item 7 (user): booking for someone else. Batch 76 (user): "Book for someone", at the top so it is seen first. Their ticket still goes to the buyer's email until an
+                SMS service is chosen; their contact is an email or a mobile number (numbers only once a digit is typed). */}
+            <Card className="p-5 sm:p-6" data-testid="for-someone-else">
+              <label className="flex items-center gap-2 text-sm font-semibold text-navy-950">
+                <input type="checkbox" checked={Boolean(form.for_someone_else)} onChange={(e) => handleChange('for_someone_else', e.target.checked)} className="h-4 w-4 rounded border-slate-300 text-teal-600" />
+                Book for someone
+              </label>
+              {form.for_someone_else && (
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <label className="block text-sm font-semibold text-navy-950">
+                    Their name
+                    <input type="text" value={form.traveller_name} onChange={(e) => handleChange('traveller_name', e.target.value)} aria-invalid={Boolean(formErrors.traveller_name)} maxLength={100} className={FIELD} />
+                    {formErrors.traveller_name && <span role="alert" className="mt-1 block text-xs font-medium text-red-600">{formErrors.traveller_name}</span>}
+                  </label>
+                  <label className="block text-sm font-semibold text-navy-950">
+                    Their email or mobile number
+                    <input
+                      type="text"
+                      inputMode={looksLikePhone(form.traveller_contact) ? 'tel' : 'email'}
+                      value={form.traveller_contact}
+                      onChange={(e) => handleChange('traveller_contact', cleanContactInput(e.target.value))}
+                      aria-invalid={Boolean(formErrors.traveller_contact)}
+                      placeholder="name@example.com or 09171234567"
+                      className={FIELD}
+                    />
+                    {formErrors.traveller_contact && <span role="alert" className="mt-1 block text-xs font-medium text-red-600">{formErrors.traveller_contact}</span>}
+                  </label>
+                  <p className="text-xs font-normal text-slate-500 sm:col-span-2">Their ticket is sent to your email. Send it to them, or give them the Ticket ID to show the Chauffeur.</p>
+                </div>
+              )}
+            </Card>
             {/* Route: where, when, which bus. Everything here comes from the server. */}
             <Card className="p-5 sm:p-6">
               <div className="flex items-center justify-between gap-3">
@@ -371,30 +393,7 @@ export default function BuyTicket({ onTicketPurchased, returnTo = '/' }) {
 
               {form.origin_stop_id && form.destination_stop_id && (
                 <div className="mt-5 border-t border-slate-100 pt-5">
-                  <fieldset>
-                    <legend className={LABEL}>Booking Option</legend>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {[['now', 'Book Now'], ['later', 'Book Later']].map(([option, label]) => (
-                        <RadioPill
-                          key={option}
-                          name="booking_option"
-                          checked={bookingMode === option}
-                          disabled={option === 'now' && !isToday}
-                          onChange={() => handleJourneyChange('booking_option', option)}
-                          label={label}
-                        />
-                      ))}
-                    </div>
-                    <p className="mt-2 text-sm text-amber-600">
-                      {!isToday
-                        ? `Book Now is for today's buses. For ${formatManilaDate(travelDate)} choose a departure below.`
-                        : bookingMode === 'now'
-                          ? `You're booking the next bus today, ${formatManilaDate(travelDate)}.`
-                          : 'Choose one of the later departures today.'}
-                    </p>
-                  </fieldset>
-
-                  <div className="mt-4" aria-live="polite">
+                  <div aria-live="polite">
                     {resolution.loading && (
                       <div className="flex items-center gap-2 text-sm text-slate-500"><Loader size={16} className="animate-spin" /> Finding your bus...</div>
                     )}
@@ -402,7 +401,9 @@ export default function BuyTicket({ onTicketPurchased, returnTo = '/' }) {
 
                     {bookingMode === 'later' && !resolution.loading && sameKindDepartures.length > 0 && (
                       <div>
-                        <p className={LABEL}>Departure time at {boardingLabel}</p>
+                        {/* Batch 76 (user): one list of the date's departures replaces Book Now / Book Later. */}
+                        <p className={LABEL}>Select departure time</p>
+                        <p className="mt-0.5 text-xs text-slate-500">Leaving from {boardingLabel}</p>
                         <div role="radiogroup" aria-label="Departure time" className="mt-2 flex flex-wrap gap-2">
                           {sameKindDepartures.map((departure) => {
                             const selected = String(trip?.trip_id) === String(departure.trip_id);
@@ -470,27 +471,32 @@ export default function BuyTicket({ onTicketPurchased, returnTo = '/' }) {
                   onSelectAlighting={selectAlightingStop}
                 />
 
-                {/* The shared route map, highlighting the boarding-to-alighting segment. */}
+                {/* Batch 76 (user): the route map opens in a pop-up, so the page stays short; Track Bus has the live map. */}
                 {timeline?.trip?.route_id && (
-                  <Card className="overflow-hidden p-0">
-                    <RouteMap
-                      routeId={timeline.trip.route_id}
-                      direction={timeline.trip.leg_direction}
-                      highlight={journeyHighlight}
-                      showStatus={false}
-                      className="relative h-72 w-full"
-                    />
-                  </Card>
+                  <div>
+                    <button
+                      type="button"
+                      onClick={() => setShowMap(true)}
+                      className="inline-flex items-center gap-2 rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-navy-900 hover:bg-slate-50"
+                      data-testid="view-route-map"
+                    >
+                      <MapPin size={16} aria-hidden="true" /> View route map
+                    </button>
+                    <Modal open={showMap} onClose={() => setShowMap(false)} title="Route map" size="lg">
+                      <RouteMap
+                        routeId={timeline.trip.route_id}
+                        direction={timeline.trip.leg_direction}
+                        highlight={journeyHighlight}
+                        showStatus={false}
+                        className="relative h-[60vh] w-full"
+                      />
+                    </Modal>
+                  </div>
                 )}
 
                 {/* Seat and Payment */}
                 <Card className="space-y-6 p-5 sm:p-6">
-                  <h2 className="font-display text-lg font-semibold text-navy-950">Seat and Payment</h2>
-
-                  <div>
-                    <p className={LABEL}>Seat Type</p>
-                    <p className="mt-1 text-sm text-slate-600">Seated. Online tickets reserve a seat. Standing places are sold on the bus.</p>
-                  </div>
+                  <h2 className="font-display text-lg font-semibold text-navy-950">Tickets and Payment</h2>
 
                   <div>
                     <label htmlFor="ticket_quantity" className={LABEL}>Ticket Quantity</label>
@@ -523,28 +529,72 @@ export default function BuyTicket({ onTicketPurchased, returnTo = '/' }) {
                     </label>
                   )}
 
-                  {/* Batch 75 (panel): claim a discount online; the Chauffeur checks the ID on the bus. */}
-                  {discountTypes.length > 0 && (
-                    <fieldset data-testid="discount-claims">
-                      <legend className={LABEL}>Student, senior citizen or PWD?</legend>
-                      <p className="mt-1 text-sm text-slate-500">
-                        You pay the full fare now. Show your valid ID to the Chauffeur on the bus. Once they approve it, the {ratePercent(discountTypes[0].rate)} discount goes back to your {form.payment_channel === 'maya' ? 'Maya' : 'GCash'}.
-                      </p>
-                      <div className="mt-3 grid gap-2">
-                        {Array.from({ length: Math.max(1, parseInt(form.ticket_quantity, 10) || 1) }, (_, index) => (
-                          <label key={index} className="flex items-center justify-between gap-3 text-sm text-slate-700">
-                            <span>{(parseInt(form.ticket_quantity, 10) || 1) > 1 ? `Ticket ${index + 1}` : 'This ticket'}</span>
-                            <select
-                              className="w-48 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-navy-950"
-                              value={form.discount_claims?.[index] || ''}
-                              onChange={(e) => setDiscountClaim(index, e.target.value)}
-                              data-testid={`discount-claim-${index}`}
-                            >
-                              <option value="">No discount</option>
-                              {discountTypes.map((type) => <option key={type.key} value={type.key}>{type.label} ({ratePercent(type.rate)})</option>)}
-                            </select>
-                          </label>
-                        ))}
+
+                  {/* Batch 75 (panel): claim a discount online; the Chauffeur checks the ID on the bus. Batch 76 (user): with a
+                      priority seat and baggage, per ticket. */}
+                  {(discountTypes.length > 0 || priorityTypes.length > 0 || baggagePercent > 0) && (
+                    <fieldset data-testid="ticket-options">
+                      <legend className={LABEL}>Ticket options</legend>
+                      <ul className="mt-1 space-y-1 text-xs text-slate-500">
+                        {discountTypes.length > 0 && (
+                          <li>Valid for discount: you pay the full fare now and show your valid ID to the Chauffeur. Once approved, the {ratePercent(discountTypes[0].rate)} discount goes back to your {form.payment_channel === 'maya' ? 'Maya' : 'GCash'}.</li>
+                        )}
+                        {priorityTypes.length > 0 && <li>Priority seats are for senior citizens, persons with disability and pregnant passengers. The Chauffeur checks on the bus.</li>}
+                        {baggagePercent > 0 && <li>Baggage in the compartment costs {baggagePercent}% of the fare.</li>}
+                      </ul>
+                      <div className="mt-3 space-y-3">
+                        {Array.from({ length: Math.max(1, parseInt(form.ticket_quantity, 10) || 1) }, (_, index) => {
+                          const extra = form.ticket_extras?.[index] || {};
+                          const many = (parseInt(form.ticket_quantity, 10) || 1) > 1;
+                          return (
+                            <div key={index} className="rounded-xl border border-slate-200 px-4 py-3">
+                              {many && <p className="mb-2 text-sm font-semibold text-navy-950">Ticket {index + 1}</p>}
+                              <div className="grid gap-3 sm:grid-cols-2">
+                                {discountTypes.length > 0 && (
+                                  <label className="block text-sm font-medium text-slate-700">
+                                    Valid for Discount?
+                                    <select
+                                      className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-navy-950"
+                                      value={form.discount_claims?.[index] || ''}
+                                      onChange={(e) => setDiscountClaim(index, e.target.value)}
+                                      data-testid={`discount-claim-${index}`}
+                                    >
+                                      <option value="">No discount</option>
+                                      {discountTypes.map((type) => <option key={type.key} value={type.key}>{type.label} ({ratePercent(type.rate)})</option>)}
+                                    </select>
+                                  </label>
+                                )}
+                                {priorityTypes.length > 0 && (
+                                  <label className="block text-sm font-medium text-slate-700">
+                                    Priority seat
+                                    <select
+                                      className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-navy-950"
+                                      value={extra.priority_type || ''}
+                                      onChange={(e) => setTicketExtra(index, 'priority_type', e.target.value)}
+                                      data-testid={`priority-${index}`}
+                                    >
+                                      <option value="">No</option>
+                                      {priorityTypes.map((type) => <option key={type.key} value={type.key}>{type.label}</option>)}
+                                    </select>
+                                  </label>
+                                )}
+                              </div>
+                              {baggagePercent > 0 && (
+                                <label className="mt-3 flex items-center gap-2 text-sm text-slate-700">
+                                  <input
+                                    type="checkbox"
+                                    className="h-4 w-4 rounded border-slate-300"
+                                    checked={Boolean(extra.baggage)}
+                                    onChange={(e) => setTicketExtra(index, 'baggage', e.target.checked)}
+                                    data-testid={`baggage-${index}`}
+                                  />
+                                  Baggage in the compartment
+                                  {hasFareQuote && <span className="text-slate-500">(+PHP {Math.round((Number(unitFare) * baggagePercent) / 100).toFixed(2)})</span>}
+                                </label>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
                     </fieldset>
                   )}
@@ -592,37 +642,6 @@ export default function BuyTicket({ onTicketPurchased, returnTo = '/' }) {
                       </label>
                     )}
 
-                    {/* Batch 51 item 7 (user): booking for someone else. Their ticket still goes to the buyer's email until an
-                        SMS service is chosen; their contact is an email or a mobile number (numbers only once a digit is typed). */}
-                    <div className="mt-4 rounded-xl border border-slate-200 px-4 py-3" data-testid="for-someone-else">
-                      <label className="flex items-center gap-2 text-sm font-semibold text-navy-950">
-                        <input type="checkbox" checked={Boolean(form.for_someone_else)} onChange={(e) => handleChange('for_someone_else', e.target.checked)} className="h-4 w-4 rounded border-slate-300 text-teal-600" />
-                        This ticket is for someone else
-                      </label>
-                      {form.for_someone_else && (
-                        <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                          <label className="block text-sm font-semibold text-navy-950">
-                            Their name
-                            <input type="text" value={form.traveller_name} onChange={(e) => handleChange('traveller_name', e.target.value)} aria-invalid={Boolean(formErrors.traveller_name)} maxLength={100} className={FIELD} />
-                            {formErrors.traveller_name && <span role="alert" className="mt-1 block text-xs font-medium text-red-600">{formErrors.traveller_name}</span>}
-                          </label>
-                          <label className="block text-sm font-semibold text-navy-950">
-                            Their email or mobile number
-                            <input
-                              type="text"
-                              inputMode={looksLikePhone(form.traveller_contact) ? 'tel' : 'email'}
-                              value={form.traveller_contact}
-                              onChange={(e) => handleChange('traveller_contact', cleanContactInput(e.target.value))}
-                              aria-invalid={Boolean(formErrors.traveller_contact)}
-                              placeholder="name@example.com or 09171234567"
-                              className={FIELD}
-                            />
-                            {formErrors.traveller_contact && <span role="alert" className="mt-1 block text-xs font-medium text-red-600">{formErrors.traveller_contact}</span>}
-                          </label>
-                          <p className="text-xs font-normal text-slate-500 sm:col-span-2">Their ticket is sent to your email. Send it to them, or give them the Ticket ID to show the Chauffeur.</p>
-                        </div>
-                      )}
-                    </div>
 
                     {!isGuestCheckout && (
                       <div className="mt-4 rounded-xl border border-slate-200 px-4 py-2">
@@ -675,15 +694,15 @@ export default function BuyTicket({ onTicketPurchased, returnTo = '/' }) {
               <SummaryRow label="Board at">{boardingRow?.name || summaryFrom || '-'}</SummaryRow>
               <SummaryRow label="Get off at">{alightingRow?.name || summaryTo || '-'}</SummaryRow>
               <SummaryRow label="Departure">{trip ? `${trip.trip_date} ${trip.boarding_time}` : '-'}</SummaryRow>
-              <SummaryRow label="Seat Type">Seated</SummaryRow>
               <SummaryRow label="Payment">Online &middot; {form.payment_channel === 'maya' ? 'Maya' : 'GCash'}</SummaryRow>
               <SummaryRow label="Unit Fare">
                 PHP {hasFareQuote ? Number(unitFare).toFixed(2) : '0.00'}
               </SummaryRow>
               <SummaryRow label="Quantity">{totalTickets}</SummaryRow>
               <SummaryRow label="Gross Total">PHP {Number(grossTotal || 0).toFixed(2)}</SummaryRow>
+              {baggage.count > 0 && <SummaryRow label={`Baggage (${baggage.count})`}>PHP {Number(baggage.total).toFixed(2)}</SummaryRow>}
               <SummaryRow label="Rewards Applied">{Number(rewardPointsToApply || 0).toFixed(0)} points</SummaryRow>
-              <SummaryRow label="Fare after rewards">PHP {Number(netTotal || 0).toFixed(2)}</SummaryRow>
+              <SummaryRow label={baggage.count > 0 ? 'Fare and baggage after rewards' : 'Fare after rewards'}>PHP {Number(netTotal || 0).toFixed(2)}</SummaryRow>
               <SummaryRow label={bookingFeeRate ? `Transaction fee (${bookingFeeRate})` : 'Transaction fee'}>{bookingFee === null ? 'Not provided' : `PHP ${Number(bookingFee).toFixed(2)}`}</SummaryRow>
             </dl>
             <div className="mt-2 flex items-center justify-between border-t border-slate-200 pt-4">
@@ -694,7 +713,7 @@ export default function BuyTicket({ onTicketPurchased, returnTo = '/' }) {
             </div>
             {bookingFee > 0 && (
               <p className="mt-1 text-xs text-slate-500">
-                Online payments have a transaction fee of {bookingFeeRate} of the fare for {form.payment_channel === 'maya' ? 'Maya' : 'GCash'} (PHP {Number(bookingFee).toFixed(2)} here), once for each payment however many tickets you buy. Tickets bought with cash on the bus have no fee.
+                Online payments have a transaction fee of {bookingFeeRate} of the amount for {form.payment_channel === 'maya' ? 'Maya' : 'GCash'} (PHP {Number(bookingFee).toFixed(2)} here), once for each payment however many tickets you buy. Tickets bought with cash on the bus have no fee.
               </p>
             )}
             {timeline?.fare?.error && <p className="mt-2 text-xs text-red-600">{timeline.fare.error}</p>}

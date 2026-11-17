@@ -4,6 +4,7 @@ import PassengerService from '../../PassengerService/PassengerService';
 import { checkoutIdempotencyKey, clearCheckoutIdempotencyKey, shouldDropCheckoutKey } from '../../../utils/checkoutIdempotency';
 import { getBookingWindow, getTripDiscountTypes, readApiError } from '../../../services/bookingService';
 import { itemsWithClaims } from '../../../utils/discountClaim';
+import { baggageSummary, itemsWithExtras, priorityFromClaim } from '../../../utils/ticketExtras';
 import { useBookingStops, useDepartures, useTripResolution } from './useBookingSearch';
 import useBookingLink from './useBookingLink';
 import useTripTimeline from './useTripTimeline';
@@ -127,6 +128,9 @@ export default function useBuyTicket({ onTicketPurchased }) {
   const [feeRates, setFeeRates] = useState(null);
   // Batch 49 item 1: the most tickets in one purchase comes from the server (it checks it too); 20 until it answers.
   const [maxSeatsPerPurchase, setMaxSeatsPerPurchase] = useState(DEFAULT_MAX_SEATS);
+  // Batch 76: the priority seat types and the baggage fee percent from the server (none / 0 until it answers).
+  const [priorityTypes, setPriorityTypes] = useState([]);
+  const [baggagePercent, setBaggagePercent] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -137,6 +141,8 @@ export default function useBuyTicket({ onTicketPurchased }) {
         if (cancelled) return;
         setFeeRates(rates && typeof rates === 'object' ? rates : null);
         if (Number.isInteger(maxSeats) && maxSeats > 0) setMaxSeatsPerPurchase(maxSeats);
+        setPriorityTypes(Array.isArray(window?.priority_types) ? window.priority_types : []);
+        setBaggagePercent(Number(window?.baggage_percent) > 0 ? Number(window.baggage_percent) : 0);
       })
       .catch(() => { if (!cancelled) setFeeRates(null); });
     return () => { cancelled = true; };
@@ -179,6 +185,8 @@ export default function useBuyTicket({ onTicketPurchased }) {
     traveller_contact: '',
     // Batch 75: the discount claimed for each ticket ({ ticketIndex: 'student' }); checked on the bus.
     discount_claims: {},
+    // Batch 76: each ticket's priority seat and baggage ({ ticketIndex: { priority_type: 'pwd', baggage: true } }).
+    ticket_extras: {},
   }));
   // Apply the checked link once (derived-state update during render, not an effect).
   const [linkApplied, setLinkApplied] = useState(false);
@@ -200,9 +208,9 @@ export default function useBuyTicket({ onTicketPurchased }) {
   // The travel date is a Manila calendar date; until one is chosen it is today (from the server).
   const travelDate = form.booking_date || stopsData.today;
   const isToday = Boolean(travelDate) && travelDate === stopsData.today;
-  // Book Now means "the next bus today"; any other date can only be Book Later. The mode is page
-  // state, never part of the URL.
-  const bookingMode = isToday ? form.booking_option : 'later';
+  // Batch 76 (user, 2026-11-17): Book Now / Book Later is gone; the passenger always picks from the date's departures
+  // ("Select departure time", the next one selected first). The mode is page state, never part of the URL.
+  const bookingMode = 'later';
 
 
   // Book Now: the server picks the next departure today. Book Later: the passenger picks one of the
@@ -251,7 +259,22 @@ export default function useBuyTicket({ onTicketPurchased }) {
     return () => { cancelled = true; };
   }, [discountTripId]);
   const setDiscountClaim = useCallback((index, key) => {
-    setForm((prev) => ({ ...prev, discount_claims: { ...prev.discount_claims, [index]: key || null } }));
+    setForm((prev) => {
+      // Batch 76: a senior or PWD claim asks for a priority seat too (the passenger can still turn it off).
+      const implied = priorityFromClaim(key, priorityTypes);
+      const current = prev.ticket_extras?.[index] || {};
+      const extras = implied && !current.priority_type
+        ? { ...prev.ticket_extras, [index]: { ...current, priority_type: implied } }
+        : prev.ticket_extras;
+      return { ...prev, discount_claims: { ...prev.discount_claims, [index]: key || null }, ticket_extras: extras };
+    });
+  }, [priorityTypes]);
+  // Batch 76: one ticket's priority seat ('' for none) or baggage (true / false).
+  const setTicketExtra = useCallback((index, field, value) => {
+    setForm((prev) => ({
+      ...prev,
+      ticket_extras: { ...prev.ticket_extras, [index]: { ...(prev.ticket_extras?.[index] || {}), [field]: value } },
+    }));
   }, []);
 
   // The link mirrors the choice: stops, date and (for Book Later) the departure time.
@@ -285,12 +308,15 @@ export default function useBuyTicket({ onTicketPurchased }) {
 
   const quantity = Math.max(1, parseInt(form.ticket_quantity, 10) || 1);
   const grossTotal = Number.isFinite(unitFare) ? Number((unitFare * quantity).toFixed(2)) : 0;
+  // Batch 76: baggage is a share of each ticket's full fare, added to the payment (the server works out the same).
+  const baggage = baggageSummary(Number.isFinite(unitFare) ? unitFare : 0, quantity, form.ticket_extras, baggagePercent);
+  const payableBeforeRewards = Number((grossTotal + baggage.total).toFixed(2));
   const requestedRewardPoints = Math.max(0, parseInt(form.reward_points_to_use, 10) || 0);
-  const maxRedeemableByTotal = Math.max(0, Math.floor(grossTotal - 1));
+  const maxRedeemableByTotal = Math.max(0, Math.floor(payableBeforeRewards - 1));
   const maxRedeemableRewardPoints = Math.min(availableRewardPoints, maxRedeemableByTotal);
   const rewardPointsToApply = form.use_rewards ? Math.min(requestedRewardPoints, maxRedeemableRewardPoints) : 0;
   const isRewardRequestInsufficient = form.use_rewards && requestedRewardPoints > maxRedeemableRewardPoints;
-  const netTotal = Number(Math.max(0, grossTotal - rewardPointsToApply).toFixed(2));
+  const netTotal = Number(Math.max(0, payableBeforeRewards - rewardPointsToApply).toFixed(2));
   // Batch 75: the transaction fee at the chosen e-wallet's rate (one per payment, whatever the number of tickets).
   // null until the rates have loaded; the page then says it is not known yet instead of showing a made-up amount.
   const bookingFee = transactionFee(feeRates, form.payment_channel, netTotal);
@@ -802,7 +828,7 @@ export default function useBuyTicket({ onTicketPurchased }) {
       };
 
       const payload = {
-        items: itemsWithClaims(itemPayload, quantity, form.discount_claims, discountTypes),
+        items: itemsWithExtras(itemsWithClaims(itemPayload, quantity, form.discount_claims, discountTypes), form.ticket_extras, priorityTypes),
         booking_date: trip.trip_date,
         return_base_url: window.location.origin,
         payment_channel: form.payment_channel,
@@ -864,6 +890,7 @@ export default function useBuyTicket({ onTicketPurchased }) {
     discountTypes,
     effectiveAlightingStopId,
     form.discount_claims,
+    form.ticket_extras,
     form.email_group_qr,
     form.guest_email,
     form.for_someone_else,
@@ -878,6 +905,7 @@ export default function useBuyTicket({ onTicketPurchased }) {
     isRewardRequestInsufficient,
     maxRedeemableRewardPoints,
     maxSeatsPerPurchase,
+    priorityTypes,
     quantity,
     rewardPointsToApply,
     trip,
@@ -912,6 +940,10 @@ export default function useBuyTicket({ onTicketPurchased }) {
     bookingFeeRate,
     discountTypes,
     setDiscountClaim,
+    priorityTypes,
+    baggagePercent,
+    baggage,
+    setTicketExtra,
     maxSeatsPerPurchase,
     totalDue,
     printQrTicket,

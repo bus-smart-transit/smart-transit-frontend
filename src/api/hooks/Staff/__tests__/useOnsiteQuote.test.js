@@ -22,8 +22,17 @@ describe('useOnsiteQuote', () => {
     const { result } = renderHook(() => useOnsiteQuote({ tripId: 7, form, ready: true }));
 
     expect(result.current.status).toBe('loading');
-    await waitFor(() => expect(result.current).toEqual({ status: 'ready', amount: 35, originalAmount: null, discountAmount: null, discountLabel: null, message: '' }));
+    await waitFor(() => expect(result.current).toEqual({ status: 'ready', amount: 35, originalAmount: null, discountAmount: null, discountLabel: null, baggageFee: 0, message: '' }));
     expect(quoteOnsite).toHaveBeenCalledWith({ trip_id: 7, seat_type: 'seated', origin_stop_id: 1, destination_stop_id: 3 });
+  });
+
+  // Batch 76: with baggage the server also prices the baggage fee (SAMPLE: fare 35, baggage 18).
+  it('asks for the baggage fee when the passenger has baggage', async () => {
+    quoteOnsite.mockResolvedValue({ data: { amount: 35, baggage_fee: 18 } });
+    const { result } = renderHook(() => useOnsiteQuote({ tripId: 7, form, ready: true, baggage: true }));
+
+    await waitFor(() => expect(result.current.baggageFee).toBe(18));
+    expect(quoteOnsite).toHaveBeenCalledWith({ trip_id: 7, seat_type: 'seated', origin_stop_id: 1, destination_stop_id: 3, baggage: true });
   });
 
   it('asks again when the destination or the seat type changes, and never shows the old fare for the new choice', async () => {

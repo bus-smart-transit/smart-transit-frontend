@@ -1127,6 +1127,9 @@ export function useConductorDashboardData({ onLogout, pairing }) {
         onsiteItem.discount_type_key = discount.discount_type_key;
         onsiteItem.discount_id_checked = Boolean(discount.discount_id_checked);
       }
+      // Batch 76: a priority seat and baggage in the compartment (the server adds the baggage fee).
+      if (discount?.priority_type) onsiteItem.priority_type = discount.priority_type;
+      if (discount?.baggage) onsiteItem.baggage = true;
       const onsitePayload = { items: [onsiteItem] };
       const idempotencyKey = checkoutIdempotencyKey('conductor-cash', onsitePayload);
       const res = await ConductorService.checkoutOnsite(onsitePayload, idempotencyKey);

@@ -184,7 +184,59 @@ describe('booking for someone else', () => {
     useBuyTicket.mockReturnValue(state);
     render(<MemoryRouter><BuyTicket /></MemoryRouter>);
     expect(screen.queryByLabelText('Their name')).toBeNull();
-    fireEvent.click(screen.getByRole('checkbox', { name: 'This ticket is for someone else' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Book for someone' }));
     expect(state.handleChange).toHaveBeenCalledWith('for_someone_else', true);
+  });
+});
+
+
+// Batch 76 (user, 2026-11-17): one departure list, "Book for someone" first, no seat type, the map in a pop-up, and per
+// ticket "Valid for Discount?", a priority seat and baggage. SAMPLE values.
+describe('checkout layout and ticket options (Batch 76)', () => {
+  beforeEach(() => vi.clearAllMocks());
+  const options = () => ({
+    ...bookingState(),
+    discountTypes: [{ key: 'student', label: 'Student', rate: 0.2 }],
+    priorityTypes: [{ key: 'senior', label: 'Senior citizen' }, { key: 'pregnant', label: 'Pregnant' }],
+    baggagePercent: 50,
+    baggage: { count: 1, total: 118 },
+    setDiscountClaim: vi.fn(),
+    setTicketExtra: vi.fn(),
+    timelineState: { timeline: { trip: { route_id: 3, leg_direction: 'outbound' } } },
+    form: { ...bookingState().form, ticket_extras: { 0: { baggage: true } } },
+  });
+
+  it('puts Book for someone before the route and drops Booking Option and Seat Type', () => {
+    useBuyTicket.mockReturnValue(options());
+    render(<MemoryRouter><BuyTicket /></MemoryRouter>);
+
+    const someone = screen.getByTestId('for-someone-else');
+    const route = screen.getByText('Route');
+    expect(someone.compareDocumentPosition(route) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.queryByText('Booking Option')).not.toBeInTheDocument();
+    expect(screen.queryByText('Seat Type')).not.toBeInTheDocument();
+  });
+
+  it('asks per ticket for a discount, a priority seat and baggage, and passes the choices to the form', () => {
+    const state = options();
+    useBuyTicket.mockReturnValue(state);
+    render(<MemoryRouter><BuyTicket /></MemoryRouter>);
+
+    expect(screen.getAllByText('Valid for Discount?')).toHaveLength(2);
+    fireEvent.change(screen.getByTestId('priority-1'), { target: { value: 'pregnant' } });
+    expect(state.setTicketExtra).toHaveBeenCalledWith(1, 'priority_type', 'pregnant');
+    fireEvent.click(screen.getByTestId('baggage-1'));
+    expect(state.setTicketExtra).toHaveBeenCalledWith(1, 'baggage', true);
+    expect(screen.getAllByText('(+PHP 118.00)')).toHaveLength(2);
+    expect(screen.getByText('Baggage (1)')).toBeInTheDocument();
+  });
+
+  it('opens the route map in a pop-up', () => {
+    useBuyTicket.mockReturnValue(options());
+    render(<MemoryRouter><BuyTicket /></MemoryRouter>);
+
+    expect(screen.queryByRole('dialog', { name: 'Route map' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('view-route-map'));
+    expect(screen.getByText('Route map')).toBeInTheDocument();
   });
 });

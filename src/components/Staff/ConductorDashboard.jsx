@@ -149,6 +149,9 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   const [onsiteDiscountError, setOnsiteDiscountError] = useState('');
   const [onsiteDiscountTypeKey, setOnsiteDiscountTypeKey] = useState('');
   const [onsiteDiscountIdChecked, setOnsiteDiscountIdChecked] = useState(false);
+  // Batch 76: the cash sale's priority seat and baggage.
+  const [onsitePriority, setOnsitePriority] = useState('');
+  const [onsiteBaggage, setOnsiteBaggage] = useState(false);
   const [confirmStart, setConfirmStart] = useState(false);
   // 2026-10-28 (§4.5): no opening cash at Start Shift. Chauffeurs are not given petty cash, so a shift starts at 0.
   // Batch 29: End Shift asks for the cash counted and handed over; the Operator confirms it on the web dashboard.
@@ -276,10 +279,14 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     const completed = await handleConfirmedOnsiteCheckout({
       discount_type_key: onsiteDiscountTypeKey,
       discount_id_checked: onsiteDiscountIdChecked,
+      priority_type: onsitePriority,
+      baggage: onsiteBaggage,
     }, onsiteQuote.status === 'ready' ? onsiteQuote.amount : null);
     if (completed) {
       setOnsiteDiscountTypeKey('');
       setOnsiteDiscountIdChecked(false);
+      setOnsitePriority('');
+      setOnsiteBaggage(false);
     }
   };
   // Batch 27: the cash ticket offers real stopping stops in the order this leg travels
@@ -311,6 +318,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     ready: formReady,
     refreshKey: `${byBusPosition ? boardingView.distanceFromOriginKm : 0}-${quoteNonce}`,
     discount: { discount_type_key: onsiteDiscountTypeKey, discount_id_checked: onsiteDiscountIdChecked },
+    baggage: onsiteBaggage,
   });
 
   const headerBadge = resolveConductorHeaderBadge({
@@ -627,6 +635,14 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                     <p className="text-3xl font-bold text-teal-800" data-testid="expected-boarding-count">{expectedBoarding.next_stop.waiting_count}</p>
                     <p className="text-xs font-semibold text-teal-900">{expectedBoarding.next_stop.waiting_count === 1 ? 'passenger to board here' : 'passengers to board here'}</p>
                   </div>
+                  {(expectedBoarding.next_stop.priority_count > 0 || expectedBoarding.next_stop.baggage_count > 0) && (
+                    <p className="w-full text-sm font-semibold text-teal-900" data-testid="expected-boarding-extras">
+                      {[
+                        expectedBoarding.next_stop.priority_count > 0 && `${expectedBoarding.next_stop.priority_count} need a priority seat`,
+                        expectedBoarding.next_stop.baggage_count > 0 && `${expectedBoarding.next_stop.baggage_count} with baggage for the compartment`,
+                      ].filter(Boolean).join(' · ')}
+                    </p>
+                  )}
                   <p className="w-full text-xs text-teal-900">{expectedBoarding.waiting_total === 1 ? '1 paid passenger' : `${expectedBoarding.waiting_total ?? 0} paid passengers`} still to board on this trip.</p>
                 </article>
               )}
@@ -819,6 +835,34 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                       )}
                     </div>
 
+                    {/* Batch 76: a priority seat and baggage in the compartment (the baggage fee is added to the fare). */}
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div>
+                        <label htmlFor="onsite-priority" className="mb-1 block text-sm font-semibold text-slate-700">Priority seat</label>
+                        <select
+                          id="onsite-priority"
+                          value={onsitePriority}
+                          onChange={(event) => setOnsitePriority(event.target.value)}
+                          className="h-11 w-full rounded-lg border border-slate-300 bg-slate-800 px-3 text-sm text-white outline-none focus:border-teal-500"
+                        >
+                          <option value="">No</option>
+                          <option value="senior">Senior citizen</option>
+                          <option value="pwd">Person with disability</option>
+                          <option value="pregnant">Pregnant</option>
+                        </select>
+                      </div>
+                      <label className="flex items-center gap-2 self-end pb-2 text-sm font-semibold text-slate-700">
+                        <input
+                          type="checkbox"
+                          checked={onsiteBaggage}
+                          onChange={(event) => setOnsiteBaggage(event.target.checked)}
+                          className="h-4 w-4 rounded border-slate-300 accent-teal-700"
+                          data-testid="onsite-baggage"
+                        />
+                        Baggage in the compartment
+                      </label>
+                    </div>
+
                     <div data-testid="onsite-fare">
                       <label htmlFor="onsite-fare-amount" className="mb-1 block text-sm font-semibold text-slate-700">Fare Amount (PHP)</label>
                       <output
@@ -831,6 +875,11 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                         {onsiteQuote.status === 'error' && <span role="alert" className="text-sm font-semibold text-red-700">{onsiteQuote.message}</span>}
                         {onsiteQuote.status === 'idle' && <span className="text-sm text-slate-600">Select boarding point and destination first</span>}
                       </output>
+                      {onsiteQuote.status === 'ready' && onsiteQuote.baggageFee > 0 && (
+                        <p className="mt-1 text-sm font-semibold text-slate-800" data-testid="onsite-baggage-fee">
+                          Plus baggage &#8369;{onsiteQuote.baggageFee.toFixed(2)}. Collect &#8369;{(onsiteQuote.amount + onsiteQuote.baggageFee).toFixed(2)}.
+                        </p>
+                      )}
                       {onsiteQuote.status === 'ready' && onsiteQuote.discountAmount > 0 && (
                         <p className="mt-1 text-xs text-slate-600" data-testid="onsite-fare-discount">
                           Regular fare &#8369;{onsiteQuote.originalAmount.toFixed(2)}, {onsiteQuote.discountLabel} discount -&#8369;{onsiteQuote.discountAmount.toFixed(2)}.
@@ -953,7 +1002,12 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                             return (
                               <tr key={p.ticket_id ?? `${group.key}-${i}`} className="border-b border-slate-100">
                                 <td className="py-3 font-data text-slate-500">{p.row_number}</td>
-                                <td className="py-3 text-slate-900">{p.passenger_name ?? p.passenger?.name ?? 'Guest'}</td>
+                                <td className="py-3 text-slate-900">
+                                  {p.passenger_name ?? p.passenger?.name ?? 'Guest'}
+                                  {/* Batch 76: priority seat and baggage, so the Chauffeur can seat and load them. */}
+                                  {p.priority_label && <span className="ml-1.5 rounded-full bg-violet-100 px-2 py-0.5 text-xs font-semibold text-violet-800">Priority: {p.priority_label}</span>}
+                                  {p.baggage && <span className="ml-1.5 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700">Baggage</span>}
+                                </td>
                                 <td className="py-3"><span className="rounded-full border border-slate-200 px-2 py-1 text-xs capitalize text-slate-600">{p.seat_type}</span></td>
                                 <td className="py-3 text-slate-600">{p.destination_display}{p.discount_claim && <span className="block text-xs font-semibold text-amber-800">{claimReviewState(p.discount_claim).text}</span>}</td>
                                 <td className="py-3">
@@ -1229,7 +1283,10 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
               <div><dt className="text-xs text-slate-500">Passenger Type</dt><dd className="font-semibold text-slate-100 capitalize">{cashForm.seat_type}</dd></div>
               <div><dt className="text-xs text-slate-500">Trip ID</dt><dd className="font-semibold text-slate-100">#{trip?.trip_id}</dd></div>
               {onsiteQuote.status === 'ready' && (
-                <div className="col-span-2"><dt className="text-xs text-slate-500">Fare to collect</dt><dd className="font-data text-2xl font-bold text-emerald-300">&#8369;{onsiteQuote.amount.toFixed(2)}</dd></div>
+                <div className="col-span-2">
+                  <dt className="text-xs text-slate-500">{onsiteQuote.baggageFee > 0 ? 'Fare and baggage to collect' : 'Fare to collect'}</dt>
+                  <dd className="font-data text-2xl font-bold text-emerald-300">&#8369;{(onsiteQuote.amount + (onsiteQuote.baggageFee || 0)).toFixed(2)}</dd>
+                </div>
               )}
             </dl>
             <div className="flex gap-2">

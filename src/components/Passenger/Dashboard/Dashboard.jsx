@@ -200,6 +200,7 @@ export default function Dashboard() {
     { value: 'scheduled', label: 'Scheduled' },
     { value: 'completed', label: 'Completed' },
     { value: 'expired', label: 'Expired' },
+    { value: 'missed', label: 'Missed' },
     { value: 'cancelled', label: 'Cancelled trips' },
     { value: 'group', label: 'Group' },
   ];
@@ -217,6 +218,9 @@ export default function Dashboard() {
     }
     if (ticketStatusFilter === 'expired') {
       return normalizedStatus === 'expired';
+    }
+    if (ticketStatusFilter === 'missed') {
+      return normalizedStatus === 'missed';
     }
     if (ticketStatusFilter === 'group') {
       const ref = ticket?.payment?.transaction_reference;
@@ -897,6 +901,8 @@ export default function Dashboard() {
                 farePaid={selectedTicket.amount ?? selectedTicketQr?.amount}
                 discountVerified={Boolean(selectedTicket.discount_id_checked_at ?? selectedTicketQr?.discount_id_checked_at)}
                 discountClaimMessage={selectedTicket.discount_claim?.message || ''}
+                priorityLabel={selectedTicket.priority_label || ''}
+                baggageFee={selectedTicket.baggage_fee ?? null}
                 trackingToken={renewedTokens[selectedTicket.ticket_uuid] || selectedTicket.tracking_token || ''}
                 trackingCode={selectedTicket.ticket_uuid in renewedCodes ? renewedCodes[selectedTicket.ticket_uuid] : (selectedTicket.tracking_code || '')}
                 ticketId={ticketIdOf(selectedTicket.ticket_uuid)}
