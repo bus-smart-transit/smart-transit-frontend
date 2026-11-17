@@ -26,6 +26,7 @@ import { journeyLabel, servedStopIdsOf } from '../../../utils/expressTrip';
 import { useRegion } from '../../../api/hooks/useRegion';
 import { busArrival, busesNear, busTrip, formatKm, passengersText } from '../../../utils/nearbyBuses';
 import TrackMyBusModal from '../Track/TrackMyBusModal';
+import StopArrivalsCard from './StopArrivalsCard';
 import { setGeoJson } from '../../Map/routeLayers';
 // The stops of a bus's route, ordered for its leg direction, are what name its place (routeKeyOf).
 import { busCounts, busStatusText, routeKeyOf, routeLineFeatures, stopPlaceFeatures, tripsFromStopHref } from '../../../utils/publicTrackingView';
@@ -64,6 +65,8 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
   const [mapReady, setMapReady] = useState(false);
   const [fleets, setFleets] = useState([]);
   const [selectedFleetId, setSelectedFleetId] = useState(null);
+  // Batch 77 (user): the stop pin whose "Next arrivals" card is open ({ code, name }), or null.
+  const [selectedStop, setSelectedStop] = useState(null);
   const [userCoords, setUserCoords] = useState(null);
   const [isPinning, setIsPinning] = useState(false);
   const [pinError, setPinError] = useState('');
@@ -183,6 +186,7 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
           const el = icon.element;
           busIconsRef.current.set(fleetId, icon);
           el.addEventListener('click', () => {
+            setSelectedStop(null);
             setSelectedFleetId(fleetId);
             flyToFleet(row);
           });
@@ -293,18 +297,23 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
   };
   const coordinatesTitle = (row) => `${Number(row?.latitude).toFixed(5)}, ${Number(row?.longitude).toFixed(5)}`;
 
-  // Only the chosen bus is drawn while one is chosen; with none, every bus, and the map fits them all.
+  const previousFleetIdRef = useRef(null);
+  // Only the chosen bus is drawn while one is chosen; with none, every bus. The map follows a clicked bus only.
   useEffect(() => {
     for (const [fleetId, marker] of markersRef.current) {
       const el = marker.getElement?.();
       if (el) el.style.display = selectedFleetId && Number(fleetId) !== Number(selectedFleetId) ? 'none' : '';
     }
+    // Batch 77 (user, 2026-11-17): the map no longer zooms in to the buses on its own (on load or at each refresh). It
+    // moves only when a bus is clicked (flyToFleet), and once back out to every bus when the passenger leaves that bus.
     const map = mapRef.current;
     const maplibregl = mapLibRef.current;
-    if (!selectedFleetId && map && maplibregl && fleets.length > 0) {
+    const leftABus = previousFleetIdRef.current && !selectedFleetId;
+    previousFleetIdRef.current = selectedFleetId;
+    if (leftABus && map && maplibregl && fleets.length > 0) {
       const bounds = new maplibregl.LngLatBounds();
       fleets.forEach((row) => bounds.extend([Number(row.longitude), Number(row.latitude)]));
-      try { map.fitBounds(bounds, { padding: 60, maxZoom: 13, duration: 600 }); } catch { /* map not ready */ }
+      try { map.fitBounds(bounds, { padding: 60, maxZoom: 11, duration: 600 }); } catch { /* map not ready */ }
     }
   }, [selectedFleetId, fleets]);
   const showAll = useCallback(() => setSelectedFleetId(null), []);
@@ -341,7 +350,6 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
   useEffect(() => { navigateRef.current = navigate; }, [navigate]);
   useEffect(() => {
     const map = mapRef.current;
-    const maplibregl = mapLibRef.current;
     if (!mapReady || !map) return undefined;
     const data = { type: 'FeatureCollection', features: selectedFleetId ? [] : stopPlaceFeatures(stopPlaceGroups) };
     const apply = () => {
@@ -356,23 +364,13 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
           });
           map.on('mouseenter', STOP_PINS_LAYER, () => { map.getCanvas().style.cursor = 'pointer'; });
           map.on('mouseleave', STOP_PINS_LAYER, () => { map.getCanvas().style.cursor = ''; });
+          // Batch 77 (user): a stop pin opens its "Next arrivals" card (StopArrivalsCard), which also offers the trips
+          // from that place.
           map.on('click', STOP_PINS_LAYER, (event) => {
             const feature = event.features?.[0];
-            if (!feature || !maplibregl) return;
+            if (!feature) return;
             const { code, name } = feature.properties || {};
-            const box = document.createElement('div');
-            box.style.cssText = 'font-family:sans-serif;padding:4px;min-width:170px;color:#0f172a;';
-            const title = document.createElement('p');
-            title.style.cssText = 'margin:0 0 6px;font-weight:700;font-size:13px;';
-            title.textContent = name;
-            const button = document.createElement('button');
-            button.type = 'button';
-            button.setAttribute('data-testid', 'stop-pin-trips');
-            button.style.cssText = 'width:100%;border:0;border-radius:8px;background:#0f766e;color:#fff;font-weight:700;font-size:12px;padding:8px;cursor:pointer;';
-            button.textContent = `View available trips from ${name}`;
-            button.addEventListener('click', () => navigateRef.current(tripsFromStopHref(code)));
-            box.append(title, button);
-            new maplibregl.Popup({ offset: 12 }).setLngLat(feature.geometry.coordinates).setDOMContent(box).addTo(map);
+            if (code) setSelectedStop({ code, name });
           });
         }
       } catch { /* the map style is not ready yet; the next change draws it */ }
@@ -551,7 +549,13 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
               </button>
             </div>
 
-            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+            <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white">
+              <StopArrivalsCard
+                key={selectedStop?.code || 'none'}
+                stop={selectedStop}
+                onClose={() => setSelectedStop(null)}
+                onViewTrips={(code) => navigateRef.current(tripsFromStopHref(code))}
+              />
               <RouteMap
                 routeId={selectedRouteId}
                 direction={selectedFleet?.leg_direction || 'outbound'}

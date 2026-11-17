@@ -74,6 +74,13 @@ export async function getFareOptions() {
 }
 
 /** Timeline for a trip, recomputed for the chosen boarding/alighting stop or custom drop-off pin. */
+/** Batch 77: the buses coming to a stop (by its code), soonest first; `limit` asks for more than the first three. */
+export async function getStopArrivals(stopCode, limit = null) {
+  const params = limit ? { limit } : {}
+  const response = await api.get(`/stops/${encodeURIComponent(stopCode)}/arrivals`, { params })
+  return data(response)
+}
+
 export async function getTripTimeline(tripId, selection = {}) {
   const params = {}
   Object.entries(selection).forEach(([key, value]) => {
