@@ -28,6 +28,7 @@ import { busArrival, busesNear, busTrip, formatKm, passengersText } from '../../
 import TrackMyBusModal from '../Track/TrackMyBusModal';
 import StopArrivalsCard from './StopArrivalsCard';
 import { setGeoJson } from '../../Map/routeLayers';
+import drawWhenReady from '../../Map/drawWhenReady';
 // The stops of a bus's route, ordered for its leg direction, are what name its place (routeKeyOf).
 import { busCounts, busStatusText, routeKeyOf, routeLineFeatures, stopPlaceFeatures, tripsFromStopHref } from '../../../utils/publicTrackingView';
 import { useBookingStops } from '../../../api/hooks/Passenger/useBookingSearch';
@@ -338,9 +339,8 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
         }
       } catch { /* the map style is not ready yet; the next poll draws it */ }
     };
-    if (map.isStyleLoaded?.()) apply();
-    else map.once?.('idle', apply);
-    return undefined;
+    // Batch 78 (user, 2026-11-17: "the pins often disappear"): a replaced run's waiting draw is cancelled (drawWhenReady).
+    return drawWhenReady(map, apply);
   }, [mapReady, fleets, geometryByRoute, selectedFleetId]);
   // Batch 75 (user, 2026-11-15): every passenger place as a pin while no bus is chosen; a click offers the available
   // trips from that place. The chosen bus's own stops are drawn by RouteMap instead.
@@ -375,9 +375,8 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
         }
       } catch { /* the map style is not ready yet; the next change draws it */ }
     };
-    if (map.isStyleLoaded?.()) apply();
-    else map.once?.('idle', apply);
-    return undefined;
+    // Batch 78 (user, 2026-11-17: "the pins often disappear"): a replaced run's waiting draw is cancelled (drawWhenReady).
+    return drawWhenReady(map, apply);
   }, [mapReady, stopPlaceGroups, selectedFleetId]);
   const counts = busCounts(fleets);
 
