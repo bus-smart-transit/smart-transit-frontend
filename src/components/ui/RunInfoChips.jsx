@@ -17,7 +17,7 @@ export default function RunInfoChips({ runPattern = null, service = null, servic
         <span
           data-testid="run-pattern-chip"
           data-run-pattern={runPattern?.key}
-          className={`inline-flex items-center rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[11px] font-semibold text-sky-800 ${className}`}
+          className={`inline-flex items-center rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-xs font-semibold text-sky-800 ${className}`}
         >
           {pattern}
         </span>

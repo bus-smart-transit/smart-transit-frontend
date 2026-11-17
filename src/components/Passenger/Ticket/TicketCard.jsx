@@ -91,15 +91,15 @@ export default function TicketCard({
 
         <div className="mt-3.5 grid grid-cols-3 gap-2">
           <div>
-            <span className="block text-[0.62rem] uppercase tracking-wide opacity-85">Departure</span>
+            <span className="block text-xs uppercase tracking-wide opacity-85">Departure</span>
             <strong className="mt-0.5 block text-sm font-bold">{departureLabel || '-'}</strong>
           </div>
           <div>
-            <span className="block text-[0.62rem] uppercase tracking-wide opacity-85">Seat</span>
+            <span className="block text-xs uppercase tracking-wide opacity-85">Seat</span>
             <strong className="mt-0.5 block text-sm font-bold">{seatLabel || '-'}</strong>
           </div>
           <div>
-            <span className="block text-[0.62rem] uppercase tracking-wide opacity-85">Route</span>
+            <span className="block text-xs uppercase tracking-wide opacity-85">Route</span>
             <strong className="mt-0.5 block text-sm font-bold">{routeLabel || '-'}</strong>
           </div>
         </div>
@@ -141,7 +141,7 @@ export default function TicketCard({
       {canTrack && trackingCode && (
         <div className="mx-3.5 mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5" data-testid="tracking-code">
           <div>
-            <span className="block text-[0.62rem] font-semibold uppercase tracking-wide text-slate-500">Tracking code</span>
+            <span className="block text-xs font-semibold uppercase tracking-wide text-slate-500">Tracking code</span>
             <strong className="font-data text-lg tracking-[0.2em] text-navy-950">{trackingCode}</strong>
             <span className="block text-xs text-slate-500">Type it at <Link to="/track" className="font-semibold text-navy-800 underline">Track my bus</Link>.</span>
           </div>

@@ -42,7 +42,7 @@ function TimelineRow({ row, canSelect, onSelect }) {
       </span>
       <span className="min-w-0 flex-1 text-left">
         <span className={`block truncate text-sm ${isPassThrough ? 'text-slate-500' : 'font-semibold text-navy-950'}`}>{row.name}</span>
-        <span className="flex flex-wrap items-center gap-1.5 text-[0.7rem] text-slate-400">
+        <span className="flex flex-wrap items-center gap-1.5 text-xs text-slate-400">
           {row.municipality && <span>{row.municipality}</span>}
           {row.type === 'stop' && <span className="rounded-full bg-navy-50 px-2 py-0.5 font-semibold text-navy-700">Stop</span>}
           {row.is_boarding && <span className="rounded bg-emerald-100 px-1.5 py-0.5 font-semibold text-emerald-700">You board here</span>}
@@ -125,7 +125,7 @@ export default function TripTimeline({
         {error && <p className="mt-2 text-xs text-red-600">{error.message}</p>}
       </header>
 
-      <ul className="flex flex-wrap gap-x-4 gap-y-1 border-b border-slate-100 px-4 py-2 text-[0.7rem] text-slate-500" aria-label="Legend">
+      <ul className="flex flex-wrap gap-x-4 gap-y-1 border-b border-slate-100 px-4 py-2 text-xs text-slate-500" aria-label="Legend">
         {LEGEND.map((entry) => (
           <li key={entry.state} className="inline-flex items-center gap-1.5">
             <span className={`block h-2.5 w-2.5 rounded-full border-2 ${NODE_STYLE[entry.state]}`} aria-hidden="true" />

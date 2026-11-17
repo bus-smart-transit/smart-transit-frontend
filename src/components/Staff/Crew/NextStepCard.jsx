@@ -11,7 +11,7 @@ export default function NextStepCard({ step, onPress, children = null }) {
   return (
     <section className="rounded-2xl border-2 border-teal-200 bg-white p-5 shadow-sm" aria-label="Next step" data-testid="crew-next-step" data-step={key}>
       <p className="text-sm font-semibold uppercase tracking-wide text-teal-700">Next step</p>
-      <h2 className="mt-1 text-2xl font-bold leading-tight text-slate-900">{title}</h2>
+      <h2 className="font-display mt-1 text-2xl font-bold leading-tight text-slate-900">{title}</h2>
       {hint && <p className="mt-2 text-base text-slate-700">{hint}</p>}
       {children}
       {label && (

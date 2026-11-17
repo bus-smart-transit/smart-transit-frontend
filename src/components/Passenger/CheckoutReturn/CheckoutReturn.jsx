@@ -114,7 +114,7 @@ export default function CheckoutReturn() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center px-6">
       <div className="rounded-xl border border-slate-800 bg-slate-900/80 px-6 py-5 text-center text-sm text-slate-300 max-w-md w-full" role="status" aria-live="polite">
-        <h1 className="text-base font-semibold text-slate-100 mb-2">{copy.title}</h1>
+        <h1 className="mb-2 font-display text-lg font-bold text-slate-100">{copy.title}</h1>
         <p className="mb-4">{copy.body}</p>
         <div className="flex items-center justify-center gap-3">
           {outcome === 'pending' && reference && (

@@ -171,7 +171,7 @@ function TripRequestsPanel({ onDecided, showEmpty = false }) {
 
   return (
     <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
-      <h2 className="text-sm font-bold text-amber-800">For Approval ({requests.length})</h2>
+      <h2 className="font-display text-sm font-bold text-amber-800">For Approval ({requests.length})</h2>
       {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
       {loading && requests.length === 0 ? <SkeletonList label="Loading approval requests..." rows={2} className="mt-3" />
         : requests.length === 0 ? <p className="mt-3 text-sm text-slate-600">No pending approval requests.</p>

@@ -419,7 +419,7 @@ export default function BuyTicket({ onTicketPurchased, returnTo = '/' }) {
                                 }`}
                               >
                                 <span className="block font-bold">{departure.boarding_time}</span>
-                                <span className="block text-[0.7rem] text-slate-500">{seatsLeftText(departure.seats_left)}</span>
+                                <span className="block text-xs text-slate-500">{seatsLeftText(departure.seats_left)}</span>
                               </button>
                             );
                           })}

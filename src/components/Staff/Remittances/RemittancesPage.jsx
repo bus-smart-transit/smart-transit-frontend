@@ -175,7 +175,7 @@ export default function RemittancesPage({ service, embedded = false }) {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          {!embedded && <h2 className="text-xl font-bold text-slate-900">Remittances</h2>}
+          {!embedded && <h2 className="font-display text-xl font-bold text-slate-900">Remittances</h2>}
           <p className="text-xs text-slate-500">The cash handed over after each Chauffeur shift. Count it, then confirm.</p>
         </div>
         <div className="inline-flex max-w-full flex-wrap rounded-lg border border-slate-200 bg-white p-0.5 text-sm font-semibold" role="group" aria-label="Status">

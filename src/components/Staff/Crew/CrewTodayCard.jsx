@@ -6,7 +6,7 @@ export default function CrewTodayCard({ title = "Today's trip", route, fromTo, r
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm" aria-label={title} data-testid="crew-today-card">
       <p className="text-sm font-semibold uppercase tracking-wide text-slate-500">{title}</p>
-      <h2 className="mt-1 text-2xl font-bold leading-tight text-slate-900">{route || 'Not provided'}</h2>
+      <h2 className="font-display mt-1 text-2xl font-bold leading-tight text-slate-900">{route || 'Not provided'}</h2>
       {fromTo && <p className="mt-1 text-lg text-slate-700">{fromTo}</p>}
       <dl className="mt-4 grid gap-3">
         {rows.map(([label, value]) => (

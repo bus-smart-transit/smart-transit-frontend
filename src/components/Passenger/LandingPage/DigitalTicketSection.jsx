@@ -41,7 +41,7 @@ export default function DigitalTicketSection() {
                 <p className="text-sm font-bold">SmartTransit Express</p>
                 <p className="text-xs text-slate-300">Passenger: Juan Dela Cruz</p>
               </div>
-              <span className="rounded-full bg-teal-500/20 px-2 py-0.5 text-[10px] font-semibold text-teal-300">Confirmed</span>
+              <span className="rounded-full bg-teal-500/20 px-2 py-0.5 text-xs font-semibold text-teal-300">Confirmed</span>
             </div>
             <div className="grid grid-cols-2 gap-3 border-t border-white/10 pt-3 text-xs">
               <div>
@@ -70,7 +70,7 @@ export default function DigitalTicketSection() {
               </div>
             </div>
             <div className="mt-4 flex items-center justify-between rounded-xl bg-white p-3 text-slate-900">
-              <p className="text-[11px] text-slate-500">Present this QR code when boarding.</p>
+              <p className="text-xs text-slate-500">Present this QR code when boarding.</p>
               <QrCode className="h-14 w-14 shrink-0" aria-hidden="true" />
             </div>
           </div>

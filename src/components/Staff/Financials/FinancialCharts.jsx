@@ -66,7 +66,7 @@ export function HourChart({ hours }) {
           );
         })}
       </div>
-      <div className="mt-1 flex gap-0.5 text-[10px] text-slate-500" aria-hidden="true">
+      <div className="mt-1 flex gap-0.5 text-xs text-slate-500" aria-hidden="true">
         {list.map((h) => (
           <span key={h.hour} className="flex-1 text-center">{h.hour % 3 === 0 ? String(h.hour).padStart(2, '0') : ''}</span>
         ))}

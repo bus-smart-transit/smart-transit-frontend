@@ -64,7 +64,7 @@ export default function FinancialsPage({ service, view = 'all', embedded = false
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          {!embedded && <h2 className="text-xl font-bold text-slate-900">Financials</h2>}
+          {!embedded && <h2 className="font-display text-xl font-bold text-slate-900">Financials</h2>}
           <p className="text-xs text-slate-500">Paid tickets only.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">

@@ -7,7 +7,7 @@ export default function ServiceTypeChip({ serviceType, label, className = '' }) 
     <span
       data-testid="service-type-chip"
       data-service-type={express ? 'express' : 'regular'}
-      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${
+      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold ${
         express ? 'border-amber-300 bg-amber-50 text-amber-800' : 'border-slate-200 bg-slate-50 text-slate-600'
       } ${className}`}
     >

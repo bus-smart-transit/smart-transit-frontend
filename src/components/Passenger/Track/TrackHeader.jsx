@@ -9,7 +9,7 @@ export default function TrackHeader({ title = 'Track my bus' }) {
         <Link to="/" className="inline-flex items-center" aria-label="SmartTransit home">
           <BrandLogo className="h-10" alt="" />
         </Link>
-        <h1 className="text-sm font-semibold text-slate-600 sm:text-base">{title}</h1>
+        <h1 className="font-display text-base font-bold text-navy-950 sm:text-lg">{title}</h1>
       </div>
     </header>
   )

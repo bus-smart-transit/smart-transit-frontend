@@ -287,7 +287,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
         <header className="crew-header mb-4">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">{pageTitle}</h1>
+            <h1 className="font-display text-2xl font-bold text-slate-900">{pageTitle}</h1>
             <p className="text-xs text-slate-500">
               {getBusinessTodayLabel()}{currentRoute?.origin && currentRoute?.destination ? ` — ${currentRoute.origin} → ${currentRoute.destination}` : ''}
             </p>

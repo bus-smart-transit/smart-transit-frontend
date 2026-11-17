@@ -20,7 +20,7 @@ export default function BuyTicketPage() {
           <Link to={returnTo} className="inline-flex items-center gap-1.5 text-sm font-semibold text-navy-800 transition hover:text-navy-950">
             <ArrowLeft size={16} aria-hidden="true" /> Back to Search
           </Link>
-          <h1 className="font-display text-base font-bold text-navy-950 sm:text-lg">Trip Details and Payment</h1>
+          <h1 className="font-display text-lg font-bold text-navy-950 sm:text-xl">Trip Details and Payment</h1>
           {isAuthenticated ? (
             <Link to="/passenger/dashboard" className="text-sm font-semibold text-navy-800 transition hover:text-navy-950">My Dashboard</Link>
           ) : (

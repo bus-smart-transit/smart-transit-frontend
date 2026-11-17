@@ -76,7 +76,7 @@ export default function AvailableTripsPage() {
           <Link to={returnTo} className="inline-flex items-center gap-1.5 text-sm font-semibold text-navy-800 transition hover:text-navy-950">
             <ArrowLeft size={16} aria-hidden="true" /> Back
           </Link>
-          <h1 className="font-display text-base font-bold text-navy-950 sm:text-lg">All Available Trips</h1>
+          <h1 className="font-display text-lg font-bold text-navy-950 sm:text-xl">All Available Trips</h1>
           <span className="w-24" aria-hidden="true" />
         </div>
       </header>
