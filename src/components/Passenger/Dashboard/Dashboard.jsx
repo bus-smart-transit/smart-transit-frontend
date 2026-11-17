@@ -902,7 +902,7 @@ export default function Dashboard() {
                 discountVerified={Boolean(selectedTicket.discount_id_checked_at ?? selectedTicketQr?.discount_id_checked_at)}
                 discountClaimMessage={selectedTicket.discount_claim?.message || ''}
                 priorityLabel={selectedTicket.priority_label || ''}
-                baggageFee={selectedTicket.baggage_fee ?? null}
+                hasBaggage={Boolean(selectedTicket.has_baggage)}
                 trackingToken={renewedTokens[selectedTicket.ticket_uuid] || selectedTicket.tracking_token || ''}
                 trackingCode={selectedTicket.ticket_uuid in renewedCodes ? renewedCodes[selectedTicket.ticket_uuid] : (selectedTicket.tracking_code || '')}
                 ticketId={ticketIdOf(selectedTicket.ticket_uuid)}

@@ -39,6 +39,7 @@ import FileTypeSelect from '../ui/FileTypeSelect';
 import { todaySummary } from '../../utils/assignmentCards';
 import { BOARDING_NOT_STARTED, BOARDING_OPEN_STATUSES, ticketingReason } from '../../utils/actionReasons';
 import { claimReviewState } from '../../utils/discountClaim';
+import { passengerCountRows } from '../../utils/passengerCount';
 import DiscountReviewDialog from './Crew/DiscountReviewDialog';
 import { boardingStopsForLeg, checkInLabel, destinationsAhead, destinationsNotPassed, isOnsiteFormComplete, orderedStopsForLeg, placesLeft, stopLabel } from '../../utils/cashTicket';
 import { isExpress } from '../../utils/serviceType';
@@ -644,6 +645,21 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                     </p>
                   )}
                   <p className="w-full text-xs text-teal-900">{expectedBoarding.waiting_total === 1 ? '1 paid passenger' : `${expectedBoarding.waiting_total ?? 0} paid passengers`} still to board on this trip.</p>
+                </article>
+              )}
+              {/* Batch 76 (user): the leg's passenger count, for an inspector to compare with the people on the bus. */}
+              {expectedBoarding?.passenger_count && (
+                <article data-testid="passenger-count" className="mb-4 rounded-xl border border-slate-200 bg-white px-4 py-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Passenger count for this trip</p>
+                  <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-sm sm:grid-cols-4">
+                    {passengerCountRows(expectedBoarding.passenger_count).map((row) => (
+                      <div key={row.key} className={row.key === 'on_board' ? 'col-span-2 sm:col-span-1' : ''}>
+                        <dt className="text-xs text-slate-500">{row.label}</dt>
+                        <dd className={`font-data font-bold ${row.key === 'on_board' ? 'text-2xl text-slate-900' : 'text-slate-800'}`} data-testid={`count-${row.key}`}>{row.value ?? 'Not provided'}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                  <p className="mt-2 text-xs text-slate-500">On board now should match the people on the bus. Tickets never scanned are not counted as passengers.</p>
                 </article>
               )}
               <div className="staff-grid lg:grid-cols-[1.1fr_1fr]">

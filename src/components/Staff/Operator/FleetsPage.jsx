@@ -1,3 +1,4 @@
+import { passengerCountLine } from '../../../utils/passengerCount';
 import { useEffect, useMemo, useState } from 'react';
 import { RefreshCw, Bus, ChevronRight, MapPinned, Pencil, Plus, Clock, Pause } from 'lucide-react';
 import { OpPageHeader, OpCard, OpChip, OpStat, OpEmpty } from './OperatorUI';
@@ -225,6 +226,8 @@ function TrackFleetModal({ row, trip, advice, saving, error, onDecide, onClose, 
             <div><dt className="text-xs text-slate-500">Tickets sold</dt><dd className="font-semibold text-slate-900">{ticketsSold(trip)} of {capacityOf(trip) || '-'}{pct === null ? '' : ` (${pct}%)`}</dd></div>
             {/* §4.7: passengers on board now (scanned on or sold on the bus, not yet off), from the server. */}
             <div><dt className="text-xs text-slate-500">On board now</dt><dd data-testid="onboard-now" className="font-semibold text-slate-900">{trip.onboard_count == null ? 'Not provided' : `${trip.onboard_count} of ${capacityOf(trip) || '-'}`}</dd></div>
+            {/* Batch 76 (user): the leg's passenger count, the figures an inspector checks against the bus. */}
+            <div className="sm:col-span-2"><dt className="text-xs text-slate-500">Passengers</dt><dd data-testid="passenger-count-line" className="font-semibold text-slate-900">{passengerCountLine(trip.passenger_count)}</dd></div>
             <div><dt className="text-xs text-slate-500">Trip status</dt><dd className="font-semibold capitalize text-slate-900">{String(trip.status).replace('-', ' ')}</dd></div>
           </dl>
           <section aria-label="Reroute advice">

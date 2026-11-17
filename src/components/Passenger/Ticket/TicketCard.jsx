@@ -32,9 +32,9 @@ export default function TicketCard({
   discountVerified = false,
   // Batch 75: what happened to a discount claimed online (the server's sentence), or '' when none was claimed.
   discountClaimMessage = '',
-  // Batch 76: a priority seat ("Senior citizen") and the baggage compartment fee (0 or null for none).
+  // Batch 76: a priority seat ("Senior citizen") and baggage in the compartment (its fee is part of the fare).
   priorityLabel = '',
-  baggageFee = null,
+  hasBaggage = false,
   trackingToken = '',
   trackingCode = '',
   ticketId = '',
@@ -128,9 +128,9 @@ export default function TicketCard({
             {farePaid != null && <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-1.5"><dt className="text-xs text-slate-500">Fare paid</dt><dd className="text-right text-sm font-bold text-navy-950">PHP {Number(farePaid).toFixed(2)}</dd></div>}
           </>}
         </dl>
-        {(priorityLabel || Number(baggageFee) > 0) && (
+        {(priorityLabel || hasBaggage) && (
           <p data-testid="ticket-extras" className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 sm:col-span-2">
-            {[priorityLabel && `Priority seat: ${priorityLabel}`, Number(baggageFee) > 0 && `Baggage in the compartment: PHP ${Number(baggageFee).toFixed(2)}`].filter(Boolean).join(' · ')}
+            {[priorityLabel && `Priority seat: ${priorityLabel}`, hasBaggage && 'Baggage in the compartment (included in the fare)'].filter(Boolean).join(' · ')}
           </p>
         )}
         {discountClaimMessage && (
