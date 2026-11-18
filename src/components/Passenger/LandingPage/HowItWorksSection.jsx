@@ -1,11 +1,10 @@
-import { Search, CalendarCheck, Armchair, CreditCard, QrCode } from 'lucide-react';
+import { Search, CalendarCheck, CreditCard, QrCode } from 'lucide-react';
 
 const STEPS = [
   { step: '01', icon: Search, title: 'Search for a Trip', description: 'Choose your origin, destination, and travel date using the Search Trips section.' },
   { step: '02', icon: CalendarCheck, title: 'Choose Your Schedule', description: 'Review the available trips and select the schedule that works best for you.' },
-  { step: '03', icon: Armchair, title: 'Reserve Your Seat', description: 'Choose an available seat and review your trip details.' },
-  { step: '04', icon: CreditCard, title: 'Complete Your Payment', description: 'Follow the available payment process to confirm your reservation.' },
-  { step: '05', icon: QrCode, title: 'Get Your Digital Ticket', description: 'After your booking is confirmed, your digital ticket and QR code will be available in your account.' },
+  { step: '03', icon: CreditCard, title: 'Complete Your Payment', description: 'Follow the available payment process to confirm your reservation.' },
+  { step: '04', icon: QrCode, title: 'Get Your Digital Ticket', description: 'After your booking is confirmed, your digital ticket and QR code will be available in your account.' },
 ];
 
 /**
@@ -23,11 +22,11 @@ export default function HowItWorksSection() {
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal-600">How SmartTransit works</p>
           <h2 className="mt-2 font-display text-3xl font-bold text-navy-950 sm:text-4xl">Your trip, made simple.</h2>
           <p className="mt-3 text-base leading-relaxed text-slate-500">
-            New to SmartTransit? Follow these simple steps to find a trip, reserve your seat, complete your booking, and board with your digital ticket.
+            New to SmartTransit? Follow these simple steps to find a trip, complete your booking, and board with your digital ticket.
           </p>
         </div>
 
-        <ol className="mt-12 grid gap-10 sm:mt-14 lg:grid-cols-5 lg:gap-6">
+        <ol className="mt-12 grid gap-10 sm:mt-14 lg:grid-cols-4 lg:gap-6">
           {STEPS.map(({ step, icon: Icon, title, description }, index) => {
             const isLast = index === last;
             return (

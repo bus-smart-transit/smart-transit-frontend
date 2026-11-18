@@ -109,7 +109,7 @@ export default function DigitalTicketSection() {
                 <div className="mt-5 grid grid-cols-3 gap-3 rounded-xl bg-slate-50 px-4 py-3">
                   <Field label="Date" value="June 10, 2026" />
                   <Field label="Departure" value="7:00 AM" />
-                  <Field label="Seat" value="13" align="right" />
+                  <Field label="Seat" value="Seated" align="right" />
                 </div>
               </dl>
 
