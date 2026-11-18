@@ -27,7 +27,7 @@ export function OpCard({ title, subtitle, badge = null, icon: Icon = null, accen
   return (
     <Card padding={padding} className={`min-w-0 ${className}`}>
       {(title || badge) && (
-        <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+        <div className={`${subtitle ? 'mb-5' : 'mb-3'} flex flex-wrap items-start justify-between gap-3`}>
           <div className="flex min-w-0 items-start gap-3">
             {/* 2026-11-13: a thin outline icon in the card's colour, no grey tile (the reference design). */}
             {Icon && <Icon className={`mt-0.5 h-6 w-6 shrink-0 ${accentOf(accent)}`} strokeWidth={1.5} aria-hidden="true" />}
@@ -100,8 +100,10 @@ function smoothPath(pts) {
 /**
  * 2026-11-13: a small trend line for a stat card, in the card's colour, with a soft fill under it. Hovering shows the
  * point's label and value; screen readers get every point in the accessible name. Needs at least two points.
+ * 2026-11-18 (user): thinner line and a fainter fill so it sits behind the figure, plus an optional `caption`
+ * (e.g. "by hour", "last 7 days") so the shape is not read without its time span.
  */
-export function OpSparkline({ points, accent = 'slate', label, format = (point) => `${point.label}: ${point.value}` }) {
+export function OpSparkline({ points, accent = 'slate', label, caption = null, format = (point) => `${point.label}: ${point.value}` }) {
   const gradientId = useId();
   const [active, setActive] = useState(null);
   if (!Array.isArray(points) || points.length < 2) return null;
@@ -122,6 +124,7 @@ export function OpSparkline({ points, accent = 'slate', label, format = (point) 
   };
   const at = active === null ? null : pts[active];
   return (
+    <div className="w-full">
     <div
       className={`relative h-12 w-full ${accentOf(accent)}`}
       role="img"
@@ -133,12 +136,12 @@ export function OpSparkline({ points, accent = 'slate', label, format = (point) 
       <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="h-full w-full overflow-visible" aria-hidden="true">
         <defs>
           <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="currentColor" stopOpacity="0.28" />
+            <stop offset="0%" stopColor="currentColor" stopOpacity="0.12" />
             <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
           </linearGradient>
         </defs>
         <path d={area} fill={`url(#${gradientId})`} />
-        <path d={line} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+        <path d={line} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
         {at && <line x1={at.x} x2={at.x} y1="0" y2={H} stroke="currentColor" strokeOpacity="0.35" strokeWidth="1" vectorEffect="non-scaling-stroke" />}
       </svg>
       {at && (
@@ -158,12 +161,14 @@ export function OpSparkline({ points, accent = 'slate', label, format = (point) 
         </>
       )}
     </div>
+    {caption && <p className="mt-1 text-right text-[11px] leading-none text-slate-400">{caption}</p>}
+    </div>
   );
 }
 
 export function OpStat({ label, value, hint = null, tone = 'neutral', icon: Icon = null, accent = 'slate', delta = null, chart = null, className = '' }) {
   return (
-    <Card padding="sm" className={`min-w-0 p-4! transition-shadow hover:shadow-card-hover sm:p-5! ${className}`}>
+    <Card padding="sm" className={`flex h-full min-w-0 flex-col p-4! transition-shadow hover:shadow-card-hover sm:p-5! ${className}`}>
       <div className="min-w-0">
         <p className="flex min-w-0 items-center gap-2 text-xs font-medium text-slate-500 sm:text-[13px]">
           {Icon && <Icon className={`op-stat-icon h-5 w-5 shrink-0 sm:h-6 sm:w-6 ${accentOf(accent)}`} strokeWidth={1.5} aria-hidden="true" />}
@@ -178,7 +183,7 @@ export function OpStat({ label, value, hint = null, tone = 'neutral', icon: Icon
           {chart && <div className="min-w-0 max-w-32 flex-1">{chart}</div>}
         </div>
       </div>
-      {hint && <p className="mt-2.5 flex items-start gap-1.5 text-xs leading-snug text-slate-500 sm:mt-3"><span className={`mt-[4px] inline-block h-2 w-2 shrink-0 rounded-full ${toneOf(tone).dot}`} aria-hidden="true" />{hint}</p>}
+      {hint && <p className="mt-auto flex items-start gap-1.5 pt-2.5 text-xs leading-snug text-slate-500 sm:pt-3"><span className={`mt-[4px] inline-block h-2 w-2 shrink-0 rounded-full ${toneOf(tone).dot}`} aria-hidden="true" />{hint}</p>}
     </Card>
   );
 }

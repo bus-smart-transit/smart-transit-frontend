@@ -7,7 +7,7 @@ export default function HomeFaqSection() {
   const [openIndex, setOpenIndex] = useState(null);
 
   return (
-    <section id="faq" className="bg-white px-4 py-12 sm:px-6 lg:px-10">
+    <section id="faq" className="px-4 py-12 sm:px-6 lg:px-10">
       <div className="mx-auto max-w-3xl text-center">
         <p className="text-xs font-semibold uppercase tracking-wide text-teal-600">FAQ</p>
         <h2 className="mt-1 font-display text-2xl font-bold text-slate-900 sm:text-3xl">Frequently Asked Questions</h2>

@@ -210,7 +210,7 @@ export default function StaffLoginPage() {
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col lg:grid lg:grid-cols-[1fr_1.2fr]">
       {/* Left panel - dark navy branding */}
-      <div className="hidden lg:flex flex-col items-center justify-center bg-[#0D1B2A] px-8 py-12 text-white">
+      <div className="hidden lg:flex flex-col items-center justify-center bg-navy-900 px-8 py-12 text-white">
         <div className="flex flex-col items-center text-center gap-5 max-w-xs">
           {/* Logo */}
           <BrandLogo variant="icon" light alt="" className="h-20" />
@@ -318,7 +318,7 @@ export default function StaffLoginPage() {
 
                 <button
                   type="submit"
-                  className="w-full rounded-lg bg-[#0D1B2A] py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="w-full rounded-lg bg-navy-800 py-3 text-sm font-semibold text-white transition hover:bg-navy-900 disabled:cursor-not-allowed disabled:opacity-60"
                   disabled={isLoading}
                 >
                   {isLoading ? (
@@ -383,7 +383,7 @@ export default function StaffLoginPage() {
 
                 <button
                   type="submit"
-                  className="w-full rounded-lg bg-[#0D1B2A] py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="w-full rounded-lg bg-navy-800 py-3 text-sm font-semibold text-white transition hover:bg-navy-900 disabled:cursor-not-allowed disabled:opacity-60"
                   disabled={isLoading || otp.length !== 6}
                 >
                   {isLoading ? (

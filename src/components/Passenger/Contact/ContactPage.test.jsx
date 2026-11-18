@@ -9,10 +9,12 @@ vi.mock('../../../api/hooks/useRegion', () => ({ useRegion: () => ({ name: 'Samp
 
 // 2026-11-07: Contact is a sample for the test period; it never claims a message was sent.
 describe('ContactPage', () => {
-  it('marks the page and details as samples', () => {
+  // 2026-11-18 (user): no "Sample page" badge and no "(sample)" labels on the details.
+  it('shows the contact details without sample labels', () => {
     render(<MemoryRouter><ContactPage /></MemoryRouter>);
-    expect(screen.getByText('Sample page for the test period')).toBeInTheDocument();
-    expect(screen.getByText('Phone (sample)')).toBeInTheDocument();
+    expect(screen.queryByText('Sample page for the test period')).toBeNull();
+    expect(screen.getByText('Phone')).toBeInTheDocument();
+    expect(screen.queryByText(/\(sample\)/i)).toBeNull();
     expect(screen.getByText('Serving terminals across Sample Region')).toBeInTheDocument();
   });
 

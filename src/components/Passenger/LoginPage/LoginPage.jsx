@@ -71,9 +71,8 @@ export default function LoginPage() {
   return (
     <AuthShell
       photoSide="right"
-      title="Your commute, simplified."
-      text={`Sign in to manage your tickets, follow your bus live, and keep track of every trip${region?.name ? ` across ${region.name}` : ''}.`}
-      tagline="Your next trip starts here."
+      title="Your tickets are waiting."
+      text={`Log in to see the trips you booked, show your QR code when you board, and check where your bus is on the road${region?.name ? ` in ${region.name}` : ''}.`}
     >
           {!otpRequired ? (
             <>

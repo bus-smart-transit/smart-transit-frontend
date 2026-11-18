@@ -1,7 +1,8 @@
 import Navbar from '../../Layout/Navbar';
 import Footer from '../../Layout/Footer';
 
-const PHOTO = '/images/auth-road.jpg';
+// 2026-11-18 (user): a photo about riding the bus — a passenger boarding at a station (Pexels 19376424, free to use).
+const PHOTO = '/images/auth-boarding.jpg';
 
 /**
  * 2026-11-06 (passenger redesign, joshua-frontend): the frame shared by Log In and Sign Up. The site header and
@@ -11,7 +12,7 @@ const PHOTO = '/images/auth-road.jpg';
 export default function AuthShell({ photoSide = 'right', title, text, tagline, children }) {
   const photo = (
     <div className="relative hidden min-h-[560px] overflow-hidden rounded-2xl bg-navy-900 lg:block">
-      <img src={PHOTO} alt="" className="absolute inset-0 h-full w-full object-cover object-[78%_center]" />
+      <img src={PHOTO} alt="" className="absolute inset-0 h-full w-full object-cover object-[58%_center]" />
       <div className="absolute inset-0 bg-gradient-to-t from-navy-950/95 from-10% via-navy-950/50 via-35% to-transparent to-60%" aria-hidden="true" />
       <div className="absolute inset-x-0 bottom-0 p-8 xl:p-10">
         <p className="font-display text-3xl font-extrabold uppercase leading-[1.05] tracking-tight text-white xl:text-4xl">{title}</p>

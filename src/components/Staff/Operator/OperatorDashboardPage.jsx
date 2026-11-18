@@ -35,13 +35,13 @@ const greetingFor = (nowMs) => {
  */
 function QuickActions({ onCreateSchedule, onOpenApprovals, onOpenStaffs, onOpenFleets }) {
   const actions = [
-    { key: 'schedule', label: 'Schedule a trip', hint: 'Open the Schedule Service form', icon: CalendarPlus, accent: 'teal', onClick: onCreateSchedule },
+    { key: 'schedule', label: 'Schedule a trip', hint: 'Open the Schedule form', icon: CalendarPlus, accent: 'teal', onClick: onCreateSchedule },
     { key: 'approvals', label: 'Trip approvals', hint: 'Requests waiting for you', icon: ClipboardCheck, accent: 'blue', onClick: onOpenApprovals },
-    { key: 'staffs', label: 'Staffs', hint: 'Drivers, Chauffeurs and shifts', icon: Users, accent: 'violet', onClick: onOpenStaffs },
+    { key: 'staffs', label: 'Staff', hint: 'Drivers, Chauffeurs and shifts', icon: Users, accent: 'violet', onClick: onOpenStaffs },
     { key: 'fleets', label: 'Fleets', hint: 'Buses and live tracking', icon: Bus, accent: 'orange', onClick: onOpenFleets },
   ];
   return (
-    <OpCard icon={Zap} accent="orange" title="Quick actions" subtitle="Go straight to what you do most often.">
+    <OpCard icon={Zap} accent="orange" title="Quick actions" className="p-4! sm:p-5!">
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {actions.map(({ key, label, hint, icon: Icon, accent, onClick }) => (
           <button
@@ -212,7 +212,7 @@ export default function OperatorDashboardPage({
           label="Tickets sold"
           value={kpis.ticketsSold}
           hint="today, cancelled trips excluded"
-          chart={<OpSparkline accent="orange" label="Tickets sold today by departure hour" points={view.soldByHour.map((row) => ({ label: row.hour, value: row.sold }))} format={(p) => `${p.label} trips: ${p.value} sold`} />}
+          chart={<OpSparkline accent="orange" caption="by departure hour" label="Tickets sold today by departure hour" points={view.soldByHour.map((row) => ({ label: row.hour, value: row.sold }))} format={(p) => `${p.label} trips: ${p.value} sold`} />}
         />
         <OpStat
           className="col-span-2 md:col-span-1"
@@ -222,7 +222,7 @@ export default function OperatorDashboardPage({
           value={kpis.tripsToday}
           hint="all statuses"
           delta={<OpDelta current={tripsToday} previous={tripsYesterday} label="vs yesterday" />}
-          chart={<OpSparkline accent="violet" label="Trips per day, last 7 days, cancelled not counted" points={tripsPerDay.map((day) => ({ label: dayLabel(day.date), value: day.trips }))} format={(p) => `${p.label}: ${p.value} trip${p.value === 1 ? '' : 's'}`} />}
+          chart={<OpSparkline accent="violet" caption="last 7 days" label="Trips per day, last 7 days, cancelled not counted" points={tripsPerDay.map((day) => ({ label: dayLabel(day.date), value: day.trips }))} format={(p) => `${p.label}: ${p.value} trip${p.value === 1 ? '' : 's'}`} />}
         />
       </section>
 

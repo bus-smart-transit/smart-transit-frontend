@@ -84,7 +84,7 @@ describe('OperatorDashboardPage', () => {
     renderPage(handlers);
     fireEvent.click(screen.getByRole('button', { name: /Schedule a trip/ }));
     fireEvent.click(screen.getByRole('button', { name: /Trip approvals/ }));
-    fireEvent.click(screen.getByRole('button', { name: /^Staffs/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Staff/ }));
     fireEvent.click(screen.getByRole('button', { name: /^Fleets/ }));
     Object.values(handlers).forEach((handler) => expect(handler).toHaveBeenCalledOnce());
     await waitFor(() => expect(mocks.getFleetLocations).toHaveBeenCalled());

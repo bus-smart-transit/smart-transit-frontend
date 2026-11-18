@@ -42,10 +42,12 @@ export default function ProvincesSection() {
   const [first, second, ...rest] = provinces;
 
   return (
-    <section className="bg-slate-50 py-16 sm:py-20" aria-labelledby="provinces-heading">
+    // 2026-11-18 (user): no band of its own (the page is mist everywhere; the old slate band left hard edges), and a
+    // centred heading like the sections below.
+    <section className="py-16 sm:py-20" aria-labelledby="provinces-heading">
       <div className="container-page">
-        <div className="max-w-2xl">
-          <p className="text-sm font-semibold uppercase tracking-wide text-teal-600">Where we go</p>
+        <div className="mx-auto max-w-2xl text-center">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal-600">Where we go</p>
           <h2 id="provinces-heading" className="mt-2 font-display text-3xl font-bold text-navy-950 sm:text-4xl">Provinces we serve</h2>
           <p className="mt-3 text-base leading-relaxed text-slate-500">
             SmartTransit covers the provinces of {region.name}. Tap one to search for a trip.
@@ -53,7 +55,7 @@ export default function ProvincesSection() {
         </div>
 
         {first && (
-          <div className="mt-10 grid gap-4 sm:grid-cols-2">
+          <div className="mt-12 grid gap-4 sm:mt-14 sm:grid-cols-2">
             <ProvinceCard card={first} tall />
             {second && <ProvinceCard card={second} tall />}
           </div>
@@ -66,7 +68,7 @@ export default function ProvincesSection() {
 
         {cities.length > 0 && (
           <>
-            <div className="mt-14 max-w-2xl">
+            <div className="mx-auto mt-16 max-w-2xl text-center">
               <h3 className="font-display text-2xl font-bold text-navy-950 sm:text-3xl">And the city we call home</h3>
             </div>
             <div className="mt-6 grid gap-4">

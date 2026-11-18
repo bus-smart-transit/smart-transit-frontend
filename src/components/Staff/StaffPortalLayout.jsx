@@ -49,7 +49,7 @@ export default function StaffPortalLayout({
           changed. `lg:sticky lg:top-0 lg:h-screen` pins it to exactly one
           viewport height, decoupled from `<main>`'s content length, with
           its own internal scroll if the nav ever overflows. */}
-      <aside className={`fixed inset-y-0 left-0 z-40 w-65 transform flex-col justify-between overflow-y-auto bg-[#0D1B2A] p-4 transition-transform duration-200 ease-out lg:sticky lg:top-0 lg:flex lg:h-screen lg:translate-x-0 ${mobileNavOpen ? 'flex translate-x-0' : 'hidden -translate-x-full'}`}>
+      <aside className={`fixed inset-y-0 left-0 z-40 w-65 transform flex-col justify-between overflow-y-auto bg-navy-900 p-4 transition-transform duration-200 ease-out lg:sticky lg:top-0 lg:flex lg:h-screen lg:translate-x-0 ${mobileNavOpen ? 'flex translate-x-0' : 'hidden -translate-x-full'}`}>
         <div>
           <div className="mb-2 flex justify-end lg:hidden">
             <button
@@ -77,9 +77,10 @@ export default function StaffPortalLayout({
                 <button
                   key={item.key}
                   type="button"
+                  aria-current={isActive ? 'page' : undefined}
                   className={`flex items-center gap-3.5 rounded-xl px-3.5 py-2.5 text-[15px] lg:py-3 font-medium transition-colors ${
                     isActive
-                      ? 'bg-teal-700 text-white'
+                      ? 'relative bg-white/10 text-white before:absolute before:inset-y-2 before:left-0 before:w-1 before:rounded-full before:bg-teal-400'
                       : 'text-slate-300 hover:bg-white/10 hover:text-white'
                   }`}
                   onClick={() => {

@@ -895,9 +895,9 @@ export default function OperatorDashboard() {
         )}
         {activeTab === 'staffs'     && (
           <div className="space-y-6">
-            <OpPageHeader title="Staffs" subtitle="Your Drivers and Chauffeurs, and when their shifts started and ended" />
+            <OpPageHeader title="Staff" subtitle="Your Drivers and Chauffeurs, and when their shifts started and ended" />
             {/* Batch 61 (advisor): the directory and the crew time in/out are two tabs, not one long page. */}
-            <ViewTabs label="Staffs views" tabs={viewsForRole('staffs', OPERATOR_ROLE)} value={view || 'directory'} onChange={setView} />
+            <ViewTabs label="Staff views" tabs={viewsForRole('staffs', OPERATOR_ROLE)} value={view || 'directory'} onChange={setView} />
             {/* Batch 46: the directory pages and counts on the server; a change also refreshes the scheduling pickers. */}
             {(view || 'directory') === 'directory' && <StaffDirectory fleetCount={fleets.length} onChanged={loadFull} />}
             {view === 'shifts' && <CrewShiftTimes staff={[...drivers, ...conductors]} />}

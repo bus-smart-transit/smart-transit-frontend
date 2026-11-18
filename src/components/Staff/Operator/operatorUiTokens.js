@@ -24,14 +24,18 @@ export const OP_ICON_TILE = 'bg-slate-100 text-slate-600';
 
 // 2026-11-13: stat-card, card-header and quick-action icon colours. A thin outline icon in one colour sits beside the label. The colour
 // only tells the cards apart; status (good/bad) is still carried by the `tone` dot and the hint text.
+// 2026-11-18 (user): the many colours read as a rainbow, not minimalist. Every decorative accent is now the palette's
+// ocean blue; only `rose` keeps its own colour, because it marks something wrong (delays, alerts). The old names stay
+// so existing call sites keep working.
+const OCEAN = 'text-ocean';
 export const OP_ACCENTS = {
-  slate: 'text-slate-500',
-  teal: 'text-teal-600',
-  blue: 'text-sky-700',
-  green: 'text-emerald-600',
-  orange: 'text-orange-500',
+  slate: OCEAN,
+  teal: OCEAN,
+  blue: OCEAN,
+  green: OCEAN,
+  orange: OCEAN,
+  violet: OCEAN,
   rose: 'text-rose-500',
-  violet: 'text-violet-600',
 };
 
 export const accentOf = (accent) => OP_ACCENTS[accent] ?? OP_ACCENTS.slate;
