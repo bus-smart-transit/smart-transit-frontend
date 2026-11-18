@@ -14,7 +14,7 @@ describe('TeamSection', () => {
   it('starts on the middle card and moves to the next one every 2 seconds', () => {
     vi.useFakeTimers();
     render(<TeamSection />);
-    expect(activeName()).toBe('Everest T. Ang');
+    expect(activeName()).toBe('Jhon Michael A. Murcia');
     act(() => { vi.advanceTimersByTime(2000); });
     expect(activeName()).toBe('Joshua P. Galo');
     act(() => { vi.advanceTimersByTime(2000); });
@@ -26,7 +26,7 @@ describe('TeamSection', () => {
   it('keeps going forward past the end, round after round', () => {
     vi.useFakeTimers();
     render(<TeamSection />);
-    // 12 turns from Everest (3rd of 5) lands on the 5th person, two full rounds later.
+    // 12 turns from the middle (3rd of 5) lands on the 5th person, two full rounds later.
     for (let turn = 0; turn < 12; turn += 1) act(() => { vi.advanceTimersByTime(2000); });
     expect(activeName()).toBe('Hasannal Guiabar');
     act(() => { vi.advanceTimersByTime(2000); });
@@ -40,6 +40,6 @@ describe('TeamSection', () => {
     render(<TeamSection />);
     fireEvent.mouseEnter(screen.getByRole('list'));
     act(() => { vi.advanceTimersByTime(6000); });
-    expect(activeName()).toBe('Everest T. Ang');
+    expect(activeName()).toBe('Jhon Michael A. Murcia');
   });
 });

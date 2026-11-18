@@ -10,8 +10,8 @@ const RESUME_AFTER_TOUCH_MS = 5000;
 // 2026-11-18: full names, and stand-in illustrated avatars (DiceBear "Lorelei", CC0) until real photos are added.
 const TEAM = [
   { name: 'Jan Blair De Vila', role: 'Project Manager', photo: '/images/team/member-1.svg' },
-  { name: 'Jhon Michael A. Murcia', role: 'Backend Developer', photo: '/images/team/member-2.svg' },
   { name: 'Everest T. Ang', role: 'Frontend Developer', photo: '/images/team/member-3.svg' },
+  { name: 'Jhon Michael A. Murcia', role: 'Backend Developer', photo: '/images/team/member-2.svg' },
   { name: 'Joshua P. Galo', role: 'UI/UX Designer', photo: '/images/team/member-4.svg' },
   { name: 'Hasannal Guiabar', role: 'QA & Documentation', photo: '/images/team/member-5.svg' },
 ];
