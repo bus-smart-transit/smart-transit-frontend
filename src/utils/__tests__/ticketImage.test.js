@@ -23,7 +23,7 @@ describe('buildTicketImageModel', () => {
     expect(byLabel['Ticket ID']).toBe('ABCDEF12')
     expect(byLabel.Boarding).toBe('Alpha')
     expect(byLabel.Alighting).toBe('Beta')
-    expect(byLabel.Departs).toBe('2026-10-01 06:30')
+    expect(byLabel.Departs).toBe('2026-10-01 6:30 AM')
     expect(byLabel['Fare paid']).toBe('PHP 80.00')
     expect(byLabel.Transaction).toBe('TXN-1')
   })
@@ -63,7 +63,7 @@ describe('manilaDepartureLabel', () => {
   it('uses the stored Manila values, or converts an instant to Manila time', () => {
     expect(manilaDepartureLabel({ trip_date: '2026-10-01' })).toBe('2026-10-01')
     // 2026-09-30T22:30:00Z is 2026-10-01 06:30 in Manila regardless of the viewer's timezone.
-    expect(manilaDepartureLabel({ valid_from: '2026-09-30T22:30:00Z' })).toBe('2026-10-01 06:30')
+    expect(manilaDepartureLabel({ valid_from: '2026-09-30T22:30:00Z' })).toBe('2026-10-01 6:30 AM')
     expect(manilaDepartureLabel({})).toBe('-')
   })
 })

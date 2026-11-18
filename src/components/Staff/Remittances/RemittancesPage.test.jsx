@@ -26,7 +26,7 @@ describe('RemittancesPage', () => {
     expect(card).toHaveTextContent('XY-123');
     expect(card).toHaveTextContent('Test Lines - B-1');
     expect(card).toHaveTextContent('Route One');
-    expect(card).toHaveTextContent('Oct 5, 2026 06:00');
+    expect(card).toHaveTextContent('Oct 5, 2026 6:00 AM');
     expect(card).toHaveTextContent('ended by the Chauffeur');
     expect(card).toHaveTextContent('160.00');
     expect(card).toHaveTextContent('The Chauffeur declared');
@@ -70,7 +70,7 @@ describe('RemittancesPage', () => {
     expect(card).toHaveTextContent('Confirmed');
     expect(card).toHaveTextContent('158.50');
     expect(card).toHaveTextContent('Test Operator');
-    expect(card).toHaveTextContent('Oct 6, 2026 08:15');
+    expect(card).toHaveTextContent('Oct 6, 2026 8:15 AM');
     expect(card).toHaveTextContent('Counted at the office');
     expect(card).toHaveTextContent('A refund was paid out after this was confirmed');
     expect(within(card).queryByRole('button', { name: 'Confirm remittance' })).not.toBeInTheDocument();

@@ -1,4 +1,5 @@
 import { useCalendarSummary } from '../../api/hooks/Staff/useCalendarSummary';
+import { clock12 } from '../../utils/clock';
 
 // Dates arrive as business-day 'YYYY-MM-DD' strings; format them without
 // going through the browser's timezone.
@@ -11,7 +12,7 @@ const formatShortDate = (value) => {
 
 const formatTime = (value) => {
   const match = String(value || '').match(/^(\d{2}:\d{2})/);
-  return match ? match[1] : '';
+  return match ? clock12(match[1]) : '';
 };
 
 const countLabel = (n, word) => `${n} ${word}${Number(n) === 1 ? '' : 's'}`;

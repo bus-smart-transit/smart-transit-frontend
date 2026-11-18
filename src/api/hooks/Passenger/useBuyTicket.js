@@ -13,6 +13,7 @@ import { groupQrPayload, openPrintWindow } from '../../../utils/qr';
 import { manilaDepartureLabel } from '../../../utils/ticketImage';
 import { normalizeContact } from '../../../utils/travellerContact';
 import { ratePercentLabel, transactionFee } from '../../../utils/transactionFee';
+import { clock12 } from '../../../utils/clock';
 const CHECKOUT_EVENT_KEY = 'smart_transit_checkout_event';
 const CHECKOUT_PENDING_KEY = 'smart_transit_checkout_pending';
 const CHECKOUT_LOOKUP_CACHE_KEY = 'smart_transit_checkout_lookup_cache_v1';
@@ -76,9 +77,7 @@ const formatDateTime = (value) => {
   const mm = String(date.getMonth() + 1).padStart(2, '0');
   const dd = String(date.getDate()).padStart(2, '0');
   if (isDateOnly) return `${yyyy}/${mm}/${dd}`;
-  const hh = String(date.getHours()).padStart(2, '0');
-  const min = String(date.getMinutes()).padStart(2, '0');
-  return `${yyyy}/${mm}/${dd} - ${hh}:${min}`;
+  return `${yyyy}/${mm}/${dd} - ${clock12(`${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}`)}`;
 };
 
 const HTML_ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };

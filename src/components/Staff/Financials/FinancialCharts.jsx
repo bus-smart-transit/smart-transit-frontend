@@ -68,7 +68,7 @@ export function HourChart({ hours }) {
       </div>
       <div className="mt-1 flex gap-0.5 text-xs text-slate-500" aria-hidden="true">
         {list.map((h) => (
-          <span key={h.hour} className="flex-1 text-center">{h.hour % 3 === 0 ? String(h.hour).padStart(2, '0') : ''}</span>
+          <span key={h.hour} className="flex-1 text-center">{h.hour % 3 === 0 ? `${Number(h.hour) % 12 === 0 ? 12 : Number(h.hour) % 12} ${Number(h.hour) < 12 ? 'AM' : 'PM'}` : ''}</span>
         ))}
       </div>
       <p className="mt-2 text-xs text-slate-500">Busiest hour: {busiest.label} ({formatPeso(busiest.gross)}, {formatCount(busiest.tickets)} tickets).</p>

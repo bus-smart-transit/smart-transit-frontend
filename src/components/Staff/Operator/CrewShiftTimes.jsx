@@ -6,6 +6,7 @@ import { getBusinessToday } from '../../../utils/dates';
 import { endedOnLabel, hoursWorked, rangeProblem } from '../../../utils/crewShift';
 
 import { SkeletonTable } from '../../ui/Skeleton';
+import { clock12 } from '../../../utils/clock';
 // §4.8 and Batch 46: Start Shift and End Shift are the crew's time in and time out. Read only: nothing here changes a
 // shift. Breaks are not recorded, so they are not shown or taken off. A shift that ends after midnight shows the day
 // it ended next to the time out.
@@ -20,13 +21,13 @@ const COLUMNS = [
   { key: 'role', header: 'Role', render: (row) => row.role },
   { key: 'bus', header: 'Bus', render: (row) => <span>{row.bus ?? 'Not provided'}<span className="block text-xs text-slate-500">{row.route ?? 'Not provided'}</span></span> },
   { key: 'shift', header: 'Shift', render: (row) => <span>{row.shift}<span className="block text-xs text-slate-500">{dayLabel(row.date)}</span></span> },
-  { key: 'time_in', header: 'Time in', render: (row) => <span className="font-data">{row.time_in ?? 'Not provided'}</span> },
+  { key: 'time_in', header: 'Time in', render: (row) => <span className="font-data">{clock12(row.time_in) ?? 'Not provided'}</span> },
   {
     key: 'time_out',
     header: 'Time out',
     render: (row) => (row.open
       ? <OpChip tone="info">In progress</OpChip>
-      : <span className="font-data">{row.time_out ?? 'Not provided'}{row.ended_on && <span className="block text-xs text-slate-500">{endedOnLabel(row.ended_on)}</span>}</span>),
+      : <span className="font-data">{clock12(row.time_out) ?? 'Not provided'}{row.ended_on && <span className="block text-xs text-slate-500">{endedOnLabel(row.ended_on)}</span>}</span>),
   },
   { key: 'hours', header: 'Hours worked', render: (row) => (row.open ? <span className="text-slate-500">In progress</span> : <span className="font-data">{row.minutes == null ? 'Not provided' : hoursWorked(row.minutes)}</span>) },
 ];

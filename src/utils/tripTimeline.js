@@ -1,3 +1,4 @@
+import { clock12 } from './clock';
 // Pure display logic for the passenger trip timeline (A2). The server decides
 // every row, ETA, journey flag and fare; this only groups rows for display.
 
@@ -11,9 +12,9 @@ export function formatDuration(minutes) {
   return mins === 0 ? `${hours} h` : `${hours} h ${mins} min`
 }
 
-/** Manila wall-clock "HH:mm" carried by the server as `eta_time`; null means "ETA unavailable". */
+/** The server's Manila wall-clock `eta_time` on a 12-hour clock ("1:30 PM"); null means "ETA unavailable". */
 export function etaLabel(row) {
-  return row?.eta_time || null
+  return clock12(row?.eta_time)
 }
 
 const isPassThrough = (row) => row.type === 'pass_through'

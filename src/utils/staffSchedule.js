@@ -1,4 +1,5 @@
 import { getBusinessToday } from './dates';
+import { clock12 } from './clock';
 
 export const STATUS_COLOR = {
   scheduled: '#153a6b',
@@ -14,7 +15,7 @@ export const STATUS_COLOR = {
 export const ROLE_LABEL = { driver: 'Driver', conductor: 'Chauffeur', operator: 'Operator' };
 
 /** 'HH:MM' from a time that may carry seconds, or '' when there is none. */
-export const formatTime = (value) => String(value || '').match(/^(\d{2}:\d{2})/)?.[1] ?? '';
+export const formatTime = (value) => clock12(String(value || '').match(/^(\d{2}:\d{2})/)?.[1]) ?? '';
 
 /** Long label for a business-day key, formatted without the browser timezone. */
 export const formatDayLabel = (dateKey) => {

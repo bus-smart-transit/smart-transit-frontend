@@ -33,7 +33,7 @@ describe('buildFleetRows', () => {
   it('is active when a trip is still to run but none is under way', () => {
     expect(rowOf(rows, 2).status.key).toBe('active');
     expect(rowOf(rows, 2).trackable).toBe(false);
-    expect(rowOf(rows, 2).nextTripLabel).toBe('Davao - Tagum - 08:00');
+    expect(rowOf(rows, 2).nextTripLabel).toBe('Davao - Tagum - 8:00 AM');
   });
 
   // Batch 60: Track opens for a trip that is late leaving, as well as a running one.

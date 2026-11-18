@@ -5,6 +5,7 @@ import { openPrintReport } from '../../utils/printReport';
 import { reportFileName, reportToCsv } from '../../utils/reportCsv';
 import { DEFAULT_FILE_TYPE, downloadReport } from '../../utils/tableExport';
 import FileTypeSelect from '../ui/FileTypeSelect';
+import { clock12 } from '../../utils/clock';
 
 const REPORTS = [
   { key: 'adherence', label: 'Route Adherence' },
@@ -58,7 +59,7 @@ function exportRowsFor(reportType, report) {
     return Object.entries(report?.peak_hours || {})
       .sort(([left], [right]) => Number(left) - Number(right))
       .map(([hour, average]) => ({
-        departure_hour: `${String(hour).padStart(2, '0')}:00`,
+        departure_hour: clock12(`${String(hour).padStart(2, '0')}:00`),
         average_occupancy: Number(average),
         capacity: Number(report?.capacity || 0),
         average_utilization_pct: Number(report?.capacity) > 0 ? (Number(average) / Number(report.capacity)) * 100 : null,
@@ -161,7 +162,7 @@ function OccupancyReport({ report }) {
               const value = Number(rawValue) || 0;
               return (
                 <div key={hour} className="grid grid-cols-[3.5rem_minmax(0,1fr)_5rem] items-center gap-3" data-testid="occupancy-hour-row">
-                  <span className="font-mono text-xs text-slate-600">{String(hour).padStart(2, '0')}:00</span>
+                  <span className="font-mono text-xs text-slate-600">{clock12(`${String(hour).padStart(2, '0')}:00`)}</span>
                   <div className="h-3 overflow-hidden rounded-sm bg-slate-100">
                     <div className="h-full bg-teal-600" style={{ width: `${Math.min(100, (value / maxValue) * 100)}%` }} />
                   </div>

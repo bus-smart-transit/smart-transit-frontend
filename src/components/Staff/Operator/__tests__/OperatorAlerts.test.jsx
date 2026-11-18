@@ -70,6 +70,6 @@ describe('OperatorAlerts', () => {
 
     expect(screen.queryByTestId('operator-alert-recent')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: /Crew alerts in the last 24 hours \(1\)/ }))
-    expect(screen.getByTestId('operator-alert-recent')).toHaveTextContent('Handled by Oscar Operator at 2026/11/10 - 10:40 · Spare bus sent')
+    expect(screen.getByTestId('operator-alert-recent')).toHaveTextContent('Handled by Oscar Operator at 2026/11/10 - 10:40 AM · Spare bus sent')
   })
 })

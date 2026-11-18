@@ -43,6 +43,7 @@ import {
   X, Loader2, AlertTriangle, Bell,
 } from 'lucide-react'
 import { SkeletonList, SkeletonPage } from '../ui/Skeleton'
+import { clock12 } from '../../utils/clock';
 const fmt = (v) => {
   if (v == null) return '-'
   const n = Number(v)
@@ -526,7 +527,7 @@ function TripsTab({ drivers, conductors, onRefresh, tripsState, focusTripId = nu
                       <tr key={t.trip_id} id={`trip-row-${t.trip_id}`} data-focused={Number(t.trip_id) === Number(focusTripId) ? 'true' : undefined} className={`border-b border-slate-100 hover:bg-slate-50 ${Number(t.trip_id) === Number(focusTripId) ? 'bg-teal-50 ring-2 ring-inset ring-teal-500' : ''}`}>
                         <td className="px-4 py-3 font-mono text-xs text-slate-600">#{t.trip_id}</td>
                         <td className="px-4 py-3 text-slate-700 whitespace-nowrap">{fmtDate(t.trip_date)}</td>
-                        <td className="px-4 py-3 text-slate-700 whitespace-nowrap">{String(t.departure_time || t.fleet_route?.start_time || '--:--').slice(0, 5)}</td>
+                        <td className="px-4 py-3 text-slate-700 whitespace-nowrap">{clock12(t.departure_time || t.fleet_route?.start_time) || '--:--'}</td>
                         <td className="px-4 py-3 text-slate-700 max-w-30 truncate">
                           {t.fleet_route?.route?.route_name || '-'}
                           {t.shift_block_id

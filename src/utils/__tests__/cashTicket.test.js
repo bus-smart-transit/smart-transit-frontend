@@ -69,12 +69,12 @@ test('stopLabel reads the nested stop name', () => {
 
 describe('formatManilaDateTime (server UTC shown in Manila time)', () => {
   test('converts a UTC instant to Manila wall-clock time, whatever the device timezone', () => {
-    expect(formatManilaDateTime('2026-10-04T09:30:00Z')).toBe('2026/10/04 - 17:30');
+    expect(formatManilaDateTime('2026-10-04T09:30:00Z')).toBe('2026/10/04 - 5:30 PM');
   });
 
   test('crosses midnight correctly: 20:00 UTC is 04:00 the next day in Manila', () => {
-    expect(formatManilaDateTime('2026-10-03T20:00:00Z')).toBe('2026/10/04 - 04:00');
-    expect(formatManilaDateTime('2026-10-03T16:00:00Z')).toBe('2026/10/04 - 00:00');
+    expect(formatManilaDateTime('2026-10-03T20:00:00Z')).toBe('2026/10/04 - 4:00 AM');
+    expect(formatManilaDateTime('2026-10-03T16:00:00Z')).toBe('2026/10/04 - 12:00 AM');
   });
 
   test('empty or invalid input is a dash', () => {

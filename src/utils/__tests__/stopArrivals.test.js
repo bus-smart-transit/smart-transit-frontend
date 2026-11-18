@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { busLine, etaBand, etaText, updatedText } from '../stopArrivals';
+import { busLine, busParts, etaBand, etaText, expectedAndEta, updatedText } from '../stopArrivals';
 
 // SAMPLE arrivals, shaped like the server's StopArrivalsService.
 describe('stopArrivals (Batch 77)', () => {
@@ -10,6 +10,7 @@ describe('stopArrivals (Batch 77)', () => {
     expect(etaBand({ eta_minutes: 15 }).label).toBe('Approaching');
     expect(etaBand({ eta_minutes: 16 }).label).toBe('Expected later');
     expect(etaBand({ eta_minutes: 2, delayed: true }).label).toBe('Delayed');
+    expect(etaBand({ eta_minutes: 2, delayed: true, late_by_minutes: 7 }).label).toBe('Delayed +7 min');
     expect(etaBand({}).label).toBe('Not provided');
   });
 
@@ -22,6 +23,11 @@ describe('stopArrivals (Batch 77)', () => {
   it('names a bus by company and body number, never making one up', () => {
     expect(busLine({ bus_company: 'Sample Lines', body_no: '1024' })).toBe('Sample Lines – 1024');
     expect(busLine({ bus_label: 'Sample Lines / 7' })).toBe('Sample Lines / 7');
+    expect(busParts({ bus_company: 'A Very Long Sample Bus Company Name', body_no: 'DMS-06' })).toEqual({ title: 'DMS-06', subtitle: 'A Very Long Sample Bus Company Name' });
+    expect(busParts({ bus_label: 'Sample Lines / 7' })).toEqual({ title: 'Sample Lines / 7', subtitle: null });
+    expect(expectedAndEta({ scheduled_time: '12:39', eta_time: '12:45' })).toBe('Expected 12:39 PM · ETA 12:45 PM');
+    expect(expectedAndEta({ eta_time: '00:05' })).toBe('ETA 12:05 AM');
+    expect(expectedAndEta({})).toBe('Not provided');
     expect(busLine({})).toBe('Not provided');
   });
 

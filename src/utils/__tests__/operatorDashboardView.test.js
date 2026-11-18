@@ -93,7 +93,7 @@ describe('buildDashboardView', () => {
       trips: [trip(1, { departure_time: '08:15:00', total_occupancy: 4 }), trip(2, { departure_time: '08:45:00', total_occupancy: 6 }), trip(3, { departure_time: '10:00:00', total_occupancy: 1 })],
       fleets: [fleet(1)], today: TODAY, nowMs: NOW,
     });
-    expect(view.soldByHour).toEqual([{ hour: '08:00', sold: 10 }, { hour: '10:00', sold: 1 }]);
+    expect(view.soldByHour).toEqual([{ hour: '8:00 AM', sold: 10 }, { hour: '10:00 AM', sold: 1 }]);
   });
 
   it('raises alerts for a delayed trip, a crew gap, a silent bus and a near-full trip', () => {

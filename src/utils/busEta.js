@@ -1,3 +1,4 @@
+import { clock12 } from './clock';
 /**
  * 2026-10-29: the homepage tracker's ETA, from where the bus is now. The server's trip timeline gives every stop's
  * expected time (the schedule moved by how late or early the bus was at the last stop the Driver passed, with any
@@ -20,7 +21,7 @@ const minutesUntil = (iso, nowMs) => {
 const describe = (row, nowMs) => (row ? {
   stopId: row.stop_id ?? null,
   name: row.name || 'Not provided',
-  time: row.eta_time || null,
+  time: clock12(row.eta_time),
   minutes: minutesUntil(row.eta, nowMs),
   live: row.eta_source === 'live',
   passed: row.progress === 'passed',

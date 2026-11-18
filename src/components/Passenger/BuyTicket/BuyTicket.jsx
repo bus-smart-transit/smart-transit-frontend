@@ -20,6 +20,7 @@ import { formatManilaDate } from '../../../utils/dates';
 import { formatDuration } from '../../../utils/tripTimeline';
 import { seatsLeftText, tripProgressText } from '../../../utils/passengerTripProgress';
 import { cleanContactInput, looksLikePhone } from '../../../utils/travellerContact';
+import { clock12 } from '../../../utils/clock';
 
 // Matches OnlineCheckoutRequest: the passenger picks GCash or Maya (C4). The payment
 // page itself collects whatever else the provider needs.
@@ -112,6 +113,8 @@ export default function BuyTicket({ onTicketPurchased, returnTo = '/' }) {
   const summaryFrom = boardingRow?.name || stopName(form.origin_stop_id);
   const summaryTo = (alightingRow && !alightingRow.custom ? alightingRow.name : '') || stopName(form.destination_stop_id);
   const boardingLabel = boardingRow?.name || summaryFrom;
+  // Batch 79: times on a 12-hour clock, worked out before the memo below so React's compiler keeps it.
+  const arrivalClock = clock12(alightingRow?.eta_time) || 'Arrival time not available';
 
   // The map dims everything outside the passenger's own segment. Memoised so the map only redraws
   // when the segment really changes.
@@ -418,7 +421,7 @@ export default function BuyTicket({ onTicketPurchased, returnTo = '/' }) {
                                   selected ? 'border-teal-500 bg-teal-50 text-teal-800' : 'border-slate-200 bg-white text-navy-900 hover:border-slate-300'
                                 }`}
                               >
-                                <span className="block font-bold">{departure.boarding_time}</span>
+                                <span className="block font-bold">{clock12(departure.boarding_time) || departure.boarding_time}</span>
                                 <span className="block text-xs text-slate-500">{seatsLeftText(departure.seats_left)}</span>
                               </button>
                             );
@@ -439,8 +442,8 @@ export default function BuyTicket({ onTicketPurchased, returnTo = '/' }) {
                     {trip && (
                       <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
                         {[
-                          [Clock3, 'Departure', `${trip.boarding_time} at ${boardingLabel}`],
-                          [Clock3, 'Arrival', alightingRow?.eta_time || 'Arrival time not available'],
+                          [Clock3, 'Departure', `${clock12(trip.boarding_time) || trip.boarding_time} at ${boardingLabel}`],
+                          [Clock3, 'Arrival', arrivalClock],
                           [Bus, 'Bus', busLabelText(trip.bus_label)],
                           [MapPin, 'Duration', formatDuration(timeline?.header?.duration_minutes) || '-'],
                         ].map(([Icon, label, value]) => (
@@ -693,7 +696,7 @@ export default function BuyTicket({ onTicketPurchased, returnTo = '/' }) {
             <dl className="mt-4 divide-y divide-slate-100 text-sm">
               <SummaryRow label="Board at">{boardingRow?.name || summaryFrom || '-'}</SummaryRow>
               <SummaryRow label="Get off at">{alightingRow?.name || summaryTo || '-'}</SummaryRow>
-              <SummaryRow label="Departure">{trip ? `${trip.trip_date} ${trip.boarding_time}` : '-'}</SummaryRow>
+              <SummaryRow label="Departure">{trip ? `${trip.trip_date} ${clock12(trip.boarding_time) || trip.boarding_time}` : '-'}</SummaryRow>
               <SummaryRow label="Payment">Online &middot; {form.payment_channel === 'maya' ? 'Maya' : 'GCash'}</SummaryRow>
               <SummaryRow label="Unit Fare">
                 PHP {hasFareQuote ? Number(unitFare).toFixed(2) : '0.00'}

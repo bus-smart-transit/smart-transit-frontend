@@ -1,3 +1,4 @@
+import { clock12 } from './clock';
 // Shared look-up for the shift block / trip cards (Driver, Chauffeur and Operator): badge colours, the status text and
 // the time range line. The status VALUE always comes from the server (ScheduleStatus); this only names and colours it.
 
@@ -19,6 +20,6 @@ export const statusLabel = (value) => String(value || 'scheduled').replace(/[_-]
 /** "Departures 06:00 to 13:30", "Departs 09:00" or "Time not set". */
 export function timeRange(card) {
   if (!card.start_time) return 'Time not set';
-  if (card.legs_count > 1 && card.end_time && card.end_time !== card.start_time) return `Departures ${card.start_time} to ${card.end_time}`;
-  return `Departs ${card.start_time}`;
+  if (card.legs_count > 1 && card.end_time && card.end_time !== card.start_time) return `Departures ${clock12(card.start_time) || card.start_time} to ${clock12(card.end_time) || card.end_time}`;
+  return `Departs ${clock12(card.start_time) || card.start_time}`;
 }

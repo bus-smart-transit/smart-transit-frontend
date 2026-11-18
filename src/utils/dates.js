@@ -1,3 +1,4 @@
+import { clock12 } from './clock';
 const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 // The backend always stores/compares trip_date + departure_time as wall-clock
@@ -212,7 +213,7 @@ export function formatManilaDate(isoDate) {
 
 /**
  * An instant (for example the server's ISO 8601 UTC time, "2026-10-04T09:30:00Z")
- * as Manila wall-clock time, "2026/10/04 - 17:30". Independent of the device timezone.
+ * as Manila wall-clock time, "2026/10/04 - 5:30 PM" (12-hour clock, Batch 79). Independent of the device timezone.
  */
 export function formatManilaDateTime(value) {
   if (!value) return '-';
@@ -224,5 +225,5 @@ export function formatManilaDateTime(value) {
       hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
     }).formatToParts(date).map((p) => [p.type, p.value]),
   );
-  return `${parts.year}/${parts.month}/${parts.day} - ${parts.hour}:${parts.minute}`;
+  return `${parts.year}/${parts.month}/${parts.day} - ${clock12(`${parts.hour}:${parts.minute}`)}`;
 }

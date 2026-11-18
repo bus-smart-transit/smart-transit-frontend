@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import OperatorService from '../../api/StaffService/OperatorService';
+import { clock12 } from '../../utils/clock';
 
 /**
  * Batch 28 Stage 3, item 7: suggested leg start times for a new shift block. Leg 1 stays where the operator put it;
@@ -52,8 +53,8 @@ export default function LegTimeSuggestion({ fleetRouteId, date, firstTime, servi
           <ol className="mt-2 space-y-1" data-testid="suggested-legs">
             {plan.legs.map((leg) => (
               <li key={leg.leg_index}>
-                Leg {leg.leg_index} ({leg.direction}): <strong className="text-slate-800">{leg.suggested_departure}</strong>
-                {leg.expected_duration_minutes !== null && <> &rarr; ends about {leg.expected_end} ({leg.expected_duration_minutes} min{leg.factor_label ? `, factor x${leg.factor} ${leg.factor_label}` : ''}{leg.duration_source_label ? ` · ${leg.duration_source_label}` : ''})</>}
+                Leg {leg.leg_index} ({leg.direction}): <strong className="text-slate-800">{clock12(leg.suggested_departure) || leg.suggested_departure}</strong>
+                {leg.expected_duration_minutes !== null && <> &rarr; ends about {clock12(leg.expected_end) || leg.expected_end} ({leg.expected_duration_minutes} min{leg.factor_label ? `, factor x${leg.factor} ${leg.factor_label}` : ''}{leg.duration_source_label ? ` · ${leg.duration_source_label}` : ''})</>}
                 {leg.expected_duration_minutes === null && <> (this route has no stop times, so the following legs cannot be suggested)</>}
                 {leg.spills_into_next_day && <> (after midnight: choose it yourself)</>}
               </li>
@@ -61,7 +62,7 @@ export default function LegTimeSuggestion({ fleetRouteId, date, firstTime, servi
           </ol>
           {plan.summary?.expected_finish && (
             <p className="mt-1" data-testid="plan-summary">
-              {plan.legs.length} legs, finishing about {plan.summary.expected_finish}.
+              {plan.legs.length} legs, finishing about {clock12(plan.summary.expected_finish) || plan.summary.expected_finish}.
             </p>
           )}
           {flags.length > 0 && (

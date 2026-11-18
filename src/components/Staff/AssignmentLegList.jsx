@@ -1,5 +1,6 @@
 import ServiceTypeChip from '../ui/ServiceTypeChip';
 import { STATUS_CLASS, statusLabel } from '../../utils/assignmentCardView';
+import { clock12 } from '../../utils/clock';
 
 /** Everything the "View legs" modal shows for one card's legs. Plain text only: React escapes it. */
 export default function AssignmentLegList({ card }) {
@@ -11,7 +12,7 @@ export default function AssignmentLegList({ card }) {
             <p className="font-semibold text-slate-900">
               {card.legs.length > 1 ? `Leg ${index + 1}: ` : ''}{leg.origin || '-'} → {leg.destination || '-'}
             </p>
-            <p className="text-xs text-slate-500">{leg.leg_direction === 'reverse' ? 'Return' : 'Outbound'} · Departs {leg.departure_time || '-'}</p>
+            <p className="text-xs text-slate-500">{leg.leg_direction === 'reverse' ? 'Return' : 'Outbound'} · Departs {clock12(leg.departure_time) || '-'}</p>
           </div>
           <div className="flex items-center gap-2">
             <ServiceTypeChip serviceType={leg.service_type} />

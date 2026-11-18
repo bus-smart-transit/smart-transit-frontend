@@ -9,6 +9,7 @@ import { BarList, HourChart, SplitBar } from './FinancialCharts';
 import TransactionsTable from './TransactionsTable';
 
 import { SkeletonStats } from '../../ui/Skeleton';
+import { clock12 } from '../../../utils/clock';
 const FIELD = 'w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500';
 
 const ICON_TILE = 'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600 sm:h-10 sm:w-10 sm:rounded-xl';
@@ -219,7 +220,7 @@ export default function FinancialsPage({ service, view = 'all', embedded = false
             <BarList
               rows={summary.by_trip.map((t) => ({
                 key: t.trip_id,
-                label: `${t.trip_date} ${t.departure_time || ''} · ${t.route_name}`.trim(),
+                label: `${t.trip_date} ${clock12(t.departure_time) || ''} · ${t.route_name}`.trim(),
                 value: t.gross,
                 sublabel: `${t.plate_number}${t.shift_block_id ? ` · Block #${t.shift_block_id}` : ''}`,
                 detail: `${formatCount(t.tickets)} tickets${t.refunds > 0 ? ` · Net ${formatPeso(t.net)}` : ''}`,

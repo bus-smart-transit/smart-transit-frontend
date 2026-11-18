@@ -1,6 +1,7 @@
 import { Link, useNavigate } from 'react-router-dom';
 import Modal from '../../ui/Modal';
 import useTrackMyBus from '../../../api/hooks/Passenger/useTrackMyBus';
+import { clock12 } from '../../../utils/clock';
 
 const inputClass = 'w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-ink placeholder:text-slate-400 focus:border-navy-700 focus:outline-none focus:ring-2 focus:ring-navy-700/30';
 
@@ -40,7 +41,7 @@ export default function TrackMyBusModal({ open, onClose }) {
           <dl className="space-y-1 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
             <div className="flex justify-between gap-3"><dt className="text-slate-500">Route</dt><dd className="text-right font-semibold text-slate-900">{trip?.route_name || 'Not provided'}</dd></div>
             <div className="flex justify-between gap-3"><dt className="text-slate-500">Date</dt><dd className="text-right font-semibold text-slate-900">{trip?.trip_date || 'Not provided'}</dd></div>
-            <div className="flex justify-between gap-3"><dt className="text-slate-500">Leaves at</dt><dd className="text-right font-semibold text-slate-900">{trip?.departure_time || 'Not provided'}</dd></div>
+            <div className="flex justify-between gap-3"><dt className="text-slate-500">Leaves at</dt><dd className="text-right font-semibold text-slate-900">{clock12(trip?.departure_time) || 'Not provided'}</dd></div>
             <div className="flex justify-between gap-3"><dt className="text-slate-500">Your stops</dt><dd className="text-right font-semibold text-slate-900">{t.view?.boarding?.name || 'Not provided'} to {t.view?.alighting?.name || 'Not provided'}</dd></div>
           </dl>
           {t.view?.message && <p className="text-xs text-slate-500">{t.view.message}</p>}

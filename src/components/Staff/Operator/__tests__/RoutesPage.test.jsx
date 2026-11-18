@@ -292,10 +292,10 @@ describe('Route detail', () => {
     renderPage({ onOpenSchedule });
     await openTagum();
     goToTab('Schedule');
-    expect(screen.getByText('05:00 - 21:00')).toBeInTheDocument();
+    expect(screen.getByText('5:00 AM - 9:00 PM')).toBeInTheDocument();
     const upcoming = screen.getByRole('table', { name: 'Upcoming trips on this route' });
     expect(within(upcoming).getAllByRole('row')).toHaveLength(2);
-    expect(within(upcoming).getByText('09:00')).toBeInTheDocument();
+    expect(within(upcoming).getByText('9:00 AM')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Open Schedule' }));
     expect(onOpenSchedule).toHaveBeenCalled();
   });

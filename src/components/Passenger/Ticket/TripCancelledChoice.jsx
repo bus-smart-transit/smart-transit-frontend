@@ -4,6 +4,7 @@ import PassengerService from '../../../api/PassengerService/PassengerService';
 import Button from '../../ui/Button';
 import { busLabelText } from '../../../utils/busLabel';
 import { refundMethodText, resolutionSummary } from '../../../utils/ticketResolution';
+import { clock12 } from '../../../utils/clock';
 
 /**
  * Batch 28 Stage 3, item 6: the ONE way a paid ticket can be given up: the OPERATOR cancelled the trip. The passenger
@@ -83,7 +84,7 @@ export default function TripCancelledChoice({ ticketUuid, onChanged }) {
                 {options.map((option) => (
                   <label key={option.trip_id} className="flex cursor-pointer items-start gap-2 text-xs text-slate-700">
                     <input type="radio" name="rebook-trip" value={option.trip_id} checked={String(option.trip_id) === String(tripId)} onChange={() => setTripId(String(option.trip_id))} className="mt-0.5 accent-navy-800" />
-                    <span>{option.trip_date} at {option.boarding_time} &middot; {busLabelText(option.bus_label)}</span>
+                    <span>{option.trip_date} at {clock12(option.boarding_time) || option.boarding_time} &middot; {busLabelText(option.bus_label)}</span>
                   </label>
                 ))}
               </fieldset>

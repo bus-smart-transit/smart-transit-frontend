@@ -1,5 +1,6 @@
 import { getBusinessToday } from './dates';
 import { computeVehicleState, formatAge } from './vehicleState';
+import { clock12 } from './clock';
 
 /**
  * Batch 31: everything the reworked Operator Dashboard shows, computed from data the backend already returns (trips,
@@ -48,7 +49,10 @@ export function loadPct(trip) {
   return capacity > 0 ? Math.round((ticketsSold(trip) / capacity) * 100) : null;
 }
 
-export const departureLabel = (trip) => String(trip?.departure_time || trip?.fleet_route?.start_time || '').slice(0, 5) || '--:--';
+/** The 24-hour "HH:mm" a trip leaves at, for sorting and grouping only ('--:--' when unknown). */
+export const departureKey = (trip) => String(trip?.departure_time || trip?.fleet_route?.start_time || '').slice(0, 5) || '--:--';
+/** Batch 79: the departure time people read, on a 12-hour clock ("8:00 AM"). */
+export const departureLabel = (trip) => clock12(departureKey(trip)) || '--:--';
 
 const hasDriver = (trip) => Boolean(trip?.driver || trip?.driver_id);
 const hasConductor = (trip) => Boolean(trip?.conductor || trip?.conductor_id);
@@ -81,7 +85,7 @@ export function gpsStatus(location, nowMs = Date.now()) {
 export function tripsToday(trips = [], today = getBusinessToday()) {
   return trips
     .filter((trip) => String(trip?.trip_date || '').slice(0, 10) === today)
-    .sort((a, b) => departureLabel(a).localeCompare(departureLabel(b)) || Number(a.trip_id) - Number(b.trip_id));
+    .sort((a, b) => departureKey(a).localeCompare(departureKey(b)) || Number(a.trip_id) - Number(b.trip_id));
 }
 
 const DECISION_LABEL = { accept: 'Advice acknowledged', keep: 'Kept current route', contact: 'Crew contacted' };
@@ -216,11 +220,11 @@ export function buildDashboardView({ trips = [], fleets = [], locations = [], to
 
   const hours = new Map();
   for (const trip of counted) {
-    const label = `${departureLabel(trip).slice(0, 2)}:00`;
+    const label = `${departureKey(trip).slice(0, 2)}:00`;
     if (label.includes('-')) continue;
     hours.set(label, (hours.get(label) ?? 0) + ticketsSold(trip));
   }
-  const soldByHour = [...hours.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([hour, sold]) => ({ hour, sold }));
+  const soldByHour = [...hours.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([hour, sold]) => ({ hour: clock12(hour) || hour, sold }));
 
   // Route Delay Overview: the schedule's own verdict (the server marks a trip "delayed" once its departure time has
   // passed without departing) plus whether the live buses are reporting.

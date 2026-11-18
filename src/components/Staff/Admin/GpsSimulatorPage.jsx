@@ -7,6 +7,7 @@ import RouteMap from '../../Map/RouteMap';
 import { busLabelText } from '../../../utils/busLabel';
 
 import { SkeletonList } from '../../ui/Skeleton';
+import { clock12 } from '../../../utils/clock';
 const STATUS = {
   running: { tone: 'success', label: 'Running' },
   paused: { tone: 'warning', label: 'Paused' },
@@ -107,7 +108,7 @@ export default function GpsSimulatorPage({ simulatorTab }) {
                 <li key={trip.trip_id} className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between">
                   <span className="min-w-0">
                     <span className="block text-sm font-semibold text-slate-900">{trip.route_name || `Trip ${trip.trip_id}`}</span>
-                    <span className="block text-xs text-slate-500">{busLabelText(trip.bus_label)} · {trip.trip_date} {trip.departure_time}</span>
+                    <span className="block text-xs text-slate-500">{busLabelText(trip.bus_label)} · {trip.trip_date} {clock12(trip.departure_time) || trip.departure_time}</span>
                     {!trip.has_route_line && <span className="block text-xs text-amber-700">This route has no route line yet.</span>}
                   </span>
                   <button

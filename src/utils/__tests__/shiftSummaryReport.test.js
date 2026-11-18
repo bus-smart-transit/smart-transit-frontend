@@ -13,7 +13,7 @@ describe('shiftSummaryCsv', () => {
     const lines = csv.split('\r\n');
     expect(lines).toContain('Net revenue (PHP),120.00');
     expect(lines).toContain('Cash to hand over (PHP),80.00');
-    expect(lines).toContain('7,Tagum,"Panabo, Davao",06:00,06:02,Not provided,5,120.00');
+    expect(lines).toContain('7,Tagum,"Panabo, Davao",6:00 AM,6:02 AM,Not provided,5,120.00');
     expect(lines).toContain('10:42,Stop B');
   });
 

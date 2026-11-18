@@ -32,7 +32,7 @@ const listRow = (p) => ({
 });
 const ticketRow = {
   key: 'ticket-5', kind: 'ticket', date: '2026-11-07T01:00:00Z', transaction_reference: 'TXN-REF1', passenger: 'Rider One', email: null,
-  trip: 'Davao - Tagum, 2026-11-07 08:00', reason: 'Trip cancelled', amount: 57, status: 'refunded', needs_action: false,
+  trip: 'Davao - Tagum, 2026-11-07 8:00 AM', reason: 'Trip cancelled', amount: 57, status: 'refunded', needs_action: false,
   detail: { id: 5, ticket_uuid: 'u-1', route_name: 'Davao - Tagum', trip_date: '2026-11-07', departure_time: '08:00', passenger_name: 'Rider One', guest_email: null, transaction_reference: 'TXN-REF1', method: 'gateway', status: 'succeeded', amount: 47, fee_amount: 10, requested_at: '2026-11-07T01:00:00Z', completed_at: '2026-11-07T01:05:00Z', failure_reason: null },
 };
 
@@ -68,7 +68,7 @@ describe('PaymentRefundsPage', () => {
     expect(card).toHaveTextContent('rider@example.com');
     expect(card).toHaveTextContent('GCash');
     expect(card).toHaveTextContent('47.00');
-    expect(card).toHaveTextContent('Davao - Tagum, 2026-10-05 08:00 (2 tickets)');
+    expect(card).toHaveTextContent('Davao - Tagum, 2026-10-05 8:00 AM (2 tickets)');
     expect(card).toHaveTextContent('pay_abc456');
     expect(card).toHaveTextContent('cs_checkout123');
     expect(within(card).getByTestId('refund-status')).toHaveTextContent('Needs refund');
@@ -221,7 +221,7 @@ describe('PaymentRefundsPage: Cancelled trips', () => {
     expect(within(rows[1]).getByTestId('refund-row-status')).toHaveTextContent('Refunded');
 
     const card = await openRow(1);
-    expect(card).toHaveTextContent('Davao - Tagum, 2026-11-07 08:00');
+    expect(card).toHaveTextContent('Davao - Tagum, 2026-11-07 8:00 AM');
     expect(card).toHaveTextContent('Rider One');
     expect(card).toHaveTextContent('57.00');
     expect(within(card).getByTestId('ticket-refund-status')).toHaveTextContent('Refunded');

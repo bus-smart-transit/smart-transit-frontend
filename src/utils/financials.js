@@ -1,4 +1,5 @@
 import { addDaysToDate, formatCalendarDate } from './bookingQuery';
+import { clock12 } from './clock';
 
 // Batch 29, Stage 2: display helpers for the Operator financial page. Nothing here computes a fare or a total:
 // every amount shown comes from the server's stored ticket and payment amounts.
@@ -11,10 +12,10 @@ export const formatCount = (value) => Number(value || 0).toLocaleString('en-PH')
 
 export const formatPercent = (value) => `${Number(value || 0).toLocaleString('en-PH', { maximumFractionDigits: 1 })}%`;
 
-/** "Oct 5, 2026 06:04" from the server's Manila "YYYY-MM-DD HH:MM:SS". */
+/** "Oct 5, 2026 6:04 AM" from the server's Manila "YYYY-MM-DD HH:MM:SS" (12-hour clock, Batch 79). */
 export function formatPaidAt(value) {
   const match = String(value || '').match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})/);
-  return match ? `${formatCalendarDate(match[1])} ${match[2]}` : '';
+  return match ? `${formatCalendarDate(match[1])} ${clock12(match[2])}` : '';
 }
 
 /** The quick date ranges, from the Manila business date. */

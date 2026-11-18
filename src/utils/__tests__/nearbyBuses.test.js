@@ -26,14 +26,14 @@ describe('nearbyBuses (Batch 45 Feature C)', () => {
 
   it('labels a live estimate and shows the scheduled time and the delay apart', () => {
     expect(busArrival({ eta_time: '12:50', eta_basis: 'live', scheduled_time: '12:45', delay_minutes: 5, gps_stale: false })).toEqual({
-      time: '12:50', basis: 'Live estimate', scheduled: 'Scheduled 12:45', delay: '5 min late', note: null,
+      time: '12:50 PM', basis: 'Live estimate', scheduled: 'Scheduled 12:45 PM', delay: '5 min late', note: null,
     });
     expect(busArrival({ eta_time: '12:43', eta_basis: 'live', scheduled_time: '12:45', delay_minutes: -2 }).delay).toBe('2 min early');
   });
 
   it('falls back to the scheduled time when the GPS is old, and says why', () => {
     expect(busArrival({ eta_time: '12:45', eta_basis: 'scheduled', scheduled_time: '12:45', delay_minutes: null, gps_stale: true })).toEqual({
-      time: '12:45', basis: 'Scheduled', scheduled: null, delay: null, note: 'Bus location is old, so this is the scheduled time.',
+      time: '12:45 PM', basis: 'Scheduled', scheduled: null, delay: null, note: 'Bus location is old, so this is the scheduled time.',
     });
   });
 
@@ -56,9 +56,9 @@ describe('nearbyBuses (Batch 45 Feature C)', () => {
 describe('busTrip', () => {
   it('reads departed at, the destination and its arrival time', () => {
     expect(busTrip({ departed_at: '15:26', destination: 'Last Stop', destination_eta_time: '16:10', destination_eta_basis: 'live', arrived: false }))
-      .toEqual({ departedAt: '15:26', destination: 'Last Stop', arrives: { time: '16:10', basis: 'Live estimate', minutes: null }, arrived: false, full: false });
+      .toEqual({ departedAt: '3:26 PM', destination: 'Last Stop', arrives: { time: '4:10 PM', basis: 'Live estimate', minutes: null }, arrived: false, full: false });
     expect(busTrip({ destination: 'Last Stop', destination_eta_time: '16:40', destination_eta_basis: 'scheduled' }).arrives)
-      .toEqual({ time: '16:40', basis: 'Scheduled', minutes: null });
+      .toEqual({ time: '4:40 PM', basis: 'Scheduled', minutes: null });
   });
 
   it('says arrived, with no arrival time, at the last stop, and drops the old-location note', () => {

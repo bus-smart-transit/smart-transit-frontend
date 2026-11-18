@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { X } from 'lucide-react';
 import useStopArrivals from '../../../api/hooks/Passenger/useStopArrivals';
-import { busLine, etaBand, etaText, updatedText } from '../../../utils/stopArrivals';
+import { busParts, etaBand, etaText, expectedAndEta, updatedText } from '../../../utils/stopArrivals';
 
 /**
  * Batch 77 (user, 2026-11-17): the minimalist card of a clicked stop pin on Track Bus: the stop's name, its next three
- * buses soonest first ("{company} – {body no}", "To {destination}", minutes with an ETA band), whether the times are live,
+ * buses soonest first (body number, company, "To {destination}", "Expected {time} · ETA {time}" (Batch 79), minutes with an
+ * ETA band), whether the times are live,
  * when they were last updated, and "View all arrivals". A floating card over the map on wide screens, a bottom sheet on
  * phones. Every value comes from the server (StopArrivalsService).
  */
@@ -52,11 +53,14 @@ export default function StopArrivalsCard({ stop, onClose, onViewTrips }) {
         <ul className="mt-2 divide-y divide-slate-100" data-testid="arrivals-list">
           {arrivals.map((arrival) => {
             const band = etaBand(arrival);
+            const bus = busParts(arrival);
             return (
-              <li key={arrival.trip_id} className="flex items-center justify-between gap-3 py-2.5">
+              <li key={arrival.trip_id} className="flex items-start justify-between gap-3 py-2.5">
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-slate-900">{busLine(arrival)}</p>
-                  <p className="truncate text-xs text-slate-500">To {arrival.destination || 'Not provided'}</p>
+                  <p className="break-words text-sm font-bold text-slate-900" data-testid="arrival-body-no">{bus.title}</p>
+                  {bus.subtitle && <p className="break-words text-xs text-slate-600">{bus.subtitle}</p>}
+                  <p className="break-words text-xs text-slate-500">To {arrival.destination || 'Not provided'}</p>
+                  <p className="mt-0.5 text-xs font-semibold text-slate-700" data-testid="arrival-times">{expectedAndEta(arrival)}</p>
                 </div>
                 <div className="shrink-0 text-right">
                   <p className="font-data text-base font-bold text-navy-950">{etaText(arrival)}</p>

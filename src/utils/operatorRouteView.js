@@ -1,5 +1,6 @@
 import { getBusinessToday } from './dates';
 import { OPEN_STATUSES } from './operatorDashboardView';
+import { clock12 } from './clock';
 
 /**
  * Batch 31 Phase 4: what the Operator's Routes pages show for each route, computed from the route payload
@@ -127,7 +128,7 @@ export function routeActivity(routeId, trips = []) {
     totalTrips: mine.length,
     completionRatePct: mine.length ? Math.round((completed / mine.length) * 100) : null,
     avgDailyTicketsSold: days ? Math.round(sold / days) : null,
-    peakHour: peak ? { hour: peak[0], trips: peak[1] } : null,
+    peakHour: peak ? { hour: clock12(peak[0]), trips: peak[1] } : null,
   };
 }
 
@@ -147,8 +148,8 @@ export function assignmentsOnRoute(routeId, fleets = []) {
       key: `${fleet.fleet_id}-${link.fleet_route_id ?? routeId}`,
       fleet,
       fleetRouteId: link.fleet_route_id ?? null,
-      start: String(link.start_time || '').slice(0, 5) || null,
-      end: String(link.end_time || '').slice(0, 5) || null,
+      start: clock12(link.start_time),
+      end: clock12(link.end_time),
       active: String(link.status || 'active').toLowerCase() === 'active' && String(fleet.status || 'active').toLowerCase() === 'active',
     })));
 }

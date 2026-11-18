@@ -5,6 +5,7 @@ import PassengerService from '../../PassengerService/PassengerService';
 import { initFcmAndGetToken } from '../../../services/fcmService';
 import { openPrintWindow } from '../../../utils/qr';
 import { leaveAccountDeletionNotice } from '../../../utils/accountDeletionNotice';
+import { clock12 } from '../../../utils/clock';
 
 const PROTECTED_TABS = new Set(['tickets', 'rewards', 'transactions', 'profile']);
 const URL_TABS = new Set(['dashboard', 'map', 'tickets', 'transactions', 'rewards', 'profile']);
@@ -129,9 +130,7 @@ export default function usePassengerDashboard({ preloadMapView }) {
     const mm = String(date.getMonth() + 1).padStart(2, '0');
     const dd = String(date.getDate()).padStart(2, '0');
     if (isDateOnly) return `${yyyy}/${mm}/${dd}`;
-    const hh = String(date.getHours()).padStart(2, '0');
-    const min = String(date.getMinutes()).padStart(2, '0');
-    return `${yyyy}/${mm}/${dd} - ${hh}:${min}`;
+    return `${yyyy}/${mm}/${dd} - ${clock12(`${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}`)}`;
   }, []);
 
   const getOriginLabel = useCallback((ticket) => {

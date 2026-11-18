@@ -3,6 +3,7 @@ import { Bus, Loader } from 'lucide-react'
 import { etaLabel, formatDuration, groupTimelineRows, journeyFacts, nodeState } from '../../../utils/tripTimeline'
 import { busLabelText } from '../../../utils/busLabel'
 import RunInfoChips from '../../ui/RunInfoChips'
+import { clock12 } from '../../../utils/clock';
 
 const NODE_STYLE = {
   passed: 'border-slate-400 bg-slate-400',
@@ -116,7 +117,7 @@ export default function TripTimeline({
             {' \u00b7 '}
             {bus?.fleet_type ? `${bus.fleet_type.charAt(0).toUpperCase()}${bus.fleet_type.slice(1)}` : 'Service type not set'}
           </span>
-          {timeline.trip?.departure_time && <span>Departs {timeline.trip.departure_time}</span>}
+          {timeline.trip?.departure_time && <span>Departs {clock12(timeline.trip.departure_time) || timeline.trip.departure_time}</span>}
           {facts.map((fact) => (
             <span key={fact.label}><span className="text-slate-400">{fact.label}: </span><strong className="text-navy-950">{fact.value}</strong></span>
           ))}

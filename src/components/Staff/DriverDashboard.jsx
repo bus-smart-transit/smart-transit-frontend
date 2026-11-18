@@ -42,6 +42,7 @@ import { FOR_APPROVAL_LABEL, isForApproval } from '../../utils/assignmentRequest
 import DriverService from '../../api/StaffService/DriverService';
 
 import { SkeletonPage } from '../ui/Skeleton';
+import { clock12 } from '../../utils/clock';
 // Batch 19 Part A: consolidated sidebar. "Assigned Routes" folds into
 // Dashboard (assigned-route/schedule/vehicle data belongs on the landing
 // view per Part B); Calendar + Schedule merge into one Schedule view;
@@ -72,16 +73,14 @@ const formatDateTime = (value) => {
   const mm = String(date.getMonth() + 1).padStart(2, '0');
   const dd = String(date.getDate()).padStart(2, '0');
   if (isDateOnly) return `${yyyy}/${mm}/${dd}`;
-  const hh = String(date.getHours()).padStart(2, '0');
-  const min = String(date.getMinutes()).padStart(2, '0');
-  return `${yyyy}/${mm}/${dd} - ${hh}:${min}`;
+  return `${yyyy}/${mm}/${dd} - ${clock12(`${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}`)}`;
 };
 
 const toCompactTime = (value) => {
   if (!value) return '';
   const str = String(value).trim();
   const hhmmss = str.match(/^(\d{2}:\d{2})(?::\d{2})?$/);
-  if (hhmmss) return hhmmss[1];
+  if (hhmmss) return clock12(hhmmss[1]);
   return str;
 };
 

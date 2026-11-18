@@ -48,7 +48,7 @@ export default function RouteConditions({ trafficStatus, nextStop }) {
         Measured: {trafficStatus.segmentLabel || `Current position to ${nextStop?.stop_name ?? nextStop?.name ?? 'next stop'}`}
         {' · '}
         {trafficStatus.updatedAt
-          ? `Updated ${new Date(trafficStatus.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+          ? `Updated ${new Date(trafficStatus.updatedAt).toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'Asia/Manila' })}`
           : 'No live update time'}
       </p>
     </div>

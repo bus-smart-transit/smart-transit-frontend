@@ -45,8 +45,8 @@ describe('TrackBusPage', () => {
     expect(await screen.findByText('Live')).toBeInTheDocument();
     expect(getTracking).toHaveBeenCalledWith(TOKEN);
     expect(screen.getByText('Stop B')).toBeInTheDocument();
-    expect(screen.getByText('08:15 (in 15 min)')).toBeInTheDocument(); // measured on the server's clock, not the phone's
-    expect(screen.getByText('08:45 (in 45 min)')).toBeInTheDocument();
+    expect(screen.getByText('8:15 AM (in 15 min)')).toBeInTheDocument(); // measured on the server's clock, not the phone's
+    expect(screen.getByText('8:45 AM (in 45 min)')).toBeInTheDocument();
     expect(screen.getByText('Live estimate')).toBeInTheDocument();
     const map = screen.getByTestId('map');
     expect(map.dataset).toMatchObject({ route: '7', direction: 'outbound', vehicle: '7.1,125', highlight: '11-12' });

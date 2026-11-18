@@ -1,3 +1,4 @@
+import { clock12 } from './clock';
 // Batch 54 (user, 2026-11-10): "View route stops" on a trip card in All available trips. Rows come from the server's
 // trip timeline asked for the card's boarding stop; nothing is worked out here except how a row reads.
 
@@ -14,7 +15,7 @@ export function routeStopRows(stops = []) {
       key: String(stop.stop_id ?? `${stop.name}-${index}`),
       name: stop.name || 'Not provided',
       code: stop.stop_code || '',
-      time: stop.eta_time || stop.scheduled_time || '',
+      time: clock12(stop.eta_time || stop.scheduled_time) || '',
       passesOnly: stop.type === 'pass_through',
       boarding: Boolean(stop.is_boarding),
       before: boardIndex >= 0 && index < boardIndex,

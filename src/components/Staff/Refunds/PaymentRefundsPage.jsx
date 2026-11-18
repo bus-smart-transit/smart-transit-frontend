@@ -8,6 +8,7 @@ import OperatorService from '../../../api/StaffService/OperatorService';
 import { formatCount, formatPaidAt, formatPeso } from '../../../utils/financials';
 
 import { SkeletonTable } from '../../ui/Skeleton';
+import { clock12 } from '../../../utils/clock';
 const FIELD = 'w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500';
 
 // 2026-11-08 (user): the refund of each ticket on a cancelled trip, from PayMongo or in cash.
@@ -25,7 +26,7 @@ function TicketRefundCard({ row }) {
     <Card as="article" data-testid="ticket-refund-card" data-status={row.status} className="space-y-2">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
-          <h3 className="truncate text-base font-bold text-slate-900">{row.route_name || 'Route unavailable'}{row.trip_date ? `, ${row.trip_date}` : ''}{row.departure_time ? ` ${row.departure_time}` : ''}</h3>
+          <h3 className="truncate text-base font-bold text-slate-900">{row.route_name || 'Route unavailable'}{row.trip_date ? `, ${row.trip_date}` : ''}{row.departure_time ? ` ${clock12(row.departure_time) || row.departure_time}` : ''}</h3>
           <p className="text-xs text-slate-500">{row.passenger_name || (row.guest_email ? `Guest · ${row.guest_email}` : 'Passenger')}{row.transaction_reference ? ` · ${row.transaction_reference}` : ''} · {row.method === 'cash' ? 'Cash' : 'PayMongo'}</p>
         </div>
         <span className="flex items-center gap-2">
@@ -52,7 +53,7 @@ const STATUS_CHIP = {
 const CHANNEL = { gcash: 'GCash', maya: 'Maya', paymaya: 'Maya' };
 
 function tripLine(trip) {
-  const when = [trip.trip_date, trip.departure_time ? String(trip.departure_time).slice(0, 5) : null].filter(Boolean).join(' ');
+  const when = [trip.trip_date, trip.departure_time ? clock12(trip.departure_time) : null].filter(Boolean).join(' ');
   return `${trip.route_name || 'Route unavailable'}${when ? `, ${when}` : ''} (${formatCount(trip.tickets)} ticket${trip.tickets === 1 ? '' : 's'})`;
 }
 

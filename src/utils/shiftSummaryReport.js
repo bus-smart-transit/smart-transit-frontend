@@ -4,6 +4,7 @@
  */
 
 import { downloadReport } from './tableExport';
+import { clock12 } from './clock';
 
 const NOT_PROVIDED = 'Not provided';
 
@@ -33,7 +34,7 @@ export function shiftSummaryCsv(earnings, { chauffeur = '', date = '' } = {}) {
   }
   rows.push([], ['Trip', 'From', 'To', 'Scheduled', 'Left', 'Arrived', 'Passengers', 'Fare (PHP)']);
   (Array.isArray(e.trips) ? e.trips : []).forEach((t) => {
-    rows.push([t.trip_id, t.origin, t.destination, t.scheduled_time, t.entry_time, t.exit_time, t.passenger_count, money(t.fare)]);
+    rows.push([t.trip_id, t.origin, t.destination, clock12(t.scheduled_time) || t.scheduled_time, clock12(t.entry_time) || t.entry_time, clock12(t.exit_time) || t.exit_time, t.passenger_count, money(t.fare)]);
   });
   const unpaid = Array.isArray(e.unpaid_check_ins) ? e.unpaid_check_ins : [];
   if (unpaid.length > 0) {

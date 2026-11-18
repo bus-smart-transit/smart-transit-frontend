@@ -18,7 +18,7 @@ describe('busEtaSummary', () => {
   it('gives the stop the bus is heading to and the final stop, in minutes from now', () => {
     const eta = busEtaSummary(timeline, now);
 
-    expect(eta.next).toMatchObject({ name: 'Carmen', time: '10:06', minutes: 6, live: true });
+    expect(eta.next).toMatchObject({ name: 'Carmen', time: '10:06 AM', minutes: 6, live: true });
     expect(eta.destination).toMatchObject({ name: 'Panabo Market', minutes: 25 });
     expect(eta.nearYou).toBeNull();
   });

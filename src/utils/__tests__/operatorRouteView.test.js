@@ -86,7 +86,7 @@ describe('routeActivity', () => {
     expect(result.totalTrips).toBe(4);
     expect(result.completionRatePct).toBe(50);
     expect(result.avgDailyTicketsSold).toBe(17);
-    expect(result.peakHour).toEqual({ hour: '08:00', trips: 3 });
+    expect(result.peakHour).toEqual({ hour: '8:00 AM', trips: 3 });
   });
   it('has nothing to say for a route with no trips', () => {
     expect(routeActivity(4, [])).toEqual({ totalTrips: 0, completionRatePct: null, avgDailyTicketsSold: null, peakHour: null });
@@ -105,7 +105,7 @@ describe('assignmentsOnRoute', () => {
   it('shows the service window and whether the assignment is active', () => {
     const rows = assignmentsOnRoute(4, [fleet(1), fleet(2, { status: 'inactive' })]);
     expect(rows).toHaveLength(2);
-    expect(rows[0]).toEqual(expect.objectContaining({ start: '05:00', end: '21:00', active: true }));
+    expect(rows[0]).toEqual(expect.objectContaining({ start: '5:00 AM', end: '9:00 PM', active: true }));
     expect(rows[1].active).toBe(false);
   });
 });

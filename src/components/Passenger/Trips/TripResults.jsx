@@ -11,6 +11,7 @@ import { isDeparted, seatsLeftText, tripProgressText } from '../../../utils/pass
 import { groupTrips } from '../../../utils/tripGroups'
 
 import { SkeletonCards } from '../../ui/Skeleton'
+import { clock12 } from '../../../utils/clock';
 /**
  * One departure in the search results. Every value comes from the server: times are the scheduled
  * times at the chosen stops (or "unavailable"), seats are what is left, the fare is the quote from
@@ -44,9 +45,9 @@ export function TripCard({ trip, fromName, toName, showDate = false, onBook, onC
           <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-slate-500">
             <span className="flex items-center gap-1.5">
               <Clock3 size={15} aria-hidden="true" />
-              <strong className="text-navy-950">{trip.boarding_time}</strong>
+              <strong className="text-navy-950">{clock12(trip.boarding_time) || trip.boarding_time}</strong>
               {' \u2192 '}
-              {trip.arrival_time || 'arrival unavailable'}
+              {clock12(trip.arrival_time) || 'arrival unavailable'}
             </span>
             <span className="flex items-center gap-1.5" data-testid="trip-bus-label"><Bus size={15} aria-hidden="true" />{busLabelText(trip.bus_label)}</span>
             {trip.vehicle_class_label && <span data-testid="trip-bus-type" className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">{trip.vehicle_class_label}</span>}

@@ -1,3 +1,4 @@
+import { clock12 } from './clock';
 // 2026-11-08 (user): view logic of the public Track Bus map. A bus that has not departed is "waiting" at its first
 // stop (the server decides which, WaitingBusService); the map draws the route line of every bus so no icon floats.
 
@@ -13,8 +14,8 @@ export function busStatusText(row, trip = {}) {
     const where = row.waiting_at ? `Waiting at ${row.waiting_at}` : 'Waiting to leave';
     if (!row.departs_at) return where;
     return String(row.trip_status || '').toLowerCase() === 'delayed'
-      ? `${where} · running late (was due ${row.departs_at})`
-      : `${where} · leaves ${row.departs_at}`;
+      ? `${where} · running late (was due ${clock12(row.departs_at) || row.departs_at})`
+      : `${where} · leaves ${clock12(row.departs_at) || row.departs_at}`;
   }
   if (trip.arrived) return 'Arrived';
   if (trip.departedAt) return `Departed at ${trip.departedAt}`;

@@ -4,7 +4,7 @@ import { csvFileName, filtersToParams, formatPaidAt, formatPeso, paymentFilterPa
 describe('financial page helpers', () => {
   it('formats pesos and the Manila time the server sends, without shifting the day', () => {
     expect(formatPeso(1234.5)).toMatch(/1,234\.50/);
-    expect(formatPaidAt('2026-10-05 06:04:44')).toBe('Oct 5, 2026 06:04');
+    expect(formatPaidAt('2026-10-05 06:04:44')).toBe('Oct 5, 2026 6:04 AM');
     expect(formatPaidAt('')).toBe('');
   });
 

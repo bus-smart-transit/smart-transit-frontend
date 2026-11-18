@@ -1,3 +1,4 @@
+import { clock12 } from './clock';
 // How the Driver / Chauffeur dashboards group their assignment cards (Batch 28 item 1, Batch 29 issue 1).
 //
 // The server decides each card's status and section from the leg statuses and the Manila day
@@ -43,7 +44,7 @@ export function todaySummary(cards, today) {
   if (todays.length === 0) return null;
   const pick = [...todays].sort((a, b) => Number(isDone(a)) - Number(isDone(b)) || String(a.start_time || '').localeCompare(String(b.start_time || '')))[0];
   const schedule = pick.start_time
-    ? (pick.legs_count > 1 && pick.end_time && pick.end_time !== pick.start_time ? `${pick.start_time} - ${pick.end_time}` : pick.start_time)
+    ? (pick.legs_count > 1 && pick.end_time && pick.end_time !== pick.start_time ? `${clock12(pick.start_time) || pick.start_time} - ${clock12(pick.end_time) || pick.end_time}` : (clock12(pick.start_time) || pick.start_time))
     : null;
   return {
     plate: pick.plate_number || null,

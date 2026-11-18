@@ -17,7 +17,7 @@ describe('formatDuration', () => {
 
 describe('etaLabel', () => {
   it('is null (rendered as "ETA unavailable") when the server has no ETA', () => {
-    expect(etaLabel({ eta_time: '08:15' })).toBe('08:15')
+    expect(etaLabel({ eta_time: '08:15' })).toBe('8:15 AM')
     expect(etaLabel({ eta_time: null })).toBeNull()
   })
 })

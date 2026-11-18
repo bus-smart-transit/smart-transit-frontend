@@ -18,7 +18,7 @@ describe('SystemHealthPage', () => {
     render(<SystemHealthPage healthTab={{ health, loading: false, error: '', reload: vi.fn() }} />);
     const scheduler = screen.getByText('Scheduled tasks').closest('li');
     expect(within(scheduler).getByText('Problem')).toBeInTheDocument();
-    expect(within(scheduler).getByText(/Last: 2026\/11\/06 - 18:00/)).toBeInTheDocument();
+    expect(within(scheduler).getByText(/Last: 2026\/11\/06 - 6:00 PM/)).toBeInTheDocument();
     expect(within(screen.getByText('Email').closest('li')).getByText('No record yet')).toBeInTheDocument();
     expect(within(screen.getByText('Database').closest('li')).getByText('Working')).toBeInTheDocument();
   });

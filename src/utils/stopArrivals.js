@@ -1,9 +1,13 @@
 // Batch 77 (user, 2026-11-17): words and colours for the "Next arrivals" card of a stop pin on Track Bus. The server's
 // StopArrivalsService gives each bus's minutes, live flag and delay; this only chooses how to show them.
+import { clock12 } from './clock';
 
 /** The ETA band of one arrival: Delayed, Arriving (5 min or less), Approaching (6 to 15), Expected later (16+). */
 export function etaBand(arrival) {
-  if (arrival?.delayed) return { key: 'delayed', label: 'Delayed', tone: 'bg-red-100 text-red-800' };
+  if (arrival?.delayed) {
+    const late = Number(arrival?.late_by_minutes);
+    return { key: 'delayed', label: Number.isFinite(late) && late > 0 ? `Delayed +${late} min` : 'Delayed', tone: 'bg-red-100 text-red-800' };
+  }
   const minutes = Number(arrival?.eta_minutes);
   if (!Number.isFinite(minutes)) return { key: 'unknown', label: 'Not provided', tone: 'bg-slate-100 text-slate-600' };
   if (minutes <= 5) return { key: 'arriving', label: 'Arriving', tone: 'bg-emerald-100 text-emerald-800' };
@@ -24,6 +28,24 @@ export function busLine(arrival) {
   const body = String(arrival?.body_no || '').trim();
   if (company && body) return `${company} – ${body}`;
   return company || body || String(arrival?.bus_label || '').trim() || 'Not provided';
+}
+
+/**
+ * Batch 79 (user, 2026-11-18): the card names the bus by its body number on its own line, with the company under it, so a
+ * long company name never hides the body number. Falls back to the server's bus label, then "Not provided".
+ */
+export function busParts(arrival) {
+  const company = String(arrival?.bus_company || '').trim();
+  const body = String(arrival?.body_no || '').trim();
+  if (body) return { title: body, subtitle: company || null };
+  return { title: company || String(arrival?.bus_label || '').trim() || 'Not provided', subtitle: null };
+}
+
+/** Batch 79 (user): "Expected 12:39 PM · ETA 12:45 PM" (the timetable time at the stop, then the estimate). */
+export function expectedAndEta(arrival) {
+  const expected = clock12(arrival?.scheduled_time);
+  const eta = clock12(arrival?.eta_time);
+  return [expected && `Expected ${expected}`, eta && `ETA ${eta}`].filter(Boolean).join(' · ') || 'Not provided';
 }
 
 /** "Last updated just now" / "Last updated 2 min ago", from the server's time of the answer. */

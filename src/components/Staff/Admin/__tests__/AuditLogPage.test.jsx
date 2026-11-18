@@ -13,7 +13,7 @@ describe('AuditLogPage', () => {
   it('shows when (Manila time), who, the action, the item and the details', () => {
     render(<AuditLogPage auditTab={tab()} />);
     const row = screen.getByText('company.rename').closest('tr');
-    expect(within(row).getByText('2026/11/05 - 09:00')).toBeInTheDocument();
+    expect(within(row).getByText('2026/11/05 - 9:00 AM')).toBeInTheDocument();
     expect(within(row).getByText('Ada Admin')).toBeInTheDocument();
     expect(within(row).getByText('from: Old Co · to: New Co')).toBeInTheDocument();
     expect(within(screen.getByText('refund.reconcile').closest('tr')).getAllByText('-').length).toBeGreaterThan(0);

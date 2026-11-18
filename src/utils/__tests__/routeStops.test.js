@@ -15,9 +15,9 @@ describe('routeStopRows', () => {
   test('lists real stops with their time, marks boarding, passing and earlier stops, and which can be chosen', () => {
     const rows = routeStopRows(stops);
     expect(rows.map((r) => r.name)).toEqual(['A', 'B', 'C', 'D']);
-    expect(rows[0]).toMatchObject({ before: true, boarding: false, time: '06:00', choosable: false });
+    expect(rows[0]).toMatchObject({ before: true, boarding: false, time: '6:00 AM', choosable: false });
     expect(rows[1]).toMatchObject({ boarding: true, before: false });
-    expect(rows[2]).toMatchObject({ passesOnly: true, time: '06:20', choosable: false });
+    expect(rows[2]).toMatchObject({ passesOnly: true, time: '6:20 AM', choosable: false });
     expect(rows[3]).toMatchObject({ time: '', choosable: true, code: 'd' });
   });
 

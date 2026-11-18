@@ -6,6 +6,7 @@ import TrackHeader from './TrackHeader'
 import { useTicketTracking } from '../../../api/hooks/Passenger/useTicketTracking'
 import { formatManilaDate } from '../../../utils/dates'
 import { placeInMinutes } from '../../../utils/busEta'
+import { clock12 } from '../../../utils/clock';
 
 const NO_STOPS = []
 
@@ -35,7 +36,7 @@ function etaText(stop, generatedAt) {
   if (!stop?.eta_time) return 'Arrival time not available'
   const minutes = Math.round((Date.parse(stop.eta) - Date.parse(generatedAt)) / 60000)
   const rel = Number.isFinite(minutes) ? (minutes <= 0 ? ' (now)' : ` (in ${minutes} min)`) : ''
-  return `${stop.eta_time}${rel}`
+  return `${clock12(stop.eta_time) || stop.eta_time}${rel}`
 }
 
 function StopCard({ icon: Icon, title, stop, generatedAt }) {
@@ -98,7 +99,7 @@ export default function TrackBusPage() {
             <section aria-label="Bus status" className={`rounded-2xl p-4 ring-1 ring-inset ${style.tone}`}>
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="flex items-center gap-2 text-base font-bold"><Bus size={18} aria-hidden="true" />{style.label}</p>
-                {view.trip && <p className="text-sm">{formatManilaDate(view.trip.trip_date)} &middot; departs {view.trip.departure_time}</p>}
+                {view.trip && <p className="text-sm">{formatManilaDate(view.trip.trip_date)} &middot; departs {clock12(view.trip.departure_time) || view.trip.departure_time}</p>}
               </div>
               {view.message && <p className="mt-1 text-sm">{view.message}</p>}
               {view.state === 'not_yet' && view.opens_at && <p className="mt-1 text-sm">Opens at {new Date(view.opens_at).toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Manila' })}.</p>}

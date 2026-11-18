@@ -2,6 +2,7 @@ import { qrDataUrl } from './qr';
 import { isMobileDevice } from './inAppBrowser';
 import { busLabelText } from './busLabel';
 import { serviceLabel, servedStopsText } from './runInfo';
+import { clock12 } from './clock';
 
 // One-click "Save QR to device". The image is drawn with the same qrDataUrl() as the
 // on-screen QR, rendered ahead of the click (useTicketImage), and handed to the device
@@ -12,10 +13,10 @@ const shortId = (uuid) => String(uuid || '').slice(0, 8).toUpperCase();
 
 const MANILA = 'Asia/Manila';
 
-/** "2026-10-01 06:30". Stored trip values are already Manila wall-clock; the label does not name the timezone. */
+/** "2026-10-01 6:30 AM". Stored trip values are already Manila wall-clock; the label does not name the timezone. */
 export function manilaDepartureLabel(ticket) {
   if (ticket?.trip_date) {
-    const time = ticket.departure_time ? ` ${String(ticket.departure_time).slice(0, 5)}` : '';
+    const time = ticket.departure_time ? ` ${clock12(ticket.departure_time) || String(ticket.departure_time).slice(0, 5)}` : '';
     return `${ticket.trip_date}${time}`;
   }
   const instant = ticket?.valid_from ? new Date(ticket.valid_from) : null;
@@ -25,7 +26,7 @@ export function manilaDepartureLabel(ticket) {
       timeZone: MANILA, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
     }).formatToParts(instant).map((p) => [p.type, p.value]),
   );
-  return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}`;
+  return `${parts.year}-${parts.month}-${parts.day} ${clock12(`${parts.hour}:${parts.minute}`)}`;
 }
 
 /** What the image says, as plain data (drawn by renderTicketCanvas; testable without a canvas). */

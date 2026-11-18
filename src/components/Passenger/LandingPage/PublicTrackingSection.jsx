@@ -35,6 +35,7 @@ import { useBookingStops } from '../../../api/hooks/Passenger/useBookingSearch';
 import { useNavigate } from 'react-router-dom';
 import { useLiveChannels, useLiveConnected, useLiveEvent } from '../../../api/hooks/useLive';
 import { livePositionLngLat, pollEvery } from '../../../utils/liveUpdates';
+import { clock12 } from '../../../utils/clock';
 
 const POLL_MS = 12000;
 
@@ -583,7 +584,7 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
                   <div data-testid="eta-waiting">
                     <p className="mt-1 inline-flex items-center gap-1 text-sm font-semibold text-slate-900">
                       <Clock3 className="h-3.5 w-3.5 text-teal-600" />
-                      {selectedFleet.departs_at ? `Leaves at ${selectedFleet.departs_at}` : 'Not departed yet'}
+                      {selectedFleet.departs_at ? `Leaves at ${clock12(selectedFleet.departs_at) || selectedFleet.departs_at}` : 'Not departed yet'}
                     </p>
                     <p className="text-xs text-slate-500">{busStatusText(selectedFleet)}</p>
                     {selectedTrip.arrives && <p className="text-xs text-slate-500">Destination {selectedTrip.destination} {selectedTrip.arrives.time} · {selectedTrip.arrives.basis}</p>}

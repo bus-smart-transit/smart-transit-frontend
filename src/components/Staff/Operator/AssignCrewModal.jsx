@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import Modal from '../../ui/Modal';
 import { crewOptionLabel, isPickable, sortForPicker } from '../../../utils/crewPicker';
+import { clock12 } from '../../../utils/clock';
 
 const idOf = (person) => person?.company_user_id ?? person?.user_id ?? person?.id;
 
@@ -27,7 +28,7 @@ export default function AssignCrewModal({ trip, drivers, conductors, loadingDriv
     <Modal open onClose={onClose} title={`Assign crew to Trip #${trip.trip_id}`}>
       <form className="space-y-4" onSubmit={submit}>
         <p className="text-sm text-slate-600">
-          {trip.fleet_route?.route?.route_name || 'Route not provided'}, {String(trip.trip_date || '').slice(0, 10)} at {String(trip.departure_time || '').slice(0, 5) || 'Not provided'}.
+          {trip.fleet_route?.route?.route_name || 'Route not provided'}, {String(trip.trip_date || '').slice(0, 10)} at {clock12(trip.departure_time) || 'Not provided'}.
           The trip can start boarding once it has both.
         </p>
         {needDriver && (

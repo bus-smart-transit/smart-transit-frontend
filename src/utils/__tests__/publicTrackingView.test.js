@@ -9,8 +9,8 @@ describe('public Track Bus view', () => {
   });
 
   it('says where a waiting bus is and when it leaves, or that it is late', () => {
-    expect(busStatusText({ waiting: true, waiting_at: 'Stop A', departs_at: '19:25', trip_status: 'scheduled' })).toBe('Waiting at Stop A · leaves 19:25');
-    expect(busStatusText({ waiting: true, waiting_at: 'Stop A', departs_at: '19:25', trip_status: 'delayed' })).toBe('Waiting at Stop A · running late (was due 19:25)');
+    expect(busStatusText({ waiting: true, waiting_at: 'Stop A', departs_at: '19:25', trip_status: 'scheduled' })).toBe('Waiting at Stop A · leaves 7:25 PM');
+    expect(busStatusText({ waiting: true, waiting_at: 'Stop A', departs_at: '19:25', trip_status: 'delayed' })).toBe('Waiting at Stop A · running late (was due 7:25 PM)');
     expect(busStatusText({ waiting: true })).toBe('Waiting to leave');
   });
 

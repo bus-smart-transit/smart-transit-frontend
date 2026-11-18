@@ -93,7 +93,7 @@ describe('FinancialsPage', () => {
     expect(screen.getByRole('region', { name: 'By trip' })).toHaveTextContent('Block #3');
     expect(screen.getAllByTestId('hour-bar')).toHaveLength(24);
 
-    await waitFor(() => expect(screen.getByTestId('transaction-row')).toHaveTextContent('Oct 5, 2026 06:04'));
+    await waitFor(() => expect(screen.getByTestId('transaction-row')).toHaveTextContent('Oct 5, 2026 6:04 AM'));
     expect(screen.getByTestId('transaction-row')).toHaveTextContent('Alpha to Omega');
     expect(screen.getByTestId('transaction-row')).toHaveTextContent('Paid');
 

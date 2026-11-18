@@ -49,7 +49,7 @@ describe('LegTimeSuggestion', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Suggest times' }))
 
     expect(await screen.findByTestId('plan-flags')).toHaveTextContent('8 h 30 min')
-    expect(screen.getByTestId('plan-summary')).toHaveTextContent('6 legs, finishing about 14:30')
+    expect(screen.getByTestId('plan-summary')).toHaveTextContent('6 legs, finishing about 2:30 PM')
     expect(screen.getByTestId('suggested-legs')).toHaveTextContent('Measured from past trips')
     fireEvent.click(screen.getByRole('button', { name: 'Use these times' }))
     expect(onApply).toHaveBeenCalledWith(['06:00', '07:30', '09:00', '10:30', '12:00', '13:30'])

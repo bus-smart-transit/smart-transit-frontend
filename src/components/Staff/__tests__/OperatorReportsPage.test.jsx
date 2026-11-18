@@ -59,8 +59,8 @@ describe('OperatorReportsPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Run report' }));
 
     expect(await screen.findByRole('region', { name: 'Average occupancy by scheduled departure hour' })).toBeInTheDocument();
-    expect(screen.getByText('07:00')).toBeInTheDocument();
-    expect(screen.getByText('09:00')).toBeInTheDocument();
+    expect(screen.getByText('7:00 AM')).toBeInTheDocument();
+    expect(screen.getByText('9:00 AM')).toBeInTheDocument();
     expect(mocks.getOccupancyTrends).toHaveBeenCalledWith('3', { start_date: '2026-10-01', end_date: '2026-10-18' });
   });
 

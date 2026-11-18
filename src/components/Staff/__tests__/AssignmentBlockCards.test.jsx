@@ -25,7 +25,7 @@ describe('AssignmentBlockCards', () => {
     const cards = screen.getAllByTestId('assignment-card');
     expect(cards).toHaveLength(1);
     expect(within(cards[0]).getByText('Alpha-Omega')).toBeInTheDocument();
-    expect(within(cards[0]).getByText('Departures 06:00 to 13:30')).toBeInTheDocument();
+    expect(within(cards[0]).getByText('Departures 6:00 AM to 1:30 PM')).toBeInTheDocument();
     expect(within(cards[0]).getByTestId('assignment-legs-count')).toHaveTextContent('4 legs');
     expect(within(cards[0]).getByText('SCHEDULED')).toBeInTheDocument();
     // The legs are NOT listed on the card itself.
@@ -58,7 +58,7 @@ describe('AssignmentBlockCards', () => {
     render(<AssignmentBlockCards cards={[single()]} />);
 
     expect(screen.getByTestId('assignment-legs-count')).toHaveTextContent('1 leg');
-    expect(screen.getByText('Departs 09:00')).toBeInTheDocument();
+    expect(screen.getByText('Departs 9:00 AM')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Details' }));
     expect(within(screen.getByTestId('assignment-legs')).getAllByRole('listitem')).toHaveLength(1);
   });
@@ -138,7 +138,7 @@ describe('sectionCards (Batch 29: the server section decides)', () => {
 describe('todaySummary', () => {
   it('reads the plate, route, status and schedule from the same card as the list', () => {
     const summary = todaySummary([block({ section: 'today', scheduled_date: '2026-10-04' })], '2026-10-04');
-    expect(summary).toEqual({ plate: 'AB-123', route: 'Alpha-Omega', status: 'scheduled', schedule: '06:00 - 13:30' });
+    expect(summary).toEqual({ plate: 'AB-123', route: 'Alpha-Omega', status: 'scheduled', schedule: '6:00 AM - 1:30 PM' });
   });
 
   it('is null when nothing is scheduled today', () => {

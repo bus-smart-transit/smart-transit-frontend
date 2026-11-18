@@ -20,7 +20,7 @@ export function openPrintReport({ title, meta = [], columns, rows, format = (val
   const body = rows
     .map((row) => `<tr>${columns.map((column) => `<td>${escapeHtml(format(row?.[column]) || '-')}</td>`).join('')}</tr>`)
     .join('')
-  const metaHtml = [...meta, ['Generated', new Date().toLocaleString()]]
+  const metaHtml = [...meta, ['Generated', new Date().toLocaleString('en-PH', { timeZone: 'Asia/Manila', year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })]]
     .map(([label, value]) => `<div><strong>${escapeHtml(label)}:</strong> ${escapeHtml(value)}</div>`)
     .join('')
 

@@ -3,6 +3,7 @@
 
 import { minutesFromNow } from './busEta';
 import { haversineM } from './geo';
+import { clock12 } from './clock';
 
 /** Metres between two { lat, lng } points, or null when either is missing (uses the shared haversineM). */
 export function distanceMeters(a, b) {
@@ -43,9 +44,9 @@ export function busArrival(progress) {
     else delay = 'On time';
   }
   return {
-    time: progress.eta_time,
+    time: clock12(progress.eta_time) || progress.eta_time,
     basis: live ? 'Live estimate' : 'Scheduled',
-    scheduled: live && progress.scheduled_time && progress.scheduled_time !== progress.eta_time ? `Scheduled ${progress.scheduled_time}` : null,
+    scheduled: live && progress.scheduled_time && progress.scheduled_time !== progress.eta_time ? `Scheduled ${clock12(progress.scheduled_time) || progress.scheduled_time}` : null,
     delay,
     note: !live && progress.gps_stale && !progress.arrived ? 'Bus location is old, so this is the scheduled time.' : null,
   };
@@ -60,11 +61,11 @@ export function busTrip(progress, nowMs = Date.now()) {
   if (!progress) return { departedAt: null, destination: null, arrives: null, arrived: false, full: false };
   const arrived = progress.arrived === true;
   return {
-    departedAt: progress.departed_at || null,
+    departedAt: clock12(progress.departed_at) || progress.departed_at || null,
     destination: progress.destination || null,
     // Batch 51 item 1: minutes to the destination too ("{destination} in n min"), null when its full time is unknown.
     arrives: !arrived && progress.destination_eta_time
-      ? { time: progress.destination_eta_time, basis: progress.destination_eta_basis === 'live' ? 'Live estimate' : 'Scheduled', minutes: minutesFromNow(progress.destination_eta, nowMs) }
+      ? { time: clock12(progress.destination_eta_time) || progress.destination_eta_time, basis: progress.destination_eta_basis === 'live' ? 'Live estimate' : 'Scheduled', minutes: minutesFromNow(progress.destination_eta, nowMs) }
       : null,
     arrived,
     // Batch 51 item 5: every place on the bus is sold (the server's TripCapacity).
