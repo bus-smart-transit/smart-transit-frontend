@@ -108,7 +108,7 @@ export default function StopCombobox({ id, label, value, groups, placeholder, di
           {options.length === 0 && <li className="px-3 py-2 text-sm text-slate-500">No stops match &ldquo;{query}&rdquo;.</li>}
           {sections.map((section) => (
             <li key={section.heading} role="presentation">
-              <p className="px-3 pb-1 pt-2 text-[0.65rem] font-semibold uppercase tracking-wide text-slate-400">{section.heading}</p>
+              <p className="px-3 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-slate-500">{section.heading}</p>
               <ul role="presentation">
                 {section.items.map(({ stop, index }) => (
                   <li

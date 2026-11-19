@@ -21,6 +21,7 @@ import { formatDuration } from '../../../utils/tripTimeline';
 import { seatsLeftText, tripProgressText } from '../../../utils/passengerTripProgress';
 import { cleanContactInput, looksLikePhone } from '../../../utils/travellerContact';
 import { clock12 } from '../../../utils/clock';
+import { baggageFeeFor } from '../../../utils/ticketExtras';
 
 // Matches OnlineCheckoutRequest: the passenger picks GCash or Maya (C4). The payment
 // page itself collects whatever else the provider needs.
@@ -37,7 +38,7 @@ const FIELD = 'mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3
 function SummaryRow({ label, children }) {
   return (
     <div className="flex justify-between gap-4 py-2.5">
-      <dt className="shrink-0 text-slate-400">{label}</dt>
+      <dt className="shrink-0 text-slate-500">{label}</dt>
       <dd className="text-right font-semibold text-navy-950">{children}</dd>
     </div>
   );
@@ -177,7 +178,7 @@ export default function BuyTicket({ onTicketPurchased, returnTo = '/' }) {
       )}
 
       {error && (
-        <div className="flex items-center gap-2 rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-medium text-red-700 ring-1 ring-inset ring-red-200">
+        <div role="alert" className="flex items-center gap-2 rounded-xl bg-red-50 px-3.5 py-2.5 text-sm font-medium text-red-700 ring-1 ring-inset ring-red-200">
           <AlertCircle size={16} className="shrink-0" />
           <span>{error}</span>
         </div>
@@ -337,7 +338,7 @@ export default function BuyTicket({ onTicketPurchased, returnTo = '/' }) {
             {/* Route: where, when, which bus. Everything here comes from the server. */}
             <Card className="p-5 sm:p-6">
               <div className="flex items-center justify-between gap-3">
-                <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">Route</span>
+                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Route</span>
                 <div className="flex items-center gap-2">
                   {trip && tripProgressText(trip.progress) && (
                     <span data-testid="trip-progress" className="rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700">
@@ -449,7 +450,7 @@ export default function BuyTicket({ onTicketPurchased, returnTo = '/' }) {
                           [MapPin, 'Duration', formatDuration(timeline?.header?.duration_minutes) || '-'],
                         ].map(([Icon, label, value]) => (
                           <div key={label}>
-                            <p className="flex items-center gap-1.5 text-xs text-slate-400"><Icon size={14} aria-hidden="true" /> {label}</p>
+                            <p className="flex items-center gap-1.5 text-xs text-slate-500"><Icon size={14} aria-hidden="true" /> {label}</p>
                             <p className="mt-1 text-sm font-semibold text-navy-950">{value}</p>
                           </div>
                         ))}
@@ -458,7 +459,7 @@ export default function BuyTicket({ onTicketPurchased, returnTo = '/' }) {
                     {trip && !trip.boarding_time_is_scheduled_offset && (
                       <p className="mt-2 text-xs text-slate-500">This is the trip start time; stop-by-stop times are not set for this route.</p>
                     )}
-                    {formErrors.trip && <p className="mt-2 text-xs text-red-600">{formErrors.trip}</p>}
+                    {formErrors.trip && <p role="alert" className="mt-2 text-xs text-red-600">{formErrors.trip}</p>}
                   </div>
 
                 </div>
@@ -512,10 +513,12 @@ export default function BuyTicket({ onTicketPurchased, returnTo = '/' }) {
                       step="1"
                       value={form.ticket_quantity}
                       onChange={(e) => handleChange('ticket_quantity', e.target.value)}
+                      aria-invalid={Boolean(formErrors.ticket_quantity)}
+                      aria-describedby={formErrors.ticket_quantity ? 'ticket_quantity_hint ticket_quantity_error' : 'ticket_quantity_hint'}
                       className={FIELD}
                     />
-                    <p className="mt-1.5 text-xs text-slate-500">Up to {maxSeatsPerPurchase} tickets per booking.</p>
-                    {formErrors.ticket_quantity && <span className="mt-1.5 block text-xs text-red-600">{formErrors.ticket_quantity}</span>}
+                    <p id="ticket_quantity_hint" className="mt-1.5 text-xs text-slate-500">Up to {maxSeatsPerPurchase} tickets per booking.</p>
+                    {formErrors.ticket_quantity && <span id="ticket_quantity_error" role="alert" className="mt-1.5 block text-xs text-red-600">{formErrors.ticket_quantity}</span>}
                   </div>
 
                   {(parseInt(form.ticket_quantity, 10) || 1) > 1 && (
@@ -593,7 +596,7 @@ export default function BuyTicket({ onTicketPurchased, returnTo = '/' }) {
                                     data-testid={`baggage-${index}`}
                                   />
                                   Baggage in the compartment
-                                  {hasFareQuote && <span className="text-slate-500">(+PHP {Math.round((Number(unitFare) * baggagePercent) / 100).toFixed(2)})</span>}
+                                  {hasFareQuote && <span className="text-slate-500">(+PHP {baggageFeeFor(unitFare, baggagePercent).toFixed(2)})</span>}
                                 </label>
                               )}
                             </div>
@@ -667,26 +670,29 @@ export default function BuyTicket({ onTicketPurchased, returnTo = '/' }) {
                         />
                         {form.use_rewards && (
                           <div className="pb-2">
+                            <label htmlFor="reward_points_to_use" className={`${LABEL} mt-2 block`}>Points to use</label>
                             <input
+                              id="reward_points_to_use"
                               type="number"
                               min="0"
                               step="1"
                               value={form.reward_points_to_use}
                               onChange={(e) => handleChange('reward_points_to_use', e.target.value)}
-                              placeholder="Reward points to use"
+                              aria-invalid={Boolean(formErrors.reward_points_to_use) || isRewardRequestInsufficient}
+                              aria-describedby="reward_points_hint"
                               className={FIELD}
                             />
-                            <div className={`mt-1.5 text-xs ${isRewardRequestInsufficient ? 'text-red-600' : 'text-slate-500'}`}>
+                            <div id="reward_points_hint" role={isRewardRequestInsufficient ? 'alert' : undefined} className={`mt-1.5 text-xs ${isRewardRequestInsufficient ? 'text-red-600' : 'text-slate-500'}`}>
                               You can use up to {Number(maxRedeemableRewardPoints || 0).toFixed(0)} points now
                               {isRewardRequestInsufficient ? ' (insufficient for requested amount)' : ''}
                             </div>
-                            {formErrors.reward_points_to_use && <div className="mt-1 text-xs text-red-600">{formErrors.reward_points_to_use}</div>}
+                            {formErrors.reward_points_to_use && <div role="alert" className="mt-1 text-xs text-red-600">{formErrors.reward_points_to_use}</div>}
                           </div>
                         )}
                       </div>
                     )}
-                    {formErrors.payment && <p className="mt-2 text-xs text-red-600">{formErrors.payment}</p>}
-                    {formErrors.destination_stop_id && <p className="mt-2 text-xs text-red-600">{formErrors.destination_stop_id}</p>}
+                    {formErrors.payment && <p role="alert" className="mt-2 text-xs text-red-600">{formErrors.payment}</p>}
+                    {formErrors.destination_stop_id && <p role="alert" className="mt-2 text-xs text-red-600">{formErrors.destination_stop_id}</p>}
                   </fieldset>
                 </Card>
               </>
@@ -699,7 +705,7 @@ export default function BuyTicket({ onTicketPurchased, returnTo = '/' }) {
             <dl className="mt-4 divide-y divide-slate-100 text-sm">
               <SummaryRow label="Board at">{boardingRow?.name || summaryFrom || '-'}</SummaryRow>
               <SummaryRow label="Get off at">{alightingRow?.name || summaryTo || '-'}</SummaryRow>
-              <SummaryRow label="Departure">{trip ? `${trip.trip_date} ${clock12(trip.boarding_time) || trip.boarding_time}` : '-'}</SummaryRow>
+              <SummaryRow label="Departure">{trip ? `${formatManilaDate(trip.trip_date)} ${clock12(trip.boarding_time) || trip.boarding_time}` : '-'}</SummaryRow>
               <SummaryRow label="Payment">Online &middot; {form.payment_channel === 'maya' ? 'Maya' : 'GCash'}</SummaryRow>
               <SummaryRow label="Unit Fare">
                 PHP {hasFareQuote ? Number(unitFare).toFixed(2) : '0.00'}

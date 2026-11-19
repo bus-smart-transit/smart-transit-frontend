@@ -41,6 +41,23 @@ const bookingState = () => ({
 describe('single-journey booking', () => {
   beforeEach(() => vi.clearAllMocks());
 
+  // Booking page audit (2026-11-19): errors are announced, the points box has a label, the summary date is friendly.
+  it('announces errors to screen readers, labels the points box and shows the friendly date', () => {
+    const state = bookingState();
+    state.error = 'The payment could not be started.';
+    state.formErrors = { ticket_quantity: 'Choose 1 to 20 tickets.' };
+    state.form = { ...state.form, use_rewards: true, reward_points_to_use: '5' };
+    useBuyTicket.mockReturnValue(state);
+    render(<MemoryRouter><BuyTicket /></MemoryRouter>);
+
+    const alerts = screen.getAllByRole('alert').map((el) => el.textContent);
+    expect(alerts).toEqual(expect.arrayContaining([expect.stringContaining('The payment could not be started.'), 'Choose 1 to 20 tickets.']));
+    expect(screen.getByLabelText('Ticket Quantity')).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getByLabelText('Ticket Quantity')).toHaveAccessibleDescription(/Up to 20 tickets per booking.*Choose 1 to 20 tickets/);
+    expect(screen.getByLabelText('Points to use')).toHaveValue(5);
+    expect(screen.getByText(/Oct 19, 2026 11:36 AM/)).toBeInTheDocument();
+  });
+
   it('has no trip-type or return selector and keeps quantity, fare and rewards', () => {
     const state = bookingState();
     useBuyTicket.mockReturnValue(state);
