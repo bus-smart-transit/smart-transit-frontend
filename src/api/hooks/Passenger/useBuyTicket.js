@@ -10,7 +10,7 @@ import useBookingLink from './useBookingLink';
 import useTripTimeline from './useTripTimeline';
 import { findStopCode, withBookingParams } from '../../../utils/bookingQuery';
 import { groupQrPayload, openPrintWindow } from '../../../utils/qr';
-import { manilaDepartureLabel } from '../../../utils/ticketImage';
+import { ticketExtraRows, ticketPrintHtml } from '../../../utils/ticketPrint';
 import { normalizeContact } from '../../../utils/travellerContact';
 import { ratePercentLabel, transactionFee } from '../../../utils/transactionFee';
 import { clock12 } from '../../../utils/clock';
@@ -80,8 +80,6 @@ const formatDateTime = (value) => {
   return `${yyyy}/${mm}/${dd} - ${clock12(`${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}`)}`;
 };
 
-const HTML_ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
-const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (ch) => HTML_ESCAPES[ch]);
 
 // What a ticket row says about itself, from the server's own data (a custom drop-off
 // carries its label; nothing here names a place).
@@ -364,60 +362,22 @@ export default function useBuyTicket({ onTicketPurchased }) {
 
   const printQrTicket = useCallback((ticket, idx) => {
     if (!ticket?.qr_content) return;
-    const esc = escapeHtml;
 
     // The QR is drawn locally (same renderer as the screen); the window opens first so the
     // browser allows it, and is filled once the image is ready.
-    openPrintWindow(ticket.qr_content, (qrSrc) => `
-      <html>
-        <head>
-          <title>Ticket QR ${idx + 1}</title>
-          <style>
-            body { font-family: Arial, sans-serif; padding: 18px; color: #0f172a; background: #f8fafc; }
-            .ticket { max-width: 760px; border: 1px solid #d6dbe5; border-radius: 12px; overflow: hidden; background: #fff; }
-            .head { background: linear-gradient(145deg, #2ab557, #31c964); color: #fff; padding: 18px; }
-            .head h1 { margin: 0; font-size: 20px; }
-            .head h2 { margin: 4px 0 0; font-size: 32px; line-height: 1.05; }
-            .strip { margin-top: 14px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-            .strip span { display: block; font-size: 10px; text-transform: uppercase; opacity: 0.85; }
-            .strip strong { display: block; margin-top: 2px; font-size: 13px; }
-            .body { padding: 14px; display: grid; grid-template-columns: 160px 1fr; gap: 14px; border-top: 2px dashed #d6dbe5; }
-            .qr-wrap { width: 160px; height: 160px; border: 1px solid #d7dee8; border-radius: 10px; display: grid; place-items: center; background: #fff; }
-            img { width: 146px; height: 146px; object-fit: contain; }
-            .meta { display: grid; gap: 8px; }
-            .meta div { display: flex; justify-content: space-between; border-bottom: 1px solid #ebeff5; padding-bottom: 6px; }
-            .meta .k { color: #64748b; font-size: 12px; }
-            .meta .v { color: #0f172a; font-size: 13px; font-weight: 700; }
-            .foot { margin: 0 14px 14px; border: 1px solid #9dd7af; background: #eaf9f0; color: #166534; border-radius: 10px; padding: 9px 10px; font-size: 12px; text-align: center; font-weight: 700; }
-          </style>
-        </head>
-        <body>
-          <article class="ticket">
-            <header class="head">
-              <h1>${esc(ticket.origin || '')}</h1>
-              <h2>${esc(ticket.destination || '')}</h2>
-              <div class="strip">
-                <div><span>Departure</span><strong>${esc(manilaDepartureLabel(ticket))}</strong></div>
-                <div><span>Seat</span><strong>${esc(ticket.seat_type || '-')}</strong></div>
-                <div><span>Ticket ID</span><strong>${esc(String(ticket.ticket_uuid || '').slice(0, 8).toUpperCase())}</strong></div>
-              </div>
-            </header>
-            <div class="body">
-              <div class="qr-wrap"><img src="${qrSrc}" alt="Ticket QR" /></div>
-              <div class="meta">
-                <div><span class="k">Valid</span><span class="v">${formatDateTime(ticket.valid_from)}</span></div>
-                <div><span class="k">Expires</span><span class="v">${formatDateTime(ticket.expires_at)}</span></div>
-                <div><span class="k">Status</span><span class="v">Valid</span></div>
-                ${Number(ticket.discount_amount) > 0 ? `<div><span class="k">Original fare</span><span class="v">PHP ${Number(ticket.original_amount).toFixed(2)}</span></div><div><span class="k">${esc(ticket.discount_label || 'Onsite')} discount</span><span class="v">-PHP ${Number(ticket.discount_amount).toFixed(2)}</span></div>${ticket.discount_id_checked_at ? '<div><span class="k">ID check</span><span class="v">Verified by Chauffeur</span></div>' : ''}` : ''}
-                <div><span class="k">Fare Paid</span><span class="v">PHP ${Number(ticket.amount || 0).toFixed(2)}</span></div>
-              </div>
-            </div>
-            <div class="foot">Valid ticket. Show this QR code when boarding</div>
-          </article>
-          <script>window.onload = function () { window.print(); };</script>
-        </body>
-      </html>
-    `);
+    // Batch 80: the designer's ticket design, shared with My Tickets (utils/ticketPrint.js).
+    openPrintWindow(ticket.qr_content, (qrSrc) => ticketPrintHtml({
+      title: `Ticket QR ${idx + 1}`,
+      from: ticket.origin,
+      to: ticket.destination,
+      departure: formatDateTime(ticket.valid_from),
+      fare: ticket.amount ?? null,
+      status: 'valid',
+      ticketId: String(ticket.ticket_uuid || '').slice(0, 8).toUpperCase(),
+      traveller: ticket.traveller_name || '',
+      rows: ticketExtraRows(ticket),
+      qrSrc,
+    }));
   }, []);
 
   const toGuestQrTicket = useCallback((ticket) => {

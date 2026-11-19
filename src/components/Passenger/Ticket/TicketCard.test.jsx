@@ -128,3 +128,25 @@ describe('TicketCard: the tracking code', () => {
     expect(screen.queryByTestId('tracking-code')).toBeNull();
   });
 });
+
+// Batch 80 (user, 2026-11-19): the designer's ticket design with every detail of the old ticket.
+describe('TicketCard: designer layout', () => {
+  test('shows the status pill, From and To, the date and time apart, the fare, and no seat', () => {
+    renderCard({ statusLabel: 'boarded', validLabel: '2026/11/19 - 2:00 PM', farePaid: 152, seatLabel: 'seated', travellerName: 'Sam Sample' });
+    expect(screen.getByTestId('ticket-status')).toHaveTextContent('Boarded');
+    expect(screen.getByText('Stop B')).toBeInTheDocument();
+    expect(screen.getByText('Stop D')).toBeInTheDocument();
+    expect(screen.getByText('2026/11/19')).toBeInTheDocument();
+    expect(screen.getByText('2:00 PM')).toBeInTheDocument();
+    expect(screen.getByText('PHP 152.00')).toBeInTheDocument();
+    expect(screen.getByTestId('ticket-traveller')).toHaveTextContent('Passenger: Sam Sample');
+    expect(screen.queryByText(/^Seat$/)).toBeNull();
+    expect(screen.getByText('Boarded — You are currently on this trip')).toBeInTheDocument();
+  });
+
+  test('a missed ticket says so in the pill and at the foot', () => {
+    renderCard({ statusLabel: 'missed' });
+    expect(screen.getByTestId('ticket-status')).toHaveTextContent('Missed');
+    expect(screen.getByText(/Buy a new ticket to ride/)).toBeInTheDocument();
+  });
+});

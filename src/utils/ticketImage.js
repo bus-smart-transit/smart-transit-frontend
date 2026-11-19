@@ -50,7 +50,8 @@ export function buildTicketImageModel(ticket, { group = false, groupSize = 1 } =
     : [
       { label: 'Ticket ID', value: shortId(ticket?.ticket_uuid) || '-' },
       ...journey,
-      { label: 'Seat', value: ticket?.seat_type || '-' },
+      ...(ticket?.priority_label ? [{ label: 'Priority seat', value: ticket.priority_label }] : []),
+      ...(ticket?.has_baggage ? [{ label: 'Baggage', value: 'In the compartment (in the fare)' }] : []),
       ...(Number(ticket?.discount_amount) > 0 ? [
         { label: 'Original fare', value: `PHP ${Number(ticket.original_amount).toFixed(2)}` },
         { label: `${ticket.discount_label || 'Onsite'} discount`, value: `-PHP ${Number(ticket.discount_amount).toFixed(2)}` },
@@ -64,6 +65,8 @@ export function buildTicketImageModel(ticket, { group = false, groupSize = 1 } =
   const code = String(ticket?.tracking_code || '').trim();
   return {
     title: group ? 'SmartTransit Group Ticket' : 'SmartTransit Ticket',
+    // Batch 80: the route under the title in the header band, like the ticket on screen.
+    route: [ticket?.origin, ticket?.destination].filter(Boolean).join('  →  '),
     qrContent: content || null,
     tracking: code ? { code: `${code.slice(0, 4)} ${code.slice(4)}`.trim(), hint: 'Type this code at Track my bus to see where your bus is' } : null,
     lines,
@@ -103,7 +106,7 @@ export async function renderTicketCanvas(model) {
   const rowHeight = 64;
   const qrSize = 600; // quiet zone is part of the generated image
   const trackingHeight = model.tracking ? 170 : 0;
-  const height = 220 + qrSize + 40 + trackingHeight + model.lines.length * rowHeight + 120;
+  const height = 220 + qrSize + 60 + trackingHeight + model.lines.length * rowHeight + 120;
   const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = height;
@@ -112,17 +115,36 @@ export async function renderTicketCanvas(model) {
 
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, width, height);
-  ctx.fillStyle = '#0f766e';
+  // Batch 80 (user, 2026-11-19): the designer's ticket: a navy-to-ocean band with the title and the route.
+  const band = ctx.createLinearGradient(0, 0, width, 0);
+  band.addColorStop(0, '#153a6b');
+  band.addColorStop(1, '#05588a');
+  ctx.fillStyle = band;
   ctx.fillRect(0, 0, width, 170);
   ctx.fillStyle = '#ffffff';
-  ctx.font = 'bold 54px Arial, sans-serif';
-  ctx.fillText(model.title, 48, 108);
+  ctx.font = 'bold 50px Arial, sans-serif';
+  ctx.fillText(model.title, 48, 84);
+  if (model.route) {
+    ctx.font = '28px Arial, sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    ctx.fillText(fit(ctx, model.route, width - 96), 48, 132);
+  }
 
   const qrImage = await loadImage(await qrDataUrl(model.qrContent, qrSize));
   ctx.imageSmoothingEnabled = false;
   ctx.drawImage(qrImage, (width - qrSize) / 2, 200, qrSize, qrSize);
 
-  let y = 200 + qrSize + 60;
+  const tearY = 200 + qrSize + 24;
+  ctx.fillStyle = '#e0f4f2';
+  ctx.beginPath(); ctx.arc(0, tearY, 18, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(width, tearY, 18, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#d6e5ec';
+  ctx.lineWidth = 3;
+  ctx.setLineDash([14, 10]);
+  ctx.beginPath(); ctx.moveTo(40, tearY); ctx.lineTo(width - 40, tearY); ctx.stroke();
+  ctx.setLineDash([]);
+
+  let y = 200 + qrSize + 80;
   if (model.tracking) {
     ctx.fillStyle = '#f1f5f9';
     ctx.fillRect(48, y - 40, width - 96, 140);
@@ -150,7 +172,7 @@ export async function renderTicketCanvas(model) {
     y += rowHeight;
   });
 
-  ctx.fillStyle = '#166534';
+  ctx.fillStyle = '#153a6b';
   ctx.font = 'bold 26px Arial, sans-serif';
   ctx.textAlign = 'center';
   ctx.fillText(fit(ctx, model.footer, width - 96), width / 2, y + 40);

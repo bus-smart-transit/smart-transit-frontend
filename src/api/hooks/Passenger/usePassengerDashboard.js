@@ -4,6 +4,7 @@ import { useAuth } from '../useAuth';
 import PassengerService from '../../PassengerService/PassengerService';
 import { initFcmAndGetToken } from '../../../services/fcmService';
 import { openPrintWindow } from '../../../utils/qr';
+import { ticketExtraRows, ticketPrintHtml } from '../../../utils/ticketPrint';
 import { leaveAccountDeletionNotice } from '../../../utils/accountDeletionNotice';
 import { clock12 } from '../../../utils/clock';
 
@@ -467,73 +468,19 @@ export default function usePassengerDashboard({ preloadMapView }) {
     if (!selectedTicket) return;
 
     const qrContent = selectedTicketQr?.qr_content || '';
-    const ticketStatus = String(selectedTicket.status || 'valid').toLowerCase();
-    const footerMessages = {
-      boarded:   'Boarded — You are currently on this trip',
-      alighted:  'Trip Completed — Thank you for riding!',
-      expired:   'This ticket has expired',
-      missed:    'Missed. The bus left your stop before this ticket was scanned.',
-      cancelled: 'Ticket Cancelled',
-    };
-    const footerText = footerMessages[ticketStatus] ?? 'Valid ticket. Show this QR code when boarding';
-    const footerStyles = {
-      boarded:   'border:1px solid #7dd3fc;background:#e0f2fe;color:#0369a1;',
-      alighted:  'border:1px solid #94a3b8;background:#f1f5f9;color:#475569;',
-      expired:   'border:1px solid #fca5a5;background:#fef2f2;color:#991b1b;',
-      missed:    'border:1px solid #fca5a5;background:#fef2f2;color:#991b1b;',
-      cancelled: 'border:1px solid #fca5a5;background:#fef2f2;color:#7f1d1d;',
-    };
-    const footerStyle = footerStyles[ticketStatus] ?? 'border:1px solid #9dd7af;background:#eaf9f0;color:#166534;';
-    const buildHtml = (qrSrc) => `
-      <html>
-        <head>
-          <title>Smart Transit Ticket</title>
-          <style>
-            body { font-family: Arial, sans-serif; padding: 18px; color: #0f172a; background: #f8fafc; }
-            .ticket { max-width: 760px; border: 1px solid #d6dbe5; border-radius: 12px; overflow: hidden; background: #fff; }
-            .head { background: linear-gradient(145deg, #2ab557, #31c964); color: #fff; padding: 18px; }
-            .head h1 { margin: 0; font-size: 20px; }
-            .head h2 { margin: 4px 0 0; font-size: 32px; line-height: 1.05; }
-            .strip { margin-top: 14px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-            .strip span { display: block; font-size: 10px; text-transform: uppercase; opacity: 0.85; }
-            .strip strong { display: block; margin-top: 2px; font-size: 13px; }
-            .body { padding: 14px; display: grid; grid-template-columns: 160px 1fr; gap: 14px; border-top: 2px dashed #d6dbe5; }
-            .qr-wrap { width: 160px; height: 160px; border: 1px solid #d7dee8; border-radius: 10px; display: grid; place-items: center; background: #fff; }
-            img { width: 146px; height: 146px; object-fit: contain; }
-            .meta { display: grid; gap: 8px; }
-            .meta div { display: flex; justify-content: space-between; border-bottom: 1px solid #ebeff5; padding-bottom: 6px; }
-            .meta .k { color: #64748b; font-size: 12px; }
-            .meta .v { color: #0f172a; font-size: 13px; font-weight: 700; }
-            .foot { margin: 0 14px 14px; border: 1px solid #9dd7af; background: #eaf9f0; color: #166534; border-radius: 10px; padding: 9px 10px; font-size: 12px; text-align: center; font-weight: 700; }
-          </style>
-        </head>
-        <body>
-          <article class="ticket">
-            <header class="head">
-              <h1>${getOriginLabel(selectedTicket)}</h1>
-              <h2>${getDestinationLabel(selectedTicket)}</h2>
-              <div class="strip">
-                <div><span>Departure</span><strong>${formatDateTime(selectedTicket.valid_from ?? selectedTicketQr?.valid_from)}</strong></div>
-                <div><span>Seat</span><strong>${selectedTicket.seat_type || '-'}</strong></div>
-                <div><span>Route</span><strong>${getOriginLabel(selectedTicket)} to ${getDestinationLabel(selectedTicket)}</strong></div>
-              </div>
-            </header>
-            <div class="body">
-              <div class="qr-wrap">${qrSrc ? `<img src="${qrSrc}" alt="Ticket QR" />` : '<span>QR unavailable</span>'}</div>
-              <div class="meta">
-                <div><span class="k">Valid</span><span class="v">${formatDateTime(selectedTicket.valid_from ?? selectedTicketQr?.valid_from)}</span></div>
-                <div><span class="k">Expires</span><span class="v">${formatDateTime(selectedTicket.expires_at ?? selectedTicketQr?.expires_at)}</span></div>
-                <div><span class="k">Status</span><span class="v">${selectedTicket.status || '-'}</span></div>
-                <div><span class="k">Fare Paid</span><span class="v">PHP ${Number(selectedTicket.amount ?? selectedTicket.final_amount ?? 0).toFixed(2)}</span></div>
-              </div>
-            </div>
-            <div class="foot" style="${footerStyle}">${footerText}</div>
-          </article>
-          </div>
-          <script>window.onload = function () { window.print(); };</script>
-        </body>
-      </html>
-    `;
+    // Batch 80: the designer's ticket design, shared with the booking page (utils/ticketPrint.js).
+    const buildHtml = (qrSrc) => ticketPrintHtml({
+      title: 'SmartTransit Ticket',
+      from: getOriginLabel(selectedTicket),
+      to: getDestinationLabel(selectedTicket),
+      departure: formatDateTime(selectedTicket.valid_from ?? selectedTicketQr?.valid_from),
+      fare: selectedTicket.amount ?? selectedTicket.final_amount ?? null,
+      status: selectedTicket.status || 'valid',
+      ticketId: String(selectedTicket.ticket_uuid || '').slice(0, 8).toUpperCase(),
+      traveller: selectedTicket.traveller_name || '',
+      rows: ticketExtraRows({ ...selectedTicketQr, ...selectedTicket }),
+      qrSrc,
+    });
 
     // The QR is drawn locally (same renderer as the screen); nothing is fetched.
     if (qrContent) {

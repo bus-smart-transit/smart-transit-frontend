@@ -6,7 +6,7 @@ import { useAuth } from '../../../api/hooks/useAuth';
 const BEFORE_BOARDING_STEPS = [
   { step: 1, title: 'Open My Tickets', description: 'Find your active booking.' },
   { step: 2, title: 'Select your trip', description: 'Open the ticket you want to use.' },
-  { step: 3, title: 'Check your details', description: 'Make sure your route, schedule, and seat are correct.' },
+  { step: 3, title: 'Check your details', description: 'Make sure your route and schedule are correct.' },
   { step: 4, title: 'Show your QR code', description: 'Present the QR code when boarding.' },
 ];
 
@@ -46,7 +46,7 @@ function QrPicture({ className = '' }) {
 
 const Field = ({ label, value, align = 'left' }) => (
   <div className={align === 'right' ? 'text-right' : ''}>
-    <dt className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">{label}</dt>
+    <dt className="text-xs font-semibold uppercase tracking-wider text-slate-500">{label}</dt>
     <dd className="mt-1 text-sm font-semibold text-navy-950">{value}</dd>
   </div>
 );
@@ -93,7 +93,7 @@ export default function DigitalTicketSection() {
                   <p className="font-display text-base font-semibold">SmartTransit Express</p>
                   <p className="mt-0.5 text-xs text-white/75">Passenger: Juan Dela Cruz</p>
                 </div>
-                <span className="rounded-full bg-mint px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-navy-900">Confirmed</span>
+                <span className="rounded-full bg-mint px-2.5 py-1 text-xs font-bold uppercase tracking-wide text-navy-900">Confirmed</span>
               </header>
 
               <dl className="px-5 pb-5 pt-5">
@@ -106,10 +106,9 @@ export default function DigitalTicketSection() {
                   </div>
                   <Field label="To" value="Your drop-off stop" align="right" />
                 </div>
-                <div className="mt-5 grid grid-cols-3 gap-3 rounded-xl bg-slate-50 px-4 py-3">
+                <div className="mt-5 grid grid-cols-2 gap-3 rounded-xl bg-slate-50 px-4 py-3">
                   <Field label="Date" value="June 10, 2026" />
-                  <Field label="Departure" value="7:00 AM" />
-                  <Field label="Seat" value="Seated" align="right" />
+                  <Field label="Departure" value="7:00 AM" align="right" />
                 </div>
               </dl>
 
@@ -122,8 +121,8 @@ export default function DigitalTicketSection() {
 
               <div className="flex items-center justify-between gap-4 px-5 pb-5 pt-3">
                 <div className="min-w-0">
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Booking ID</p>
-                  <p className="mt-1 font-mono text-sm font-semibold text-navy-950">ST-20260610-0142</p>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Ticket ID</p>
+                  <p className="mt-1 font-mono text-sm font-semibold tracking-widest text-navy-950">3F9A12BC</p>
                   <p className="mt-3 text-xs leading-relaxed text-slate-500">Present this QR code when boarding.</p>
                 </div>
                 <span className="shrink-0 rounded-xl p-1.5 ring-1 ring-fog">

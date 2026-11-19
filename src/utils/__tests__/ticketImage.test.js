@@ -28,6 +28,17 @@ describe('buildTicketImageModel', () => {
     expect(byLabel.Transaction).toBe('TXN-1')
   })
 
+  // Batch 80 (user, 2026-11-19): the saved ticket follows the designer's ticket: the route under the title, no seat,
+  // and the priority seat and baggage when the ticket has them.
+  it('puts the route in the header, leaves the seat out, and lists priority seat and baggage', () => {
+    const model = buildTicketImageModel({ ...ticket, priority_label: 'Senior citizen', has_baggage: true })
+    const byLabel = Object.fromEntries(model.lines.map((l) => [l.label, l.value]))
+    expect(model.route).toBe('Alpha  →  Beta')
+    expect(byLabel.Seat).toBeUndefined()
+    expect(byLabel['Priority seat']).toBe('Senior citizen')
+    expect(byLabel.Baggage).toBe('In the compartment (in the fare)')
+  })
+
   it('shows the onsite discount snapshot and ID verification on a discounted ticket image', () => {
     const model = buildTicketImageModel({
       ...ticket,
