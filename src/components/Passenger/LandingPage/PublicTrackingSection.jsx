@@ -335,7 +335,8 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
             type: 'line',
             source: ALL_ROUTES_SOURCE,
             layout: { 'line-join': 'round', 'line-cap': 'round' },
-            paint: { 'line-color': '#0d9488', 'line-width': 4, 'line-opacity': 0.55 },
+            // Batch 81 (user, 2026-11-19): each route in its own colour, as on the Operator dashboard.
+            paint: { 'line-color': ['coalesce', ['get', 'color'], '#0d9488'], 'line-width': 4, 'line-opacity': 0.7 },
           });
         }
       } catch { /* the map style is not ready yet; the next poll draws it */ }

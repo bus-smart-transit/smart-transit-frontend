@@ -1,4 +1,5 @@
 import { clock12 } from './clock';
+import { routeColorMap } from './routeColors';
 // 2026-11-08 (user): view logic of the public Track Bus map. A bus that has not departed is "waiting" at its first
 // stop (the server decides which, WaitingBusService); the map draws the route line of every bus so no icon floats.
 
@@ -29,8 +30,10 @@ export const routeKeyOf = (row) => `${Number(row?.route_id)}:${row?.leg_directio
 /**
  * GeoJSON features for the route line of every listed bus, once per route and direction. geometryByKey maps
  * routeKeyOf() to a LineString geometry; a route without a stored line is left out (never drawn from guesses).
+ * Batch 81 (user, 2026-11-19): each route in its own colour (utils/routeColors, the same as the Operator dashboard).
  */
 export function routeLineFeatures(rows = [], geometryByKey = {}) {
+  const colors = routeColorMap(rows.map((row) => row?.route_id));
   const seen = new Set();
   const features = [];
   rows.forEach((row) => {
@@ -39,7 +42,7 @@ export function routeLineFeatures(rows = [], geometryByKey = {}) {
     const coordinates = geometryByKey[key]?.coordinates;
     if (seen.has(key) || !Array.isArray(coordinates) || coordinates.length < 2) return;
     seen.add(key);
-    features.push({ type: 'Feature', properties: { key }, geometry: { type: 'LineString', coordinates } });
+    features.push({ type: 'Feature', properties: { key, color: colors.get(Number(row.route_id))?.color }, geometry: { type: 'LineString', coordinates } });
   });
   return features;
 }

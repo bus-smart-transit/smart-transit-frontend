@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { ROUTE_PALETTE, routeColorMap } from '../routeColors';
+import { ROUTE_PALETTE, routeColor, routeColorMap } from '../routeColors';
+import { routeLineFeatures } from '../publicTrackingView';
 import { busesForMap, todayByRoute } from '../operatorDashboardView';
 
 // Batch 81 (user, 2026-11-19): one colour and R-code per route on the dashboard map and in Today's trips.
@@ -8,7 +9,9 @@ describe('routeColorMap', () => {
     const a = routeColorMap([20, 10, 20, 30]);
     const b = routeColorMap([30, 10, 20]);
     expect([...a.entries()]).toEqual([...b.entries()]);
-    expect(a.get(10)).toEqual({ color: ROUTE_PALETTE[0], code: 'R1' });
+    expect(a.get(10)).toEqual({ color: routeColor(10), code: 'R1' });
+    expect(routeColor(1)).toBe(ROUTE_PALETTE[0]);
+    expect(routeColor(9)).toBe(ROUTE_PALETTE[0]);
     expect(a.get(30).code).toBe('R3');
     expect(routeColorMap([null, 0, 'x']).size).toBe(0);
   });
@@ -31,5 +34,17 @@ describe('todayByRoute and busesForMap (Batch 81)', () => {
       now,
     );
     expect(buses.map((b) => [b.tripId, b.state])).toEqual([[1, 'in_service'], [2, 'delayed']]);
+  });
+});
+
+// Batch 81 (user): the passengers' Track Bus map draws each route in the same colour as the Operator dashboard.
+describe('Track Bus route colours', () => {
+  it('colours each route line by its route, whatever else is listed', () => {
+    const line = { coordinates: [[125, 7], [125.1, 7.1]] };
+    const alone = routeLineFeatures([{ route_id: 3 }], { '3:outbound': line });
+    const withOthers = routeLineFeatures([{ route_id: 1 }, { route_id: 3 }], { '1:outbound': line, '3:outbound': line });
+    expect(alone[0].properties.color).toBe(routeColor(3));
+    expect(withOthers.find((f) => f.properties.key === '3:outbound').properties.color).toBe(routeColor(3));
+    expect(routeColorMap([3]).get(3).color).toBe(routeColor(3));
   });
 });
