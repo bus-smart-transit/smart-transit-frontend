@@ -135,7 +135,7 @@ export async function renderTicketCanvas(model) {
   ctx.drawImage(qrImage, (width - qrSize) / 2, 200, qrSize, qrSize);
 
   const tearY = 200 + qrSize + 24;
-  ctx.fillStyle = '#e0f4f2';
+  ctx.fillStyle = '#f1f5f9';
   ctx.beginPath(); ctx.arc(0, tearY, 18, 0, Math.PI * 2); ctx.fill();
   ctx.beginPath(); ctx.arc(width, tearY, 18, 0, Math.PI * 2); ctx.fill();
   ctx.strokeStyle = '#d6e5ec';

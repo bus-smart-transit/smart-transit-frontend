@@ -112,10 +112,10 @@ export default function DigitalTicketSection() {
                 </div>
               </dl>
 
-              {/* The torn-off line; the notches are the page colour (mist), so they read as cut-outs. */}
+              {/* The torn-off line; the notches are the page colour (slate-100), so they read as cut-outs. */}
               <div aria-hidden="true" className="relative h-6">
-                <span className="absolute -left-3 top-0 h-6 w-6 rounded-full bg-mist" />
-                <span className="absolute -right-3 top-0 h-6 w-6 rounded-full bg-mist" />
+                <span className="absolute -left-3 top-0 h-6 w-6 rounded-full bg-slate-100" />
+                <span className="absolute -right-3 top-0 h-6 w-6 rounded-full bg-slate-100" />
                 <div className="absolute inset-x-5 top-1/2 border-t-2 border-dashed border-fog" />
               </div>
 

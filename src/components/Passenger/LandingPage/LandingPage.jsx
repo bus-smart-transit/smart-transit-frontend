@@ -24,7 +24,7 @@ export default function LandingPage() {
   }, [hash]);
 
   return (
-    <div className="flex min-h-screen flex-col bg-mist">
+    <div className="flex min-h-screen flex-col bg-slate-100">
       <Navbar />
       <AccountDeletionNotice />
 

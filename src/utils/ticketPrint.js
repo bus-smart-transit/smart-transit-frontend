@@ -53,7 +53,7 @@ export function ticketPrintHtml({ title = 'SmartTransit Ticket', from, to, depar
         <head>
           <title>${esc(title)}</title>
           <style>
-            body { font-family: Arial, sans-serif; padding: 24px; color: #0f172a; background: #e0f4f2; }
+            body { font-family: Arial, sans-serif; padding: 24px; color: #0f172a; background: #f1f5f9; }
             .ticket { max-width: 420px; margin: 0 auto; border-radius: 16px; overflow: hidden; background: #fff; border: 1px solid #d6e5ec; }
             .head { background: linear-gradient(90deg, #153a6b, #05588a); color: #fff; padding: 16px 20px; display: flex; justify-content: space-between; gap: 12px; }
             .head .brand { margin: 0; font-size: 16px; font-weight: 700; }
@@ -72,7 +72,7 @@ export function ticketPrintHtml({ title = 'SmartTransit Ticket', from, to, depar
             .rows div span:first-child { color: #64748b; }
             .rows div span:last-child { font-weight: 700; }
             .tear { position: relative; height: 24px; }
-            .tear::before, .tear::after { content: ''; position: absolute; top: 0; width: 24px; height: 24px; border-radius: 50%; background: #e0f4f2; }
+            .tear::before, .tear::after { content: ''; position: absolute; top: 0; width: 24px; height: 24px; border-radius: 50%; background: #f1f5f9; }
             .tear::before { left: -12px; } .tear::after { right: -12px; }
             .tear span { position: absolute; left: 20px; right: 20px; top: 50%; border-top: 2px dashed #d6e5ec; }
             .foot-area { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 8px 20px 16px; }
