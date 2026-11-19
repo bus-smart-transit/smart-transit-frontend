@@ -210,10 +210,10 @@ export default function RoutesPage({ routes, stops, trips, fleets, onRefresh, on
 
       {showRoutes && (<>
       <section aria-label="Route summary" className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-        <OpStat icon={RouteIcon} label="Routes" value={rows.length} />
-        <OpStat icon={Bus} label="With an active fleet" value={withFleet} tone="success" />
-        <OpStat icon={Ban} label="No active fleet" value={rows.length - withFleet} tone={rows.length - withFleet ? 'warning' : 'neutral'} />
-        <OpStat icon={MapPin} label="Stops" value={stops.length} hint="in your directory" />
+        <OpStat icon={RouteIcon} accent="blue" label="Routes" value={rows.length} />
+        <OpStat icon={Bus} accent="green" label="With an active fleet" value={withFleet} tone="success" />
+        <OpStat icon={Ban} accent="orange" label="No active fleet" value={rows.length - withFleet} tone={rows.length - withFleet ? 'warning' : 'neutral'} />
+        <OpStat icon={MapPin} accent="violet" label="Stops" value={stops.length} hint="in your directory" />
       </section>
 
       <OpCard

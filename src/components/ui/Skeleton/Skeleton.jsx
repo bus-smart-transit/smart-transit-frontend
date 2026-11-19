@@ -137,7 +137,7 @@ export function SkeletonPage({ label = 'Loading...', variant = 'page' }) {
   if (variant === 'portal') {
     return (
       <SkeletonStatus label={label} className="grid min-h-screen grid-cols-1 bg-slate-50 lg:grid-cols-[260px_1fr]">
-        <div className="hidden space-y-3 bg-[#0D1B2A] p-5 lg:block">
+        <div className="hidden space-y-3 bg-navy-900 p-5 lg:block">
           <span aria-hidden="true" className="block h-9 w-40 animate-pulse rounded-md bg-white/10 motion-reduce:animate-none" />
           {Array.from({ length: 7 }, (_, i) => <span key={i} aria-hidden="true" className="block h-10 animate-pulse rounded-xl bg-white/10 motion-reduce:animate-none" />)}
         </div>

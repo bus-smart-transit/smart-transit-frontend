@@ -4,8 +4,8 @@ import {
 } from '../operatorNav';
 
 describe('Operator sidebar (Batch 30)', () => {
-  test('is Dashboard, Staffs, Fleets, Routes, Schedule, Finance, Reports, Account', () => {
-    expect(navForRole('operator').map((i) => i.label)).toEqual(['Dashboard', 'Staffs', 'Fleets', 'Routes', 'Schedule', 'Finance', 'Reports', 'Account']);
+  test('is Dashboard, Staff, Fleets, Routes, Schedule, Finance, Reports, Account', () => {
+    expect(navForRole('operator').map((i) => i.label)).toEqual(['Dashboard', 'Staff', 'Fleets', 'Routes', 'Schedule', 'Finance', 'Reports', 'Account']);
   });
 
   test('has no separate Trips, Calendar, Shift Blocks, Financials or Remittances item any more', () => {

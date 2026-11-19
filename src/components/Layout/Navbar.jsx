@@ -1,28 +1,31 @@
 import { useState } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import BrandLogo from '../ui/BrandLogo';
-import { Menu, X, House, Info, MapPin, CircleHelp, Phone, LayoutGrid, Ticket, History, Gift, User, LogOut } from 'lucide-react';
+import { Menu, X, House, UsersRound, BusFront, MessageCircleQuestion, Headset, LayoutDashboard, TicketCheck, History, Gift, CircleUser, LogOut } from 'lucide-react';
 import { useAuth } from '../../api/hooks/useAuth';
 import ProfileDropdown from './ProfileDropdown';
 
 // 2026-11-06 (passenger redesign, joshua-frontend): a white header with the site links and one Log In button
 // (sign-up is reached from the login page); on phones a navy drawer from the right. Track Bus is a site link so
 // anyone can follow a bus without an account.
+// 2026-11-18 (user): icons that say what the page is (team for About, a bus for Track Bus, a help bubble for FAQ,
+// a headset for Contact), drawn with a thin 1.5 line.
 const NAV_LINKS = [
   { label: 'Home', to: '/', icon: House },
-  { label: 'About', to: '/about', icon: Info },
-  { label: 'Track Bus', to: '/track-bus', icon: MapPin },
-  { label: 'FAQ', to: '/faq', icon: CircleHelp },
-  { label: 'Contact Us', to: '/contact', icon: Phone },
+  { label: 'About', to: '/about', icon: UsersRound },
+  { label: 'Track Bus', to: '/track-bus', icon: BusFront },
+  { label: 'FAQ', to: '/faq', icon: MessageCircleQuestion },
+  { label: 'Contact Us', to: '/contact', icon: Headset },
 ];
 
 const ACCOUNT_LINKS = [
-  { label: 'Dashboard', to: '/passenger/dashboard?tab=dashboard', icon: LayoutGrid },
-  { label: 'My Tickets', to: '/passenger/dashboard?tab=tickets', icon: Ticket },
+  { label: 'Dashboard', to: '/passenger/dashboard?tab=dashboard', icon: LayoutDashboard },
+  { label: 'My Tickets', to: '/passenger/dashboard?tab=tickets', icon: TicketCheck },
   { label: 'Trip History', to: '/passenger/dashboard?tab=transactions', icon: History },
   { label: 'Rewards', to: '/passenger/dashboard?tab=rewards', icon: Gift },
-  { label: 'Profile', to: '/passenger/dashboard?tab=profile', icon: User },
+  { label: 'Profile', to: '/passenger/dashboard?tab=profile', icon: CircleUser },
 ];
+const ICON_PROPS = { size: 19, strokeWidth: 1.5, 'aria-hidden': true };
 
 const linkClass = ({ isActive }) => `text-sm font-medium transition-colors ${isActive ? 'font-semibold text-navy-800' : 'text-slate-600 hover:text-navy-800'}`;
 const drawerLinkClass = ({ isActive }) => `flex min-h-11 items-center gap-3 rounded-xl px-3.5 text-sm font-medium transition-colors ${isActive ? 'bg-white text-navy-900 shadow-sm' : 'text-navy-200 hover:bg-teal-400/10 hover:text-teal-300'}`;
@@ -97,7 +100,7 @@ export default function Navbar() {
         <nav className="mt-6 flex flex-col gap-1 border-b border-white/10 pb-4" aria-label="Mobile navigation">
           {NAV_LINKS.map(({ label, to, icon: Icon }) => (
             <NavLink key={label} to={to} end onClick={close} className={to.includes('#') ? drawerLinkClass({ isActive: false }) : drawerLinkClass}>
-              <Icon size={19} aria-hidden="true" />
+              <Icon {...ICON_PROPS} />
               {label}
             </NavLink>
           ))}
@@ -109,13 +112,13 @@ export default function Navbar() {
             <nav className="mt-2 flex flex-col gap-1" aria-label="Account">
               {ACCOUNT_LINKS.map(({ label, to, icon: Icon }) => (
                 <Link key={label} to={to} onClick={close} className={drawerLinkClass({ isActive: false })}>
-                  <Icon size={19} aria-hidden="true" />
+                  <Icon {...ICON_PROPS} />
                   {label}
                 </Link>
               ))}
             </nav>
             <button type="button" onClick={handleMobileLogout} className="mt-auto flex min-h-11 items-center gap-3 rounded-xl px-3.5 text-left text-sm font-medium text-red-300 hover:bg-white/10">
-              <LogOut size={18} aria-hidden="true" />
+              <LogOut {...ICON_PROPS} />
               Logout
             </button>
           </>

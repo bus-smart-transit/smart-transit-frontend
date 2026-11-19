@@ -18,8 +18,8 @@ describe('FaqPage', () => {
     const topics = screen.getByRole('navigation', { name: 'FAQ topics' });
     expect(within(topics).getAllByRole('link')).toHaveLength(FAQ_TOPICS.length);
 
-    fireEvent.click(screen.getByText('Can I choose my seat?'));
-    expect(screen.getByText(/Every online ticket reserves a seat/)).toBeInTheDocument();
+    fireEvent.click(screen.getByText('How do I book a trip?'));
+    expect(screen.getByText(/Use the Search Trips panel/)).toBeInTheDocument();
     expect(FAQ_ITEMS.length).toBe(FAQ_TOPICS.reduce((n, t) => n + t.items.length, 0));
   });
 });

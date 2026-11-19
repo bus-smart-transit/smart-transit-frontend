@@ -14,7 +14,6 @@ export const FAQ_TOPICS = [
     topic: 'Booking and payment',
     items: [
       { q: 'How do I book a trip?', a: 'Use the Search Trips panel on the homepage to find a route and date, then select "Book Seat" on the trip you want.' },
-      { q: 'Can I choose my seat?', a: 'Every online ticket reserves a seat. Standing places are sold only on the bus, by the Chauffeur, once all seats are taken.' },
       { q: 'How do I pay for my booking?', a: 'Payments are completed online through your chosen payment method (GCash, Maya, or Card) during checkout.' },
       { q: 'How do rewards work?', a: 'You earn SmartPoints for every paid ticket. Once you have enough points, you can redeem them for a discount on future tickets.' },
     ],

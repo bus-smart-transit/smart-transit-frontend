@@ -29,7 +29,7 @@ export default function AvailableTripsPage() {
   const to = read(params, 'to').toLowerCase()
   const date = read(params, 'date')
   const page = Math.max(1, parseInt(read(params, 'page'), 10) || 1)
-  // Batch 54 (user): bus type filter (Ordinary / Aircon, from the server) kept in the address like the rest.
+  // Batch 54 (user): bus type filter (Non-aircon / Aircon, from the server) kept in the address like the rest.
   const busType = read(params, 'bus').toLowerCase()
   const region = useRegion()
   const radiusKm = region?.nearbyRadiusKm ?? 5

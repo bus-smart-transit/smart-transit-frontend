@@ -125,8 +125,8 @@ test('Standing: online booking offers seats only, and the FAQ says so', async ({
   expect(JSON.stringify(await refused.json())).toContain('Online tickets are for seats only. Standing places are sold on the bus.');
 
   await page.goto('/');
-  await page.getByText('Can I choose my seat?').click();
-  await expect(page.getByText(/Every online ticket reserves a seat/)).toBeVisible();
+  await page.getByText('How do I book a trip?').click();
+  await expect(page.getByText(/Use the Search Trips panel/)).toBeVisible();
   await shot(page, '3-faq-seats-only');
 });
 

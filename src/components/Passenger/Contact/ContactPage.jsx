@@ -10,7 +10,8 @@ import { useRegion } from '../../../api/hooks/useRegion';
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // Sample details for the test period (user, 2026-11-07: "This can be mockups"). Replace with the real ones before
-// launch; the page says plainly that they are samples.
+// launch. 2026-11-18 (user): the "Sample page" badge and "(sample)" labels were removed, so these now read as real —
+// they are still made up until replaced. The form below still says it does not send anything.
 const SAMPLE_DETAILS = [
   { icon: Phone, label: 'Phone', value: '(082) 123 4567' },
   { icon: Mail, label: 'Email', value: 'support@smarttransit-davao.ph' },
@@ -53,9 +54,6 @@ export default function ContactPage() {
             <p className="text-sm font-semibold uppercase tracking-wide text-teal-300">Contact Us</p>
             <h1 className="mt-2 font-display text-3xl font-bold text-white sm:text-4xl">We&apos;re here to help</h1>
             <p className="mt-3 max-w-xl text-base text-navy-200">Questions about a booking, a route, or a lost item on the bus? Reach out and our team will get back to you.</p>
-            <p className="mt-4 inline-flex items-center gap-2 rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-900">
-              <Info className="h-3.5 w-3.5" aria-hidden="true" /> Sample page for the test period
-            </p>
           </div>
         </section>
 
@@ -76,7 +74,7 @@ export default function ContactPage() {
                   <li key={label} className="flex items-start gap-3">
                     <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-navy-50 text-navy-800"><Icon size={18} aria-hidden="true" /></span>
                     <div>
-                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{label} (sample)</p>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{label}</p>
                       <p className="text-sm font-medium text-navy-950">{value}</p>
                     </div>
                   </li>

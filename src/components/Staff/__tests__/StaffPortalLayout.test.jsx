@@ -25,26 +25,26 @@ describe('Operator sidebar in the shared staff layout', () => {
   it('lists the merged items in order, with no Trips, Calendar, Shift Blocks, Financials or Remittances', () => {
     const { aside } = setup();
     const labels = [...aside.querySelectorAll('nav button')].map((b) => b.textContent.trim());
-    expect(labels).toEqual(['Dashboard', 'Staffs', 'Fleets', 'Routes', 'Schedule', 'Finance', 'Reports', 'Account']);
+    expect(labels).toEqual(['Dashboard', 'Staff', 'Fleets', 'Routes', 'Schedule', 'Finance', 'Reports', 'Account']);
   });
 
   it('highlights only the active item', () => {
     const { aside } = setup('finance');
-    expect(sidebarButton(aside, 'Finance').className).toMatch(/bg-teal-500/);
-    expect(sidebarButton(aside, 'Schedule').className).not.toMatch(/bg-teal-500/);
-    expect([...aside.querySelectorAll('nav button')].filter((b) => /bg-teal-500/.test(b.className))).toHaveLength(1);
+    expect(sidebarButton(aside, 'Finance')).toHaveAttribute('aria-current', 'page');
+    expect(sidebarButton(aside, 'Schedule')).not.toHaveAttribute('aria-current');
+    expect([...aside.querySelectorAll('nav button')].filter((b) => b.getAttribute('aria-current') === 'page')).toHaveLength(1);
   });
 
   it('moves the highlight when the active item changes', () => {
     const { aside, rerender, onTabChange } = setup('schedule');
-    expect(sidebarButton(aside, 'Schedule').className).toMatch(/bg-teal-500/);
+    expect(sidebarButton(aside, 'Schedule')).toHaveAttribute('aria-current', 'page');
     rerender(
       <StaffPortalLayout brandLabel="Operator Portal" brandIcon={Bus} navItems={items} activeTab="reports" onTabChange={onTabChange} profile={{ name: 'Olive Operator' }} profileRoleLabel="Operator" onLogout={vi.fn()}>
         <p>page body</p>
       </StaffPortalLayout>,
     );
-    expect(sidebarButton(aside, 'Reports').className).toMatch(/bg-teal-500/);
-    expect(sidebarButton(aside, 'Schedule').className).not.toMatch(/bg-teal-500/);
+    expect(sidebarButton(aside, 'Reports')).toHaveAttribute('aria-current', 'page');
+    expect(sidebarButton(aside, 'Schedule')).not.toHaveAttribute('aria-current');
   });
 
   it('calls onTabChange with the item key', () => {

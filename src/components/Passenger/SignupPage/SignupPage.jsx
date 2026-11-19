@@ -48,9 +48,8 @@ export default function SignUpPage() {
   return (
     <AuthShell
       photoSide="left"
-      title="Join SmartTransit."
-      text="Create your free SmartTransit account to book trips, pay online, and follow your bus in real time."
-      tagline="Your journey starts here."
+      title="Get your seat before you leave home."
+      text="Make a free account to reserve a seat, pay online, and keep your ticket on your phone."
     >
           <div className="mb-8">
             <span className="inline-flex items-center rounded-full bg-navy-50 px-3 py-1 text-xs font-semibold text-navy-800">

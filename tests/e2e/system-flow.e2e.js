@@ -197,7 +197,7 @@ test('Operator: every page and view opens, and a new Driver account keeps its ge
   // request at a time, and a full reload of every page queues the whole dashboard again each time.
   await expect(page.getByText('Loading dashboard...')).toHaveCount(0, { timeout: 120000 });
   const pages = {
-    Dashboard: [], Staffs: [], Fleets: [], Routes: [],
+    Dashboard: [], Staff: [], Fleets: [], Routes: [],
     Schedule: ['Calendar', 'Blocks', 'Trips', 'Approvals'],
     Finance: ['Overview', 'Transactions', 'Remittances', 'Refunds'],
     Reports: [], Account: [],
@@ -211,7 +211,7 @@ test('Operator: every page and view opens, and a new Driver account keeps its ge
     }
   }
 
-  await clickSidebar(page, 'Staffs');
+  await clickSidebar(page, 'Staff');
   await expect(page.getByTestId('staff-roster')).toBeVisible();
   await page.getByRole('button', { name: 'Add Staff' }).first().click();
   const dialog = page.getByRole('dialog');

@@ -1,7 +1,7 @@
 // Batch 65 (user, 2026-11-13): Available trips shows one card per journey instead of one per departure; the passenger
 // chooses the time on the trip details page (its "Departure time" choice). Departures are grouped only when everything
 // that changes the fare or the stops is the same: the date, where they board and get off, the route, the bus type
-// (Aircon, Ordinary) and the service (Regular, Express). The server's list order is kept.
+// (Aircon, Non-aircon) and the service (Regular, Express). The server's list order is kept.
 
 const part = (value) => String(value ?? '').trim().toLowerCase();
 

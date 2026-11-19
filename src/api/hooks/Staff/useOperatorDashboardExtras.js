@@ -132,3 +132,27 @@ export function useCrewShiftRange({ from, to, staffId, page }) {
 
   return state;
 }
+
+/**
+ * 2026-11-13: trips per business day over the last `days` days (today last), from the calendar markers, for the
+ * Trips today card's trend line and its change against yesterday. The calendar does not count cancelled trips, so
+ * today and yesterday are both read from here to compare like with like. A failed load leaves `days` empty.
+ */
+export function useTripsPerDay(days = 7, refreshKey = null) {
+  const [state, setState] = useState({ days: [] });
+  useEffect(() => {
+    let cancelled = false;
+    const to = getBusinessToday();
+    const from = addDays(to, -(days - 1));
+    Promise.resolve()
+      .then(() => OperatorService.getCalendarDays({ from, to }))
+      .then((res) => {
+        if (cancelled) return;
+        const byDate = new Map((res?.data?.days ?? []).map((day) => [day.date, Number(day.trips) || 0]));
+        setState({ days: Array.from({ length: days }, (_, i) => { const date = addDays(from, i); return { date, trips: byDate.get(date) ?? 0 }; }) });
+      })
+      .catch(() => { if (!cancelled) setState({ days: [] }); });
+    return () => { cancelled = true; };
+  }, [days, refreshKey]);
+  return state.days;
+}

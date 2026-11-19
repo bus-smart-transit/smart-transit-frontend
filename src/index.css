@@ -2,6 +2,25 @@
 @import "tailwindcss";
 @config "../tailwind.config.js";
 
+/* ─── Brand palette (design team, 2026-11-18) ─────────────────────
+   Dark:  ocean #05588A, navy #153A6B
+   Mid:   teal #6AC1B8, cyan #41FDFE
+   Light: mint #BEE8DA, sky #A8E4FF, mist #E0F4F2, fog #D6E5EC, white
+   The light slate steps (50/100/200) are retinted toward mist/fog so every
+   existing bg-slate-50/100 and border-slate-200 picks up the palette instead
+   of plain grey-white. Darker slate steps (text) are left alone for contrast. */
+@theme {
+  --color-ocean: #05588a;
+  --color-mint: #bee8da;
+  --color-sky: #a8e4ff;
+  --color-mist: #e0f4f2;
+  --color-fog: #d6e5ec;
+
+  --color-slate-50: #f2f9f9;
+  --color-slate-100: #e6f1f3;
+  --color-slate-200: #d6e5ec;
+}
+
 /* ─── Base overrides ──────────────────────────────── */
 @layer base {
   html { 
@@ -29,7 +48,7 @@
     outline-offset: 2px;
   }
   body {
-    background-color: #f1f5f9;
+    background-color: #e0f4f2; /* mist */
     color: #0f172a;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -192,8 +211,15 @@
 
 /* ─── Scrollbar ────────────────────────────────── */
 ::-webkit-scrollbar       { width: 6px; }
-::-webkit-scrollbar-track { background: #f1f5f9; }
-::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+::-webkit-scrollbar-track { background: #e0f4f2; }
+::-webkit-scrollbar-thumb { background: #a9c7d3; border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
 
+
+/* 2026-11-13: the check mark on the Operator dashboard's Refresh button pops in once the data is back. */
+@keyframes op-pop {
+  0% { transform: scale(0.4); opacity: 0; }
+  70% { transform: scale(1.2); opacity: 1; }
+  100% { transform: scale(1); }
+}

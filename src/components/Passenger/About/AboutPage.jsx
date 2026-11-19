@@ -2,29 +2,29 @@ import { Clock3, MapPin, ShieldCheck, Wallet } from 'lucide-react';
 import { useRegion } from '../../../api/hooks/useRegion';
 import Navbar from '../../Layout/Navbar';
 import Footer from '../../Layout/Footer';
-import Button from '../../ui/Button';
 import TeamSection from './TeamSection';
 
+// 2026-11-18 (user): plainer wording — what a rider actually does, not slogans.
 const BENEFITS = [
   {
     icon: Clock3,
-    title: 'Save time',
-    description: 'Check the schedule and choose your bus before you ever leave the house.',
+    title: 'Know before you go',
+    description: 'See the schedule and pick your bus before you leave the house.',
   },
   {
     icon: Wallet,
-    title: 'Pay with ease',
-    description: 'Cashless GCash and Maya payments mean no exact change and no queuing at the window.',
+    title: 'Pay with GCash or Maya',
+    description: 'No exact change, no line at the ticket window.',
   },
   {
     icon: MapPin,
-    title: 'Stay informed',
-    description: 'Live GPS tracking shows where a bus is on every active route.',
+    title: 'See where your bus is',
+    description: 'Follow it on the map while it is on the road.',
   },
   {
     icon: ShieldCheck,
-    title: 'Travel with confidence',
-    description: 'A digital QR ticket for every seat, checked when you board.',
+    title: 'Board with your phone',
+    description: 'Your seat comes with a QR ticket. The conductor scans it at the door.',
   },
 ];
 
@@ -59,14 +59,15 @@ export default function AboutPage() {
               About SmartTransit
             </h1>
 
-            <div className="mt-8 max-w-3xl">
+            {/* 2026-11-18 (user): simpler words, and the paragraph runs the full width so its right edge lines up
+                with the Mission text below. */}
+            <div className="mt-8">
               <h2 className="font-display text-2xl font-bold text-navy-900 sm:text-3xl">
-                Built for commuters travelling across {place}
+                Made for people who ride the bus in {place}
               </h2>
-              <p className="mt-4 text-base leading-relaxed text-slate-600">
-                SmartTransit is a bus transportation platform for the daily commuting routes of {place}. Instead of
-                guessing when the next bus arrives or lining up at a terminal window, riders can see the
-                schedule, choose a bus, and pay for their trip before they leave the house.
+              <p className="mt-4 text-base leading-relaxed text-slate-600 sm:text-lg">
+                SmartTransit lets you check the bus schedule, pick your bus and pay for your seat on your phone. No more
+                guessing when the next bus comes, and no more waiting in line at the terminal window.
               </p>
             </div>
           </div>
@@ -122,43 +123,36 @@ export default function AboutPage() {
 
         <section className="bg-slate-50 py-16 sm:py-20">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-10">
-            <div className="max-w-2xl">
-              <p className="text-sm font-semibold uppercase tracking-wide text-teal-600">Why SmartTransit Exists</p>
+            {/* 2026-11-18 (user): centred, like the section headings on the homepage. */}
+            <div className="mx-auto max-w-2xl text-center">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal-600">Why we built it</p>
               <h2 className="mt-2 font-display text-3xl font-bold text-navy-950 sm:text-4xl">
-                Passenger benefits, built on real transportation technology
+                Less waiting at the terminal
               </h2>
               <p className="mt-3 text-base leading-relaxed text-slate-500">
-                Commuters have long relied on terminal windows and word of mouth to plan a trip. SmartTransit
-                brings that experience online: GPS tracking, digital ticketing, and cashless payments, so every
-                rider knows what to expect before they reach the terminal.
+                For years, the only way to know when the next bus leaves was to ask at the ticket window or ask
+                someone who rode it. SmartTransit puts the schedule, the seats and the bus on a map in your phone,
+                so you know what to expect before you get to the terminal.
               </p>
             </div>
 
-            <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="mt-12 grid gap-5 sm:mt-14 sm:grid-cols-2 lg:grid-cols-4">
               {BENEFITS.map(({ icon: Icon, title, description }) => (
-                <div key={title} className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-100">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-navy-50 text-navy-800">
-                    <Icon size={22} aria-hidden="true" />
+                // 2026-11-18 (user): the same filled navy → ocean card as "Before you travel" on the homepage.
+                <div key={title} className="rounded-2xl bg-gradient-to-br from-navy-800 to-ocean p-6 text-white shadow-xl shadow-navy-900/15 transition duration-300 hover:-translate-y-1 hover:shadow-navy-900/25">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/15 text-white">
+                    <Icon className="h-5 w-5" strokeWidth={1.75} aria-hidden="true" />
                   </div>
-                  <h3 className="mt-4 font-display text-base font-semibold text-navy-950">{title}</h3>
-                  <p className="mt-2 text-sm leading-relaxed text-slate-500">{description}</p>
+                  <h3 className="mt-4 font-display text-base font-semibold text-white">{title}</h3>
+                  <p className="mt-2 text-sm leading-relaxed text-white/80">{description}</p>
                 </div>
               ))}
             </div>
           </div>
         </section>
 
+        {/* 2026-11-18 (user): the "Ready to plan your trip?" banner after the team was removed. */}
         <TeamSection regionName={region?.name} />
-
-        <section className="bg-navy-950 px-4 py-14 text-center sm:px-6 lg:px-10">
-          <div className="mx-auto max-w-2xl">
-            <h2 className="font-display text-2xl font-bold text-white sm:text-3xl">Ready to plan your trip?</h2>
-            <p className="mt-2 text-sm text-slate-300">Search the next buses for your journey and book a seat.</p>
-            <div className="mt-6">
-              <Button to="/#search-trips" variant="accent" size="md">Search trips</Button>
-            </div>
-          </div>
-        </section>
       </main>
 
       <Footer />

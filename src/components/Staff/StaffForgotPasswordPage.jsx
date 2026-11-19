@@ -36,7 +36,7 @@ export default function StaffForgotPasswordPage() {
 
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col lg:grid lg:grid-cols-[1fr_1.2fr]">
-      <div className="hidden lg:flex flex-col items-center justify-center bg-[#0D1B2A] px-8 py-12 text-white">
+      <div className="hidden lg:flex flex-col items-center justify-center bg-navy-900 px-8 py-12 text-white">
         <div className="flex flex-col items-center text-center gap-5 max-w-xs">
           <BrandLogo variant="icon" light alt="" className="h-20" />
           <div>
@@ -88,7 +88,7 @@ export default function StaffForgotPasswordPage() {
               disabled={isLoading}
             />
 
-            <Button type="submit" className="w-full bg-[#0D1B2A] hover:bg-slate-800" size="lg" loading={isLoading} disabled={isLoading}>
+            <Button type="submit" className="w-full bg-navy-800 hover:bg-navy-900" size="lg" loading={isLoading} disabled={isLoading}>
               Send Reset Link
             </Button>
           </form>

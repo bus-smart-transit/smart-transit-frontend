@@ -15,7 +15,7 @@ const OPERATOR_ONLY = [OPERATOR_ROLE];
 
 export const OPERATOR_NAV = [
   { key: 'dashboard', label: 'Dashboard', roles: OPERATOR_ONLY },
-  { key: 'staffs', label: 'Staffs', roles: OPERATOR_ONLY },
+  { key: 'staffs', label: 'Staff', roles: OPERATOR_ONLY },
   { key: 'fleets', label: 'Fleets', roles: OPERATOR_ONLY },
   { key: 'routes', label: 'Routes', roles: OPERATOR_ONLY },
   { key: 'schedule', label: 'Schedule', roles: OPERATOR_ONLY },

@@ -1,7 +1,7 @@
 import { ratePercent } from '../../../utils/discountClaim';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { AlertCircle, Bus, CalendarDays, CheckCircle, Clock3, CreditCard, Loader, MapPin, Pencil, Smartphone, Wallet } from 'lucide-react';
+import { AlertCircle, Bus, CalendarDays, CheckCircle, Clock3, CreditCard, Loader, MapPin, Pencil } from 'lucide-react';
 import useBuyTicket from '../../../api/hooks/Passenger/useBuyTicket';
 import { busLabelText } from '../../../utils/busLabel';
 import { sameTripGroup } from '../../../utils/tripGroups';
@@ -24,9 +24,10 @@ import { clock12 } from '../../../utils/clock';
 
 // Matches OnlineCheckoutRequest: the passenger picks GCash or Maya (C4). The payment
 // page itself collects whatever else the provider needs.
+// 2026-11-18 (user): each option shows the provider's own logo (from gcash.com and maya.ph, in public/images/payments).
 const PAYMENT_CHANNELS = [
-  { value: 'gcash', label: 'GCash', icon: Smartphone },
-  { value: 'maya', label: 'Maya', icon: Wallet },
+  { value: 'gcash', label: 'GCash', logo: '/images/payments/gcash.svg', logoClass: 'h-8' },
+  { value: 'maya', label: 'Maya', logo: '/images/payments/maya.svg', logoClass: 'h-6' },
 ];
 
 
@@ -620,7 +621,9 @@ export default function BuyTicket({ onTicketPurchased, returnTo = '/' }) {
                               isSelected ? 'border-teal-500 bg-teal-50 text-teal-800' : 'border-slate-200 text-slate-600 hover:border-slate-300'
                             }`}
                           >
-                            <channel.icon className="h-5 w-5" />
+                            <span className="flex h-8 items-center" aria-hidden="true">
+                              <img src={channel.logo} alt="" className={`${channel.logoClass} w-auto`} />
+                            </span>
                             {channel.label}
                           </button>
                         );
