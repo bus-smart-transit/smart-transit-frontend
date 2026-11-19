@@ -126,7 +126,7 @@ export function OpSparkline({ points, accent = 'slate', label, caption = null, f
   return (
     <div className="w-full">
     <div
-      className={`relative h-12 w-full ${accentOf(accent)}`}
+      className={`relative h-10 w-full ${accentOf(accent)}`}
       role="img"
       aria-label={`${label}. ${points.map(format).join(', ')}`}
       data-testid="op-sparkline"
@@ -161,7 +161,7 @@ export function OpSparkline({ points, accent = 'slate', label, caption = null, f
         </>
       )}
     </div>
-    {caption && <p className="mt-1 text-right text-[11px] leading-none text-slate-400">{caption}</p>}
+    {caption && <p className="mt-1 whitespace-nowrap text-right text-xs leading-none text-slate-500">{caption}</p>}
     </div>
   );
 }
@@ -174,14 +174,13 @@ export function OpStat({ label, value, hint = null, tone = 'neutral', icon: Icon
           {Icon && <Icon className={`op-stat-icon h-5 w-5 shrink-0 sm:h-6 sm:w-6 ${accentOf(accent)}`} strokeWidth={1.5} aria-hidden="true" />}
           <span className="min-w-0">{label}</span>
         </p>
-        {/* 2026-11-13: the figure on the left, an optional trend line on the right (the reference design). */}
-        <div className="mt-2.5 flex items-start justify-between gap-3">
-          <div className="min-w-0 shrink-0">
-            <p className="font-display text-2xl font-bold leading-none tracking-tight text-slate-900 tabular-nums sm:text-[1.875rem]">{value}</p>
-            {delta && <div className="mt-2">{delta}</div>}
-          </div>
-          {chart && <div className="min-w-0 max-w-32 flex-1">{chart}</div>}
+        {/* 2026-11-13: the figure and its change; 2026-11-19: the optional trend line sits under them at the card's full
+            width (beside the figure it crowded the number and pushed its caption out of the narrow cards). */}
+        <div className="mt-2.5 min-w-0">
+          <p className="font-display text-2xl font-bold leading-none tracking-tight text-slate-900 tabular-nums sm:text-[1.875rem]">{value}</p>
+          {delta && <div className="mt-2">{delta}</div>}
         </div>
+        {chart && <div className="mt-2 w-full">{chart}</div>}
       </div>
       {hint && <p className="mt-auto flex items-start gap-1.5 pt-2.5 text-xs leading-snug text-slate-500 sm:pt-3"><span className={`mt-[4px] inline-block h-2 w-2 shrink-0 rounded-full ${toneOf(tone).dot}`} aria-hidden="true" />{hint}</p>}
     </Card>
