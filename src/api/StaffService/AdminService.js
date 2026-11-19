@@ -63,6 +63,11 @@ class AdminService extends StaffBaseService {
     return await this.request('/admin/financials', 'GET', params);
   }
 
+  // Batch 81: the online discount claims (every company, read only).
+  async getFinancialDiscountClaims(params = {}) {
+    return await this.request('/admin/financials/discount-claims', 'GET', params);
+  }
+
   async getNeedsRefund(params = {}) {
     return await this.request('/admin/payments/needs-refund', 'GET', params);
   }

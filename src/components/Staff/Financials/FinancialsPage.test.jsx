@@ -63,8 +63,10 @@ describe('FinancialsPage', () => {
     });
     render(<FinancialsPage service={service} />);
 
-    expect(await screen.findByTestId('kpi-discounts')).toHaveTextContent('7.00');
-    expect(screen.getByRole('region', { name: 'Discounts by type' })).toHaveTextContent('Student');
+    // Batch 81: the overview's Quick insights carry the total; the breakdown by type is on the Discounts tab.
+    expect(await screen.findByTestId('quick-insights')).toHaveTextContent('Discounts given');
+    expect(screen.getByTestId('quick-insights')).toHaveTextContent('7.00');
+    expect(screen.queryByRole('region', { name: 'Discounts by type' })).toBeNull();
     expect(screen.getByTestId('transaction-row')).toHaveTextContent('Student');
     expect(screen.getByTestId('transaction-row')).toHaveTextContent('35.00');
     expect(screen.getByTestId('transaction-row')).toHaveTextContent('7.00');
@@ -80,18 +82,18 @@ describe('FinancialsPage', () => {
     expect(screen.getByTestId('kpi-net')).toHaveTextContent('850.00');
     expect(screen.getByTestId('kpi-tickets')).toHaveTextContent('8');
     expect(screen.getByTestId('kpi-tickets')).toHaveTextContent('3 boarded');
-    expect(screen.getByTestId('kpi-average')).toHaveTextContent('125.00');
-    expect(screen.getByTestId('kpi-discounts')).toHaveTextContent('0.00');
-    expect(screen.getByTestId('kpi-split')).toHaveTextContent('25%');
-    expect(screen.getByTestId('kpi-split')).toHaveTextContent('75%');
+    // Batch 81: average fare, discounts, fees and the cash/online split are the Quick insights row.
+    expect(screen.getByTestId('quick-insights')).toHaveTextContent('125.00');
+    expect(screen.getByTestId('quick-insights')).toHaveTextContent('25% / 75%');
 
     const channels = screen.getByRole('region', { name: 'Payment channels' });
     expect(within(channels).getByText('GCash')).toBeInTheDocument();
     expect(within(channels).queryByText('Maya')).not.toBeInTheDocument(); // no method without data
-    expect(screen.getByRole('region', { name: 'By route' })).toHaveTextContent('Route One');
-    expect(screen.getByRole('region', { name: 'By bus' })).toHaveTextContent('Test Lines - B-1');
-    expect(screen.getByRole('region', { name: 'By trip' })).toHaveTextContent('Block #3');
-    expect(screen.getAllByTestId('hour-bar')).toHaveLength(24);
+    expect(screen.getByTestId('channel-ring')).toBeInTheDocument();
+    expect(screen.getByTestId('top-routes')).toHaveTextContent('Route One');
+    expect(screen.getByTestId('trend-chart')).toBeInTheDocument();
+    for (const gone of ['By route', 'By bus', 'By trip']) expect(screen.queryByRole('region', { name: gone })).toBeNull();
+    await waitFor(() => expect(screen.getByTestId('recent-transactions')).toHaveTextContent('Ticket sale'));
 
     await waitFor(() => expect(screen.getByTestId('transaction-row')).toHaveTextContent('Oct 5, 2026 6:04 AM'));
     expect(screen.getByTestId('transaction-row')).toHaveTextContent('Alpha to Omega');
@@ -119,7 +121,9 @@ describe('FinancialsPage', () => {
     fireEvent.click(within(alert.closest('[role="alert"]')).getByRole('button', { name: 'Try again' }));
 
     await waitFor(() => expect(screen.getByTestId('kpi-gross')).toHaveTextContent('1,000.00'));
-    expect(getFinancials).toHaveBeenCalledTimes(2);
+    // Batch 81: each load also asks for the previous period; the chosen range itself was asked twice (fail, retry).
+    const chosen = getFinancials.mock.calls[0][0].from;
+    expect(getFinancials.mock.calls.filter(([params]) => params.from === chosen)).toHaveLength(2);
   });
 
   it('sends the chosen filters to the server and goes back to page 1', async () => {
@@ -179,7 +183,7 @@ describe('FinancialsPage', () => {
     expect(URL.createObjectURL.mock.calls[0][0].type).toBe('application/pdf');
 
     fireEvent.change(screen.getByLabelText('File type'), { target: { value: 'csv' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Export daily summary' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Daily summary' }));
     await waitFor(() => expect(service.downloadFinancialExport).toHaveBeenLastCalledWith(expect.objectContaining({ type: 'daily' })));
     await waitFor(() => expect(URL.createObjectURL).toHaveBeenCalledTimes(2));
     expect(URL.createObjectURL.mock.calls[1][0].type).toBe('text/csv;charset=utf-8');
@@ -214,7 +218,7 @@ describe('FinancialsPage refunds', () => {
     await screen.findByTestId('kpi-gross');
 
     expect(service.getFinancials).toHaveBeenLastCalledWith(expect.objectContaining({ refund_basis: 'completed' }));
-    expect(screen.getByTestId('kpi-refunds')).toHaveTextContent('Completed in this range');
+    expect(screen.getByLabelText('Refunds counted by')).toHaveValue('completed');
     expect(screen.getByText(/closed day is never changed/)).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText('Refunds counted by'), { target: { value: 'sale' } });
@@ -230,5 +234,19 @@ describe('FinancialsPage refunds', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Export refunds' }));
     await waitFor(() => expect(service.downloadFinancialExport).toHaveBeenLastCalledWith(expect.objectContaining({ type: 'refunds', refund_basis: 'completed' })));
+  });
+});
+
+// Batch 81 (user, 2026-11-19): the headline figures against the period of the same length just before.
+describe('FinancialsPage: previous period', () => {
+  it('shows the change against the previous period, asked from the server with the same filters', async () => {
+    const getFinancials = vi.fn((params) => Promise.resolve({ data: params.from === params.to && getFinancials.mock.calls.length > 1 && params.from < getFinancials.mock.calls[0][0].from
+      ? summary({ kpis: { ...summary().kpis, gross: 800, net: 700, refunds: 100, tickets: 4 } })
+      : summary() }));
+    render(<FinancialsPage service={makeService({ getFinancials })} />);
+
+    await waitFor(() => expect(within(screen.getByTestId('kpi-gross')).getByLabelText('Up 25% vs previous day')).toBeInTheDocument());
+    expect(within(screen.getByTestId('kpi-tickets')).getByLabelText('Up 100% vs previous day')).toBeInTheDocument();
+    expect(within(screen.getByTestId('kpi-refunds')).getByLabelText('Up 50% vs previous day')).toBeInTheDocument();
   });
 });

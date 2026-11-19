@@ -105,3 +105,38 @@ export function monthTotals(daily = []) {
   }
   return [...months.values()].sort((a, b) => a.month.localeCompare(b.month));
 }
+
+// Batch 81 (user, 2026-11-19): helpers for the redesigned Finance overview. Still no amount is worked out here; these
+// only choose dates and arrange the server's rows.
+
+/** The number of days from..to, both counted (1 for a single day); 0 when the dates are unreadable. */
+export function rangeDays(from, to) {
+  const a = Date.parse(`${from}T00:00:00Z`);
+  const b = Date.parse(`${to}T00:00:00Z`);
+  return Number.isFinite(a) && Number.isFinite(b) && b >= a ? Math.round((b - a) / 86400000) + 1 : 0;
+}
+
+/** The period of the same length just before from..to, for "vs previous N days"; null when the range is unreadable. */
+export function previousRange({ from, to } = {}) {
+  const days = rangeDays(from, to);
+  if (!days) return null;
+  return { from: addDaysToDate(from, -days), to: addDaysToDate(from, -1), days };
+}
+
+/** "vs previous day" / "vs previous 7 days". */
+export const previousLabel = (days) => (days === 1 ? 'vs previous day' : `vs previous ${days} days`);
+
+/** One point per day from..to (a day without sales is 0, never left out), from the server's daily rows. */
+export function dailySeries(daily = [], from, to, key = 'gross') {
+  const days = rangeDays(from, to);
+  const byDate = new Map((daily || []).map((row) => [row.date, Number(row[key]) || 0]));
+  return Array.from({ length: days }, (_, i) => {
+    const date = addDaysToDate(from, i);
+    return { date, label: formatCalendarDate(date).replace(/, \d{4}$/, ''), value: byDate.get(date) ?? 0 };
+  });
+}
+
+/** The routes with the highest gross, highest first, at most `limit`. */
+export function topRoutes(byRoute = [], limit = 5) {
+  return [...(byRoute || [])].sort((a, b) => Number(b.gross) - Number(a.gross)).slice(0, limit);
+}

@@ -218,6 +218,11 @@ class OperatorService extends StaffBaseService {
     return await this.request('/operator/financials/transactions', 'GET', params);
   }
 
+  // Batch 81 (user, 2026-11-19): Finance > Discounts, the online discount claims on trips in the range.
+  async getFinancialDiscountClaims(params = {}) {
+    return await this.request('/operator/financials/discount-claims', 'GET', params);
+  }
+
   async getDiscountTypes() {
     return await this.request('/operator/discount-types', 'GET');
   }

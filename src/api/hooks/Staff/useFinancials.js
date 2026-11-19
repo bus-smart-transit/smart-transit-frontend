@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import OperatorService from '../../StaffService/OperatorService';
 import { getBusinessToday } from '../../../utils/dates';
-import { csvFileName, filtersToParams, presetRange } from '../../../utils/financials';
+import { csvFileName, filtersToParams, presetRange, previousRange } from '../../../utils/financials';
 import { downloadReport } from '../../../utils/tableExport';
 
 const EXPORT_TITLES = { transactions: 'Financial transactions', refunds: 'Financial refunds', daily: 'Financial daily summary' };
@@ -20,6 +20,8 @@ export default function useFinancials({ service = OperatorService } = {}) {
   const [reload, setReload] = useState(0);
   const [summaryResult, setSummaryResult] = useState({ key: null, data: null, error: '' });
   const [logResult, setLogResult] = useState({ key: null, data: null, error: '' });
+  // Batch 81: the same figures for the period of the same length just before (for "vs previous N days").
+  const [previousResult, setPreviousResult] = useState({ key: null, data: null });
   const [exporting, setExporting] = useState('');
   const [exportError, setExportError] = useState('');
 
@@ -34,6 +36,19 @@ export default function useFinancials({ service = OperatorService } = {}) {
       .catch((err) => { if (!cancelled) setSummaryResult({ key: summaryKey, data: null, error: err?.message || 'The figures could not be loaded.' }); });
     return () => { cancelled = true; };
   }, [summaryKey, service]);
+
+  const previous = previousRange(filters);
+  const previousKey = previous ? JSON.stringify({ params: filtersToParams({ ...filters, from: previous.from, to: previous.to }), reload }) : null;
+
+  useEffect(() => {
+    if (!previousKey) return undefined;
+    let cancelled = false;
+    const { params } = JSON.parse(previousKey);
+    service.getFinancials(params)
+      .then((res) => { if (!cancelled) setPreviousResult({ key: previousKey, data: res?.data ?? null }); })
+      .catch(() => { if (!cancelled) setPreviousResult({ key: previousKey, data: null }); });
+    return () => { cancelled = true; };
+  }, [previousKey, service]);
 
   useEffect(() => {
     let cancelled = false;
@@ -87,6 +102,8 @@ export default function useFinancials({ service = OperatorService } = {}) {
     summary: summaryResult.key === summaryKey ? summaryResult.data : null,
     summaryError: summaryResult.key === summaryKey ? summaryResult.error : '',
     summaryLoading: summaryResult.key !== summaryKey,
+    previousKpis: previousKey && previousResult.key === previousKey ? (previousResult.data?.kpis ?? null) : null,
+    previousDays: previous?.days ?? 0,
     log: logResult.key === logKey ? logResult.data : null,
     logError: logResult.key === logKey ? logResult.error : '',
     logLoading: logResult.key !== logKey,

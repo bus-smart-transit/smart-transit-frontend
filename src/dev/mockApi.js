@@ -344,6 +344,16 @@ const HANDLERS = [
   ['GET', /^\/region$/, () => ({ data: REGION })],
   // "Are you in {place}?" on the homepage: the preview always answers Davao City.
   ['GET', /^\/region\/place$/, () => ({ data: { place: 'Davao City', province: 'Davao City' } })],
+  // Batch 81: Finance (SAMPLE figures for the preview): the summary, the transaction log and the discount claims.
+  ['GET', /^\/operator\/financials$/, (_, config) => ({ data: financeSummary(config?.params) })],
+  ['GET', /^\/operator\/financials\/transactions$/, () => ({ data: { data: FIN_ROWS, meta: { page: 1, per_page: 25, total: FIN_ROWS.length, last_page: 1, sort: 'paid_at', dir: 'desc' } } })],
+  ['GET', /^\/operator\/financials\/discount-claims$/, () => ({ data: {
+    rows: [
+      { id: 2, ticket_id: 12, ticket_code: '9C1D22AF', trip_id: 101, trip_date: today, departure_time: '7:00 AM', route_name: 'Davao City - Tagum', label: 'Student', rate: 0.2, status: 'approved', fare: 152, refund_amount: 30, refund_status: 'succeeded', reviewed_at: `${today} 06:55` },
+      { id: 1, ticket_id: 11, ticket_code: '3F9A12BC', trip_id: 102, trip_date: today, departure_time: '9:00 AM', route_name: 'Davao City - Digos', label: 'Senior citizen', rate: 0.2, status: 'claimed', fare: 120, refund_amount: null, refund_status: null, reviewed_at: null },
+    ],
+    totals: { claims: 2, claimed: 1, approved: 1, rejected: 0, lapsed: 0, refunded: 30, refund_pending: 0 },
+  } })],
   // Batch 81: the dashboard's On-time trips (SAMPLE figures for the preview).
   ['GET', /^\/operator\/dashboard\/on-time$/, () => ({ data: { grace_minutes: 5, today: { date: today, departed: 25, on_time: 22, percent: 88 }, last_week: { date: today, departed: 24, on_time: 20, percent: 83 } } })],
   ['GET', /^\/operator\/trips$/, () => ({ data: TRIPS, meta: { current_page: 1, last_page: 1, per_page: 100, total: TRIPS.length } })],
@@ -389,6 +399,51 @@ export function mockAdapter(config) {
   }
   if (method === 'GET') return Promise.resolve(respond(config, 200, { data: [] }));
   return Promise.resolve(respond(config, 200, { data: {}, message: 'Preview mode: nothing was saved.' }));
+}
+
+// Batch 81: SAMPLE finance figures for the preview, the same shape as the server's report.
+const FIN_ROWS = [
+  ['2026-11-19 10:24:00', 'Davao City - Panabo', 'gcash', 'GCash', 50, 0],
+  ['2026-11-19 10:20:00', 'Davao City - Toril', 'onsite', 'Cash', 50, 0],
+  ['2026-11-19 09:58:00', 'Ecoland - Tagum', 'gcash', 'GCash', 50, 50],
+  ['2026-11-19 09:42:00', 'SM Davao - Matina', 'maya', 'Maya', 50, 0],
+  ['2026-11-19 09:30:00', 'Davao City - Tagum', 'onsite', 'Cash', 152, 0],
+].map(([paid_at, route_name, channel, channel_label, amount, refunded], i) => ({
+  ticket_id: i + 1, transaction_id: `TXN-SAMPLE${i}`, paid_at, route_name, plate_number: 'LAB 1023', bus_label: 'Sample Lines - 1', direction_label: route_name.replace(' - ', ' to '),
+  trip_id: 100 + i, trip_date: paid_at.slice(0, 10), method: channel === 'onsite' ? 'cash' : 'online', method_label: channel === 'onsite' ? 'Cash' : 'Online', channel, channel_label,
+  service_type: 'regular', seat_type: 'seated', amount, refunded, booking_fee: channel === 'onsite' ? 0 : 1.25, status: refunded ? 'refunded' : 'paid', status_label: refunded ? 'Refunded' : 'Paid',
+}));
+
+function financeSummary(params = {}) {
+  const from = params.from || today;
+  const to = params.to || from;
+  const days = [];
+  for (let d = new Date(`${from}T00:00:00Z`); d <= new Date(`${to}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + 1)) days.push(d.toISOString().slice(0, 10));
+  const daily = days.map((date, i) => { const gross = 4000 + ((i * 37) % 9) * 350; return { date, gross, refunds: i % 3 === 0 ? 150 : 0, net: gross - (i % 3 === 0 ? 150 : 0), tickets: Math.round(gross / 45), cash: Math.round(gross * 0.28), online: Math.round(gross * 0.72), booking_fees: 40 }; });
+  const gross = daily.reduce((sum, d) => sum + d.gross, 0);
+  const refunds = daily.reduce((sum, d) => sum + d.refunds, 0);
+  const tickets = daily.reduce((sum, d) => sum + d.tickets, 0);
+  const routeShares = [['Davao City - Toril', 0.38], ['Davao City - Panabo', 0.26], ['Ecoland - Tagum', 0.2], ['SM Davao - Matina', 0.16]];
+  return {
+    filters: { from, to }, currency: 'PHP',
+    kpis: {
+      gross, refunds, net: gross - refunds, tickets, boarded: Math.round(tickets * 0.9), average_fare: Math.round((gross / Math.max(1, tickets)) * 100) / 100,
+      booking_fees: { collected: 350, refunded: 0, net: 350 },
+      cash: { gross: Math.round(gross * 0.28), refunds: 0, net: Math.round(gross * 0.28), tickets: Math.round(tickets * 0.28), percent: 28 },
+      online: { gross: Math.round(gross * 0.72), refunds, net: Math.round(gross * 0.72) - refunds, tickets: Math.round(tickets * 0.72), percent: 72 },
+    },
+    discounts: { total: 960, tickets: 48, by_type: [{ type_key: 'student', label: 'Student', rate: 0.2, tickets: 30, amount: 600 }, { type_key: 'senior', label: 'Senior citizen', rate: 0.2, tickets: 18, amount: 360 }] },
+    channels: [
+      { method: 'online', channel: 'gcash', label: 'GCash', tickets: Math.round(tickets * 0.5), gross: Math.round(gross * 0.5), refunds, net: Math.round(gross * 0.5) - refunds, percent: 50 },
+      { method: 'cash', channel: 'onsite', label: 'Cash', tickets: Math.round(tickets * 0.28), gross: Math.round(gross * 0.28), refunds: 0, net: Math.round(gross * 0.28), percent: 28 },
+      { method: 'online', channel: 'maya', label: 'Maya', tickets: Math.round(tickets * 0.22), gross: Math.round(gross * 0.22), refunds: 0, net: Math.round(gross * 0.22), percent: 22 },
+    ],
+    by_route: routeShares.map(([route_name, share], i) => ({ route_id: i + 1, route_name, tickets: Math.round(tickets * share), gross: Math.round(gross * share), refunds: 0, net: Math.round(gross * share) })),
+    by_bus: [], by_trip: [],
+    by_hour: Array.from({ length: 24 }, (_, hour) => ({ hour, label: `${hour % 12 === 0 ? 12 : hour % 12}:00 ${hour < 12 ? 'AM' : 'PM'}`, tickets: hour >= 5 && hour <= 20 ? 6 : 0, gross: hour >= 5 && hour <= 20 ? 300 + ((hour * 53) % 7) * 120 : 0 })),
+    daily,
+    options: { routes: routeShares.map(([route_name], i) => ({ route_id: i + 1, route_name })), fleets: [], trips: [], channels: [{ method: 'online', channel: 'gcash', label: 'GCash' }, { method: 'online', channel: 'maya', label: 'Maya' }, { method: 'cash', channel: 'onsite', label: 'Cash' }] },
+  };
 }
 
 export function installMockApi(instance) {

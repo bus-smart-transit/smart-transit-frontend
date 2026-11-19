@@ -52,7 +52,7 @@ describe('FinancePage', () => {
     renderPage('overview');
     expect(await screen.findByTestId('kpi-gross')).toHaveTextContent('1,000.00');
     expect(screen.getByRole('region', { name: 'Filters' })).toBeInTheDocument();
-    expect(screen.getByRole('region', { name: 'By route' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Revenue trend' })).toBeInTheDocument(); // Batch 81
     expect(screen.queryByRole('region', { name: 'Transactions' })).not.toBeInTheDocument();
   });
 

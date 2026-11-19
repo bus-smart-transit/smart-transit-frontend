@@ -99,3 +99,97 @@ export function SplitBar({ cash, online }) {
     </div>
   );
 }
+
+/**
+ * Batch 81 (user, 2026-11-19): the revenue trend of the Finance overview. A line with a soft fill, one point per day (or
+ * per hour for a single day), the last point labelled, and a few amounts on the side. Plain SVG (no chart library);
+ * screen readers get every point in the accessible name.
+ */
+export function TrendChart({ points = [], label = 'Gross revenue', format = formatPeso }) {
+  if (points.length === 0) return <p className="text-sm text-slate-500">Nothing to show for this range.</p>;
+  const W = 600;
+  const H = 200;
+  const PAD = { left: 64, right: 32, top: 24, bottom: 28 };
+  const max = Math.max(...points.map((p) => Number(p.value) || 0), 1);
+  const nice = (() => { const step = 10 ** Math.floor(Math.log10(max)); return Math.ceil(max / step) * step; })();
+  const x = (i) => PAD.left + (points.length === 1 ? (W - PAD.left - PAD.right) / 2 : (i / (points.length - 1)) * (W - PAD.left - PAD.right));
+  const y = (v) => PAD.top + (1 - (Number(v) || 0) / nice) * (H - PAD.top - PAD.bottom);
+  const line = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${x(i).toFixed(1)},${y(p.value).toFixed(1)}`).join(' ');
+  const area = `${line} L${x(points.length - 1).toFixed(1)},${H - PAD.bottom} L${x(0).toFixed(1)},${H - PAD.bottom} Z`;
+  const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => nice * f);
+  const every = Math.max(1, Math.ceil(points.length / 7));
+  const last = points[points.length - 1];
+  return (
+    // Batch 81: on a phone the chart keeps a readable width and scrolls sideways inside its card.
+    <div className="-mx-1 w-full overflow-x-auto px-1">
+      <svg viewBox={`0 0 ${W} ${H}`} className="h-52 w-full min-w-[34rem]" role="img" aria-label={`${label}. ${points.map((p) => `${p.label}: ${format(p.value)}`).join(', ')}`} data-testid="trend-chart">
+        <defs>
+          <linearGradient id="fin-trend-fill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#16a34a" stopOpacity="0.22" />
+            <stop offset="100%" stopColor="#16a34a" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        {ticks.map((t) => (
+          <g key={t}>
+            <line x1={PAD.left} x2={W - PAD.right} y1={y(t)} y2={y(t)} stroke="#e2e8f0" strokeWidth="1" />
+            <text x={PAD.left - 8} y={y(t) + 4} textAnchor="end" fontSize="12" fill="#64748b">{format(t).replace(/\.00$/, '')}</text>
+          </g>
+        ))}
+        <path d={area} fill="url(#fin-trend-fill)" />
+        <path d={line} fill="none" stroke="#16a34a" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+        {points.map((p, i) => (
+          <circle key={p.label} cx={x(i)} cy={y(p.value)} r={i === points.length - 1 ? 5 : 3.5} fill="#ffffff" stroke="#16a34a" strokeWidth="2">
+            <title>{`${p.label}: ${format(p.value)}`}</title>
+          </circle>
+        ))}
+        {points.map((p, i) => (i % every === 0 || i === points.length - 1) && (
+          <text key={`l-${p.label}`} x={x(i)} y={H - 8} textAnchor="middle" fontSize="12" fill="#64748b">{p.label}</text>
+        ))}
+        <g transform={`translate(${Math.min(x(points.length - 1), W - PAD.right - 44)}, ${Math.max(14, y(last.value) - 16)})`}>
+          <rect x="-44" y="-14" width="88" height="22" rx="6" fill="#166534" />
+          <text x="0" y="2" textAnchor="middle" fontSize="12" fontWeight="700" fill="#ffffff">{format(last.value).replace(/\.00$/, '')}</text>
+        </g>
+      </svg>
+    </div>
+  );
+}
+
+const CHANNEL_COLORS = ['#166534', '#2563eb', '#0d9488', '#9333ea', '#ea580c'];
+
+/**
+ * Batch 81: the payment channels as a ring (each channel's share of gross) with the total in the middle and a legend
+ * with each channel's amount and percent. The figures are the server's channel rows.
+ */
+export function ChannelRing({ channels = [], total = 0 }) {
+  const rows = (channels || []).filter((c) => Number(c.gross) > 0);
+  if (rows.length === 0) return <p className="text-sm text-slate-500">No sales in this range.</p>;
+  const R = 52;
+  const C = 2 * Math.PI * R;
+  // Each segment starts where the ones before it end.
+  const segments = rows.map((c, i) => {
+    const dash = (Math.max(0, Number(c.percent) || 0) / 100) * C;
+    const start = rows.slice(0, i).reduce((sum, prev) => sum + (Math.max(0, Number(prev.percent) || 0) / 100) * C, 0);
+    return { key: `${c.method}-${c.channel}`, dash, start, color: CHANNEL_COLORS[i % CHANNEL_COLORS.length] };
+  });
+  return (
+    <div className="flex flex-col items-center gap-5 sm:flex-row sm:items-center">
+      <svg viewBox="0 0 140 140" className="h-40 w-40 shrink-0" role="img" aria-label={`Revenue by payment method. ${rows.map((c) => `${c.label}: ${formatPeso(c.gross)}, ${formatPercent(c.percent)}`).join('; ')}`} data-testid="channel-ring">
+        <circle cx="70" cy="70" r={R} fill="none" stroke="#e2e8f0" strokeWidth="18" />
+        {segments.map((seg) => (
+          <circle key={seg.key} cx="70" cy="70" r={R} fill="none" stroke={seg.color} strokeWidth="18" strokeDasharray={`${seg.dash} ${C - seg.dash}`} strokeDashoffset={-seg.start} transform="rotate(-90 70 70)" />
+        ))}
+        <text x="70" y="68" textAnchor="middle" fontSize="14" fontWeight="700" fill="#0f172a">{formatPeso(total).replace(/\.\d{2}$/, '')}</text>
+        <text x="70" y="86" textAnchor="middle" fontSize="10" fill="#64748b">Gross revenue</text>
+      </svg>
+      <ul className="w-full space-y-2.5 text-sm">
+        {rows.map((c, i) => (
+          <li key={`${c.method}-${c.channel}`} className="flex items-center gap-3">
+            <span className="h-3 w-3 shrink-0 rounded-sm" style={{ backgroundColor: CHANNEL_COLORS[i % CHANNEL_COLORS.length] }} aria-hidden="true" />
+            <span className="min-w-0 flex-1 text-slate-700">{c.label}<span className="block text-xs text-slate-500">{formatCount(c.tickets)} tickets · {formatPeso(c.gross)}</span></span>
+            <span className="shrink-0 font-semibold tabular-nums text-slate-900">{formatPercent(c.percent)}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}

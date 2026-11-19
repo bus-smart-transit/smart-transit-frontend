@@ -4,6 +4,7 @@ import ViewTabs from '../../ui/ViewTabs';
 import FinancialsPage from '../Financials/FinancialsPage';
 import RemittancesPage from '../Remittances/RemittancesPage';
 import PaymentRefundsPage from '../Refunds/PaymentRefundsPage';
+import DiscountsTab from './DiscountsTab';
 
 import { SkeletonList } from '../../ui/Skeleton';
 // The Operator dashboard renders the Finance page without a service; like the other finance pages, the panel then
@@ -42,7 +43,7 @@ function DiscountTypesPanel({ service = OperatorService }) {
     <section className="rounded-xl border border-slate-200 bg-white p-4" aria-label="Onsite discounts">
       <div className="mb-3">
         <h3 className="text-base font-bold text-slate-900">Onsite discount eligibility</h3>
-        <p className="text-xs text-slate-500">Controls which ID-verified discounts Chauffeurs may apply to cash tickets. Online fares use rewards.</p>
+        <p className="text-xs text-slate-500">Controls which ID-verified discounts Chauffeurs may apply to cash tickets. Online tickets can claim a discount when booking, checked by the Chauffeur on the bus.</p>
       </div>
       {error && <p role="alert" className="mb-2 text-sm text-red-700">{error}</p>}
       {loading ? <SkeletonList label="Loading discount settings..." rows={3} />
@@ -84,8 +85,8 @@ export default function FinancePage({ views, view, onViewChange, service }) {
           : active === 'refunds'
             ? <PaymentRefundsPage service={service} embedded />
             : active === 'discounts'
-              ? <DiscountTypesPanel service={service} />
-              : <FinancialsPage service={service} view={active} embedded />}
+              ? <DiscountsTab service={service ?? OperatorService} settings={<DiscountTypesPanel service={service} />} />
+              : <FinancialsPage service={service} view={active} embedded onOpenTransactions={views.some((v) => v.key === 'transactions') ? () => onViewChange?.('transactions') : null} />}
       </div>
       {/* Batch 61 (advisor): the discount settings were under the Overview report; they are the Discounts tab now. */}
     </div>
