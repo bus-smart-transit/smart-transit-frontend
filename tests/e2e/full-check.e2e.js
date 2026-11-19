@@ -309,7 +309,7 @@ test('TC-09 Fleets: cards match the counts, search narrows them, details open', 
   const plate = (await cards.first().innerText()).split('\n')[0].trim();
   await page.getByTestId('fleet-search').fill('zz-no-such-bus');
   await expect(cards).toHaveCount(0);
-  await expect(page.getByText(/No fleets|No buses|Nothing/i).first()).toBeVisible();
+  await expect(page.getByText(/No fleets?\b|No buses|Nothing/i).first()).toBeVisible();
   await page.getByTestId('fleet-search').fill(plate);
   await expect(cards.first()).toContainText(plate);
   await page.getByTestId('fleet-search').fill('');

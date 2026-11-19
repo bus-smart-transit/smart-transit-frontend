@@ -68,6 +68,8 @@ for (const width of [1280, 390]) {
       await signIn(page, 'operator@smarttransit.com', /operator\/dashboard/);
       if (width === 390) await page.getByRole('button', { name: 'Open navigation' }).click();
       await page.getByRole('button', { name: 'Fleets', exact: true }).click();
+      // Batch 61: the fare rules are their own tab on Fleets.
+      await page.getByRole('tab', { name: 'Fare rules' }).click();
       const use = page.getByRole('button', { name: /^Use fare .* in the form$/ }).first();
       await expect(use).toBeVisible({ timeout: 30000 });
       await use.click();

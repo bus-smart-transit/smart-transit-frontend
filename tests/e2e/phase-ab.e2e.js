@@ -106,7 +106,8 @@ test('Standing: online booking offers seats only, and the FAQ says so', async ({
   if (listed) {
     const query = new URLSearchParams({ from: listed.origin?.stop_code, to: listed.destination?.stop_code, date: listed.trip_date, time: listed.boarding_time });
     await page.goto(`/passenger/book?${query}`);
-    await expect(page.getByText('Online tickets reserve a seat. Standing places are sold on the bus.')).toBeVisible({ timeout: 30000 });
+    // Batch 76: the booking page has no seat type any more; it offers seats only and says the seat is saved at checkout.
+    await expect(page.getByText('Proceed to checkout to save the seat.')).toBeVisible({ timeout: 30000 });
     await expect(page.getByRole('radio', { name: 'Standing' })).toHaveCount(0);
     await shot(page, '2-passenger-booking-seated-only');
   } else {

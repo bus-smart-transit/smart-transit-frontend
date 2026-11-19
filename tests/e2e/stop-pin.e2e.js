@@ -26,6 +26,8 @@ for (const [width, height] of [[1280, 900], [390, 844]]) {
 
     await signIn(page);
     await page.goto('/employee/operator/dashboard?tab=routes');
+    // Batch 61: the stop directory is its own tab on Routes.
+    await page.getByRole('tab', { name: 'Stops' }).click();
     await expect(page.getByRole('table', { name: 'Stops' })).toBeVisible({ timeout: 30000 });
 
 
