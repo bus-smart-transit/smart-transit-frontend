@@ -344,6 +344,8 @@ const HANDLERS = [
   ['GET', /^\/region$/, () => ({ data: REGION })],
   // "Are you in {place}?" on the homepage: the preview always answers Davao City.
   ['GET', /^\/region\/place$/, () => ({ data: { place: 'Davao City', province: 'Davao City' } })],
+  // Batch 81: the dashboard's On-time trips (SAMPLE figures for the preview).
+  ['GET', /^\/operator\/dashboard\/on-time$/, () => ({ data: { grace_minutes: 5, today: { date: today, departed: 25, on_time: 22, percent: 88 }, last_week: { date: today, departed: 24, on_time: 20, percent: 83 } } })],
   ['GET', /^\/operator\/trips$/, () => ({ data: TRIPS, meta: { current_page: 1, last_page: 1, per_page: 100, total: TRIPS.length } })],
   ['GET', /^\/operator\/fleets$/, () => ({ data: FLEETS.map((f) => ({ ...f, fleet_routes: ROUTES.slice(0, 2).map((r) => fleetRoute(f.fleet_id, r.route_id)) })) })],
   ['GET', /^\/operator\/routes$/, () => ({ data: ROUTES })],

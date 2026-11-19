@@ -192,6 +192,9 @@ export function buildDashboardView({ trips = [], fleets = [], locations = [], to
     activeTrips: liveTrips.length,
     delayedTrips: todays.filter((trip) => statusOf(trip) === 'delayed').length,
     ticketsSold: counted.reduce((sum, trip) => sum + ticketsSold(trip), 0),
+    // Batch 81: trips still to run or running today, the ones on the road, and the passengers scanned in so far.
+    scheduledToday: counted.length,
+    scannedIn: counted.reduce((sum, trip) => sum + (Number(trip?.passenger_count?.scanned_in) || 0), 0),
     tripsToday: todays.length,
   };
 
@@ -275,7 +278,9 @@ export function buildDashboardView({ trips = [], fleets = [], locations = [], to
   // 2026-11-13: the most urgent first (high, medium, low); the order within one priority is kept.
   const PRIORITY_RANK = { high: 0, medium: 1, low: 2 };
   actions.sort((a, b) => PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority]);
-  return { todays, kpis, statusBreakdown, loadByRoute, soldByHour, delayByRoute, alerts, actions, advice, deployment, decisions };
+  const tripsByRoute = todayByRoute(counted);
+  const mapBuses = busesForMap(todays, locations, nowMs);
+  return { todays, kpis, statusBreakdown, loadByRoute, soldByHour, delayByRoute, alerts, actions, advice, deployment, decisions, tripsByRoute, mapBuses };
 }
 
 /** "Last seen 3m ago" for a fleet row; null when nothing was ever reported. */
@@ -283,4 +288,46 @@ export function lastSeenLabel(location, nowMs = Date.now()) {
   const at = location?.recorded_at || location?.updated_at;
   const ms = at ? new Date(at).getTime() : NaN;
   return Number.isFinite(ms) ? formatAge(nowMs - ms) : null;
+}
+
+/**
+ * Batch 81 (user, 2026-11-19): Today's trips on the dashboard, one row per route: its trips today (cancelled ones not
+ * counted), how many are delayed or on the road, and On time / Delayed. Sorted by route id, like the route colours.
+ */
+export function todayByRoute(trips = []) {
+  const rows = new Map();
+  for (const trip of trips) {
+    const routeId = routeIdOf(trip);
+    if (!routeId) continue;
+    const route = trip?.fleet_route?.route || {};
+    const row = rows.get(routeId) ?? { routeId, name: routeNameOf(trip), origin: route.origin || null, destination: route.destination || null, trips: 0, delayed: 0, live: 0 };
+    row.trips += 1;
+    if (statusOf(trip) === 'delayed') row.delayed += 1;
+    if (LIVE_STATUSES.includes(statusOf(trip))) row.live += 1;
+    rows.set(routeId, row);
+  }
+  return [...rows.values()].sort((a, b) => a.routeId - b.routeId).map((row) => ({ ...row, status: row.delayed > 0 ? 'Delayed' : 'On time' }));
+}
+
+/**
+ * Batch 81: the buses for the live fleet map: today's running or delayed trips that have a reported position, with
+ * their route (for its colour) and state: in service, delayed, or off route (from the same GPS check as the alerts).
+ */
+export function busesForMap(trips = [], locations = [], nowMs = Date.now()) {
+  return trips
+    .filter((trip) => [...LIVE_STATUSES, 'delayed'].includes(statusOf(trip)))
+    .map((trip) => {
+      const location = locationForTrip(trip, locations);
+      const lat = Number(location?.latitude);
+      const lng = Number(location?.longitude);
+      if (!location || !Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+      const gps = gpsStatus(location, nowMs);
+      const state = gps.state === 'off_route' ? 'off_route' : statusOf(trip) === 'delayed' ? 'delayed' : 'in_service';
+      return {
+        tripId: Number(trip.trip_id), fleetId: fleetIdOf(trip), routeId: routeIdOf(trip), direction: trip?.leg_direction === 'reverse' ? 'reverse' : 'outbound',
+        latitude: lat, longitude: lng, heading: Number.isFinite(Number(location.heading)) ? Number(location.heading) : null,
+        state, label: `${routeNameOf(trip)} - ${plateOf(trip)} - ${departureLabel(trip)}`,
+      };
+    })
+    .filter(Boolean);
 }

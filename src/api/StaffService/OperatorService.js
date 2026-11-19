@@ -18,6 +18,11 @@ class OperatorService extends StaffBaseService {
     return await this.request('/operator/fleets', 'GET');
   }
 
+  // Batch 81 (user, 2026-11-19): the dashboard's On-time trips, today and the same weekday last week.
+  async getDashboardOnTime() {
+    return await this.request('/operator/dashboard/on-time', 'GET');
+  }
+
   async getFleetLocations() {
     return await this.request('/fleet/locations', 'GET');
   }

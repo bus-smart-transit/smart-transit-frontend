@@ -156,3 +156,20 @@ export function useTripsPerDay(days = 7, refreshKey = null) {
   }, [days, refreshKey]);
   return state.days;
 }
+
+/**
+ * Batch 81 (user, 2026-11-19): the dashboard's On-time trips from the server (trips that left within the grace minutes of
+ * their schedule), today and the same weekday last week. Null until loaded or when it could not be loaded.
+ */
+export function useOnTimeTrips(refreshKey = null) {
+  const [state, setState] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    Promise.resolve()
+      .then(() => OperatorService.getDashboardOnTime())
+      .then((res) => { if (!cancelled) setState(res?.data ?? null); })
+      .catch(() => { if (!cancelled) setState(null); });
+    return () => { cancelled = true; };
+  }, [refreshKey]);
+  return state;
+}

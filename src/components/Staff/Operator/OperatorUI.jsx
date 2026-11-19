@@ -55,20 +55,23 @@ export function OpChip({ tone = 'neutral', children, className = '' }) {
 /**
  * 2026-11-13: change against a named earlier period, e.g. "▲ 20% vs yesterday". Green when the number went up, rose
  * when it went down (pass upIsGood={false} where more is worse). Nothing is shown when there is nothing to compare.
+ * Batch 81: unit="pts" compares two rates (both in percent) by their difference, "▲ 17 pts vs last week".
  */
-export function OpDelta({ current, previous, label, upIsGood = true }) {
+export function OpDelta({ current, previous, label, upIsGood = true, unit = '%' }) {
   const now = Number(current);
   const before = Number(previous);
-  if (!Number.isFinite(now) || !Number.isFinite(before) || before <= 0) return null;
-  const pct = Math.round(((now - before) / before) * 100);
+  const points = unit === 'pts';
+  if (current === null || previous === null || !Number.isFinite(now) || !Number.isFinite(before) || (!points && before <= 0)) return null;
+  const pct = points ? Math.round(now - before) : Math.round(((now - before) / before) * 100);
   const Arrow = pct > 0 ? ArrowUp : pct < 0 ? ArrowDown : null;
   const tone = pct === 0 ? 'neutral' : (pct > 0) === upIsGood ? 'success' : 'danger';
-  const text = `${pct > 0 ? 'Up' : pct < 0 ? 'Down' : 'No change,'} ${Math.abs(pct)}% ${label}`;
+  const suffix = points ? ' pts' : '%';
+  const text = `${pct > 0 ? 'Up' : pct < 0 ? 'Down' : 'No change,'} ${Math.abs(pct)}${suffix} ${label}`;
   return (
     <span className="inline-flex items-center gap-1.5 text-xs text-slate-500" data-testid="op-delta" title={`${before} ${label}`}>
       <span className={`inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 font-semibold tabular-nums ${toneOf(tone).chip}`} aria-label={text}>
         {Arrow && <Arrow className="h-3 w-3" strokeWidth={2.5} aria-hidden="true" />}
-        <span aria-hidden="true">{Math.abs(pct)}%</span>
+        <span aria-hidden="true">{Math.abs(pct)}{suffix}</span>
       </span>
       <span aria-hidden="true">{label}</span>
     </span>

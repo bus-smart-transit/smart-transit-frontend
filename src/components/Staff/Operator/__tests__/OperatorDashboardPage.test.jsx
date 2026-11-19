@@ -8,11 +8,14 @@ const mocks = vi.hoisted(() => ({
   getRouteAdherence: vi.fn(),
   saveDispatchDecision: vi.fn(),
   getCalendarDays: vi.fn(),
+  getDashboardOnTime: vi.fn(),
 }));
 
 vi.mock('../../../../api/StaffService/OperatorService', () => ({ default: mocks }));
 vi.mock('../../CalendarSummaryStrip', () => ({ default: () => <div>calendar-summary</div> }));
 vi.mock('../../DashboardCalendar', () => ({ default: () => <div>dashboard-calendar</div> }));
+vi.mock('../../../Map/RouteMap', () => ({ default: () => <div data-testid="route-map" /> }));
+vi.mock('../../../../services/routeMapService', () => ({ fetchRouteMapData: vi.fn().mockResolvedValue({ geometry: null, stops: [] }) }));
 
 const today = getBusinessToday();
 const fleet = { fleet_id: 1, plate_number: 'PLT-1', capacity: 40, seated_capacity: 30, standing_capacity: 10, status: 'active', fleet_routes: [] };
@@ -34,59 +37,75 @@ describe('OperatorDashboardPage', () => {
     mocks.getRouteAdherence.mockResolvedValue({ data: { summary: { trips_with_gps_data: 0, deviated_trips: 0, adherence_rate_pct: null } } });
     mocks.saveDispatchDecision.mockResolvedValue({});
     mocks.getCalendarDays.mockResolvedValue({ data: { days: [] } });
+    mocks.getDashboardOnTime.mockResolvedValue({ data: { grace_minutes: 5, today: { date: today, departed: 3, on_time: 2, percent: 67 }, last_week: { date: today, departed: 2, on_time: 1, percent: 50 } } });
   });
 
-  // 2026-11-13: trend lines on the stat cards, from real data only.
-  it('shows trips per day for the last 7 days and the change against yesterday on Trips today', async () => {
-    const day = (offset) => { const d = new Date(`${today}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + offset); return d.toISOString().slice(0, 10); };
-    mocks.getCalendarDays.mockResolvedValue({ data: { days: [{ date: day(-1), trips: 10 }, { date: today, trips: 12 }] } });
-    renderPage({ trips: [trip(1), trip(2, { departure_time: '10:00:00' })] });
-    await waitFor(() => expect(mocks.getCalendarDays).toHaveBeenCalledWith({ from: day(-6), to: today }));
-    expect(await screen.findByLabelText('Up 20% vs yesterday')).toBeInTheDocument();
-    expect(screen.getByRole('img', { name: /^Trips per day, last 7 days/ })).toBeInTheDocument();
-    expect(screen.getByRole('img', { name: 'Tickets sold today by departure hour. 8:00 AM trips: 8 sold, 10:00 AM trips: 8 sold' })).toBeInTheDocument();
-  });
-
-  it('shows no change chip when yesterday had no trips, and keeps the card when the calendar fails', async () => {
-    mocks.getCalendarDays.mockRejectedValue(new Error('offline'));
-    renderPage({ trips: [trip(1)] });
-    await waitFor(() => expect(mocks.getCalendarDays).toHaveBeenCalled());
-    expect(screen.queryByTestId('op-delta')).toBeNull();
-    expect(within(screen.getByRole('region', { name: 'Today at a glance' })).getByText('Trips today')).toBeInTheDocument();
-  });
-
-  it('shows the real figures and never a revenue card or a peso amount of zero', async () => {
-    renderPage({ trips: [trip(1, { status: 'departed', total_occupancy: 12 }), trip(2, { total_occupancy: 8 })] });
+  // Batch 81 (user, 2026-11-19): the four figures of the designer's dashboard, from real data only.
+  it('shows Active buses, On-time trips against last week, Trips in service and Total passengers', async () => {
+    renderPage({ trips: [trip(1, { status: 'departed', total_occupancy: 12, passenger_count: { scanned_in: 9 } }), trip(2, { total_occupancy: 8 })] });
     const glance = screen.getByRole('region', { name: 'Today at a glance' });
-    expect(within(glance).getByText('Tickets sold').parentElement.parentElement).toHaveTextContent('20');
-    expect(within(glance).getByText('Active buses').parentElement.parentElement).toHaveTextContent('1');
+    expect(within(glance).getByText('Active buses').closest('section > *')).toHaveTextContent('1 / 1');
+    expect(glance).toHaveTextContent('100% in service');
+    expect(await within(glance).findByText('67%')).toBeInTheDocument();
+    expect(within(glance).getByLabelText('Up 17 pts vs last week')).toBeInTheDocument();
+    expect(glance).toHaveTextContent('2 of 3 left within 5 min');
+    expect(glance).toHaveTextContent('of 2 scheduled today');
+    expect(within(glance).getByText('Total passengers').closest('section > *')).toHaveTextContent('20');
+    expect(glance).toHaveTextContent('9 scanned in so far');
     expect(screen.queryByText(/revenue/i)).not.toBeInTheDocument();
-    expect(document.body.textContent).not.toMatch(/₱0\.00/);
+  });
+
+  it('says Not provided for On-time trips before any trip has left, with no change chip', async () => {
+    mocks.getDashboardOnTime.mockResolvedValue({ data: { grace_minutes: 5, today: { date: today, departed: 0, on_time: 0, percent: null }, last_week: { date: today, departed: 2, on_time: 1, percent: 50 } } });
+    renderPage({ trips: [trip(1)] });
+    const glance = screen.getByRole('region', { name: 'Today at a glance' });
+    await waitFor(() => expect(mocks.getDashboardOnTime).toHaveBeenCalled());
+    expect(await within(glance).findByText('No trip has left yet today')).toBeInTheDocument();
+    expect(within(glance).getByText('Not provided')).toBeInTheDocument();
+    expect(screen.queryByTestId('op-delta')).toBeNull();
+  });
+
+  it("lists today's trips by route with its colour code and On time or Delayed, beside the live fleet map", async () => {
+    renderPage({ trips: [trip(1), trip(2, { status: 'delayed' }), trip(3, { fleet_route: { fleet_id: 1, route_id: 20, fleet, route: { route_id: 20, route_name: 'Ecoland - Tagum', origin: 'Ecoland', destination: 'Tagum' } } })] });
+    const list = screen.getByTestId('todays-trips');
+    const rows = within(list).getAllByRole('listitem');
+    expect(rows[0]).toHaveTextContent('R1');
+    expect(rows[0]).toHaveTextContent('Davao - Tagum');
+    expect(rows[0]).toHaveTextContent('2 trips');
+    expect(rows[0]).toHaveTextContent('Delayed');
+    expect(rows[1]).toHaveTextContent('R2');
+    expect(rows[1]).toHaveTextContent(/Ecoland →\s*to Tagum/); // the arrow is read as "to"
+    expect(rows[1]).toHaveTextContent('On time');
+    expect(screen.getByTestId('operator-fleet-map')).toBeInTheDocument();
+    expect(screen.getByLabelText('Map legend')).toHaveTextContent('In service (0)');
     await waitFor(() => expect(mocks.getFleetLocations).toHaveBeenCalled());
   });
 
-  // Batch 60 item 4 (user, 2026-11-11): only quick actions and the important information stay on the dashboard.
-  it('no longer shows the trips table, the charts, route adherence or the dispatch decision board', async () => {
+  // Batch 81: the old cards are gone; their suggestions now sit in Alerts & updates.
+  it('keeps alerts and suggestions in Alerts & updates, and drops the old tables and trend lines', async () => {
     renderPage({ trips: [trip(7, { status: 'delayed' })] });
-    for (const title of ["Today's trips", 'Tickets sold against capacity', 'Trips today by status', 'Route adherence', 'Dispatch decision board']) {
+    expect(screen.getByText('Alerts & updates')).toBeInTheDocument();
+    expect(screen.getAllByTestId('dashboard-suggestion').length).toBeGreaterThan(0);
+    for (const title of ['Recommended actions', 'Route delay overview', 'Schedule at a glance', 'Suggested bus assignments', 'Tickets sold against capacity']) {
       expect(screen.queryByText(title)).not.toBeInTheDocument();
     }
-    expect(screen.queryByRole('button', { name: 'Acknowledge advice' })).not.toBeInTheDocument();
-    expect(screen.getByText('Alerts')).toBeInTheDocument();
-    expect(screen.getByText('Recommended actions')).toBeInTheDocument();
-    expect(screen.getByRole('table', { name: 'Route delay overview' })).toBeInTheDocument();
+    expect(screen.queryByTestId('op-sparkline')).toBeNull();
+    expect(screen.getByText('dashboard-calendar')).toBeInTheDocument();
     await waitFor(() => expect(mocks.getFleetLocations).toHaveBeenCalled());
     expect(mocks.getRouteAdherence).not.toHaveBeenCalled();
   });
 
-  it('opens each quick action', async () => {
-    const handlers = { onCreateSchedule: vi.fn(), onOpenApprovals: vi.fn(), onOpenStaffs: vi.fn(), onOpenFleets: vi.fn() };
-    renderPage(handlers);
+  it('opens each quick action, and the full map from the map card', async () => {
+    const handlers = { onCreateSchedule: vi.fn(), onOpenApprovals: vi.fn(), onOpenStaffs: vi.fn() };
+    const onOpenFleets = vi.fn();
+    renderPage({ ...handlers, onOpenFleets });
     fireEvent.click(screen.getByRole('button', { name: /Schedule a trip/ }));
     fireEvent.click(screen.getByRole('button', { name: /Trip approvals/ }));
-    fireEvent.click(screen.getByRole('button', { name: /^Staff/ }));
-    fireEvent.click(screen.getByRole('button', { name: /^Fleets/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Assign staff/ }));
     Object.values(handlers).forEach((handler) => expect(handler).toHaveBeenCalledOnce());
+    fireEvent.click(screen.getByRole('button', { name: /Manage fleet/ }));
+    fireEvent.click(screen.getByRole('button', { name: /View full map/ }));
+    expect(onOpenFleets).toHaveBeenCalledTimes(2);
     await waitFor(() => expect(mocks.getFleetLocations).toHaveBeenCalled());
   });
 
@@ -102,7 +121,7 @@ describe('OperatorDashboardPage', () => {
     await waitFor(() => expect(mocks.getFleetLocations).toHaveBeenCalled());
   });
 
-  it('opens Schedule from the deployment card', async () => {
+  it("opens Schedule from Today's trips", async () => {
     const onOpenSchedule = vi.fn();
     renderPage({ onOpenSchedule });
     fireEvent.click(screen.getByRole('button', { name: 'Open Schedule' }));
