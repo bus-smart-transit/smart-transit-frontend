@@ -9,28 +9,60 @@ class PassengerService extends RoleAuthServiceBase {
     return await this.request(`/${this.endpointBase}/profile`, "PUT", updates);
   }
 
+  /** 2026-11-07: sign in (or sign up) with the proof from Google; returns { token, is_new, needs_phone }. */
+  async googleSignIn(idToken) {
+    return await this.request("/auth/google", "POST", { id_token: idToken });
+  }
+
+  /** 2026-11-05: deletes the signed-in passenger's own account (no id is sent; the server uses the session). */
+  async deleteOwnAccount(password) {
+    return await this.request(`/${this.endpointBase}/account`, "DELETE", { password, confirm: true });
+  }
+
   async requestPasswordReset(payload) {
     return await this.request(
-      `/${this.endpointBase}/password-reset`,
+      `/${this.endpointBase}/forgot-password`,
       "POST",
       payload,
     );
   }
 
-  async getTickets() {
-    return await this.request(`/${this.endpointBase}/tickets`, "GET");
+  async forgotPassword(payload) {
+    return await this.request(`/${this.endpointBase}/forgot-password`, "POST", payload);
   }
 
-  async getPaymentHistory() {
-    return await this.request(`/${this.endpointBase}/payments`, "GET");
+  async resetPassword(payload) {
+    return await this.request(`/${this.endpointBase}/reset-password`, "POST", payload);
+  }
+
+  async getTickets(options = {}) {
+    return await this.request(`/${this.endpointBase}/tickets`, "GET", options);
+  }
+
+  async getPaymentHistory(options = {}) {
+    return await this.request(`/${this.endpointBase}/payments`, "GET", options);
   }
 
   async getTicketQR(ticketUuid) {
     return await this.request(`/${this.endpointBase}/tickets/${ticketUuid}/qr`, "GET");
   }
 
-  async getRewardsHistory() {
-    return await this.request(`/${this.endpointBase}/rewards/history`, "GET");
+  // Replaces the ticket's tracking link: the old link stops working at once, the new token is returned.
+  async renewTrackingLink(ticketUuid) {
+    return await this.request(`/${this.endpointBase}/tickets/${ticketUuid}/tracking-link`, "POST");
+  }
+
+  // Batch 28 Stage 3, item 6: rebook or refund a ticket of a trip the OPERATOR cancelled (the server decides every amount).
+  async getTicketResolution(ticketUuid) {
+    return await this.request(`/${this.endpointBase}/tickets/${ticketUuid}/resolution`, "GET");
+  }
+
+  async chooseTicketResolution(ticketUuid, body) {
+    return await this.request(`/${this.endpointBase}/tickets/${ticketUuid}/resolution`, "POST", body);
+  }
+
+  async getRewardsHistory(options = {}) {
+    return await this.request(`/${this.endpointBase}/rewards/history`, "GET", options);
   }
 
   async getDashboardSummary() {
@@ -41,10 +73,11 @@ class PassengerService extends RoleAuthServiceBase {
     return await this.request(`/trips`, "GET", options);
   }
 
-  async checkoutOnline(payload) {
+  async checkoutOnline(payload, idempotencyKey) {
     const hasToken = !!(localStorage.getItem('passenger_token') || sessionStorage.getItem('passenger_token'));
     const endpoint = hasToken ? `/${this.endpointBase}/checkout` : '/checkout';
-    return await this.request(endpoint, "POST", payload);
+    const headers = idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {};
+    return await this.request(endpoint, "POST", payload, headers);
   }
 
   // ── Public Quote Endpoints (no auth required) ──
@@ -72,8 +105,27 @@ class PassengerService extends RoleAuthServiceBase {
     return await this.request(`/tickets/lookup`, "GET", payload);
   }
 
-  async getRouteStops(routeId) {
-    return await this.request(`/routes/${routeId}/stops`, "GET");
+  // 2026-10-29: the account is named by the uuid from step 1 (account_uuid), never the numeric user id.
+  async verifyOtp(accountUuid, otp) {
+    return await this.request(`/${this.endpointBase}/verify-otp`, "POST", {
+      account_uuid: accountUuid,
+      otp,
+    });
+  }
+
+  async setTwoFactorPreference(enabled) {
+    return await this.request(`/${this.endpointBase}/two-factor`, "PATCH", { enabled });
+  }
+
+  // Notifications audit follow-up: passenger-side FCM registration, so
+  // trip cancellation / payment failure pushes can reach the passenger.
+  // 2026-10-28: a new email verification code (right after sign-up, before the passenger can sign in).
+  async resendVerification(accountUuid) {
+    return await this.request(`/${this.endpointBase}/verify-email/resend`, "POST", { account_uuid: accountUuid });
+  }
+
+  async registerFcmToken(token) {
+    return await this.request(`/${this.endpointBase}/fcm-token`, "POST", { token });
   }
 }
 

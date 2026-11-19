@@ -1,17 +1,50 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import PassengerService from "../../../api/PassengerService/PassengerService";
+import { leaveAccountDeletionNotice } from "../../../utils/accountDeletionNotice";
 import { useAuth } from "../../../api/hooks/useAuth"; // adjust path
+
+/** Whole minutes a login code works, from the server's seconds; null when not given. */
+const codeMinutes = (seconds) => (Number(seconds) > 0 ? Math.max(1, Math.round(Number(seconds) / 60)) : null);
 
 export function useLogin() {
   const navigate = useNavigate();
-  const { login } = useAuth(); // ← pull login from context
+  const location = useLocation();
+  const { login } = useAuth();
+
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
-  const [form, setForm] = useState({ email: "", password: "" });
+  const [goToDashboardAfterLogin, setGoToDashboardAfterLogin] = useState(false);
+  // 2026-10-28: arriving from sign-up, the page opens on the code screen for the new account (email verification).
+  const pendingVerify = location?.state?.verifyEmail?.accountUuid ? location.state.verifyEmail : null;
+  const [form, setForm] = useState({ email: pendingVerify?.email ?? "", password: "" });
   const [errors, setErrors] = useState({});
+
+  const resolvePostLoginPath = () => {
+    const state = location?.state ?? {};
+    if (state?.redirectToBuy) {
+      // One booking page for everyone; it carries no trip id (the trip is resolved there).
+      return '/passenger/book';
+    }
+    if (state?.redirectTo) {
+      return state.redirectTo;
+    }
+    return goToDashboardAfterLogin ? '/passenger/dashboard' : '/';
+  };
+
+  // OTP stage
+  const [otpRequired, setOtpRequired] = useState(Boolean(pendingVerify));
+  // The account's uuid from step 1 (never the numeric user id).
+  const [otpUserId, setOtpUserId] = useState(pendingVerify?.accountUuid ?? null);
+  const [otpEmailMasked, setOtpEmailMasked] = useState(pendingVerify ? (pendingVerify.emailMasked ?? "your email") : "");
+  // 2026-11-08 (user): how long the code works, as the server says (null when it did not say).
+  const [otpMinutes, setOtpMinutes] = useState(codeMinutes(pendingVerify?.expiresInSeconds));
+  const [otp, setOtp] = useState("");
+  const [otpError, setOtpError] = useState("");
+  // 2026-10-28: true while the code also verifies the email (right after sign-up, or an account not verified yet).
+  const [verifyingEmail, setVerifyingEmail] = useState(Boolean(pendingVerify));
 
   const update = (field, value) => {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -28,6 +61,7 @@ export function useLogin() {
     return e;
   };
 
+  // Step 1 — credentials → triggers OTP email
   const handleSubmit = async (e) => {
     e.preventDefault();
     const errs = validate();
@@ -44,18 +78,77 @@ export function useLogin() {
         password: form.password,
       });
 
-      const token = response?.data?.token;
-      if (!token) {
-        throw new Error("Authentication token missing from server response.");
-      }
+      const data = response?.data;
 
-      login(token, rememberMe); // ← updates AuthProvider's state, triggers re-render
-      navigate("/passenger/dashboard");
+      if (data?.otp_required) {
+        setOtpUserId(data.account_uuid);
+        setOtpEmailMasked(data.email_masked ?? "your email");
+        setOtpMinutes(codeMinutes(data.otp_expires_in_seconds));
+        setVerifyingEmail(Boolean(data.verification_required));
+        setOtpRequired(true);
+      } else {
+        // Fallback: if server somehow returns a token directly
+        const token = data?.token;
+        if (!token) throw new Error("Authentication token missing from server response.");
+        login(token, rememberMe);
+        if (data?.deletion_cancelled) leaveAccountDeletionNotice({ cancelled: true });
+        navigate(resolvePostLoginPath(), { replace: true });
+      }
     } catch (err) {
       setError(err?.message || "Invalid email or password. Please try again.");
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Step 2 — OTP submission
+  const handleVerifyOtp = async (e) => {
+    e.preventDefault();
+    const cleaned = otp.trim();
+    if (cleaned.length !== 6 || !/^\d{6}$/.test(cleaned)) {
+      setOtpError("Enter the 6-digit code from your email.");
+      return;
+    }
+
+    setIsLoading(true);
+    setOtpError("");
+    try {
+      const response = await PassengerService.verifyOtp(otpUserId, cleaned);
+      const token = response?.data?.token;
+      if (!token) throw new Error("Token missing after OTP verification.");
+      login(token, rememberMe);
+      if (response?.data?.deletion_cancelled) leaveAccountDeletionNotice({ cancelled: true });
+      navigate(resolvePostLoginPath(), { replace: true });
+    } catch (err) {
+      setOtpError(err?.message || "Incorrect or expired code. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleResendOtp = async () => {
+    // Re-run step 1 with the same credentials (user already typed them)
+    setOtpError("");
+    setOtp("");
+    setIsLoading(true);
+    try {
+      // Right after sign-up the password is not at hand: ask for a new verification code instead.
+      if (verifyingEmail && !form.password) await PassengerService.resendVerification(otpUserId);
+      else await PassengerService.login({ email: form.email, password: form.password });
+    } catch {
+      // Silently ignore — the OTP screen stays open
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const cancelOtp = () => {
+    setOtpRequired(false);
+    setOtpUserId(null);
+    setOtpEmailMasked("");
+    setVerifyingEmail(false);
+    setOtp("");
+    setOtpError("");
   };
 
   return {
@@ -67,7 +160,21 @@ export function useLogin() {
     setShowPassword,
     rememberMe,
     setRememberMe,
+    goToDashboardAfterLogin,
+    setGoToDashboardAfterLogin,
     update,
     handleSubmit,
+    // OTP
+    otpRequired,
+    verifyingEmail,
+    otp,
+    setOtp,
+    otpError,
+    otpEmailMasked,
+    otpMinutes,
+    handleVerifyOtp,
+    handleResendOtp,
+    cancelOtp,
   };
 }
+

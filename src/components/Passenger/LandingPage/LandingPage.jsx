@@ -1,43 +1,40 @@
-import Navbar from './Navbar';
-import Hero from './Hero';
-import StatsStrip from './StatsStrip';
-import FeatureGrid from './FeatureGrid';
-import PassengerEntryCard from './PassengerEntryCard';
-import OperationsAccessCard from './OperationsAccessCard';
-import Footer from './Footer';
+import { useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
+import Navbar from '../../Layout/Navbar';
+import Footer from '../../Layout/Footer';
+import LandingHero from './LandingHero';
+import ProvincesSection from './ProvincesSection';
+import HowItWorksSection from './HowItWorksSection';
+import DigitalTicketSection from './DigitalTicketSection';
+import BeforeYouTravelSection from './BeforeYouTravelSection';
+import HomeFaqSection from './HomeFaqSection';
+import AccountDeletionNotice from '../../Account/AccountDeletionNotice';
 
+/**
+ * 2026-11-06 (passenger redesign, joshua-frontend): search, the provinces, how it works, the digital ticket, notes
+ * and the FAQ. Live bus tracking moved to its own page (/track-bus); "What you can do", "Why ride" and "Need help"
+ * were dropped with the new design.
+ */
 export default function LandingPage() {
+  const { hash } = useLocation();
+
+  // Client-side navigation does not scroll to #anchors on its own (for example Back to Search).
+  useEffect(() => {
+    if (hash) document.getElementById(hash.slice(1))?.scrollIntoView();
+  }, [hash]);
+
   return (
-    <div className="flex min-h-screen flex-col bg-slate-950 text-slate-200">
+    <div className="flex min-h-screen flex-col bg-slate-100">
       <Navbar />
+      <AccountDeletionNotice />
 
       <main className="flex-1">
-        {/* Hero — large split layout with search card as primary action */}
-        <Hero />
-
-        {/* Live status strip — lightweight stats, not competing card grid */}
-        <StatsStrip />
-
-        {/* Features — equal-height 2×2 grid with normal document flow */}
-        <FeatureGrid />
-
-        {/* Access section — Passenger (prominent) + Operations (secondary) */}
-        <section
-          className="px-4 pb-16 pt-2 sm:px-6 lg:px-10"
-          aria-label="Get started"
-        >
-          <div className="mx-auto max-w-7xl">
-            {/* 3-column grid: passenger takes 2 cols, operations takes 1 */}
-            <div className="grid items-start gap-6 lg:grid-cols-3">
-              <div className="lg:col-span-2">
-                <PassengerEntryCard />
-              </div>
-              <div>
-                <OperationsAccessCard />
-              </div>
-            </div>
-          </div>
-        </section>
+        <LandingHero />
+        <ProvincesSection />
+        <HowItWorksSection />
+        <DigitalTicketSection />
+        <BeforeYouTravelSection />
+        <HomeFaqSection />
       </main>
 
       <Footer />

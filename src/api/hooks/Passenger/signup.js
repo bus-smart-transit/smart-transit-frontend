@@ -1,25 +1,18 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import PassengerService from "../../../api/PassengerService/PassengerService";
-
-const STRENGTH_INFO = [
-  { label: "", color: "transparent" },
-  { label: "Very Weak", color: "#ef4444" },
-  { label: "Weak", color: "#f97316" },
-  { label: "Fair", color: "#eab308" },
-  { label: "Strong", color: "#22c55e" },
-  { label: "Very Strong", color: "#06b6d4" },
-];
-
-const getStrength = (pwd) => {
-  let score = 0;
-  if (pwd.length >= 8) score++;
-  if (/[A-Z]/.test(pwd)) score++;
-  if (/[a-z]/.test(pwd)) score++;
-  if (/\d/.test(pwd)) score++;
-  if (/[^a-zA-Z\d]/.test(pwd)) score++;
-  return score;
-};
+// Batch 46: the same field rules as the Operator's Add Staff form (utils/accountFormRules.js).
+import {
+  STRENGTH_INFO,
+  passwordStrength as getStrength,
+  nameErrors,
+  emailError,
+  birthDateError,
+  passwordError,
+  confirmPasswordError,
+  compactErrors,
+} from "../../../utils/accountFormRules";
+import { DEFAULT_CALLING_CODE, PHONE_INVALID_MESSAGE, toE164 } from "../../../utils/phone";
 
 export function useSignUp() {
   const navigate = useNavigate();
@@ -34,8 +27,11 @@ export function useSignUp() {
     firstName: "",
     lastName: "",
     email: "",
+    // Batch 47 part B: calling code (default +63) and the local number, sent as one E.164 number.
+    callingCode: DEFAULT_CALLING_CODE,
     phone: "",
     dateOfBirth: "",
+    gender: "",
     address: "",
     password: "",
     confirmPassword: "",
@@ -52,35 +48,22 @@ export function useSignUp() {
 
   /* ── Validation ── */
   const validateStep1 = () => {
-    const e = {};
-    if (!form.firstName.trim()) e.firstName = "First name is required";
-    if (!form.lastName.trim()) e.lastName = "Last name is required";
-    if (!form.email.trim()) e.email = "Email is required";
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email))
-      e.email = "Enter a valid email";
+    const e = { ...nameErrors(form), email: emailError(form.email) };
+    // Batch 47 part B: the same phone rule as the server and the staff forms (utils/phone.js).
     if (!form.phone.trim()) e.phone = "Phone number is required";
-    else if (!/^\+?[\d\s\-()]{7,15}$/.test(form.phone))
-      e.phone = "Enter a valid phone number";
-    if (!form.dateOfBirth) e.dateOfBirth = "Date of birth is required";
-    return e;
+    else if (!toE164(form.callingCode, form.phone)) e.phone = PHONE_INVALID_MESSAGE;
+    if (!form.dateOfBirth) e.dateOfBirth = birthDateError(form.dateOfBirth);
+    return compactErrors(e);
   };
 
   const validateStep2 = () => {
-    const e = {};
-    if (!form.password) e.password = "Password is required";
-    else if (form.password.length < 8)
-      e.password = "Password must be at least 8 characters";
-    else if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(form.password))
-      e.password = "Must include uppercase, lowercase, and a number";
-
-    if (!form.confirmPassword)
-      e.confirmPassword = "Please confirm your password";
-    else if (form.password !== form.confirmPassword)
-      e.confirmPassword = "Passwords do not match";
-
+    const e = {
+      password: passwordError(form.password),
+      confirmPassword: confirmPasswordError(form.password, form.confirmPassword),
+    };
     if (!form.agreeTerms)
       e.agreeTerms = "You must accept the Terms & Conditions";
-    return e;
+    return compactErrors(e);
   };
 
   const handleStep1 = (e) => {
@@ -105,18 +88,25 @@ export function useSignUp() {
     setError("");
     try {
       // FIX: Map your frontend state fields to match Laravel's specific database columns
-      await PassengerService.register({
+      const response = await PassengerService.register({
         name: `${form.firstName.trim()} ${form.lastName.trim()}`, // Combines into 'name'
         email: form.email,
-        phone_num: form.phone, // Maps 'phone' to 'phone_num'
+        phone_num: toE164(form.callingCode, form.phone), // Batch 47 part B: one stored form, e.g. +639171234567
         birthdate: form.dateOfBirth, // Maps 'dateOfBirth' to 'birthdate'
+        gender: form.gender || null, // 2026-10-28: optional
         address: form.address,
         password: form.password,
         password_confirmation: form.confirmPassword, // Always good practice for Laravel validation
       });
 
-      setSuccess("Account created! Redirecting to login…");
-      setTimeout(() => navigate("/passenger/login"), 2000);
+      // 2026-10-28: the account is verified by a code emailed now; the login page opens on the code screen.
+      const data = response?.data ?? {};
+      setSuccess("Account created! Check your email for the code to verify it.");
+      setTimeout(() => navigate("/passenger/login", {
+        state: data.verification_required
+          ? { verifyEmail: { accountUuid: data.account_uuid, emailMasked: data.email_masked, expiresInSeconds: data.otp_expires_in_seconds, email: form.email.trim().toLowerCase() } }
+          : undefined,
+      }), 1500);
     } catch (err) {
       setError(err?.message || "Registration failed. Please try again.");
     } finally {

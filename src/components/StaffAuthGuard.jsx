@@ -1,25 +1,32 @@
 import { Navigate, Outlet } from 'react-router-dom';
-import { useState, useEffect } from 'react';
-
-// Base URL for API calls — must match the Vite proxy / backend origin.
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '/api';
+import { useState, useEffect, useCallback } from 'react';
+import { TokenManager } from '../utils/TokenManager.js';
+import StaffService from '../api/StaffService/StaffBaseService';
+import useInactivityTimeout from '../api/hooks/useInactivityTimeout';
+import { STAFF_INACTIVITY_MINUTES } from '../config/sessionConfig';
 
 /**
  * Validates a staff token against the backend before allowing a redirect or
- * granting access. Returns 'loading' | 'valid' | 'invalid'.
+ * granting access. Returns 'invalid' | 'valid'.
+ *
+ * Architecture audit follow-up (CONF-06): previously called `fetch()`
+ * directly, bypassing BaseService's auth-header/error handling. Now goes
+ * through StaffService.getProfile(), which reads the same stored token.
  */
 async function validateStaffToken(token, role) {
   if (!token || !role) return 'invalid';
 
-  // Each role exposes its own profile endpoint; any 2xx means the token is live.
   try {
-    const res = await fetch(`${API_BASE}/${role}/profile`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    return res.ok ? 'valid' : 'invalid';
-  } catch {
-    // Network failure — fail safe: treat as invalid so the user stays on login.
-    return 'invalid';
+    await StaffService.getProfile(role);
+    return 'valid';
+  } catch (err) {
+    const status = err?.cause?.response?.status ?? err?.response?.status ?? null;
+
+    // Network failure (e.g. CORS, offline) has no HTTP status — treat as
+    // valid so we don't wipe a freshly-issued token just because the
+    // tunnel/backend is unreachable. Any real HTTP error status means the
+    // token itself was rejected.
+    return status === null ? 'valid' : 'invalid';
   }
 }
 
@@ -36,8 +43,8 @@ export function StaffGuestRoute() {
   useEffect(() => {
     let cancelled = false;
 
-    const token = localStorage.getItem('staff_token') || sessionStorage.getItem('staff_token');
-    const role = localStorage.getItem('staff_role') || sessionStorage.getItem('staff_role');
+    const token = TokenManager.getStaffToken();
+    const role = TokenManager.getStaffRole();
 
     validateStaffToken(token, role).then((result) => {
       if (cancelled) return;
@@ -45,11 +52,7 @@ export function StaffGuestRoute() {
         setValidRole(role);
         setStatus('redirect');
       } else {
-        // Clear any stale credentials so they don't interfere with a fresh login.
-        localStorage.removeItem('staff_token');
-        localStorage.removeItem('staff_role');
-        sessionStorage.removeItem('staff_token');
-        sessionStorage.removeItem('staff_role');
+        TokenManager.clearStaffSession();
         setStatus('guest');
       }
     });
@@ -73,13 +76,41 @@ export function StaffGuestRoute() {
 }
 
 export function StaffProtectedRoute({ allowedRoles }) {
-  const [isAuth] = useState(() => {
-    const token = localStorage.getItem('staff_token') || sessionStorage.getItem('staff_token');
-    const role = localStorage.getItem('staff_role') || sessionStorage.getItem('staff_role');
+  const [isAuth, setIsAuth] = useState(() => {
+    const token = TokenManager.getStaffToken();
+    const role  = TokenManager.getStaffRole();
     if (!token) return false;
     if (allowedRoles && !allowedRoles.includes(role)) return false;
     return true;
   });
 
-  return isAuth ? <Outlet /> : <Navigate to="/employee/login" replace />;
+  useEffect(() => {
+    const handleStorageChange = () => {
+      const token = TokenManager.getStaffToken();
+      const role  = TokenManager.getStaffRole();
+      const authorized = token && (!allowedRoles || allowedRoles.includes(role));
+      setIsAuth(!!authorized);
+    };
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, [allowedRoles]);
+
+  // The Operator portal signs out after a stretch with nobody touching the screen (see config/sessionConfig.js for why
+  // only that role). The session is ended on the server too; the sign-in page says why.
+  const [timedOutAfter, setTimedOutAfter] = useState(0);
+  const role = TokenManager.getStaffRole();
+  const idleMinutes = STAFF_INACTIVITY_MINUTES[role] || 0;
+  const endIdleSession = useCallback(() => {
+    StaffService.logout(role).catch(() => {});
+    TokenManager.clearStaffSession();
+    setTimedOutAfter(idleMinutes);
+    setIsAuth(false);
+  }, [role, idleMinutes]);
+  useInactivityTimeout({ minutes: isAuth ? idleMinutes : 0, onTimeout: endIdleSession });
+
+  if (isAuth) return <Outlet />;
+  const notice = timedOutAfter
+    ? `You were signed out after ${timedOutAfter} minutes without activity. Sign in again to continue.`
+    : undefined;
+  return <Navigate to="/employee/login" replace state={notice ? { notice } : undefined} />;
 }

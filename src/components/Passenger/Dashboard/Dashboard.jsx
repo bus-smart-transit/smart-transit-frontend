@@ -1,366 +1,86 @@
-import { Suspense, lazy, useState } from 'react';
-import { Bell, Map, Ticket, User, LogOut, Gift, History, ShoppingCart, Menu } from 'lucide-react';
+import { useState } from 'react';
+import { Link } from 'react-router-dom';
+import BrandLogo from '../../ui/BrandLogo';
+import { Bell, Map as MapIcon, Ticket, User, LogOut, Gift, History, LayoutGrid, Menu, House, X } from 'lucide-react';
 import usePassengerDashboard from '../../../api/hooks/Passenger/usePassengerDashboard';
+import PassengerService from '../../../api/PassengerService/PassengerService';
 import TicketCard from '../Ticket/TicketCard';
-import './PassengerPortal.css';
+import { ticketIdOf } from '../../../utils/ticketId';
+import SaveQrButton from '../Ticket/SaveQrButton';
+import QrImage from '../Ticket/QrImage';
+import { groupQrPayload } from '../../../utils/qr';
+import PublicTrackingSection from '../LandingPage/PublicTrackingSection';
+import ProfileDropdown from '../../Layout/ProfileDropdown';
+import Card from '../../ui/Card';
+import Button from '../../ui/Button';
+import StatusBadge from '../../ui/StatusBadge';
+import SearchBar from '../../ui/SearchBar';
+import ProfilePage from '../../Account/ProfilePage';
+import Modal from '../../ui/Modal';
+import { parseAppDate, getBusinessToday } from '../../../utils/dates';
+import { busLabelText } from '../../../utils/busLabel';
+import { buildBookingQuery } from '../../../utils/bookingQuery';
+import RunInfoChips from '../../ui/RunInfoChips';
+import TripCancelledChoice from '../Ticket/TripCancelledChoice';
+import { CANCELLED_TRIP_STATUSES, paymentDisplayStatus, refundedAmountText } from '../../../utils/ticketResolution';
+import { formatPeso } from '../../../utils/financials';
+import { REWARDS } from '../../../config/rewardsConfig';
+import AccountDeletionNotice from '../../Account/AccountDeletionNotice';
 
+import { SkeletonCards, SkeletonSquare, SkeletonText } from '../../ui/Skeleton';
+import useTextMessages from '../../../api/hooks/useTextMessages';
 const preloadMapView = () =>
   Promise.all([
     import('../../Map/mapDependencies').then((mod) => mod.preloadMapDependencies()),
     import('../../Map/MapView.web'),
   ]).then(([, mod]) => mod);
 
-const MapView = lazy(() => preloadMapView());
-const BuyTicket = lazy(() => import('../BuyTicket/BuyTicket'));
-
 const NAV_ITEMS = [
-  { key: 'buy', label: 'Home', icon: ShoppingCart, protected: false },
-  { key: 'rewards', label: 'Rewards', icon: Gift, protected: true },
-  { key: 'tickets', label: 'My Ticket', icon: Ticket, protected: true },
+  { key: 'dashboard', label: 'Dashboard', icon: LayoutGrid, protected: false },
+  { key: 'tickets', label: 'My Tickets', icon: Ticket, protected: true },
   { key: 'transactions', label: 'Transaction History', icon: History, protected: true },
-  { key: 'profile', label: 'My Profile', icon: User, protected: true },
-  { key: 'map', label: 'Live Map', icon: Map, protected: false },
+  { key: 'map', label: 'Track Bus', icon: MapIcon, protected: false },
+  { key: 'rewards', label: 'Rewards', icon: Gift, protected: true },
 ];
 
 const PROTECTED_TABS = new Set(['tickets', 'rewards', 'transactions', 'profile']);
 
-// ─── Group order card ────────────────────────────────────────────────────────
-function GroupOrderCard({ tickets, onCardClick, openTicketModal, getOriginLabel, getDestinationLabel, formatDateTime }) {
-  const transRef = tickets[0]?.payment?.transaction_reference ?? '';
-  const groupQrUrl = transRef
-    ? `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(`grp:${transRef}`)}`
-    : null;
-  const totalAmount = tickets.reduce((sum, t) => sum + Number(t.amount ?? 0), 0);
-  const allBoarded = tickets.every((t) => t.status === 'boarded');
-  const anyBoarded = tickets.some((t) => t.status === 'boarded');
-  const groupStatus = allBoarded ? 'boarded' : anyBoarded ? 'partial' : 'valid';
-  const statusColors = {
-    boarded: { bg: 'rgba(14,165,233,0.1)', border: 'rgba(56,189,248,0.3)', color: '#38bdf8', label: 'All Boarded' },
-    partial: { bg: 'rgba(251,191,36,0.1)', border: 'rgba(251,191,36,0.3)', color: '#fbbf24', label: 'Partially Boarded' },
-    valid:   { bg: 'rgba(52,211,153,0.1)', border: 'rgba(52,211,153,0.3)', color: '#34d399', label: 'Ready to Board' },
-  };
-  const sc = statusColors[groupStatus];
+const toTripDate = (ticket) => {
+  const raw = ticket?.trip?.trip_date || ticket?.valid_from || ticket?.created_at;
+  if (!raw) return null;
+  return parseAppDate(raw);
+};
 
-  return (
-    <div
-      role="button"
-      tabIndex={0}
-      onClick={onCardClick}
-      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onCardClick(); }}
-      style={{ border: '1px solid rgba(148,163,184,0.2)', borderRadius: '12px', background: 'rgba(15,23,42,0.6)', overflow: 'hidden', marginBottom: '12px', cursor: 'pointer', transition: 'border-color 0.15s' }}
-      onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'rgba(56,189,248,0.4)'; }}
-      onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'rgba(148,163,184,0.2)'; }}
-    >
-      {/* Card header */}
-      <div style={{ padding: '12px 14px', borderBottom: '1px solid rgba(148,163,184,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-        <div>
-          <p style={{ margin: 0, fontSize: '0.78rem', fontWeight: 700, color: '#e2e8f0' }}>
-            Group Order — {tickets.length} Ticket{tickets.length > 1 ? 's' : ''}
-          </p>
-          <p style={{ margin: '2px 0 0', fontSize: '0.68rem', color: '#64748b', fontFamily: 'monospace' }}>
-            {transRef ? transRef.slice(0, 20) + (transRef.length > 20 ? '…' : '') : 'No ref'}
-          </p>
-        </div>
-        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-          <span style={{ fontSize: '0.7rem', padding: '2px 8px', borderRadius: '10px', background: sc.bg, border: `1px solid ${sc.border}`, color: sc.color, fontWeight: 700 }}>
-            {sc.label}
-          </span>
-        </div>
-      </div>
+// Date-only string ("YYYY-MM-DD") extracted without constructing a Date
+// object, so it stays anchored to the business timezone's calendar day
+// rather than being reinterpreted through the device's local timezone.
+const toTripDateStr = (ticket) => {
+  const raw = ticket?.trip?.trip_date || ticket?.valid_from || ticket?.created_at;
+  if (!raw) return null;
+  const match = String(raw).match(/^(\d{4}-\d{2}-\d{2})/);
+  return match ? match[1] : null;
+};
 
-      {/* Body: QR + ticket list */}
-      <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '0' }}>
-        {/* Group QR */}
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '12px', borderRight: '1px solid rgba(148,163,184,0.1)', background: 'rgba(255,255,255,0.03)' }}>
-          {groupQrUrl ? (
-            <>
-              <img src={groupQrUrl} alt="Group QR" style={{ width: '96px', height: '96px', borderRadius: '6px', background: '#fff' }} />
-              <p style={{ margin: '4px 0 0', fontSize: '0.6rem', color: '#64748b', textAlign: 'center' }}>Group QR</p>
-            </>
-          ) : (
-            <p style={{ fontSize: '0.68rem', color: '#64748b', textAlign: 'center' }}>QR unavailable</p>
-          )}
-        </div>
-
-        {/* Ticket rows */}
-        <div style={{ padding: '8px' }}>
-          {tickets.map((ticket, i) => (
-            <button
-              key={ticket.ticket_id ?? ticket.ticket_uuid ?? i}
-              type="button"
-              onClick={(e) => { e.stopPropagation(); void openTicketModal(ticket); }}
-              style={{ display: 'flex', width: '100%', alignItems: 'center', justifyContent: 'space-between', gap: '6px', padding: '6px 8px', borderRadius: '8px', border: 'none', background: 'transparent', cursor: 'pointer', textAlign: 'left', marginBottom: i < tickets.length - 1 ? '4px' : '0' }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(148,163,184,0.08)'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
-            >
-              <div>
-                <p style={{ margin: 0, fontSize: '0.78rem', fontWeight: 600, color: '#e2e8f0' }}>
-                  {getOriginLabel(ticket)} → {getDestinationLabel(ticket)}
-                </p>
-                <p style={{ margin: '1px 0 0', fontSize: '0.68rem', color: '#64748b' }}>
-                  {ticket.seat_type || 'seated'} · {formatDateTime(ticket.valid_from)}
-                </p>
-              </div>
-              <span style={{
-                fontSize: '0.68rem', padding: '2px 7px', borderRadius: '8px', whiteSpace: 'nowrap', fontWeight: 600,
-                background: ticket.status === 'boarded' ? 'rgba(14,165,233,0.12)' : ticket.status === 'alighted' ? 'rgba(148,163,184,0.12)' : 'rgba(52,211,153,0.12)',
-                color: ticket.status === 'boarded' ? '#38bdf8' : ticket.status === 'alighted' ? '#94a3b8' : '#34d399',
-                border: ticket.status === 'boarded' ? '1px solid rgba(56,189,248,0.25)' : ticket.status === 'alighted' ? '1px solid rgba(148,163,184,0.25)' : '1px solid rgba(52,211,153,0.25)',
-              }}>
-                {ticket.status || 'issued'}
-              </span>
-            </button>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── Ticket tab with filters ──────────────────────────────────────────────────
-function TicketTabWithFilter({
-  tickets,
-  isLoadingPrivate,
-  refCounts,
-  hasGroupTickets,
-  openTicketModal,
-  getOriginLabel,
-  getDestinationLabel,
-  formatDateTime,
-}) {
-  const [filter, setFilter] = useState('all');
-  const [groupModal, setGroupModal] = useState(null); // null | ticket[]
-
-  // Build group orders map for the 'group' view
-  const groupOrders = {};
-  tickets.forEach((t) => {
-    const ref = t?.payment?.transaction_reference;
-    if (ref && (refCounts[ref] ?? 1) > 1) {
-      if (!groupOrders[ref]) groupOrders[ref] = [];
-      groupOrders[ref].push(t);
-    }
-  });
-
-  const FILTERS = [
-    { id: 'all',     label: 'All' },
-    { id: 'single',  label: 'Single QR' },
-    ...(hasGroupTickets ? [{ id: 'group', label: 'Group QR' }] : []),
-    { id: 'valid',   label: 'Valid' },
-    { id: 'boarded', label: 'Boarded' },
-  ];
-
-  // For non-group filters: list of individual tickets
-  const individualTickets = tickets.filter((t) => {
-    if (filter === 'all') return true;
-    if (filter === 'single') {
-      const ref = t?.payment?.transaction_reference;
-      return !ref || (refCounts[ref] ?? 1) === 1;
-    }
-    if (filter === 'valid')   return (t.status || 'valid') === 'valid';
-    if (filter === 'boarded') return t.status === 'boarded';
-    return false;
-  });
-
-  const isGroupView = filter === 'group';
-  const groupList = Object.values(groupOrders);
-  const noResults = isGroupView ? groupList.length === 0 : individualTickets.length === 0;
-
-  const emptyMsg = tickets.length === 0
-    ? 'No tickets available yet.'
-    : `No ${filter === 'boarded' ? 'boarded' : filter === 'valid' ? 'valid' : filter === 'single' ? 'single QR' : filter === 'group' ? 'group' : ''} tickets found.`;
-
-  // Derive group modal display values
-  const modalTransRef   = groupModal?.[0]?.payment?.transaction_reference ?? '';
-  const modalGroupQrUrl = modalTransRef
-    ? `https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=${encodeURIComponent(`grp:${modalTransRef}`)}`
-    : null;
-  const modalTotal      = groupModal?.reduce((s, t) => s + Number(t.amount ?? 0), 0) ?? 0;
-
-  return (
-    <section className="passenger-panel">
-      <div className="passenger-panel-head">
-        <h2>My Tickets</h2>
-      </div>
-
-      {/* Filter pills */}
-      {tickets.length > 0 && (
-        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '14px' }}>
-          {FILTERS.map((f) => (
-            <button
-              key={f.id}
-              type="button"
-              onClick={() => setFilter(f.id)}
-              style={{
-                padding: '4px 14px',
-                borderRadius: '20px',
-                border: filter === f.id ? '1px solid #38bdf8' : '1px solid rgba(148,163,184,0.3)',
-                background: filter === f.id ? 'rgba(56,189,248,0.12)' : 'transparent',
-                color: filter === f.id ? '#38bdf8' : '#94a3b8',
-                fontSize: '0.78rem',
-                fontWeight: filter === f.id ? 700 : 400,
-                cursor: 'pointer',
-                transition: 'all 0.15s',
-              }}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {isLoadingPrivate ? (
-        <p className="passenger-muted">Loading tickets...</p>
-      ) : noResults ? (
-        <p className="passenger-muted">{emptyMsg}</p>
-      ) : isGroupView ? (
-        // ── Group QR view ────────────────────────────────────────────────────
-        <div>
-          {groupList.map((groupTickets, idx) => (
-            <GroupOrderCard
-              key={groupTickets[0]?.payment?.transaction_reference ?? idx}
-              tickets={groupTickets}
-              refCounts={refCounts}
-              onCardClick={() => setGroupModal(groupTickets)}
-              openTicketModal={openTicketModal}
-              getOriginLabel={getOriginLabel}
-              getDestinationLabel={getDestinationLabel}
-              formatDateTime={formatDateTime}
-            />
-          ))}
-        </div>
-      ) : (
-        // ── Individual ticket list ────────────────────────────────────────────
-        <div className="passenger-ticket-list">
-          {individualTickets.map((ticket, idx) => {
-            const ref = ticket?.payment?.transaction_reference;
-            const isPartOfGroup = ref && (refCounts[ref] ?? 1) > 1;
-            return (
-              <button
-                key={ticket.ticket_id ?? ticket.ticket_uuid ?? idx}
-                type="button"
-                className="passenger-ticket-item passenger-ticket-button"
-                onClick={() => { void openTicketModal(ticket); }}
-              >
-                <span>{idx + 1}.</span>
-                <div>
-                  <strong>{getOriginLabel(ticket)} to {getDestinationLabel(ticket)}</strong>
-                  <p className="passenger-ticket-meta">Booked: {formatDateTime(ticket?.created_at)}</p>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
-                  <em>{ticket.status || 'valid'}</em>
-                  {isPartOfGroup && (
-                    <span style={{ fontSize: '0.68rem', padding: '2px 7px', borderRadius: '10px', background: 'rgba(56,189,248,0.12)', color: '#38bdf8', border: '1px solid rgba(56,189,248,0.25)', whiteSpace: 'nowrap' }}>
-                      Group order
-                    </span>
-                  )}
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      )}
-
-      {/* ── Group order modal ─────────────────────────────────────────────── */}
-      {groupModal && (
-        <div
-          className="passenger-modal-backdrop"
-          role="presentation"
-          onClick={() => setGroupModal(null)}
-        >
-          <section
-            className="passenger-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Group order details"
-            onClick={(e) => e.stopPropagation()}
-            style={{ maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}
-          >
-            <header className="passenger-modal-head">
-              <h3>Group Order — {groupModal.length} Ticket{groupModal.length > 1 ? 's' : ''}</h3>
-              <button
-                type="button"
-                className="passenger-modal-close"
-                onClick={() => setGroupModal(null)}
-              >
-                Close
-              </button>
-            </header>
-
-            <div className="passenger-modal-body" style={{ overflowY: 'auto' }}>
-              {/* Group QR */}
-              {modalGroupQrUrl && (
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', padding: '8px 0' }}>
-                  <img
-                    src={modalGroupQrUrl}
-                    alt="Group QR code"
-                    className="passenger-modal-qr"
-                    style={{ width: '200px', height: '200px' }}
-                  />
-                  <p style={{ margin: 0, fontSize: '0.75rem', color: '#5a7896', textAlign: 'center' }}>
-                    Scan this QR to board all {groupModal.length} tickets at once
-                  </p>
-                  <p style={{ margin: 0, fontSize: '0.68rem', color: '#94a3b8', fontFamily: 'monospace' }}>
-                    {modalTransRef}
-                  </p>
-                </div>
-              )}
-
-              {/* Divider */}
-              <div style={{ borderTop: '1px solid #e0ebf8', margin: '4px 0' }} />
-
-              {/* Ticket rows */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                {groupModal.map((ticket, i) => (
-                  <button
-                    key={ticket.ticket_id ?? ticket.ticket_uuid ?? i}
-                    type="button"
-                    onClick={() => { setGroupModal(null); void openTicketModal(ticket); }}
-                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', padding: '10px 12px', borderRadius: '8px', border: '1px solid #dbe8f6', background: '#f7fbff', cursor: 'pointer', textAlign: 'left' }}
-                    onMouseEnter={(e) => { e.currentTarget.style.background = '#eaf3fd'; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.background = '#f7fbff'; }}
-                  >
-                    <div>
-                      <p style={{ margin: 0, fontSize: '0.82rem', fontWeight: 700, color: '#12365a' }}>
-                        {getOriginLabel(ticket)} → {getDestinationLabel(ticket)}
-                      </p>
-                      <p style={{ margin: '2px 0 0', fontSize: '0.72rem', color: '#5a7896' }}>
-                        {ticket.seat_type || 'seated'} · {formatDateTime(ticket.valid_from)}
-                      </p>
-                    </div>
-                    <span style={{
-                      fontSize: '0.72rem', padding: '3px 9px', borderRadius: '8px', whiteSpace: 'nowrap', fontWeight: 700,
-                      background: ticket.status === 'boarded' ? '#e0f2fe' : ticket.status === 'alighted' ? '#f1f5f9' : '#eaf9f0',
-                      color: ticket.status === 'boarded' ? '#0369a1' : ticket.status === 'alighted' ? '#475569' : '#166534',
-                      border: ticket.status === 'boarded' ? '1px solid #7dd3fc' : ticket.status === 'alighted' ? '1px solid #94a3b8' : '1px solid #9dd7af',
-                    }}>
-                      {ticket.status || 'valid'}
-                    </span>
-                  </button>
-                ))}
-              </div>
-
-              {/* Total removed — amounts visible in Transaction History */}
-            </div>
-          </section>
-        </div>
-      )}
-    </section>
-  );
-}
+const getFleetDisplayLabel = (ticket) => busLabelText(ticket?.bus_label);
 
 export default function Dashboard() {
   const {
     closeTicketModal,
+    dashboardFacts,
     formatDateTime,
     getDestinationLabel,
     getOriginLabel,
     handleLogout,
+    deleteAccount,
     handleTabChange,
     isAuthenticated,
     isLoadingPrivate,
+    historyPagination,
     lastSync,
-    loadPrivateData,
     loadingTicketQr,
+    loadingMoreHistory,
+    loadMoreHistory,
+    loadPrivateData,
     menuOpen,
     navigate,
     paymentNotice,
@@ -378,263 +98,866 @@ export default function Dashboard() {
     visibleTab,
     openTicketModal,
     printSelectedTicket,
+    saveProfile,
   } = usePassengerDashboard({ preloadMapView });
 
-  const tabFallback = (
-    <section className="passenger-panel">
-      <p className="passenger-muted">Loading section...</p>
-    </section>
-  );
+
+  const [twoFactorOverride, setTwoFactorOverride] = useState(null);
+  const textMessages = useTextMessages(PassengerService, profile); // Batch 67
+  const [updating2fa, setUpdating2fa] = useState(false);
+  const [twoFactorMsg, setTwoFactorMsg] = useState('');
+  const [ticketStatusFilter, setTicketStatusFilter] = useState('scheduled');
+  const [showAllSchedule, setShowAllSchedule] = useState(false);
+  const [historySearch, setHistorySearch] = useState('');
+
+  const twoFactorEnabled = twoFactorOverride
+    ?? profile?.user?.two_factor_enabled
+    ?? profile?.two_factor_enabled
+    ?? user?.two_factor_enabled
+    ?? false;
+
+  const handleTwoFactorToggle = async (enabled) => {
+    setTwoFactorOverride(enabled);
+    setUpdating2fa(true);
+    setTwoFactorMsg('');
+
+    try {
+      await PassengerService.setTwoFactorPreference(enabled);
+      setTwoFactorMsg(enabled ? 'Extra login security is on. You will enter a one-time code each time you sign in.' : 'Extra login security is off. You will not need a one-time code to sign in.');
+    } catch (err) {
+      setTwoFactorOverride(null);
+      setTwoFactorMsg(err?.message || 'We could not update your extra login security right now. Please try again.');
+    } finally {
+      setUpdating2fa(false);
+    }
+  };
+
+  const homeStats = {
+    upcomingTrips: dashboardFacts?.upcoming_count ?? tickets.filter((t) => ['valid', 'issued'].includes(String(t?.status || '').toLowerCase())).length,
+    tripsCompleted: dashboardFacts?.completed_count ?? tickets.filter((t) => String(t?.status || '').toLowerCase() === 'alighted').length,
+    nearbyRoutes: dashboardFacts?.nearby_routes_count ?? new Set(tickets
+      .map((t) => t?.trip?.fleet_route?.route?.route_name)
+      .filter(Boolean)).size,
+  };
+
+  const recentBookings = transactions.slice(0, 4);
+  const upcomingTicket = dashboardFacts?.featured_ticket
+    || tickets.find((t) => ['valid', 'issued', 'boarded'].includes(String(t?.status || '').toLowerCase()))
+    || null;
+  const upcomingScheduleTickets = tickets
+    .filter((ticket) => {
+      const tripDateStr = toTripDateStr(ticket);
+      if (!tripDateStr) return false;
+      return tripDateStr >= getBusinessToday();
+    })
+    .sort((left, right) => {
+      const leftTime = toTripDate(left)?.getTime() ?? Number.POSITIVE_INFINITY;
+      const rightTime = toTripDate(right)?.getTime() ?? Number.POSITIVE_INFINITY;
+      return leftTime - rightTime;
+    })
+    .slice(0, 5);
+  const activeRoutes = [...new Set(tickets
+    .map((t) => t?.trip?.fleet_route?.route?.route_name)
+    .filter(Boolean))].slice(0, 5);
+
+  const getBookingLocationLabel = (payment, field) => {
+    const items = Array.isArray(payment?.items) ? payment.items : [];
+    if (items.length === 0) return '-';
+
+    const key = field === 'origin' ? 'origin_stop_name' : 'destination_stop_name';
+    const values = [...new Set(items
+      .map((item) => String(item?.[key] || '').trim())
+      .filter(Boolean))];
+
+    if (values.length === 0) return '-';
+    if (values.length === 1) return values[0];
+    return `${values[0]} +${values.length - 1} more`;
+  };
+
+  const numericPoints = Number(profile?.reward_points ?? user?.reward_points ?? 0);
+
+  // A replaced tracking link, by ticket: the card shows the new one at once, the old one no longer works on the server.
+  const [renewedTokens, setRenewedTokens] = useState({});
+  // Batch 49 item 5: the tracking code is replaced with the link (the old code stops working too).
+  const [renewedCodes, setRenewedCodes] = useState({});
+  const renewTrackingLink = async (ticketUuid) => {
+    const res = await PassengerService.renewTrackingLink(ticketUuid);
+    const token = res?.data?.tracking_token;
+    if (token) setRenewedTokens((prev) => ({ ...prev, [ticketUuid]: token }));
+    if (token) setRenewedCodes((prev) => ({ ...prev, [ticketUuid]: res?.data?.tracking_code || '' }));
+  };
+
+  // S2: ticket-history status filter — Scheduled/Completed/Expired/Group,
+  // defaulting to "Scheduled". "Group" counts transaction references shared
+  // by more than one ticket (a multi-ticket purchase).
+  const ticketRefCounts = {};
+  tickets.forEach((t) => {
+    const ref = t?.payment?.transaction_reference;
+    if (ref) ticketRefCounts[ref] = (ticketRefCounts[ref] ?? 0) + 1;
+  });
+
+  const ticketStatusFilterOptions = [
+    { value: 'scheduled', label: 'Scheduled' },
+    { value: 'completed', label: 'Completed' },
+    { value: 'expired', label: 'Expired' },
+    { value: 'missed', label: 'Missed' },
+    { value: 'cancelled', label: 'Cancelled trips' },
+    { value: 'group', label: 'Group' },
+  ];
+
+  const filteredTickets = tickets.filter((ticket) => {
+    const normalizedStatus = String(ticket?.status || '').toLowerCase();
+    if (ticketStatusFilter === 'scheduled') {
+      return ['valid', 'issued', 'boarded'].includes(normalizedStatus);
+    }
+    if (ticketStatusFilter === 'cancelled') {
+      return CANCELLED_TRIP_STATUSES.includes(normalizedStatus);
+    }
+    if (ticketStatusFilter === 'completed') {
+      return normalizedStatus === 'alighted';
+    }
+    if (ticketStatusFilter === 'expired') {
+      return normalizedStatus === 'expired';
+    }
+    if (ticketStatusFilter === 'missed') {
+      return normalizedStatus === 'missed';
+    }
+    if (ticketStatusFilter === 'group') {
+      const ref = ticket?.payment?.transaction_reference;
+      return Boolean(ref && (ticketRefCounts[ref] ?? 1) > 1);
+    }
+    return true;
+  });
+
+  // S1 (Batch 12): when the Group filter is active, present one Group QR
+  // block per transaction with its tickets nested underneath, instead of
+  // each ticket as a separate top-level row. The group QR payload matches
+  // the backend's own scheme (`grp:<transaction_reference>`, see
+  // QRCodeService::generateQRData()) so it can be derived locally without
+  // an extra per-ticket QR fetch — the conductor scan flow already expects
+  // this exact `grp:` prefix.
+  const groupedTicketsByRef = (() => {
+    if (ticketStatusFilter !== 'group') return [];
+    const groups = new Map();
+    filteredTickets.forEach((ticket) => {
+      const ref = ticket?.payment?.transaction_reference;
+      if (!ref) return;
+      if (!groups.has(ref)) groups.set(ref, []);
+      groups.get(ref).push(ticket);
+    });
+    return Array.from(groups.entries()).map(([ref, groupTickets]) => ({
+      ref,
+      tickets: groupTickets,
+      groupQr: groupQrPayload(ref),
+    }));
+  })();
+
+  const navLinkClasses = (active) => `flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-left text-sm font-medium transition-colors ${
+    active ? 'bg-white text-navy-900 shadow-sm' : 'text-navy-200 hover:bg-teal-400/10 hover:text-teal-300'
+  }`;
 
   const renderContent = () => {
-    if (visibleTab === 'buy') {
+    if (visibleTab === 'dashboard') {
       return (
-        <Suspense fallback={tabFallback}>
-          <BuyTicket
-            onTicketPurchased={() => {
-              if (isAuthenticated) {
-                void loadPrivateData();
-              }
-            }}
-          />
-        </Suspense>
-      );
-    }
+        <div className="space-y-6">
+          <div>
+            <h1 className="font-display text-2xl font-bold text-navy-950 sm:text-3xl">
+              Welcome, {profile?.name || user?.name || 'Passenger'}!
+            </h1>
+            <p className="mt-1 text-sm text-slate-500">
+              {new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' })}
+            </p>
+          </div>
 
-    if (visibleTab === 'map') {
-      return (
-        <div className="passenger-map-wrap">
-          <Suspense fallback={tabFallback}>
-            <MapView role="passenger" />
-          </Suspense>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <Card className="flex items-center gap-4 p-5">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-navy-50 text-navy-800">
+                <Ticket size={22} />
+              </span>
+              <div>
+                <p className="font-display text-2xl font-bold text-navy-950">{homeStats.upcomingTrips}</p>
+                <p className="text-xs text-slate-500">Upcoming Trips</p>
+              </div>
+            </Card>
+            <Card className="flex items-center gap-4 p-5">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-navy-50 text-navy-800">
+                <History size={22} />
+              </span>
+              <div>
+                <p className="font-display text-2xl font-bold text-navy-950">{homeStats.tripsCompleted}</p>
+                <p className="text-xs text-slate-500">Trips Completed</p>
+              </div>
+            </Card>
+            <Card className="flex items-center gap-4 p-5">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-navy-50 text-navy-800">
+                <MapIcon size={22} />
+              </span>
+              <div>
+                <p className="font-display text-2xl font-bold text-navy-950">{homeStats.nearbyRoutes}</p>
+                <p className="text-xs text-slate-500">Active Routes Nearby</p>
+              </div>
+            </Card>
+          </div>
+
+          {/* 2026-11-06: grid-cols-1 and min-w-0 let the columns shrink on phones, so the wide schedule and booking
+              tables scroll inside their cards instead of pushing the page 156 px past the screen (found 2026-11-04). */}
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+            <div className="min-w-0 space-y-6 lg:col-span-2">
+              <Card className="p-6">
+                <h2 className="font-display text-lg font-semibold text-navy-950">Upcoming Trip</h2>
+                {upcomingTicket ? (
+                  <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-slate-50 px-4 py-3.5">
+                    <div>
+                      <p className="text-sm font-semibold text-navy-950">
+                        {getOriginLabel(upcomingTicket)} → {getDestinationLabel(upcomingTicket)}
+                      </p>
+                      <p className="text-xs text-slate-500">{formatDateTime(upcomingTicket.valid_from || upcomingTicket.created_at)}</p>
+                    </div>
+                    <StatusBadge status={upcomingTicket.status || 'confirmed'} />
+                  </div>
+                ) : (
+                  <p className="mt-3 text-sm text-slate-500">No upcoming trip yet.</p>
+                )}
+              </Card>
+
+              <Card className="p-6">
+                <h2 className="font-display text-lg font-semibold text-navy-950">Bus Schedule</h2>
+                <div className="mt-4 overflow-x-auto">
+                  <table className="w-full min-w-[420px] text-left text-sm">
+                    <thead>
+                      <tr className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                        <th className="pb-2">Route</th>
+                        <th className="pb-2">Departure</th>
+                        <th className="pb-2">Bus</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {(showAllSchedule ? upcomingScheduleTickets : upcomingScheduleTickets.slice(0, 4)).map((ticket, idx) => (
+                        <tr key={`sched-${ticket.ticket_id ?? idx}`}>
+                          <td className="py-2.5 font-medium text-navy-950">{getOriginLabel(ticket)} → {getDestinationLabel(ticket)}</td>
+                          <td className="py-2.5 text-slate-500">{formatDateTime(ticket.valid_from || ticket?.trip?.trip_date || ticket.created_at)}</td>
+                          <td className="py-2.5 text-slate-500">{getFleetDisplayLabel(ticket)} <RunInfoChips runPattern={ticket?.run_info?.run_pattern} service={ticket?.run_info?.service} serviceType={ticket?.trip?.service_type} /></td>
+                        </tr>
+                      ))}
+                      {upcomingScheduleTickets.length === 0 && (
+                        <tr><td colSpan={3} className="py-2.5 text-slate-500">No upcoming schedule data available yet.</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+                {upcomingScheduleTickets.length > 4 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllSchedule((prev) => !prev)}
+                    className="mt-3 text-sm font-medium text-navy-800 underline hover:text-navy-900"
+                  >
+                    {showAllSchedule ? 'Show less' : `View all (${upcomingScheduleTickets.length})`}
+                  </button>
+                )}
+              </Card>
+
+              <Card className="p-6">
+                <h2 className="font-display text-lg font-semibold text-navy-950">Recent Bookings</h2>
+                <div className="mt-4 overflow-x-auto">
+                  <table className="w-full min-w-[480px] text-left text-sm">
+                    <thead>
+                      <tr className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                        <th className="pb-2">Origin</th>
+                        <th className="pb-2">Destination</th>
+                        <th className="pb-2">Date</th>
+                        <th className="pb-2">Amount</th>
+                        <th className="pb-2">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {recentBookings.map((payment, idx) => (
+                        <tr key={`recent-${payment.payment_id ?? idx}`}>
+                          <td className="py-2.5 font-medium text-navy-950">{getBookingLocationLabel(payment, 'origin')}</td>
+                          <td className="py-2.5 text-slate-500">{getBookingLocationLabel(payment, 'destination')}</td>
+                          <td className="py-2.5 text-slate-500">{formatDateTime(payment.paid_at)}</td>
+                          <td className="py-2.5 text-slate-500">PHP {Number(payment.amount ?? 0).toFixed(2)}</td>
+                          <td className="py-2.5">
+                            <StatusBadge status={paymentDisplayStatus(payment)} />
+                          </td>
+                        </tr>
+                      ))}
+                      {recentBookings.length === 0 && (
+                        <tr><td colSpan={5} className="py-2.5 text-slate-500">No bookings yet.</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </Card>
+            </div>
+
+            <div className="min-w-0 space-y-6">
+              <Card className="p-6">
+                <h2 className="font-display text-lg font-semibold text-navy-950">Quick Actions</h2>
+                <div className="mt-4 flex flex-col gap-2.5">
+                  <Button variant="outline" size="sm" onClick={() => navigate('/passenger/trips', { state: { returnTo: '/passenger/dashboard' } })}>Book a New Trip</Button>
+                  <Button variant="outline" size="sm" onClick={() => handleTabChange({ key: 'map', protected: false })}>Track My Bus</Button>
+                  <Button variant="outline" size="sm" onClick={() => handleTabChange({ key: 'tickets', protected: true })}>View My Tickets</Button>
+                </div>
+              </Card>
+
+              <Card className="p-6">
+                <h2 className="font-display text-lg font-semibold text-navy-950">Active Routes</h2>
+                {activeRoutes.length === 0 ? (
+                  <p className="mt-3 text-sm text-slate-500">No active routes found.</p>
+                ) : (
+                  <ul className="mt-4 space-y-3">
+                    {activeRoutes.map((routeName) => (
+                      <li key={routeName} className="text-sm font-medium text-navy-950">{routeName}</li>
+                    ))}
+                  </ul>
+                )}
+              </Card>
+            </div>
+          </div>
         </div>
       );
     }
 
+    if (visibleTab === 'map') {
+      return <PublicTrackingSection showHeader={false} compact activeTicket={upcomingTicket} />;
+    }
+
     if (!isAuthenticated && PROTECTED_TABS.has(visibleTab)) {
       return (
-        <section className="passenger-card">
-          <h2>Authentication Required</h2>
-          <p>Sign in to access this section.</p>
-          <button className="passenger-primary-btn" onClick={() => navigate('/passenger/login')}>Sign In</button>
-        </section>
+        <Card className="p-8 text-center">
+          <h2 className="font-display text-lg font-semibold text-navy-950">Authentication Required</h2>
+          <p className="mt-2 text-sm text-slate-500">Sign in to access this section.</p>
+          <Button variant="primary" size="sm" className="mt-4" onClick={() => navigate('/passenger/login')}>Sign In</Button>
+        </Card>
       );
     }
 
     if (visibleTab === 'tickets') {
-      const refCounts = {};
-      tickets.forEach((t) => {
-        const ref = t?.payment?.transaction_reference;
-        if (ref) refCounts[ref] = (refCounts[ref] ?? 0) + 1;
-      });
-      const hasGroupTickets = Object.values(refCounts).some((c) => c > 1);
-
       return (
-        <TicketTabWithFilter
-          tickets={tickets}
-          isLoadingPrivate={isLoadingPrivate}
-          refCounts={refCounts}
-          hasGroupTickets={hasGroupTickets}
-          openTicketModal={openTicketModal}
-          getOriginLabel={getOriginLabel}
-          getDestinationLabel={getDestinationLabel}
-          formatDateTime={formatDateTime}
-        />
+        <div>
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <h1 className="font-display text-2xl font-bold text-navy-950 sm:text-3xl">My Tickets</h1>
+            {tickets.length > 0 && (
+              <label className="flex items-center gap-2 text-sm font-medium text-navy-950">
+                Filter:
+                <select
+                  value={ticketStatusFilter}
+                  onChange={(e) => setTicketStatusFilter(e.target.value)}
+                  className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-navy-950 focus:border-navy-800 focus:outline-none"
+                >
+                  {ticketStatusFilterOptions.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+              </label>
+            )}
+          </div>
+
+          {tickets.some((ticket) => String(ticket?.status).toLowerCase() === 'trip_cancelled') && (
+            <div role="status" data-testid="cancelled-trip-banner" className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              <span>The operator cancelled a trip you paid for. Choose to rebook or get a refund.</span>
+              <Button type="button" variant="outline" size="sm" onClick={() => setTicketStatusFilter('cancelled')}>Show those tickets</Button>
+            </div>
+          )}
+
+          <div className="mt-6">
+            {isLoadingPrivate ? (
+              <SkeletonCards label="Loading tickets..." count={2} />
+            ) : filteredTickets.length === 0 ? (
+              <Card className="p-8 text-center text-sm text-slate-500">
+                No {ticketStatusFilterOptions.find((o) => o.value === ticketStatusFilter)?.label.toLowerCase() || ''} tickets found.
+              </Card>
+            ) : ticketStatusFilter === 'group' ? (
+              <div className="space-y-4">
+                {groupedTicketsByRef.map(({ ref, tickets: groupTickets, groupQr }) => (
+                  <Card key={ref} className="overflow-hidden p-0">
+                    <div className="flex flex-wrap items-center gap-4 border-b border-slate-100 bg-teal-50/60 px-5 py-4">
+                      <QrImage content={groupQr} alt="Group boarding QR" size={300} className="h-16 w-16 rounded-lg border border-teal-200 bg-white" />
+                      <div>
+                        <p className="text-sm font-semibold text-teal-800">Group Boarding QR — {groupTickets.length} tickets</p>
+                        <p className="mt-0.5 text-xs text-teal-700">Transaction {ref}</p>
+                      </div>
+                      <div className="ml-auto">
+                        <SaveQrButton
+                          ticket={{
+                            group_qr_content: groupQr,
+                            transaction_reference: ref,
+                            origin: getOriginLabel(groupTickets[0]),
+                            destination: getDestinationLabel(groupTickets[0]),
+                            trip_date: groupTickets[0]?.trip?.trip_date ?? null,
+                            departure_time: groupTickets[0]?.trip?.departure_time ?? null,
+                            valid_from: groupTickets[0]?.valid_from ?? null,
+                          }}
+                          group
+                          groupSize={groupTickets.length}
+                          active={Boolean(groupQr)}
+                        />
+                      </div>
+                    </div>
+                    <div className="divide-y divide-slate-100">
+                      {groupTickets.map((ticket, idx) => (
+                        <button
+                          key={ticket.ticket_id ?? ticket.ticket_uuid ?? idx}
+                          type="button"
+                          onClick={() => { void openTicketModal(ticket); }}
+                          className="flex w-full flex-wrap items-center justify-between gap-3 px-5 py-3.5 pl-8 text-left transition hover:bg-slate-50 sm:flex-nowrap"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-semibold text-navy-950">{getOriginLabel(ticket)} to {getDestinationLabel(ticket)}</p>
+                            <p className="mt-0.5 text-xs text-slate-500">Booked: {formatDateTime(ticket?.created_at)}</p>
+                          </div>
+                          <StatusBadge status={ticket.status || 'valid'} />
+                        </button>
+                      ))}
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            ) : (
+              <Card className="divide-y divide-slate-100 overflow-hidden">
+                {filteredTickets.map((ticket, idx) => {
+                  const ref = ticket?.payment?.transaction_reference;
+                  const isPartOfGroup = ref && (ticketRefCounts[ref] ?? 1) > 1;
+                  return (
+                    <button
+                      key={ticket.ticket_id ?? ticket.ticket_uuid ?? idx}
+                      type="button"
+                      onClick={() => { void openTicketModal(ticket); }}
+                      className="flex w-full flex-wrap items-center justify-between gap-3 px-5 py-4 text-left transition hover:bg-slate-50 sm:flex-nowrap"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold text-navy-950">{getOriginLabel(ticket)} to {getDestinationLabel(ticket)}</p>
+                        <p className="mt-0.5 text-xs text-slate-500">Booked: {formatDateTime(ticket?.created_at)}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {isPartOfGroup && (
+                          <span className="rounded-full bg-teal-50 px-2.5 py-1 text-xs font-semibold text-teal-700 ring-1 ring-inset ring-teal-200 whitespace-nowrap">
+                            Group order
+                          </span>
+                        )}
+                        <StatusBadge status={ticket.status || 'valid'} />
+                      </div>
+                    </button>
+                  );
+                })}
+              </Card>
+            )}
+          </div>
+          {historyPagination.tickets.page < historyPagination.tickets.last_page && (
+            <div className="mt-4 flex justify-center">
+              <Button variant="outline" size="sm" disabled={loadingMoreHistory === 'tickets'} onClick={() => void loadMoreHistory('tickets')}>
+                {loadingMoreHistory === 'tickets' ? 'Loading...' : `Load more tickets (${tickets.length} of ${historyPagination.tickets.total})`}
+              </Button>
+            </div>
+          )}
+        </div>
       );
     }
 
     if (visibleTab === 'transactions') {
+      // Search covers the pages already loaded; older transactions can be loaded below.
+      const historyQuery = historySearch.trim().toLowerCase();
+      const filteredTransactions = historyQuery
+        ? transactions.filter((payment) => {
+          const haystack = [
+            payment.route_summary,
+            payment.transaction_reference,
+            payment.payment_uuid,
+            payment.payment_channel,
+            payment.payment_method,
+          ].filter(Boolean).join(' ').toLowerCase();
+          return haystack.includes(historyQuery);
+        })
+        : transactions;
+
       return (
-        <section className="passenger-panel">
-          <div className="passenger-panel-head">
-            <h2>Transaction History</h2>
-          </div>
-          <table className="passenger-table">
-            <thead>
-              <tr>
-                <th>Route</th>
-                <th>Timestamp</th>
-                <th>Reference</th>
-                <th>Channel</th>
-                <th>Amount Paid</th>
-                <th>Rewards Used</th>
-                <th>Payment Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {isLoadingPrivate ? (
-                <tr>
-                  <td colSpan={7}>Loading transaction history...</td>
-                </tr>
-              ) : transactions.length === 0 ? (
-                <tr>
-                  <td colSpan={7}>No transaction records yet.</td>
-                </tr>
-              ) : (
-                transactions.map((payment, idx) => (
-                  <tr key={payment.payment_id ?? payment.payment_uuid ?? idx}>
-                    <td>{payment.route_summary || 'Route unavailable'}</td>
-                    <td>{formatDateTime(payment.paid_at)}</td>
-                    <td>{payment.transaction_reference || payment.payment_uuid || '-'}</td>
-                    <td>{payment.payment_channel || payment.payment_method || '-'}</td>
-                    <td>PHP {Number(payment.amount ?? 0).toFixed(2)}</td>
-                    <td>{Number(payment.reward_points_redeemed ?? 0).toFixed(0)} pts</td>
-                    <td>{payment.status || '-'}</td>
+        <div>
+          <h1 className="font-display text-2xl font-bold text-navy-950 sm:text-3xl">Transaction History</h1>
+          <SearchBar
+            value={historySearch}
+            onChange={setHistorySearch}
+            placeholder="Search by route or bus operator..."
+            className="mt-4 max-w-md"
+          />
+
+          <Card className="mt-6 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  <tr>
+                    <th className="px-5 py-3">Route</th>
+                    <th className="px-5 py-3">Timestamp</th>
+                    <th className="px-5 py-3">Reference</th>
+                    <th className="px-5 py-3">Channel</th>
+                    <th className="px-5 py-3">Amount Paid</th>
+                    <th className="px-5 py-3">Rewards Used</th>
+                    <th className="px-5 py-3">Payment Status</th>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </section>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {isLoadingPrivate ? (
+                    <tr><td colSpan={7} className="px-5 py-4"><SkeletonText label="Loading transaction history..." lines={3} /></td></tr>
+                  ) : filteredTransactions.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="px-5 py-4 text-slate-500">
+                        {historyQuery ? 'No transactions match your search.' : 'No transaction records yet.'}
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredTransactions.map((payment, idx) => (
+                      <tr key={payment.payment_id ?? payment.payment_uuid ?? idx}>
+                        <td className="px-5 py-3.5 font-medium text-navy-950">{payment.route_summary || 'Route unavailable'}</td>
+                        <td className="px-5 py-3.5 text-slate-500">{formatDateTime(payment.paid_at)}</td>
+                        <td className="px-5 py-3.5 text-slate-500">{payment.transaction_reference || payment.payment_uuid || '-'}</td>
+                        <td className="px-5 py-3.5 text-slate-500">{payment.payment_channel || payment.payment_method || '-'}</td>
+                        <td className="px-5 py-3.5 font-semibold text-navy-950">PHP {Number(payment.amount ?? 0).toFixed(2)}</td>
+                        <td className="px-5 py-3.5 text-slate-500">{Number(payment.reward_points_redeemed ?? 0).toFixed(0)} pts</td>
+                        <td className="px-5 py-3.5">
+                          <StatusBadge status={paymentDisplayStatus(payment)} />
+                          {refundedAmountText(payment) && <p className="mt-1 text-xs text-slate-500">{refundedAmountText(payment)}</p>}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+          {historyPagination.payments.page < historyPagination.payments.last_page && (
+            <div className="mt-4 flex justify-center">
+              <Button variant="outline" size="sm" disabled={loadingMoreHistory === 'payments'} onClick={() => void loadMoreHistory('payments')}>
+                {loadingMoreHistory === 'payments' ? 'Loading...' : `Load more transactions (${transactions.length} of ${historyPagination.payments.total})`}
+              </Button>
+            </div>
+          )}
+        </div>
       );
     }
 
     if (visibleTab === 'rewards') {
       return (
-        <section className="passenger-grid-two">
-          <article className="passenger-highlight">
-            <h3>{profile?.name || user?.name || 'Passenger'}</h3>
-            <p>{profile?.user?.email || user?.email || ''}</p>
-          </article>
-          <article className="passenger-highlight">
-            <h3>Rewards Points</h3>
-            <p>{points}</p>
-          </article>
-          <article className="passenger-panel span-two">
-            <div className="passenger-panel-head">
-              <h2>Rewards Activity</h2>
+        <div className="space-y-6">
+          <Card className="!bg-navy-900 p-6 text-white sm:p-8">
+            <p className="text-sm text-navy-200">Your Rewards Points</p>
+            <p className="mt-1 font-display text-4xl font-bold">{Number(numericPoints).toFixed(0)} pts</p>
+            <p className="mt-1 text-sm text-teal-300">Worth {formatPeso(numericPoints * REWARDS.pesoValueOfPoint)} off an online one-way booking.</p>
+          </Card>
+
+          <Card className="p-6">
+            <h2 className="font-display text-lg font-semibold text-navy-950">How SmartPoints Work</h2>
+            <p className="mt-2 text-sm leading-relaxed text-slate-500">
+              Pay for a ticket online, earn SmartPoints, then use them to take pesos off your next online booking.
+            </p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              <div className="rounded-xl border border-slate-200 p-4">
+                <p className="text-sm font-semibold text-navy-950">1. Earn</p>
+                <p className="mt-1 text-xs leading-relaxed text-slate-500">You earn 1 SmartPoint for every ₱{REWARDS.pesosPerPointEarned} you pay, added automatically once the payment succeeds.</p>
+              </div>
+              <div className="rounded-xl border border-slate-200 p-4">
+                <p className="text-sm font-semibold text-navy-950">2. Keep</p>
+                <p className="mt-1 text-xs leading-relaxed text-slate-500">Your balance is shown here and at checkout. If a payment fails or is not completed in time, the points you used are given back.</p>
+              </div>
+              <div className="rounded-xl border border-slate-200 p-4">
+                <p className="text-sm font-semibold text-navy-950">3. Use</p>
+                <p className="mt-1 text-xs leading-relaxed text-slate-500">1 SmartPoint = ₱{REWARDS.pesoValueOfPoint} off. Turn on "Use reward points" at checkout on a one-way booking. You always pay at least ₱1 online.</p>
+              </div>
             </div>
+          </Card>
+
+          <Card className="flex flex-wrap items-center justify-between gap-3 p-6">
+            <div>
+              <h2 className="font-display text-lg font-semibold text-navy-950">Use your points</h2>
+              <p className="mt-1 text-sm text-slate-500">Points are applied when you book. There is nothing to redeem here.</p>
+            </div>
+            <Button variant="primary" size="sm" onClick={() => navigate('/passenger/trips', { state: { returnTo: '/passenger/dashboard' } })}>Book a trip</Button>
+          </Card>
+
+          <Card className="p-6">
+            <h2 className="font-display text-lg font-semibold text-navy-950">Rewards Activity</h2>
             {rewards.length === 0 ? (
-              <p className="passenger-muted">No reward transactions found.</p>
+              <p className="mt-3 text-sm text-slate-500">No reward transactions found.</p>
             ) : (
-              <div className="passenger-reward-list">
-                {rewards.map((reward, idx) => (
-                  <div key={reward.reward_transaction_id ?? idx} className="passenger-reward-item">
-                    <strong>{reward.transaction_type ?? 'Reward transaction'}</strong>
-                    <span>{reward.points ?? reward.points_amount ?? 0} points</span>
-                    <em>{formatDateTime(reward.created_at ?? reward.transaction_date)}</em>
-                  </div>
-                ))}
+              <div className="mt-4 divide-y divide-slate-100">
+                {rewards.map((reward, idx) => {
+                  const pointsValue = Number(reward?.points ?? reward?.points_amount ?? 0);
+                  const isEarned = pointsValue >= 0;
+                  return (
+                    <div key={reward.reward_transaction_id ?? idx} className="flex items-center gap-3 py-3.5 first:pt-0 last:pb-0">
+                      <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-bold ${isEarned ? 'bg-teal-50 text-teal-700' : 'bg-slate-100 text-slate-500'}`}>
+                        {isEarned ? '+' : '−'}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium text-navy-950">{reward?.description || (isEarned ? 'Ticket purchase' : 'Used for ticket discount')}</p>
+                        <p className="text-xs text-slate-500">{formatDateTime(reward.created_at ?? reward.transaction_date)}</p>
+                      </div>
+                      <strong className={`shrink-0 text-sm font-semibold ${isEarned ? 'text-teal-700' : 'text-slate-500'}`}>
+                        {`${isEarned ? '+' : ''}${Number.isFinite(pointsValue) ? pointsValue.toFixed(0) : '0'} pts`}
+                      </strong>
+                    </div>
+                  );
+                })}
               </div>
             )}
-          </article>
-        </section>
+            {historyPagination.rewards.page < historyPagination.rewards.last_page && (
+              <div className="mt-4 flex justify-center">
+                <Button variant="outline" size="sm" disabled={loadingMoreHistory === 'rewards'} onClick={() => void loadMoreHistory('rewards')}>
+                  {loadingMoreHistory === 'rewards' ? 'Loading...' : `Load more activity (${rewards.length} of ${historyPagination.rewards.total})`}
+                </Button>
+              </div>
+            )}
+          </Card>
+        </div>
       );
     }
 
     if (visibleTab === 'profile') {
       return (
-        <section className="passenger-panel">
-          <div className="passenger-panel-head">
-            <h2>My Profile</h2>
-          </div>
-          <div className="passenger-profile-grid">
-            <div><span>Name</span><strong>{profile?.name || user?.name || '-'}</strong></div>
-            <div><span>Email</span><strong>{profile?.user?.email || user?.email || '-'}</strong></div>
-            <div><span>Contact Number</span><strong>{profile?.phone_num || '-'}</strong></div>
-            <div><span>Address</span><strong>{profile?.address || '-'}</strong></div>
-            <div><span>Rewards Points</span><strong>{points}</strong></div>
-          </div>
-        </section>
+        <ProfilePage
+          role="passenger"
+          profile={profile}
+          loading={isLoadingPrivate}
+          error={privateError}
+          twoFactor={{ enabled: twoFactorEnabled, saving: updating2fa, message: twoFactorMsg, onChange: handleTwoFactorToggle }}
+          textMessages={textMessages}
+          onSaveProfile={saveProfile}
+          onSignOut={handleLogout}
+          onDeleteAccount={deleteAccount}
+        />
       );
     }
-
     return null;
   };
 
   return (
-    <div className="passenger-shell">
-      <aside className={`passenger-sidebar ${menuOpen ? 'open' : ''}`}>
-        <button className="passenger-close" onClick={() => setMenuOpen(false)}>Close</button>
-        <nav>
+    <div className="min-h-screen bg-slate-50 lg:flex">
+      {menuOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-navy-950/50 lg:hidden"
+          onClick={() => setMenuOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
+      <aside
+        className={`fixed inset-y-0 left-0 z-50 flex w-72 flex-col bg-navy-900 p-5 transition-transform duration-200 lg:sticky lg:top-0 lg:z-30 lg:h-screen lg:w-64 lg:translate-x-0 ${
+          menuOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
+      >
+        <div className="flex items-center justify-between">
+          {/* 2026-11-07 (user): the white logo on the navy sidebar, as on the redesigned public pages. */}
+          <BrandLogo light className="h-10" />
+          <button
+            type="button"
+            className="rounded-lg p-1.5 text-navy-200 hover:bg-white/10 lg:hidden"
+            onClick={() => setMenuOpen(false)}
+            aria-label="Close menu"
+          >
+            <X size={22} />
+          </button>
+        </div>
+
+        <div className="mt-6 border-b border-white/10 pb-4">
+          <button
+            type="button"
+            onClick={() => { setMenuOpen(false); navigate('/'); }}
+            className={navLinkClasses(false)}
+          >
+            <House size={19} />
+            Homepage
+          </button>
+        </div>
+
+        <p className="mt-4 px-3.5 text-xs font-semibold uppercase tracking-wider text-navy-400">Main</p>
+        <nav className="mt-2 flex flex-col gap-1">
           {NAV_ITEMS.map(({ key, label, icon: Icon, protected: needsAuth }) => (
             <button
               key={key}
-              className={`passenger-nav-item ${visibleTab === key ? 'active' : ''}`}
+              type="button"
+              className={navLinkClasses(visibleTab === key)}
               onClick={() => handleTabChange({ key, protected: needsAuth })}
               onMouseEnter={key === 'map' ? () => { void preloadMapView(); } : undefined}
               onFocus={key === 'map' ? () => { void preloadMapView(); } : undefined}
             >
-              <Icon size={16} />
-              <span>{label}</span>
+              <Icon size={19} />
+              {label}
             </button>
           ))}
         </nav>
-        <div className="passenger-sidebar-bottom">
+
+        <div className="mt-auto flex flex-col gap-1 border-t border-white/10 pt-4">
+          <button
+            type="button"
+            className={navLinkClasses(visibleTab === 'profile')}
+            onClick={() => handleTabChange({ key: 'profile', protected: true })}
+          >
+            <User size={18} />
+            Profile
+          </button>
           {isAuthenticated ? (
-            <button className="passenger-nav-item" onClick={handleLogout}>
-              <LogOut size={16} />
-              <span>Logout</span>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-left text-sm font-medium text-red-300 hover:bg-white/10"
+            >
+              <LogOut size={18} />
+              Logout
             </button>
           ) : (
-            <button className="passenger-nav-item" onClick={() => navigate('/passenger/login')}>
-              <User size={16} />
-              <span>Sign In</span>
+            <button
+              type="button"
+              onClick={() => navigate('/passenger/login')}
+              className="flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-left text-sm font-medium text-navy-200 hover:bg-white/10"
+            >
+              <User size={18} />
+              Sign In
             </button>
           )}
         </div>
       </aside>
 
-      <main className="passenger-main">
-        <header className="passenger-topbar">
-          <button className="passenger-menu-btn" onClick={() => setMenuOpen(!menuOpen)}>
-            <Menu size={16} />
+      <div className="min-w-0 flex-1">
+        <div className="flex h-14 items-center justify-between border-b border-slate-200 bg-white px-4 lg:hidden">
+          <button type="button" className="rounded-lg p-2 text-navy-900" onClick={() => setMenuOpen(true)} aria-label="Open menu">
+            <Menu size={24} />
           </button>
-          <div className="passenger-logo">SmartTransit</div>
-          <div className="passenger-top-actions">
-            <Bell size={14} />
-            <span>{points} points</span>
+          <BrandLogo className="h-8" />
+          <span className="w-8" aria-hidden="true" />
+        </div>
+
+        <header className="sticky top-0 z-30 hidden h-16 items-center justify-end border-b border-slate-200 bg-white/95 px-4 backdrop-blur sm:h-20 sm:px-8 lg:flex">
+          <div className="flex items-center gap-2 sm:gap-4">
+            <button
+              type="button"
+              onClick={() => navigate('/')}
+              className="hidden items-center gap-2 rounded-full border border-slate-200 px-3.5 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-slate-300 hover:text-navy-900 sm:flex"
+            >
+              <House size={14} />
+              Landing Page
+            </button>
+            <button
+              type="button"
+              onClick={() => handleTabChange({ key: 'rewards', protected: true })}
+              className="hidden items-center gap-1.5 rounded-full bg-teal-50 px-3 py-1.5 text-xs font-semibold text-teal-700 transition-colors hover:bg-teal-100 sm:flex"
+            >
+              {Number(points).toFixed(0)} pts
+            </button>
+            <button
+              type="button"
+              className="relative flex h-9 w-9 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100"
+              aria-label="Notifications"
+            >
+              <Bell size={19} />
+            </button>
+            {isAuthenticated ? (
+              <ProfileDropdown />
+            ) : (
+              <Button to="/passenger/login" variant="primary" size="sm">Log In</Button>
+            )}
           </div>
         </header>
 
-        {paymentNotice && <div className="passenger-notice">{paymentNotice}</div>}
-        {privateError && <div className="passenger-error">{privateError}</div>}
-        {lastSync && isAuthenticated && <p className="passenger-last-sync">Last sync: {formatDateTime(lastSync)}</p>}
+        <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+          <AccountDeletionNotice />
+          {paymentNotice && (
+            <div className="mb-4 rounded-xl bg-teal-50 px-4 py-3 text-sm font-medium text-teal-800 ring-1 ring-inset ring-teal-200">
+              {paymentNotice}
+            </div>
+          )}
+          {privateError && (
+            <div className="mb-4 rounded-xl bg-red-50 px-4 py-3 text-sm font-medium text-red-700 ring-1 ring-inset ring-red-200">
+              {privateError}
+            </div>
+          )}
+          {lastSync && isAuthenticated && (
+            <p className="mb-4 text-xs text-slate-400">Last sync: {formatDateTime(lastSync)}</p>
+          )}
 
-        {renderContent()}
+          {renderContent()}
+        </main>
+      </div>
 
-        {ticketModalOpen && selectedTicket && (
-          <div className="passenger-modal-backdrop" role="presentation" onClick={closeTicketModal}>
-            <section
-              className="passenger-modal"
-              role="dialog"
-              aria-modal="true"
-              aria-label="Ticket details"
-              onClick={(event) => event.stopPropagation()}
-            >
-              <header className="passenger-modal-head">
-                <h3>Ticket Details</h3>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <button type="button" className="passenger-modal-close" onClick={printSelectedTicket} aria-label="Print ticket">
-                    Print PDF
-                  </button>
-                  <button type="button" className="passenger-modal-close" onClick={closeTicketModal} aria-label="Close ticket details">
-                    Close
-                  </button>
-                </div>
-              </header>
-
-              <div className="passenger-modal-body">
-                {loadingTicketQr ? (
-                  <p className="passenger-muted">Loading QR ticket...</p>
-                ) : (
-                  <TicketCard
-                    fromLabel={getOriginLabel(selectedTicket)}
-                    toLabel={getDestinationLabel(selectedTicket)}
-                    departureLabel={formatDateTime(selectedTicket.valid_from ?? selectedTicketQr?.valid_from)}
-                    seatLabel={selectedTicket.seat_type || '-'}
-                    routeLabel={`${getOriginLabel(selectedTicket)} to ${getDestinationLabel(selectedTicket)}`}
-                    qrUrl={selectedTicketQr?.qr_url || ''}
-                    statusLabel={selectedTicket.status || '-'}
-                    validLabel={formatDateTime(selectedTicket.valid_from ?? selectedTicketQr?.valid_from)}
-                    expiresLabel={formatDateTime(selectedTicket.expires_at ?? selectedTicketQr?.expires_at)}
-                  />
+      <Modal open={ticketModalOpen && Boolean(selectedTicket)} onClose={closeTicketModal} title="Ticket Details">
+        {selectedTicket && (
+          loadingTicketQr ? (
+            <SkeletonSquare label="Loading QR ticket..." className="h-56 w-56" />
+          ) : (
+            <>
+              {CANCELLED_TRIP_STATUSES.includes(String(selectedTicket.status).toLowerCase()) && (
+                <TripCancelledChoice ticketUuid={selectedTicket.ticket_uuid} onChanged={loadPrivateData} />
+              )}
+              <TicketCard
+                fromLabel={getOriginLabel(selectedTicket)}
+                toLabel={getDestinationLabel(selectedTicket)}
+                departureLabel={formatDateTime(selectedTicket.valid_from ?? selectedTicketQr?.valid_from)}
+                seatLabel={selectedTicket.seat_type || '-'}
+                routeLabel={`${getOriginLabel(selectedTicket)} to ${getDestinationLabel(selectedTicket)}`}
+                qrContent={selectedTicketQr?.qr_content || ''}
+                statusLabel={selectedTicket.status || '-'}
+                validLabel={formatDateTime(selectedTicket.valid_from ?? selectedTicketQr?.valid_from)}
+                expiresLabel={formatDateTime(selectedTicket.expires_at ?? selectedTicketQr?.expires_at)}
+                discountLabel={selectedTicket.discount_label || selectedTicketQr?.discount_label || ''}
+                discountAmount={selectedTicket.discount_amount ?? selectedTicketQr?.discount_amount}
+                originalFare={selectedTicket.original_amount ?? selectedTicketQr?.original_amount}
+                farePaid={selectedTicket.amount ?? selectedTicketQr?.amount}
+                discountVerified={Boolean(selectedTicket.discount_id_checked_at ?? selectedTicketQr?.discount_id_checked_at)}
+                discountClaimMessage={selectedTicket.discount_claim?.message || ''}
+                priorityLabel={selectedTicket.priority_label || ''}
+                hasBaggage={Boolean(selectedTicket.has_baggage)}
+                trackingToken={renewedTokens[selectedTicket.ticket_uuid] || selectedTicket.tracking_token || ''}
+                trackingCode={selectedTicket.ticket_uuid in renewedCodes ? renewedCodes[selectedTicket.ticket_uuid] : (selectedTicket.tracking_code || '')}
+                ticketId={ticketIdOf(selectedTicket.ticket_uuid)}
+                travellerName={selectedTicket.traveller_name || ''}
+                onRenewLink={selectedTicket.ticket_uuid ? () => renewTrackingLink(selectedTicket.ticket_uuid) : null}
+              />
+              <p className="mt-3 flex items-center gap-2 text-sm text-slate-600" data-testid="ticket-bus-service">
+                <span>Bus: <strong className="text-slate-900">{getFleetDisplayLabel(selectedTicket)}</strong></span>
+                <RunInfoChips runPattern={selectedTicket?.run_info?.run_pattern} service={selectedTicket?.run_info?.service} serviceType={selectedTicket?.trip?.service_type} showStops />
+                {selectedTicket.journey_leg && (
+                  <span data-testid="ticket-journey-leg" className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-600">
+                    {selectedTicket.journey_leg === 'return' ? 'Return ticket' : 'Outbound ticket'}
+                  </span>
                 )}
+              </p>
+              {selectedTicket.return_journey?.origin_stop_code && selectedTicket.return_journey?.destination_stop_code && !selectedTicket.journey_leg && (
+                <p className="mt-2 text-sm">
+                  <Link
+                    data-testid="book-return-link"
+                    className="font-semibold text-navy-800 underline hover:text-navy-950"
+                    to={`/passenger/book?${buildBookingQuery({ from: selectedTicket.return_journey.origin_stop_code, to: selectedTicket.return_journey.destination_stop_code })}`}
+                  >
+                    Book your return trip
+                  </Link>
+                  <span className="ml-2 text-xs text-slate-500">
+                    {selectedTicket.return_journey.destination_is_nearest_preceding_stop ? 'You boarded between stops, so the return goes to the stop just before where you boarded.' : ''}
+                  </span>
+                </p>
+              )}
+              <div className="mt-4 rounded-xl bg-slate-50 p-4">
+                <p className="text-xs text-slate-400">Drop-off Location</p>
+                <p className="mt-1 text-sm font-semibold text-navy-950">{getDestinationLabel(selectedTicket)}</p>
               </div>
-            </section>
-          </div>
+              <div className="mt-5 flex flex-wrap items-center justify-between gap-2">
+                <SaveQrButton
+                  ticket={{
+                    ...selectedTicketQr,
+                    ticket_uuid: selectedTicket.ticket_uuid,
+                    origin: getOriginLabel(selectedTicket),
+                    destination: getDestinationLabel(selectedTicket),
+                    seat_type: selectedTicket.seat_type,
+                    amount: selectedTicket.amount ?? selectedTicket.final_amount,
+                    transaction_reference: selectedTicket.payment?.transaction_reference,
+                  }}
+                  active={Boolean(selectedTicketQr?.qr_content)}
+                />
+                <div className="flex gap-2">
+                  <Button type="button" variant="outline" size="sm" onClick={printSelectedTicket}>Print PDF</Button>
+                  <Button type="button" variant="primary" size="sm" onClick={closeTicketModal}>Close</Button>
+                </div>
+              </div>
+            </>
+          )
         )}
-      </main>
+      </Modal>
     </div>
   );
 }

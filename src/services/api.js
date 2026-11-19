@@ -8,8 +8,28 @@ const normalizeApiBase = (value) => {
   return trimmed.replace(/\/+$/, '');
 };
 
+const getSafeStorage = () => {
+  if (typeof globalThis === 'undefined') return null;
+  const storage = globalThis.localStorage;
+  if (!storage || typeof storage.getItem !== 'function') return null;
+  return storage;
+};
+
+// A ?apiBase=<url> override is a development convenience only. In a production build it would let
+// any crafted link point the app (and the signed-in user's token) at another server, so it is
+// ignored there, any stored override is cleared, and the address bar never keeps the value.
+const API_BASE_OVERRIDE_ALLOWED = Boolean(import.meta.env.DEV);
+
+const removeApiBaseFromAddressBar = (params) => {
+  if (!params.has('apiBase') || typeof window.history?.replaceState !== 'function') return;
+  params.delete('apiBase');
+  const query = params.toString();
+  window.history.replaceState(window.history.state, '', `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`);
+};
+
 const resolveApiBaseUrl = () => {
   const envBase = normalizeApiBase(import.meta.env.VITE_API_BASE_URL);
+  const storage = getSafeStorage();
 
   if (typeof window === 'undefined') {
     return envBase || 'http://127.0.0.1:8000/api';
@@ -17,14 +37,19 @@ const resolveApiBaseUrl = () => {
 
   const params = new URLSearchParams(window.location.search || '');
   const queryBase = normalizeApiBase(params.get('apiBase'));
-  if (queryBase) {
-    localStorage.setItem(API_BASE_OVERRIDE_KEY, queryBase);
-    return queryBase;
+  removeApiBaseFromAddressBar(params);
+
+  if (API_BASE_OVERRIDE_ALLOWED) {
+    if (queryBase) {
+      storage?.setItem(API_BASE_OVERRIDE_KEY, queryBase);
+      return queryBase;
+    }
+
+    const storedBase = normalizeApiBase(storage?.getItem(API_BASE_OVERRIDE_KEY));
+    if (storedBase) return storedBase;
+  } else {
+    storage?.removeItem?.(API_BASE_OVERRIDE_KEY);
   }
-
-  const storedBase = normalizeApiBase(localStorage.getItem(API_BASE_OVERRIDE_KEY));
-  if (storedBase) return storedBase;
-
   if (envBase) return envBase;
 
   const host = window.location.hostname;
@@ -45,5 +70,16 @@ const api = axios.create({
     "ngrok-skip-browser-warning": "1",
   },
 });
+
+// 2026-11-13: UI preview mode (src/dev/mockApi.js). Dev server only. 2026-11-19: loaded with a dynamic import so
+// the sample data is never bundled into a production build (a static import kept it in the public files even though
+// it never ran). Requests made before it loads wait for it and then use its adapter.
+if (import.meta.env.DEV && import.meta.env.VITE_MOCK_API === 'true') {
+  const mockReady = import('../dev/mockApi.js').then(({ installMockApi }) => installMockApi(api));
+  api.interceptors.request.use(async (config) => {
+    await mockReady;
+    return { ...config, adapter: api.defaults.adapter };
+  });
+}
 
 export default api;

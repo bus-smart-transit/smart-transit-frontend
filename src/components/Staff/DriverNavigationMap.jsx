@@ -1,262 +1,81 @@
-import { useEffect, useRef, useState } from 'react';
-import { loadMapLib } from '../Map/mapDependencies';
-import StaffService from '../../api/StaffService/StaffService';
+﻿import { useCallback, useEffect, useMemo, useState } from 'react';
+import RouteMap from '../Map/RouteMap';
+import { BUS_COLORS, busIconSvg } from '../Map/mapMarkers';
+import { isCongestionLayerAvailable, showCongestionLayer } from '../Map/congestionLayer';
 
-const DRIVER_ROUTE_SOURCE_ID = 'driver-route';
-const DRIVER_ROUTE_LINE_LAYER_ID = 'driver-route-line';
-const DRIVER_ROUTE_STOPS_SOURCE_ID = 'driver-route-stops';
-const DRIVER_ROUTE_STOPS_LAYER_ID = 'driver-route-stops-layer';
-const DRIVER_ROUTE_STOPS_LABEL_LAYER_ID = 'driver-route-stops-label-layer';
+const ROUTE_STATUS_TEXT = {
+  idle: 'No route assigned',
+  loading: 'Loading route…',
+  ready: '✓ Route loaded',
+  no_geometry: 'The route line is not ready yet',
+  error: 'We could not load this route. Please try again.',
+};
 
 /**
- * Embedded MapLibre GL map for the driver's Navigation tab.
- * Shows:
- *   - Driver's live GPS position (green pulsing dot, updated from lastGpsRef)
- *   - Route polyline connecting all stops (sky-blue)
- *   - Origin marker (green), destination marker (red), intermediate stops (sky dots)
+ * Driver Route Navigation (B8), built on the shared RouteMap layer.
  *
- * Race-condition fix: all drawing happens AFTER the MapLibre 'load' event fires,
- * not at component mount time (when map is still async-initialising).
+ * - The line is the trip's canonical geometry for the current leg direction;
+ *   the old dashed straight "reroute" overlay is gone.
+ * - The driver's own fix is shown only when accurate enough; otherwise the map
+ *   says "GPS signal weak", and when the fix is far from the route it says
+ *   "Location not on route" with the distance. No connecting line is drawn.
+ * - Header and progress come from the trip, its route and its acknowledged
+ *   stops, never from constants.
+ * - Road congestion (TomTom live traffic colours) is always shown when the app uses server-side traffic (Batch 57, user:
+ *   was a toggle, off by default), and says so when it cannot be loaded.
  */
-export default function DriverNavigationMap({ trip, stops, lastGpsRef }) {
-  const mapContainer = useRef(null);
-  const mapRef       = useRef(null);
-  const mapLibRef    = useRef(null);
-  const driverMarkerRef   = useRef(null);
-  const routeDrawnRef     = useRef(false);
-  const gpsIntervalRef    = useRef(null);
+export default function DriverNavigationMap({ trip, stops = [], lastGpsRef }) {
+  const route = trip?.fleet_route?.route;
+  const routeId = route?.route_id ?? null;
+  const isReturnLeg = trip?.leg_direction === 'reverse';
+  const direction = isReturnLeg ? 'reverse' : 'outbound';
+  const originLabel = (isReturnLeg ? route?.destination : route?.origin) || 'Origin';
+  const destinationLabel = (isReturnLeg ? route?.origin : route?.destination) || 'Destination';
 
-  const [mapReady, setMapReady]         = useState(false);
-  const [routeLoaded, setRouteLoaded]   = useState(false);
-  const [mapError, setMapError]         = useState('');
+  const [vehicle, setVehicle] = useState(null);
+  const [routeStatus, setRouteStatus] = useState('loading');
+  const [map, setMap] = useState(null);
+  const [congestionProblem, setCongestionProblem] = useState(false);
+  const congestionOn = isCongestionLayerAvailable();
 
-  const routeId          = trip?.fleet_route?.route?.route_id ?? null;
-  const originLabel      = trip?.fleet_route?.route?.origin       || 'Origin';
-  const destinationLabel = trip?.fleet_route?.route?.destination  || 'Destination';
+  const handleMapReady = useCallback((readyMap) => setMap(readyMap), []);
 
-  // ── 1. Initialise map ─────────────────────────────────────────────────────
   useEffect(() => {
-    if (mapRef.current || !mapContainer.current) return;
-    let cancelled = false;
+    if (!map || !congestionOn) return undefined;
+    return showCongestionLayer(map, {
+      onProblem: () => setCongestionProblem(true),
+      onRecover: () => setCongestionProblem(false),
+    });
+  }, [map, congestionOn]);
 
-    (async () => {
-      try {
-        const { default: maplibregl } = await loadMapLib();
-        if (cancelled || !mapContainer.current) return;
-
-        mapLibRef.current = maplibregl;
-        const map = new maplibregl.Map({
-          container: mapContainer.current,
-          style: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json',
-          center: [4.33, 52.07], // Netherlands default — overridden when route loads
-          zoom: 11,
-        });
-        mapRef.current = map;
-
-        // Signal all dependent effects only once base tiles have rendered.
-        map.once('load', () => {
-          if (!cancelled) setMapReady(true);
-        });
-      } catch {
-        if (!cancelled) setMapError('Map failed to load. Check your internet connection.');
-      }
-    })();
-
-    return () => { cancelled = true; };
-  }, []);
-
-  // ── 2. Draw route polyline + stop markers (fires once map is ready) ───────
   useEffect(() => {
-    if (!mapReady || routeDrawnRef.current) return;
-    const map        = mapRef.current;
-    const maplibregl = mapLibRef.current;
-    if (!map || !maplibregl || !routeId) return;
+    // The GPS watcher keeps lastGpsRef fresh; sample it once a second.
+    const id = setInterval(() => {
+      const fix = lastGpsRef?.current;
+      setVehicle((prev) => {
+        if (!fix) return prev === null ? prev : null;
+        if (prev && prev.recordedAt === fix.recordedAt && prev.latitude === fix.latitude && prev.longitude === fix.longitude) {
+          return prev;
+        }
+        return {
+          latitude: fix.latitude,
+          longitude: fix.longitude,
+          accuracy: fix.accuracy,
+          recordedAt: fix.recordedAt,
+          heading: fix.heading ?? null, // 2026-10-29: points the bus icon's arrow
+        };
+      });
+    }, 1000);
+    return () => clearInterval(id);
+  }, [lastGpsRef]);
 
-    routeDrawnRef.current = true; // prevent double-draw in StrictMode
+  const acknowledgedStopIds = useMemo(
+    () => (Array.isArray(stops) ? stops : []).filter((s) => s?.is_acknowledged).map((s) => Number(s?.stop_id)),
+    [stops],
+  );
 
-    (async () => {
-      try {
-        const res      = await StaffService.getRouteStops(routeId);
-        const stopList = res?.data ?? [];
-        const valid    = stopList.filter(
-          (s) => Number.isFinite(Number(s?.longitude)) && Number.isFinite(Number(s?.latitude))
-        );
-        if (valid.length < 2) { routeDrawnRef.current = false; return; }
-
-        const coords = valid.map((s) => [Number(s.longitude), Number(s.latitude)]);
-
-        // Route polyline
-        map.addSource(DRIVER_ROUTE_SOURCE_ID, {
-          type: 'geojson',
-          data: { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: coords } },
-        });
-        map.addLayer({
-          id: DRIVER_ROUTE_LINE_LAYER_ID,
-          type: 'line',
-          source: DRIVER_ROUTE_SOURCE_ID,
-          layout: { 'line-join': 'round', 'line-cap': 'round' },
-          paint: { 'line-color': '#38bdf8', 'line-width': 5, 'line-opacity': 0.85 },
-        });
-
-        // Route stop pins as map layers, so they stay correctly anchored while zooming/panning.
-        map.addSource(DRIVER_ROUTE_STOPS_SOURCE_ID, {
-          type: 'geojson',
-          data: {
-            type: 'FeatureCollection',
-            features: valid.map((stop, idx) => ({
-              type: 'Feature',
-              properties: {
-                stopName: stop.stop_name || `Stop ${idx + 1}`,
-                stopOrder: idx + 1,
-                isFirst: idx === 0,
-                isLast: idx === valid.length - 1,
-              },
-              geometry: {
-                type: 'Point',
-                coordinates: [Number(stop.longitude), Number(stop.latitude)],
-              },
-            })),
-          },
-        });
-
-        map.addLayer({
-          id: DRIVER_ROUTE_STOPS_LAYER_ID,
-          type: 'circle',
-          source: DRIVER_ROUTE_STOPS_SOURCE_ID,
-          paint: {
-            'circle-radius': [
-              'case',
-              ['get', 'isFirst'], 8,
-              ['get', 'isLast'], 8,
-              6,
-            ],
-            'circle-color': [
-              'case',
-              ['get', 'isFirst'], '#22c55e',
-              ['get', 'isLast'], '#ef4444',
-              '#38bdf8',
-            ],
-            'circle-stroke-color': '#ffffff',
-            'circle-stroke-width': 2,
-          },
-        });
-
-        map.addLayer({
-          id: DRIVER_ROUTE_STOPS_LABEL_LAYER_ID,
-          type: 'symbol',
-          source: DRIVER_ROUTE_STOPS_SOURCE_ID,
-          layout: {
-            'text-field': ['concat', ['to-string', ['get', 'stopOrder']], '. ', ['get', 'stopName']],
-            'text-size': 11,
-            'text-offset': [0, 1.25],
-            'text-anchor': 'top',
-            'text-allow-overlap': false,
-          },
-          paint: {
-            'text-color': '#dbeafe',
-            'text-halo-color': '#0f172a',
-            'text-halo-width': 1,
-          },
-        });
-
-        map.on('click', DRIVER_ROUTE_STOPS_LAYER_ID, (ev) => {
-          const feature = ev?.features?.[0];
-          if (!feature) return;
-          const coordinates = feature?.geometry?.coordinates;
-          if (!Array.isArray(coordinates)) return;
-          const stopName = feature?.properties?.stopName || 'Stop';
-          new maplibregl.Popup({ offset: 12 })
-            .setLngLat(coordinates)
-            .setHTML(
-              `<p style="margin:0;font-size:12px;font-weight:700;color:#0f172a;">${stopName}</p>`
-            )
-            .addTo(map);
-        });
-
-        // Fit to full route extent
-        const bounds = coords.reduce(
-          (acc, c) => acc.extend(c),
-          new maplibregl.LngLatBounds(coords[0], coords[0])
-        );
-        map.fitBounds(bounds, { padding: 60, maxZoom: 14 });
-        setRouteLoaded(true);
-      } catch {
-        routeDrawnRef.current = false; // allow retry on next render
-      }
-    })();
-  }, [mapReady, routeId]);
-
-  // ── 3. Driver position marker (fires once map is ready) ───────────────────
-  useEffect(() => {
-    if (!mapReady) return;
-    const map        = mapRef.current;
-    const maplibregl = mapLibRef.current;
-    if (!map || !maplibregl) return;
-
-    const placeOrMove = () => {
-      const pos = lastGpsRef?.current;
-      if (!pos || !Number.isFinite(pos.latitude) || !Number.isFinite(pos.longitude)) return;
-
-      const lngLat = [Number(pos.longitude), Number(pos.latitude)];
-
-      if (driverMarkerRef.current) {
-        driverMarkerRef.current.setLngLat(lngLat);
-        map.panTo(lngLat, { duration: 400 });
-      } else {
-        const el = document.createElement('div');
-        el.innerHTML = `
-          <div style="
-            width:20px;height:20px;border-radius:50%;
-            background:#22c55e;border:3px solid #fff;
-            box-shadow:0 0 0 4px rgba(34,197,94,0.3);
-            animation:driverPulse 2s infinite;
-          "></div>
-          <style>
-            @keyframes driverPulse{
-              0%,100%{box-shadow:0 0 0 4px rgba(34,197,94,0.3)}
-              50%{box-shadow:0 0 0 8px rgba(34,197,94,0.1)}
-            }
-          </style>`;
-        driverMarkerRef.current = new maplibregl.Marker({ element: el, anchor: 'center' })
-          .setLngLat(lngLat)
-          .setPopup(new maplibregl.Popup({ offset: 22 }).setHTML(
-            '<p style="margin:0;font-size:12px;font-weight:700;color:#0f172a;">Your Position</p>'
-          ))
-          .addTo(map);
-        map.flyTo({ center: lngLat, zoom: 13, duration: 800 });
-      }
-    };
-
-    placeOrMove();
-    gpsIntervalRef.current = setInterval(placeOrMove, 4000);
-    return () => clearInterval(gpsIntervalRef.current);
-  }, [mapReady, lastGpsRef]);
-
-  // ── 4. Cleanup on unmount ─────────────────────────────────────────────────
-  useEffect(() => () => {
-    clearInterval(gpsIntervalRef.current);
-
-    const map = mapRef.current;
-    if (map) {
-      if (map.getLayer(DRIVER_ROUTE_STOPS_LABEL_LAYER_ID)) map.removeLayer(DRIVER_ROUTE_STOPS_LABEL_LAYER_ID);
-      if (map.getLayer(DRIVER_ROUTE_STOPS_LAYER_ID)) map.removeLayer(DRIVER_ROUTE_STOPS_LAYER_ID);
-      if (map.getSource(DRIVER_ROUTE_STOPS_SOURCE_ID)) map.removeSource(DRIVER_ROUTE_STOPS_SOURCE_ID);
-      if (map.getLayer(DRIVER_ROUTE_LINE_LAYER_ID)) map.removeLayer(DRIVER_ROUTE_LINE_LAYER_ID);
-      if (map.getSource(DRIVER_ROUTE_SOURCE_ID)) map.removeSource(DRIVER_ROUTE_SOURCE_ID);
-    }
-
-    mapRef.current?.remove();
-    mapRef.current       = null;
-    routeDrawnRef.current = false;
-  }, []);
-
-  if (mapError) {
-    return (
-      <div className="flex items-center justify-center rounded-xl border border-red-900 bg-red-950/30 p-6 text-sm text-red-300">
-        {mapError}
-      </div>
-    );
-  }
+  const completed = acknowledgedStopIds.length;
+  const total = Array.isArray(stops) ? stops.length : 0;
 
   return (
     <div className="relative overflow-hidden rounded-xl border border-slate-800 bg-slate-900">
@@ -266,17 +85,43 @@ export default function DriverNavigationMap({ trip, stops, lastGpsRef }) {
         <span className="text-slate-500">→</span>
         <span className="h-3 w-3 shrink-0 rounded-full bg-red-400" />
         <span className="text-sm font-semibold text-slate-100">{destinationLabel}</span>
-        <span className="ml-auto text-xs text-slate-500">
-          {!mapReady ? 'Loading map…' : routeLoaded ? '✓ Route loaded' : 'Drawing route…'}
+        <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[11px] font-semibold text-slate-300">
+          {isReturnLeg ? 'Return leg' : 'Outbound leg'}
         </span>
+        <span className="ml-auto text-xs text-slate-400">{ROUTE_STATUS_TEXT[routeStatus] || ''}</span>
       </div>
-      <div ref={mapContainer} style={{ height: '420px', width: '100%' }} />
+      <RouteMap
+        routeId={routeId}
+        direction={direction}
+        vehicle={vehicle}
+        acknowledgedStopIds={acknowledgedStopIds}
+        onRouteStatus={setRouteStatus}
+        onMapReady={handleMapReady}
+        className="relative h-105 w-full"
+      />
+      {congestionOn && (
+        <div className="flex flex-wrap items-center gap-4 border-t border-slate-800 px-4 py-2 text-xs text-slate-400">
+          {congestionProblem ? (
+            <span className="text-amber-300">Congestion colours are unavailable right now. The route and your position still work.</span>
+          ) : (
+            <>
+              <span className="flex items-center gap-1.5"><span className="h-1.5 w-5 rounded-full" style={{ backgroundColor: '#2EAB30' }} />Flowing</span>
+              <span className="flex items-center gap-1.5"><span className="h-1.5 w-5 rounded-full" style={{ backgroundColor: '#F1BF40' }} />Slow</span>
+              <span className="flex items-center gap-1.5"><span className="h-1.5 w-5 rounded-full" style={{ backgroundColor: '#E70704' }} />Heavy or stopped</span>
+              <span className="ml-auto">Live road speed compared with free flow, from TomTom</span>
+            </>
+          )}
+        </div>
+      )}
       <div className="flex flex-wrap gap-4 border-t border-slate-800 px-4 py-2 text-xs text-slate-400">
-        <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded-full bg-emerald-400" />Your position</span>
-        <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded-full bg-sky-400" />Route</span>
-        <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded-full bg-red-400" />Destination</span>
-        {stops.length > 0 && (
-          <span className="ml-auto">{stops.filter((s) => s.is_acknowledged).length}/{stops.length} stops acknowledged</span>
+        <span className="flex items-center gap-1.5"><span aria-hidden="true" className="inline-flex h-4 w-4" dangerouslySetInnerHTML={{ __html: busIconSvg(BUS_COLORS.live, 16) }} />Your bus</span>
+        <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded-full bg-teal-400" />Completed stop</span>
+        <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded-full bg-sky-600" />Upcoming stop</span>
+        <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded-full bg-blue-900" />Terminal</span>
+        {total > 0 && (
+          <span className="ml-auto">
+            {completed} of {total} Stops Completed — {Math.round((completed / total) * 100)}%
+          </span>
         )}
       </div>
     </div>

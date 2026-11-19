@@ -1,1656 +1,924 @@
-import { useCallback, useEffect, useState, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
-import StaffService from '../../api/StaffService/StaffService';
+import { useState, useEffect, useCallback, useId, isValidElement, cloneElement } from 'react'
+import StaffPortalLayout from './StaffPortalLayout'
+import OperatorDashboardPage from './Operator/OperatorDashboardPage'
+import StaffDirectory from './Operator/StaffDirectory'
+import NotificationGroupList from './NotificationGroupList'
+import { groupNotifications } from '../../utils/notificationGroups'
+import FleetsPage from './Operator/FleetsPage'
+import RoutesPage from './Operator/RoutesPage'
+import StaffCalendar from './StaffCalendar'
+import { ModalShell } from '../ui/Modal'
+import OperatorReportsPage from './OperatorReportsPage'
+import OperatorService from '../../api/StaffService/OperatorService'
+import useDateDrivers from '../../api/hooks/Staff/useDateDrivers'
+import { getBookingWindow } from '../../services/bookingService'
+import { bookingWindowWarning } from '../../utils/bookingQuery'
+import { parseAppDate, getBusinessToday, debugLogBusinessTime } from '../../utils/dates'
+import { useOperatorDashboardData, useNotificationBell, useTripRequests, useTripsTab } from '../../api/hooks/Staff/useOperatorDashboard'
+import useOperatorAlerts from '../../api/hooks/Staff/useOperatorAlerts'
+import OperatorAlerts from './Operator/OperatorAlerts'
+import RunInfoChips from '../ui/RunInfoChips'
+import { CancelTripModal } from './TripCancellationsPanel'
+import LegTimeSuggestion from './LegTimeSuggestion'
+import { addLeg, removeLastLeg } from '../../utils/legPlanning'
+import ScheduleRangePreview from './Schedule/ScheduleRangePreview'
+import CrewShiftTimes from './Operator/CrewShiftTimes'
+import { isRangeSchedule, rangeDayCount } from '../../utils/scheduleRange'
+import { crewOptionLabel, isPickable, needsCrew, sortForPicker } from '../../utils/crewPicker'
+import AssignCrewModal from './Operator/AssignCrewModal'
+import { CompanyAdminContext } from './Operator/companyAdmin'
+import TripFocusNotice from './TripFocusNotice'
+import { roleLabel } from '../../utils/staffForm'
+import ProfilePage from '../Account/ProfilePage'
+import SchedulePage from './Schedule/SchedulePage'
+import ShiftBlocksView from './Schedule/ShiftBlocksView'
+import FinancePage from './Finance/FinancePage'
+import { OpPageHeader } from './Operator/OperatorUI'
+import ViewTabs from '../ui/ViewTabs'
+import useTextMessages from '../../api/hooks/useTextMessages'
+import { OPERATOR_ROLE, navForRole, viewsForRole } from '../../utils/operatorNav'
 import {
-  Activity,
-  AlertCircle,
-  BarChart3,
-  Bus,
-  Calendar,
-  CheckCircle,
-  CreditCard,
-  DollarSign,
-  Loader,
-  LogOut,
-  Plus,
-  RefreshCw,
-  ShieldCheck,
-  Target,
-  TrendingUp,
-  UserRound,
-  Users,
-} from 'lucide-react';
+  LayoutDashboard, Bus, MapPin, PieChart, Users, Settings, Wallet, CalendarDays,
+  Eye, RefreshCw,
+  X, Loader2, AlertTriangle, Bell,
+} from 'lucide-react'
+import { SkeletonList, SkeletonPage } from '../ui/Skeleton'
+import { clock12 } from '../../utils/clock';
+const fmt = (v) => {
+  if (v == null) return '-'
+  const n = Number(v)
+  return Number.isNaN(n) ? String(v) : `₱${n.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
+}
+const fmtDate = (v) => {
+  if (!v) return '-'
+  const d = new Date(String(v).includes('T') ? v : v + 'T00:00')
+  if (Number.isNaN(d.getTime())) return v
+  return d.toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' })
+}
+const STATUS_CHIP = {
+  scheduled:     'bg-slate-100 text-slate-700',
+  delayed:       'bg-rose-100 text-rose-700',
+  boarding:      'bg-blue-100 text-blue-700',
+  departed:      'bg-amber-100 text-amber-700',
+  'in-progress': 'bg-amber-100 text-amber-700',
+  completed:     'bg-emerald-100 text-emerald-700',
+  cancelled:     'bg-red-100 text-red-700',
+}
 
-const NAV_ITEMS = [
-  { id: 'overview', label: 'Overview', icon: BarChart3 },
-  { id: 'fleets', label: 'Fleet Management', icon: Bus },
-  { id: 'employees', label: 'Employees', icon: Users },
-  { id: 'trips', label: 'Schedule Trips', icon: Calendar },
-  { id: 'trip-mgmt', label: 'Trip Management', icon: Target },
-  { id: 'reports', label: 'Advanced Reports', icon: TrendingUp },
-];
+const NAV_ICONS = {
+  dashboard: LayoutDashboard, staffs: Users, fleets: Bus, routes: MapPin, schedule: CalendarDays, finance: Wallet, reports: PieChart, account: Settings,
+}
+const NAV = navForRole(OPERATOR_ROLE).map((item) => ({ ...item, icon: NAV_ICONS[item.key] }))
 
-const REPORT_ACTIONS = [
-  { id: 'financial', label: 'Financial Report', icon: DollarSign, color: 'text-emerald-400' },
-  { id: 'revenue', label: 'Revenue by Route', icon: BarChart3, color: 'text-sky-400' },
-  { id: 'adherence', label: 'Route Adherence', icon: ShieldCheck, color: 'text-emerald-400' },
-  { id: 'occupancy', label: 'Occupancy Trends', icon: Activity, color: 'text-amber-400' },
-  { id: 'daily', label: 'Daily Summary', icon: Calendar, color: 'text-indigo-400' },
-  { id: 'channels', label: 'Payment Channels', icon: CreditCard, color: 'text-cyan-400' },
-];
+const getStaffFullName = (row) => row?.name || row?.user?.name || row?.user?.username || row?.username || '-'
+const getStaffCompanyUserId = (row) => row?.company_user_id || row?.user_id || row?.id
 
-const asCurrency = (value) => `P${Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+// Batch 60 item 4: `wide` lays a form out across a PC screen (Schedule Service).
+function Modal({ title, onClose, children, wide = false }) {
+  return (
+    <ModalShell label={title} onClose={onClose}>
+      <div className={`w-full ${wide ? 'max-w-5xl' : 'max-w-lg'} max-h-[calc(100dvh-2rem)] overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl`}>
+        <div className="mb-4 flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-slate-900">{title}</h3>
+          <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600"><X className="h-5 w-5" /></button>
+        </div>
+        {children}
+      </div>
+    </ModalShell>
+  )
+}
 
-const formatDateTime = (value) => {
-  if (!value) return '-';
-  const str = String(value);
-  const isDateOnly = /^\d{4}-\d{2}-\d{2}$/.test(str);
-  const date = new Date(isDateOnly ? str + 'T00:00' : str);
-  if (Number.isNaN(date.getTime())) return '-';
-  const yyyy = date.getFullYear();
-  const mm = String(date.getMonth() + 1).padStart(2, '0');
-  const dd = String(date.getDate()).padStart(2, '0');
-  if (isDateOnly) return `${yyyy}/${mm}/${dd}`;
-  const hh = String(date.getHours()).padStart(2, '0');
-  const min = String(date.getMinutes()).padStart(2, '0');
-  return `${yyyy}/${mm}/${dd} - ${hh}:${min}`;
-};
+const OPERATOR_NOTIFICATION_FIELDS = { id: (n) => n.id, text: (n) => n.message }
 
-const toCompactTime = (value) => {
-  if (!value) return '';
-  const str = String(value).trim();
-  const hhmmss = str.match(/^(\d{2}:\d{2})(?::\d{2})?$/);
-  if (hhmmss) return hhmmss[1];
-  return str;
-};
+// 2026-10-27: in the sidebar beside the profile (dark background), so its button is styled for it.
+function NotificationBell() {
+  const {
+    open, setOpen,
+    notifications,
+    unreadCount,
+    loadingNotifications,
+    handleMarkRead,
+    handleMarkGroupRead,
+    handleMarkAllRead,
+  } = useNotificationBell()
 
-const formatDateOnly = (value) => {
-  if (!value) return '-';
-  const str = String(value);
-  const match = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (match) return `${match[1]}/${match[2]}/${match[3]}`;
-  return formatDateTime(value);
-};
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="relative flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-white/10 text-slate-200 transition hover:bg-white/20 hover:text-white"
+        aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : 'Notifications'}
+      >
+        <Bell className="h-4.5 w-4.5" />
+        {unreadCount > 0 && (
+          <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-xs font-bold text-white">
+            {unreadCount > 9 ? '9+' : unreadCount}
+          </span>
+        )}
+      </button>
 
-const formatTripSchedule = (tripLike) => {
-  if (!tripLike) return '-';
-  const dateLabel = formatDateOnly(tripLike?.trip_date);
-  const start = toCompactTime(tripLike?.fleet_route?.start_time);
-  const end = toCompactTime(tripLike?.fleet_route?.end_time);
-  if (start && end) return `${dateLabel} - ${start} to ${end}`;
-  if (start) return `${dateLabel} - ${start}`;
-  return dateLabel;
-};
+      {open && (
+        <Modal title="Notifications" onClose={() => setOpen(false)}>
+          <div className="mb-3 flex items-center justify-between">
+            <span className="text-xs text-slate-500">{unreadCount} unread</span>
+            <button type="button" onClick={handleMarkAllRead} className="text-xs font-semibold text-teal-600 hover:underline" disabled={unreadCount === 0}>
+              Mark all as read
+            </button>
+          </div>
+          <div className="max-h-96 space-y-2 overflow-y-auto">
+            {loadingNotifications && notifications.length === 0 ? (
+              <SkeletonList label="Loading..." rows={3} />
+            ) : notifications.length === 0 ? (
+              <p className="py-6 text-center text-sm text-slate-400">No notifications yet.</p>
+            ) : (
+              // 2026-10-27: notifications of the same kind are one group (utils/notificationGroups).
+              <NotificationGroupList
+                groups={groupNotifications(notifications, OPERATOR_NOTIFICATION_FIELDS)}
+                fields={OPERATOR_NOTIFICATION_FIELDS}
+                onMarkRead={(ids) => (ids.length === 1 ? handleMarkRead(ids[0]) : handleMarkGroupRead(ids))}
+              />
+            )}
+          </div>
+        </Modal>
+      )}
+    </>
+  )
+}
 
-const toRows = (data) => {
-  if (Array.isArray(data)) return data;
-  if (!data || typeof data !== 'object') return [];
-  if (Array.isArray(data.data)) return data.data;
-  if (Array.isArray(data.items)) return data.items;
-  if (Array.isArray(data.routes)) return data.routes;
-  if (Array.isArray(data.records)) return data.records;
-  return [];
-};
+// 2026-10-28: the label is linked to its input (htmlFor/id), so screen readers announce it and it can be found by name.
+// A single custom child (a select) gets the same id unless it already has one.
+function Field({ label, type = 'text', value, onChange, required, placeholder, hint, children }) {
+  const autoId = useId()
+  const single = isValidElement(children) ? children : null
+  const fieldId = single?.props?.id ?? autoId
+  return (
+    <div>
+      <label htmlFor={children && !single ? undefined : fieldId} className="mb-1 block text-sm font-medium text-slate-700">{label}{required && <span className="text-red-500 ml-1">*</span>}</label>
+      {single ? cloneElement(single, { id: fieldId }) : children ?? (
+        <input id={fieldId} type={type} value={value} onChange={onChange} required={required} placeholder={placeholder}
+          className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500" />
+      )}
+      {hint && <p role="status" className="mt-1 text-xs text-amber-700">{hint}</p>}
+    </div>
+  )
+}
 
-export default function OperatorDashboard() {
-  const navigate = useNavigate();
-  const didBootstrap = useRef(false);
-  const [reportDateMax] = useState(() => {
-    return new Date().toISOString().split('T')[0];
-  });
-  
-  const [activeTab, setActiveTab] = useState('overview');
-  const [profile, setProfile] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [successMsg, setSuccessMsg] = useState('');
+const REQUEST_REASON_LABELS = { sick: 'Sick', vehicle_issue: 'Vehicle issue', schedule_conflict: 'Schedule conflict', other: 'Others' }
 
-  const [fleets, setFleets] = useState([]);
-  const [fleetForm, setFleetForm] = useState({
-    plate_number: '',
-    seated_capacity: '',
-    standing_capacity: '',
-    fleet_type: 'public',
-  });
-  const [addingFleet, setAddingFleet] = useState(false);
+function TripRequestsPanel({ onDecided, showEmpty = false }) {
+  const { requests, busyId, error, loading, decide } = useTripRequests(onDecided)
+  if (!showEmpty && requests.length === 0 && !error) return null
 
-  const [drivers, setDrivers] = useState([]);
-  const [conductors, setConductors] = useState([]);
-  const [empForm, setEmpForm] = useState({
-    name: '',
-    email: '',
-    phone_num: '',
-    address: '',
-    username: '',
-    role: 'driver',
-    password: '',
-  });
-  const [creatingEmp, setCreatingEmp] = useState(false);
+  return (
+    <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+      <h2 className="font-display text-sm font-bold text-amber-800">For Approval ({requests.length})</h2>
+      {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
+      {loading && requests.length === 0 ? <SkeletonList label="Loading approval requests..." rows={2} className="mt-3" />
+        : requests.length === 0 ? <p className="mt-3 text-sm text-slate-600">No pending approval requests.</p>
+          : <ul className="mt-3 space-y-2">
+        {requests.map((r) => {
+          const route = r.trip?.fleet_route?.route
+          const staffName = r.staff?.user?.name || r.staff?.name || 'Staff'
+          const reason = r.reason_text || REQUEST_REASON_LABELS[r.reason_code] || 'No reason given'
+          return (
+            <li key={r.id} className="flex flex-col gap-2 rounded-xl border border-amber-100 bg-white p-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="text-sm">
+                <p className="font-semibold text-slate-900">{staffName} <span className="font-normal text-slate-500">({roleLabel(r.role)})</span></p>
+                <p className="text-xs text-slate-600">{route?.origin || '-'} to {route?.destination || '-'} · {r.trip?.trip_date}</p>
+                {r.shift_block_id && (
+                  <p className="text-xs font-semibold text-amber-800" data-testid="request-block-label">Shift block #{r.shift_block_id}: all {r.legs_count} legs. Approving releases {staffName} from the whole block.</p>
+                )}
+                <p className="text-xs text-slate-500">Reason: {reason}</p>
+              </div>
+              <div className="flex gap-2">
+                <button type="button" disabled={busyId === r.id} onClick={() => decide(r.id, 'approve')} className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50">Approve</button>
+                <button type="button" disabled={busyId === r.id} onClick={() => decide(r.id, 'reject')} className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50">Reject</button>
+              </div>
+            </li>
+          )
+        })}
+          </ul>}
+    </section>
+  )
+}
 
-  const [trips, setTrips] = useState([]);
-  const [routes, setRoutes] = useState([]);
-  const [stops, setStops] = useState([]);
-  const [fleetRouteOptions, setFleetRouteOptions] = useState([]);
-  const [tripForm, setTripForm] = useState({ fleet_route_id: '', trip_date: '', driver_id: '', conductor_id: '' });
-  const [creatingTrip, setCreatingTrip] = useState(false);
-  const [routeAssignForm, setRouteAssignForm] = useState({ fleet_id: '', route_id: '', start_time: '', end_time: '' });
-  const [routeForm, setRouteForm] = useState({ route_name: '', origin: '', destination: '' });
-  const [fareRuleForm, setFareRuleForm] = useState({ fleet_id: '', seat_type: 'seated', base_fare: '', fare_per_km: '' });
-  const [stopForm, setStopForm] = useState({ stop_name: '', latitude: '', longitude: '' });
-  const [stopLocationQuery, setStopLocationQuery] = useState('');
-  const [stopLocationResults, setStopLocationResults] = useState([]);
-  const [searchingStopLocation, setSearchingStopLocation] = useState(false);
-  const [stopLocationConfirm, setStopLocationConfirm] = useState(null);
-  const [stopLocationSearched, setStopLocationSearched] = useState(false);
-  const [stopMapPin, setStopMapPin] = useState(null); // { lat, lon } — controls map pin
-  const [routeStopForm, setRouteStopForm] = useState({ route_id: '', stop_id: '', stop_order: '', distance_from_origin_km: '' });
-  const [selectedRouteStops, setSelectedRouteStops] = useState([]);
-  const [loadingRouteStops, setLoadingRouteStops] = useState(false);
-  const [assigningRoute, setAssigningRoute] = useState(false);
-  const [creatingRoute, setCreatingRoute] = useState(false);
-  const [creatingFareRule, setCreatingFareRule] = useState(false);
-  const [creatingStop, setCreatingStop] = useState(false);
-  const [addingStopToRoute, setAddingStopToRoute] = useState(false);
-
-  const [selectedFleet, setSelectedFleet] = useState('');
-  const [loadingReport, setLoadingReport] = useState(false);
-  const [reportType, setReportType] = useState('financial');
-  const [advancedReports, setAdvancedReports] = useState({});
-  const [reportRange, setReportRange] = useState(() => {
-    const now = new Date();
-    const end = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-    const start = new Date(end.getTime() - 6 * 24 * 60 * 60 * 1000);
-    return {
-      start_date: start.toISOString().split('T')[0],
-      end_date: end.toISOString().split('T')[0],
-      date: end.toISOString().split('T')[0],
-    };
-  });
-
-  const showMessage = (msg, isSuccess = true) => {
-    if (isSuccess) {
-      setSuccessMsg(msg);
-      setError('');
-      setTimeout(() => setSuccessMsg(''), 3000);
-    } else {
-      setError(msg);
-      setSuccessMsg('');
-      setTimeout(() => setError(''), 3000);
-    }
-  };
-
-  const loadDashboardData = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const [
-        profileRes,
-        fleetsRes,
-        driversRes,
-        conductorsRes,
-        routesRes,
-        stopsRes,
-        fleetRoutesRes,
-        upcomingTripsRes,
-      ] = await Promise.all([
-        StaffService.getProfile('operator'),
-        StaffService.getOperatorFleets(),
-        StaffService.getOperatorDrivers(),
-        StaffService.getOperatorConductors(),
-        StaffService.getOperatorRoutes(),
-        StaffService.getOperatorStops(),
-        StaffService.getOperatorFleetRoutes(),
-        StaffService.getOperatorTrips(),
-      ]);
-
-      setProfile(profileRes.data);
-      setFleets(fleetsRes.data || []);
-      setDrivers(driversRes.data || []);
-      setConductors(conductorsRes.data || []);
-      setRoutes(routesRes.data || []);
-      setStops(stopsRes.data || []);
-      setFleetRouteOptions(fleetRoutesRes?.data || []);
-      setTrips(upcomingTripsRes?.data || []);
-    } catch (err) {
-      showMessage(err?.message || 'Failed to load dashboard', false);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+// Batch 30: the create form behind the one "+ Schedule" button of the Schedule page (it was inside the Trips view). It
+// is the same form and the same handler (useTripsTab); only its place changed, so it opens from any Schedule view.
+function ScheduleServiceModal({ state, drivers, conductors }) {
+  const { showModal, form, setForm, saving, msg, fleetRoutes, handleSchedule, rangePreview, rangeResult, confirmRange, closeScheduleModal } = state
+  const multiLeg = form.trip_type === 'round_trip'
+  const rangeMode = isRangeSchedule(form)
+  const rangeDays = rangeDayCount(form.trip_date, form.to_date)
+  const [bookingWindow, setBookingWindow] = useState(null)
+  const { drivers: dateDrivers, loading: loadingDateDrivers, error: dateDriversError } = useDateDrivers(showModal && form.trip_date ? form.trip_date : '', drivers)
+  useEffect(() => {
+    if (!showModal) return undefined
+    let cancelled = false
+    getBookingWindow().then((w) => { if (!cancelled) setBookingWindow(w) }).catch(() => { if (!cancelled) setBookingWindow(null) })
+    return () => { cancelled = true }
+  }, [showModal])
 
   useEffect(() => {
-    if (!didBootstrap.current) {
-      didBootstrap.current = true;
-      loadDashboardData();
+    if (form.driver_id && !dateDrivers.some((driver) => String(getStaffCompanyUserId(driver)) === String(form.driver_id) && !driver.busy_reason)) {
+      setForm((previous) => ({ ...previous, driver_id: '' }))
     }
-  }, [loadDashboardData]);
+  }, [dateDrivers, form.driver_id, setForm])
 
-  const handleAddFleet = async () => {
-    if (!fleetForm.plate_number || !fleetForm.seated_capacity || !fleetForm.standing_capacity) {
-      showMessage('Please fill all required fleet fields', false);
-      return;
-    }
+  const defaultLegTimesByBlock = {
+    morning: ['06:00', '08:30', '11:00', '13:30'],
+    afternoon: ['12:00', '14:30', '17:00', '19:30'],
+  }
 
-    setAddingFleet(true);
-    try {
-      const res = await StaffService.createFleet({
-        plate_number: fleetForm.plate_number,
-        seated_capacity: parseInt(fleetForm.seated_capacity),
-        standing_capacity: parseInt(fleetForm.standing_capacity),
-        fleet_type: fleetForm.fleet_type,
-      });
-      setFleets([...fleets, res.data]);
-      setFleetForm({ plate_number: '', seated_capacity: '', standing_capacity: '', fleet_type: 'public' });
-      showMessage('Fleet added successfully!', true);
-    } catch (err) {
-      showMessage(err?.message || 'Failed to create fleet', false);
-    } finally {
-      setAddingFleet(false);
-    }
-  };
-
-  const handleCreateEmployee = async () => {
-    if (!empForm.name || !empForm.email || !empForm.password || !empForm.phone_num) {
-      showMessage('Name, Email, Phone, and Password are required', false);
-      return;
-    }
-
-    setCreatingEmp(true);
-    try {
-      const res = await StaffService.createEmployeeAccount({
-        name: empForm.name,
-        email: empForm.email,
-        password: empForm.password,
-        phone_num: empForm.phone_num,
-        address: empForm.address || null,
-        username: empForm.username || null,
-        role: empForm.role,
-      });
-      
-      if (empForm.role === 'driver') {
-        setDrivers([...drivers, res.data]);
-      } else {
-        setConductors([...conductors, res.data]);
-      }
-      
-      setEmpForm({ name: '', email: '', phone_num: '', address: '', username: '', role: 'driver', password: '' });
-      showMessage(`${empForm.role} account created successfully!`, true);
-    } catch (err) {
-      showMessage(err?.message || 'Failed to create account', false);
-    } finally {
-      setCreatingEmp(false);
-    }
-  };
-
-  const handleScheduleTrip = async () => {
-    if (!tripForm.fleet_route_id || !tripForm.trip_date || !tripForm.driver_id || !tripForm.conductor_id) {
-      showMessage('Please select a fleet route, trip date, driver, and conductor', false);
-      return;
-    }
-
-    setCreatingTrip(true);
-    try {
-      const res = await StaffService.scheduleTrip({
-        fleet_route_id: parseInt(tripForm.fleet_route_id),
-        trip_date: tripForm.trip_date,
-        driver_id: parseInt(tripForm.driver_id),
-        conductor_id: parseInt(tripForm.conductor_id),
-      });
-      
-      setTrips([res.data, ...trips]);
-      setTripForm({ fleet_route_id: '', trip_date: '', driver_id: '', conductor_id: '' });
-      showMessage('Trip scheduled successfully!', true);
-
-      const upcomingTripsRes = await StaffService.getOperatorTrips();
-      setTrips(upcomingTripsRes?.data || []);
-    } catch (err) {
-      showMessage(err?.message || 'Failed to schedule trip', false);
-    } finally {
-      setCreatingTrip(false);
-    }
-  };
-
-  const handleAssignRouteToFleet = async () => {
-    if (!routeAssignForm.fleet_id || !routeAssignForm.route_id || !routeAssignForm.start_time || !routeAssignForm.end_time) {
-      showMessage('Please select fleet, route, start time, and end time', false);
-      return;
-    }
-
-    setAssigningRoute(true);
-    try {
-      await StaffService.assignRouteToFleet(parseInt(routeAssignForm.fleet_id), {
-        route_id: parseInt(routeAssignForm.route_id),
-        start_time: routeAssignForm.start_time,
-        end_time: routeAssignForm.end_time,
-      });
-
-      const fleetRoutesRes = await StaffService.getOperatorFleetRoutes();
-      setFleetRouteOptions(fleetRoutesRes?.data || []);
-      setRouteAssignForm({ fleet_id: '', route_id: '', start_time: '', end_time: '' });
-      showMessage('Route assigned to fleet successfully!', true);
-    } catch (err) {
-      showMessage(err?.message || 'Failed to assign route to fleet', false);
-    } finally {
-      setAssigningRoute(false);
-    }
-  };
-
-  const handleCreateFareRule = async () => {
-    if (!fareRuleForm.fleet_id || !fareRuleForm.base_fare || !fareRuleForm.fare_per_km || !fareRuleForm.seat_type) {
-      showMessage('Please complete all fare rule fields', false);
-      return;
-    }
-
-    setCreatingFareRule(true);
-    try {
-      await StaffService.createFareRule({
-        fleet_id: parseInt(fareRuleForm.fleet_id),
-        seat_type: fareRuleForm.seat_type,
-        base_fare: Number(fareRuleForm.base_fare),
-        fare_per_km: Number(fareRuleForm.fare_per_km),
-      });
-
-      setFareRuleForm({ fleet_id: '', seat_type: 'seated', base_fare: '', fare_per_km: '' });
-      showMessage('Fare rule created successfully!', true);
-    } catch (err) {
-      showMessage(err?.message || 'Failed to create fare rule', false);
-    } finally {
-      setCreatingFareRule(false);
-    }
-  };
-
-  const handleSearchStopLocation = async () => {
-    if (!stopLocationQuery.trim()) return;
-    setSearchingStopLocation(true);
-    setStopLocationResults([]);
-    setStopLocationSearched(false);
-    try {
-      const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(stopLocationQuery)}&limit=5`;
-      const res = await fetch(url, { headers: { 'Accept-Language': 'en' } });
-      const data = await res.json();
-      setStopLocationResults(data ?? []);
-      setStopLocationSearched(true);
-    } catch {
-      showMessage('Location search failed. Please check your connection and try again.', false);
-    } finally {
-      setSearchingStopLocation(false);
-    }
-  };
-
-  const handlePickStopLocation = (result) => {
-    const lat = parseFloat(result.lat).toFixed(6);
-    const lon = parseFloat(result.lon).toFixed(6);
-    setStopLocationConfirm({
-      display_name: result.display_name,
-      short_name: result.display_name.split(',')[0].trim(),
-      lat,
-      lon,
-    });
-    setStopMapPin({ lat: Number(lat), lon: Number(lon) });
-    setStopLocationResults([]);
-    setStopLocationQuery('');
-    setStopLocationSearched(false);
-  };
-
-  const handleConfirmStopLocation = () => {
-    if (!stopLocationConfirm) return;
-    setStopForm((prev) => ({
+  const updateLegTime = (index, value) => {
+    setForm((prev) => ({
       ...prev,
-      stop_name: prev.stop_name || stopLocationConfirm.short_name,
-      latitude: Number(stopLocationConfirm.lat),
-      longitude: Number(stopLocationConfirm.lon),
-    }));
-    setStopLocationConfirm(null);
-    // Keep the pin on the map after confirming
-  };
+      leg_departure_times: (Array.isArray(prev.leg_departure_times) ? prev.leg_departure_times : defaultLegTimesByBlock[prev.block_type] || defaultLegTimesByBlock.morning)
+        .map((time, i) => (i === index ? value : time)),
+    }))
+  }
 
-  const handleRejectStopLocation = () => {
-    setStopLocationConfirm(null);
-    setStopMapPin(null);
-  };
+  if (!showModal) return null
 
-  const handleCreateStop = async () => {
-    if (!stopForm.stop_name || !stopForm.latitude || !stopForm.longitude) {
-      showMessage('Please complete all stop fields', false);
-      return;
-    }
+  if (rangeResult) {
+    return (
+      <Modal title="Schedule Service" onClose={closeScheduleModal}>
+        <ScheduleRangePreview result={rangeResult} onDone={closeScheduleModal} />
+      </Modal>
+    )
+  }
 
-    setCreatingStop(true);
-    try {
-      const res = await StaffService.createOperatorStop({
-        stop_name: stopForm.stop_name,
-        latitude: Number(stopForm.latitude),
-        longitude: Number(stopForm.longitude),
-      });
-
-      setStops((prev) => [res.data, ...prev]);
-      setStopForm({ stop_name: '', latitude: '', longitude: '' });
-      setStopMapPin(null);
-      showMessage('Stop created successfully!', true);
-    } catch (err) {
-      showMessage(err?.message || 'Failed to create stop', false);
-    } finally {
-      setCreatingStop(false);
-    }
-  };
-
-  const handleCreateRoute = async () => {
-    if (!routeForm.route_name || !routeForm.origin || !routeForm.destination) {
-      showMessage('Please complete route name, origin, and destination', false);
-      return;
-    }
-
-    setCreatingRoute(true);
-    try {
-      const res = await StaffService.createOperatorRoute({
-        route_name: routeForm.route_name,
-        origin: routeForm.origin,
-        destination: routeForm.destination,
-      });
-
-      setRoutes((prev) => [res?.data, ...prev]);
-      setRouteForm({ route_name: '', origin: '', destination: '' });
-      showMessage('Route created successfully!', true);
-    } catch (err) {
-      showMessage(err?.message || 'Failed to create route', false);
-    } finally {
-      setCreatingRoute(false);
-    }
-  };
-
-  const handleAddStopToRoute = async () => {
-    if (!routeStopForm.route_id || !routeStopForm.stop_id || !routeStopForm.stop_order) {
-      showMessage('Please select a route, stop, and stop order', false);
-      return;
-    }
-
-    setAddingStopToRoute(true);
-    try {
-      await StaffService.addOperatorStopToRoute(parseInt(routeStopForm.route_id), {
-        stop_id: parseInt(routeStopForm.stop_id),
-        stop_order: parseInt(routeStopForm.stop_order),
-        distance_from_origin_km: Number(routeStopForm.distance_from_origin_km) || 0,
-      });
-
-      setRouteStopForm({ route_id: '', stop_id: '', stop_order: '', distance_from_origin_km: '' });
-      setSelectedRouteStops([]);
-      showMessage('Stop applied to route successfully.', true);
-    } catch (err) {
-      showMessage(err?.message || 'Failed to apply stop to route', false);
-    } finally {
-      setAddingStopToRoute(false);
-    }
-  };
-
-  // Haversine straight-line distance in km between two lat/lng points
-  const haversineKm = (lat1, lng1, lat2, lng2) => {
-    const toRad = (deg) => (deg * Math.PI) / 180;
-    const R = 6371;
-    const dLat = toRad(lat2 - lat1);
-    const dLng = toRad(lng2 - lng1);
-    const a =
-      Math.sin(dLat / 2) ** 2 +
-      Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
-    return R * 2 * Math.asin(Math.sqrt(a));
-  };
-
-  const handleRouteStopRouteChange = async (routeId) => {
-    setRouteStopForm({ route_id: routeId, stop_id: '', stop_order: '', distance_from_origin_km: '' });
-    setSelectedRouteStops([]);
-    if (!routeId) return;
-
-    setLoadingRouteStops(true);
-    try {
-      const res = await StaffService.getOperatorRoute(parseInt(routeId));
-      const routeData = res?.data ?? res ?? {};
-      const rawStops = routeData?.routeStops ?? routeData?.route_stops ?? [];
-      const sorted = [...rawStops].sort((a, b) => (a.stop_order ?? 0) - (b.stop_order ?? 0));
-      setSelectedRouteStops(sorted);
-      setRouteStopForm((prev) => ({ ...prev, stop_order: String(sorted.length + 1) }));
-    } catch {
-      setSelectedRouteStops([]);
-    } finally {
-      setLoadingRouteStops(false);
-    }
-  };
-
-  const handleRouteStopStopChange = (stopId) => {
-    if (!stopId) {
-      setRouteStopForm((prev) => ({ ...prev, stop_id: '', distance_from_origin_km: '' }));
-      return;
-    }
-
-    // Find the selected stop's coordinates from the local stops list
-    const selectedStop = stops.find((s) => String(s.stop_id) === String(stopId));
-    const newLat = Number(selectedStop?.latitude ?? 0);
-    const newLng = Number(selectedStop?.longitude ?? 0);
-
-    if (!selectedRouteStops.length || !Number.isFinite(newLat) || !Number.isFinite(newLng)) {
-      // First stop on this route, or no coordinates — distance from origin is 0
-      setRouteStopForm((prev) => ({ ...prev, stop_id: stopId, distance_from_origin_km: '0' }));
-      return;
-    }
-
-    // Build coordinate chain through existing route stops in order
-    const chain = selectedRouteStops
-      .map((rs) => {
-        const s = rs.stop ?? stops.find((x) => x.stop_id === rs.stop_id) ?? null;
-        return s ? { lat: Number(s.latitude), lng: Number(s.longitude) } : null;
-      })
-      .filter((c) => c && Number.isFinite(c.lat) && Number.isFinite(c.lng));
-
-    // Cumulative distance along the chain
-    let total = 0;
-    for (let i = 1; i < chain.length; i++) {
-      total += haversineKm(chain[i - 1].lat, chain[i - 1].lng, chain[i].lat, chain[i].lng);
-    }
-
-    // Add leg from last existing stop to the new stop
-    if (chain.length > 0) {
-      const last = chain[chain.length - 1];
-      total += haversineKm(last.lat, last.lng, newLat, newLng);
-    }
-
-    setRouteStopForm((prev) => ({
-      ...prev,
-      stop_id: stopId,
-      distance_from_origin_km: total.toFixed(2),
-    }));
-  };
-
-  const loadAdvancedReport = async (type) => {
-    if (!selectedFleet) {
-      showMessage('Please select a fleet', false);
-      return;
-    }
-
-    setLoadingReport(true);
-    try {
-      let res;
-      const rangeParams = {
-        start_date: reportRange.start_date,
-        end_date: reportRange.end_date,
-      };
-
-      if (type === 'financial') res = await StaffService.getFinancialReport(selectedFleet, rangeParams);
-      else if (type === 'revenue') res = await StaffService.getRevenueByRoute(selectedFleet, rangeParams);
-      else if (type === 'adherence') res = await StaffService.getRouteAdherence(selectedFleet, rangeParams);
-      else if (type === 'occupancy') res = await StaffService.getOccupancyTrends(selectedFleet, rangeParams);
-      else if (type === 'daily') res = await StaffService.getDailySummary(selectedFleet, { date: reportRange.date });
-      else if (type === 'channels') res = await StaffService.getPaymentChannels(selectedFleet, rangeParams);
-      
-      setAdvancedReports((prev) => ({ ...prev, [type]: res.data }));
-      setReportType(type);
-      showMessage('Report loaded successfully', true);
-    } catch (err) {
-      showMessage(err?.message || 'Failed to load report', false);
-    } finally {
-      setLoadingReport(false);
-    }
-  };
-
-  const handleLogout = async () => {
-    await StaffService.logout('operator').catch(() => {});
-    navigate('/employee/login', { replace: true });
-  };
-
-  const printReportsPdf = () => {
-    const report = advancedReports[reportType];
-    if (!report) {
-      showMessage('Generate a report first before printing.', false);
-      return;
-    }
-
-    const popup = window.open('', '_blank', 'width=1100,height=800');
-    if (!popup) {
-      showMessage('Unable to open print window. Please allow popups.', false);
-      return;
-    }
-
-    const toRows = (value, prefix = '') => {
-      if (Array.isArray(value)) {
-        return value.flatMap((item, idx) => toRows(item, `${prefix}[${idx}]`));
-      }
-
-      if (value && typeof value === 'object') {
-        return Object.entries(value).flatMap(([key, val]) => {
-          const nextPrefix = prefix ? `${prefix}.${key}` : key;
-          return toRows(val, nextPrefix);
-        });
-      }
-
-      return [[prefix || 'value', value == null ? '-' : String(value)]];
-    };
-
-    const sections = Object.entries(report || {}).map(([key, value]) => {
-      const rows = toRows(value);
-      const body = rows.map(([label, val]) => `
-        <tr>
-          <td>${label}</td>
-          <td>${val}</td>
-        </tr>
-      `).join('');
-
-      return `
-        <section class="report-section">
-          <h2>${key.replaceAll('_', ' ')}</h2>
-          <table>
-            <thead>
-              <tr><th>Field</th><th>Value</th></tr>
-            </thead>
-            <tbody>${body || '<tr><td colspan="2">No data</td></tr>'}</tbody>
-          </table>
-        </section>
-      `;
-    }).join('');
-
-    popup.document.write(`
-      <html>
-        <head>
-          <title>Operator Report - ${reportType}</title>
-          <style>
-            body { font-family: Arial, sans-serif; padding: 20px; color: #0f172a; }
-            h1 { margin: 0 0 4px; font-size: 22px; }
-            p { margin: 0 0 12px; color: #475569; }
-            .report-section { margin-top: 16px; }
-            .report-section h2 { margin: 0 0 8px; font-size: 16px; text-transform: capitalize; }
-            table { width: 100%; border-collapse: collapse; border: 1px solid #cbd5e1; }
-            th, td { border: 1px solid #cbd5e1; padding: 8px; text-align: left; font-size: 12px; vertical-align: top; }
-            th { background: #f1f5f9; font-weight: 700; }
-          </style>
-        </head>
-        <body>
-          <h1>Smart Transit Operator Report</h1>
-          <p>Type: ${reportType} | Generated: ${formatDateTime(new Date().toISOString())}</p>
-          ${sections || '<p>No report data available.</p>'}
-          <script>window.onload = function () { window.print(); };</script>
-        </body>
-      </html>
-    `);
-    popup.document.close();
-  };
-
-  const renderReportBody = () => {
-    const report = advancedReports[reportType];
-    if (!report) return null;
-
-    if (reportType === 'financial') {
-      const revenue = report.revenue || {};
-      const tickets = report.tickets || {};
-      const trips = report.trips || {};
-
-      return (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <div className="rounded-xl border border-slate-700 bg-slate-950 p-4">
-            <div className="text-xs uppercase text-slate-500">Total Revenue</div>
-            <div className="mt-2 text-2xl font-bold text-emerald-400">{asCurrency(revenue.total)}</div>
+  return (    <Modal title="Schedule Service" onClose={closeScheduleModal} wide>
+      {/* Batch 60 item 4 (user, 2026-11-11): two columns on a PC: the service on the left, the crew on the right. */}
+      <form className="grid gap-x-6 gap-y-4 lg:grid-cols-2" onSubmit={handleSchedule}>
+        <div className="min-w-0 space-y-4">
+        <Field label="Fleet Route" required>
+          <select value={form.fleet_route_id} onChange={e => setForm(p => ({...p, fleet_route_id: e.target.value}))} required className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500">
+            <option value="">Select a fleet route...</option>
+            {fleetRoutes.map(fr => (
+              <option key={fr.fleet_route_id} value={fr.fleet_route_id}>{fr.fleet?.plate_number} - {fr.route?.route_name}</option>
+            ))}
+          </select>
+        </Field>
+        {multiLeg ? (
+          <div className="grid grid-cols-2 gap-2">
+            {/* Phase B (§4.13): the same block on every day From..To; a To date equal to From (or empty) is one day. */}
+            <Field label="From" type="date" value={form.trip_date} onChange={e => setForm(p => ({...p, trip_date: e.target.value}))} required hint={bookingWindowWarning(form.trip_date, bookingWindow)} />
+            <Field label="To (optional)">
+              <input
+                type="date"
+                aria-label="To"
+                value={form.to_date || ''}
+                min={form.trip_date || undefined}
+                onChange={e => setForm(p => ({ ...p, to_date: e.target.value }))}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500"
+              />
+              {rangeDays > 1 && <p className="mt-1 text-xs text-slate-500">{rangeDays} days. You will see each day before anything is saved.</p>}
+            </Field>
           </div>
-          <div className="rounded-xl border border-slate-700 bg-slate-950 p-4">
-            <div className="text-xs uppercase text-slate-500">Online Payments</div>
-            <div className="mt-2 text-2xl font-bold text-sky-400">{asCurrency(revenue.online)}</div>
-          </div>
-          <div className="rounded-xl border border-slate-700 bg-slate-950 p-4">
-            <div className="text-xs uppercase text-slate-500">Cash Payments</div>
-            <div className="mt-2 text-2xl font-bold text-amber-400">{asCurrency(revenue.onsite_cash)}</div>
-          </div>
-          <div className="rounded-xl border border-slate-700 bg-slate-950 p-4">
-            <div className="text-xs uppercase text-slate-500">Completed Trips</div>
-            <div className="mt-2 text-2xl font-bold text-indigo-400">{Number(trips.completed || 0)}</div>
-          </div>
-          <div className="rounded-xl border border-slate-700 bg-slate-950 p-4 md:col-span-2 xl:col-span-2">
-            <div className="text-xs uppercase text-slate-500">Tickets Issued</div>
-            <div className="mt-2 text-xl font-bold text-slate-100">{Number(tickets.total || 0)}</div>
-            <p className="mt-1 text-xs text-slate-500">Avg per completed trip: {Number(tickets.average_per_trip || 0).toFixed(2)}</p>
-          </div>
-          <div className="rounded-xl border border-slate-700 bg-slate-950 p-4 md:col-span-2 xl:col-span-2">
-            <div className="text-xs uppercase text-slate-500">Average Revenue / Trip</div>
-            <div className="mt-2 text-xl font-bold text-slate-100">{asCurrency(trips.average_revenue_per_trip)}</div>
-            <p className="mt-1 text-xs text-slate-500">Period: {report.period?.start_date || '-'} to {report.period?.end_date || '-'}</p>
-          </div>
-        </div>
-      );
-    }
+        ) : (
+          <Field label="Trip Date" type="date" value={form.trip_date} onChange={e => setForm(p => ({...p, trip_date: e.target.value}))} required hint={bookingWindowWarning(form.trip_date, bookingWindow)} />
+        )}
+        <Field label="Schedule" required>
+          <select value={form.trip_type} onChange={e => setForm(p => ({ ...p, trip_type: e.target.value }))} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500">
+            <option value="one_way">Single Departure</option>
+            <option value="round_trip">Multi-Leg Schedule</option>
+          </select>
+        </Field>
+        <Field label="Service Type" required>
+          <select value={form.service_type || 'regular'} onChange={e => setForm(p => ({ ...p, service_type: e.target.value }))} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500" data-testid="service-type-select">
+            <option value="regular">Regular (stops at every stop)</option>
+            <option value="express">Express (limited stops, no fare yet)</option>
+          </select>
+        </Field>
 
-    if (reportType === 'daily') {
-      const summary = report.summary || {};
-      const entries = Object.entries(summary);
-      return (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-          <div className="rounded-xl border border-slate-700 bg-slate-950 p-4 md:col-span-2 xl:col-span-3">
-            <div className="text-xs uppercase text-slate-500">Report Date</div>
-            <div className="mt-2 text-lg font-semibold text-slate-100">{report.date || 'N/A'}</div>
-          </div>
-          {entries.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-slate-700 bg-slate-950 p-6 text-sm text-slate-400">No daily summary data yet.</div>
-          ) : (
-            entries.map(([key, val]) => (
-              <div key={key} className="rounded-xl border border-slate-700 bg-slate-950 p-4">
-                <div className="text-xs uppercase text-slate-500">{key.replaceAll('_', ' ')}</div>
-                <div className="mt-2 text-lg font-semibold text-slate-100">{typeof val === 'number' ? val.toLocaleString() : String(val)}</div>
-              </div>
-            ))
-          )}
-        </div>
-      );
-    }
-
-    if (reportType === 'revenue') {
-      const rows = report.routes || [];
-      return (
-        <div className="overflow-x-auto rounded-xl border border-slate-700">
-          <table className="min-w-full divide-y divide-slate-700 bg-slate-950 text-sm">
-            <thead className="bg-slate-900/80 text-slate-300">
-              <tr>
-                <th className="px-4 py-3 text-left font-semibold">Route</th>
-                <th className="px-4 py-3 text-left font-semibold">Total Revenue</th>
-                <th className="px-4 py-3 text-left font-semibold">Online</th>
-                <th className="px-4 py-3 text-left font-semibold">Cash</th>
-                <th className="px-4 py-3 text-left font-semibold">Trips</th>
-                <th className="px-4 py-3 text-left font-semibold">Tickets</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800 text-slate-200">
-              {rows.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="px-4 py-6 text-center text-slate-400">No route revenue data in this date range.</td>
-                </tr>
-              ) : (
-                rows.map((row) => (
-                  <tr key={row.route_id || row.route_name} className="hover:bg-slate-900/70">
-                    <td className="px-4 py-3 font-medium text-slate-100">{row.route_name || `Route ${row.route_id}`}</td>
-                    <td className="px-4 py-3">{asCurrency(row.total_revenue)}</td>
-                    <td className="px-4 py-3">{asCurrency(row.online_revenue)}</td>
-                    <td className="px-4 py-3">{asCurrency(row.onsite_revenue)}</td>
-                    <td className="px-4 py-3">{Number(row.total_trips || 0)}</td>
-                    <td className="px-4 py-3">{Number(row.total_tickets || 0)}</td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      );
-    }
-
-    if (reportType === 'adherence') {
-      const otp = report.on_time_performance || {};
-      return (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <div className="rounded-xl border border-slate-700 bg-slate-950 p-4">
-            <div className="text-xs uppercase text-slate-500">On-time %</div>
-            <div className="mt-2 text-2xl font-bold text-emerald-400">{Number(otp.on_time_percentage || 0).toFixed(2)}%</div>
-          </div>
-          <div className="rounded-xl border border-slate-700 bg-slate-950 p-4">
-            <div className="text-xs uppercase text-slate-500">Total Trips</div>
-            <div className="mt-2 text-2xl font-bold text-slate-100">{Number(otp.total_trips || 0)}</div>
-          </div>
-          <div className="rounded-xl border border-slate-700 bg-slate-950 p-4">
-            <div className="text-xs uppercase text-slate-500">On-time Trips</div>
-            <div className="mt-2 text-2xl font-bold text-sky-400">{Number(otp.on_time_trips || 0)}</div>
-          </div>
-          <div className="rounded-xl border border-slate-700 bg-slate-950 p-4">
-            <div className="text-xs uppercase text-slate-500">Delayed Trips</div>
-            <div className="mt-2 text-2xl font-bold text-amber-400">{Number(otp.delayed_trips || 0)}</div>
-          </div>
-        </div>
-      );
-    }
-
-    if (reportType === 'occupancy') {
-      const occ = report.occupancy || {};
-      const peakHours = Object.entries(report.peak_hours || {});
-      return (
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <div className="rounded-xl border border-slate-700 bg-slate-950 p-4">
-              <div className="text-xs uppercase text-slate-500">Average Occupancy</div>
-              <div className="mt-2 text-2xl font-bold text-slate-100">{Number(occ.average || 0).toFixed(2)}</div>
+        {form.trip_type === 'one_way' ? (
+          <>
+            <Field label="Departure Time" type="time" value={form.departure_time} onChange={e => setForm(p => ({...p, departure_time: e.target.value}))} required />
+            <Field label="Notes (optional)" value={form.notes} onChange={e => setForm(p => ({...p, notes: e.target.value}))} placeholder="Any notes..." />
+          </>
+        ) : (
+          <>
+            <Field label="Shift" required>
+              <select
+                value={form.block_type}
+                onChange={e => setForm(p => ({
+                  ...p,
+                  block_type: e.target.value,
+                  leg_departure_times: defaultLegTimesByBlock[e.target.value] || defaultLegTimesByBlock.morning,
+                }))}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500"
+              >
+                <option value="morning">Morning shift</option>
+                <option value="afternoon">Afternoon shift</option>
+              </select>
+            </Field>
+            <div className="grid grid-cols-2 gap-2">
+              {(Array.isArray(form.leg_departure_times) ? form.leg_departure_times : defaultLegTimesByBlock[form.block_type] || defaultLegTimesByBlock.morning).map((time, index) => (
+                <Field
+                  key={`leg-time-${index}`}
+                  label={`Leg ${index + 1} Departure`}
+                  type="time"
+                  value={time}
+                  onChange={(e) => updateLegTime(index, e.target.value)}
+                  required
+                />
+              ))}
             </div>
-            <div className="rounded-xl border border-slate-700 bg-slate-950 p-4">
-              <div className="text-xs uppercase text-slate-500">Peak Occupancy</div>
-              <div className="mt-2 text-2xl font-bold text-amber-400">{Number(occ.peak || 0)}</div>
+            {/* 2026-10-27 (§4.2): no fixed number of legs; Suggest times works out how many fit. */}
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setForm((prev) => ({ ...prev, leg_departure_times: addLeg(Array.isArray(prev.leg_departure_times) ? prev.leg_departure_times : defaultLegTimesByBlock[prev.block_type] || defaultLegTimesByBlock.morning) }))}
+                className="rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 ring-1 ring-inset ring-slate-300 hover:bg-slate-100"
+              >
+                Add a leg
+              </button>
+              <button
+                type="button"
+                onClick={() => setForm((prev) => ({ ...prev, leg_departure_times: removeLastLeg(Array.isArray(prev.leg_departure_times) ? prev.leg_departure_times : defaultLegTimesByBlock[prev.block_type] || defaultLegTimesByBlock.morning) }))}
+                className="rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 ring-1 ring-inset ring-slate-300 hover:bg-slate-100"
+              >
+                Remove the last leg
+              </button>
             </div>
-            <div className="rounded-xl border border-slate-700 bg-slate-950 p-4">
-              <div className="text-xs uppercase text-slate-500">Average Utilization</div>
-              <div className="mt-2 text-2xl font-bold text-cyan-400">{Number(occ.average_utilization_percentage || 0).toFixed(2)}%</div>
-            </div>
-            <div className="rounded-xl border border-slate-700 bg-slate-950 p-4">
-              <div className="text-xs uppercase text-slate-500">Capacity</div>
-              <div className="mt-2 text-2xl font-bold text-indigo-400">{Number(report.capacity || 0)}</div>
-            </div>
-          </div>
+            <LegTimeSuggestion
+              fleetRouteId={form.fleet_route_id}
+              date={form.trip_date}
+              firstTime={(Array.isArray(form.leg_departure_times) ? form.leg_departure_times : defaultLegTimesByBlock[form.block_type] || defaultLegTimesByBlock.morning)[0]}
+              serviceType={form.service_type || 'regular'}
+              onApply={(times) => setForm((prev) => ({ ...prev, leg_departure_times: times }))}
+            />
+          </>
+        )}
+        </div>
+        <div className="min-w-0 space-y-4">
+        {/* Batch 46: a single trip may be scheduled before its crew is chosen; a shift block still needs both. Not
+            Available crew are listed but cannot be picked. */}
+        <Field label={multiLeg ? 'Driver' : 'Driver (or choose later)'} required={multiLeg}>
+          <select aria-label="Driver" value={form.driver_id} onChange={e => setForm(p => ({ ...p, driver_id: e.target.value }))} required={multiLeg} disabled={loadingDateDrivers || Boolean(dateDriversError)} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500 disabled:opacity-60">
+            <option value="">{multiLeg ? 'Select a driver...' : 'Choose later'}</option>
+            {sortForPicker(dateDrivers).map(d => (
+              <option key={getStaffCompanyUserId(d)} value={getStaffCompanyUserId(d)} disabled={!isPickable(d)}>
+                {crewOptionLabel(d)}
+              </option>
+            ))}
+          </select>
+        </Field>
+        {loadingDateDrivers && <p role="status" className="text-xs text-slate-500">Checking driver availability...</p>}
+        {dateDriversError && <p role="alert" className="text-xs text-rose-700">{dateDriversError}</p>}
+        <Field label={multiLeg ? 'Chauffeur' : 'Chauffeur (or choose later)'} required={multiLeg}>
+          <select aria-label="Chauffeur" value={form.conductor_id} onChange={e => setForm(p => ({ ...p, conductor_id: e.target.value }))} required={multiLeg} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500">
+            <option value="">{multiLeg ? 'Select a chauffeur...' : 'Choose later'}</option>
+            {sortForPicker(conductors).map(c => (
+              <option key={getStaffCompanyUserId(c)} value={getStaffCompanyUserId(c)} disabled={!isPickable(c)}>
+                {crewOptionLabel(c)}
+              </option>
+            ))}
+          </select>
+        </Field>
+        {!multiLeg && (!form.driver_id || !form.conductor_id) && (
+          <p role="status" className="text-xs text-amber-700">Without both a Driver and a Chauffeur the trip shows "Crew needed" and cannot start boarding.</p>
+        )}
+        </div>
+        <div className="space-y-4 lg:col-span-2">
+        {msg && <p className="text-sm text-red-600">{msg}</p>}
+        {rangeMode && <ScheduleRangePreview preview={rangePreview} saving={saving} onConfirm={confirmRange} />}
+        <div className="flex justify-end gap-2 pt-2">
+          <button type="button" onClick={closeScheduleModal} className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50">Cancel</button>
+          <button type="submit" disabled={saving || loadingDateDrivers || Boolean(dateDriversError)} className="flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-60">
+            {saving && <Loader2 className="h-4 w-4 animate-spin" />}{rangeMode ? (rangePreview ? 'Preview again' : 'Preview days') : 'Schedule'}
+          </button>
+        </div>
+        </div>
+      </form>
+    </Modal>
+  )
+}
+function TripsTab({ drivers, conductors, onRefresh, tripsState, focusTripId = null, onDismissFocus = () => {} }) {
+  const {
+    selectedTrip, setSelectedTrip,
+    tripFilter, setTripFilter,
+    gpsHistory,
+    gpsLoading,
+    gpsMessage,
+    assignModal, setAssignModal,
+    confirmComplete, setConfirmComplete,
+    statusOverrideSaving,
+    statusOverrideMsg,
+    assignId, setAssignId,
+    saving,
+    actionInFlight,
+    msg, setMsg,
+    visibleTrips,
+    visibleTripsMeta,
+    loadingMoreTrips,
+    loadMoreTrips,
+    handleAssign,
+    assignCrew,
+    handleAction,
+    handleConfirmedComplete,
+    handleStatusOverride,
+    loadTripGpsHistory,
+  } = tripsState
+  const [cancelTarget, setCancelTarget] = useState(null)
+  const [cancelNotice, setCancelNotice] = useState('')
+  const { drivers: dateDrivers, loading: loadingDateDrivers, error: dateDriversError } = useDateDrivers(
+    ['driver', 'crew'].includes(assignModal?.type) ? String(assignModal.trip?.trip_date || '').slice(0, 10) : '',
+    drivers,
+  )
 
-          <div className="overflow-x-auto rounded-xl border border-slate-700">
-            <table className="min-w-full divide-y divide-slate-700 bg-slate-950 text-sm">
-              <thead className="bg-slate-900/80 text-slate-300">
-                <tr>
-                  <th className="px-4 py-3 text-left font-semibold">Hour</th>
-                  <th className="px-4 py-3 text-left font-semibold">Avg Occupancy</th>
+  useEffect(() => {
+    if (assignModal?.type === 'driver' && assignId && !dateDrivers.some((driver) => String(getStaffCompanyUserId(driver)) === String(assignId) && !driver.busy_reason)) {
+      setAssignId('')
+    }
+  }, [assignId, assignModal?.type, dateDrivers, setAssignId])
+
+  const driverMap = new Map(drivers.map(d => [Number(getStaffCompanyUserId(d)), d]))
+  const conductorMap = new Map(conductors.map(c => [Number(getStaffCompanyUserId(c)), c]))
+
+  const sorted = [...visibleTrips]
+    .sort((a,b) => (parseAppDate(b.trip_date)?.getTime() ?? 0) - (parseAppDate(a.trip_date)?.getTime() ?? 0))
+
+  // S3: split into "Today's Trips" (today + any past/overdue trips still
+  // needing attention — the existing "Overdue" badge below already flags
+  // those) and "Upcoming Trips" (strictly future-dated), using the same
+  // Manila-anchored business-day helper relied on elsewhere in the app.
+  const todaysTrips = sorted.filter((t) => {
+    const tripDateStr = String(t?.trip_date || '').match(/^(\d{4}-\d{2}-\d{2})/)?.[1]
+    if (!tripDateStr) return true
+    return tripDateStr <= getBusinessToday()
+  })
+  const upcomingTrips = sorted.filter((t) => {
+    const tripDateStr = String(t?.trip_date || '').match(/^(\d{4}-\d{2}-\d{2})/)?.[1]
+    return Boolean(tripDateStr) && tripDateStr > getBusinessToday()
+  })
+
+  // S3: purely computed, non-persisted indicator — a trip whose scheduled
+  // date has passed without ever being closed out (completed or cancelled).
+  // Not a new status; just a visual flag layered on top of whatever status
+  // the trip is currently stuck in, so Operator/Admin can spot it without a
+  // manual search.
+  const todayStart = getBusinessToday()
+  debugLogBusinessTime('OperatorDashboard: overdue-trip flag check')
+  const isOverdueUnclosed = (trip) => {
+    const tripDateStr = String(trip?.trip_date || '').match(/^(\d{4}-\d{2}-\d{2})/)?.[1]
+    if (!tripDateStr) return false
+    return tripDateStr < todayStart && !['completed', 'cancelled'].includes(trip?.status)
+  }
+
+  // Batch 46: the trip opened from the calendar pop-up. TripFocusNotice scrolls to its row; the row is highlighted.
+  const focusedTrip = focusTripId ? visibleTrips.find((t) => Number(t.trip_id) === Number(focusTripId)) : null
+  const focusNotice = focusTripId
+    ? (focusedTrip
+      ? { state: 'shown', tone: 'info', title: `Trip #${focusTripId}`, message: `${focusedTrip.fleet_route?.route?.route_name || 'Route not provided'}, ${fmtDate(focusedTrip.trip_date)}. It is highlighted below.` }
+      : { state: 'missing', tone: 'warning', title: `Trip #${focusTripId}`, message: 'This trip is not in the loaded list yet. Choose "Load more trips" below, or Refresh.' })
+    : null
+
+  return (
+    <div className="space-y-4">
+      <TripFocusNotice tripId={focusedTrip ? focusTripId : null} notice={focusNotice} onDismiss={onDismissFocus} />
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Trips</h3>
+        <div className="flex flex-wrap items-center gap-2">
+          <label htmlFor="operator-trip-filter" className="text-xs font-semibold uppercase tracking-wide text-slate-500">Filter</label>
+          <select
+            id="operator-trip-filter"
+            value={tripFilter}
+            onChange={(event) => setTripFilter(event.target.value)}
+            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
+          >
+            <option value="all">All</option>
+            <option value="scheduled">Scheduled / Active</option>
+            <option value="completed">Completed</option>
+          </select>
+          <button type="button" onClick={onRefresh} className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50">
+            <RefreshCw className="h-4 w-4" /> Refresh
+          </button>
+        </div>
+      </div>
+      {[
+        { key: 'today', title: "Today's Trips", list: todaysTrips },
+        { key: 'upcoming', title: 'Upcoming Trips', list: upcomingTrips },
+      ].map(({ key, title, list }) => (
+        <div key={key} className="staff-card staff-card-flush overflow-hidden">
+          <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+            <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
+            <span className="text-xs font-medium text-slate-500">{list.length} trip{list.length === 1 ? '' : 's'}</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50">
+                <tr className="border-b border-slate-200">
+                  {['ID','Date','Departure','Route','Fleet','Driver','Chauffeur','Status','Actions'].map(h => (
+                    <th key={h} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 whitespace-nowrap">{h}</th>
+                  ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800 text-slate-200">
-                {peakHours.length === 0 ? (
-                  <tr>
-                    <td colSpan={2} className="px-4 py-6 text-center text-slate-400">No peak-hour occupancy data available.</td>
-                  </tr>
-                ) : (
-                  peakHours.map(([hour, avg]) => (
-                    <tr key={hour} className="hover:bg-slate-900/70">
-                      <td className="px-4 py-3 font-medium text-slate-100">{hour}:00</td>
-                      <td className="px-4 py-3">{Number(avg).toFixed(2)}</td>
-                    </tr>
-                  ))
-                )}
+              <tbody>
+                {list.length === 0
+                  ? <tr><td colSpan={9} className="px-5 py-8 text-center text-sm text-slate-400">No trips found.</td></tr>
+                  : list.map(t => {
+                    const driverRow = t.driver || driverMap.get(Number(t.driver_id))
+                    const conductorRow = t.conductor || conductorMap.get(Number(t.conductor_id))
+                    const driverName = driverRow ? getStaffFullName(driverRow) || (driverRow?.user?.email || driverRow?.email) : null
+                    const conductorName = conductorRow ? getStaffFullName(conductorRow) || (conductorRow?.user?.email || conductorRow?.email) : null
+                    return (
+                      <tr key={t.trip_id} id={`trip-row-${t.trip_id}`} data-focused={Number(t.trip_id) === Number(focusTripId) ? 'true' : undefined} className={`border-b border-slate-100 hover:bg-slate-50 ${Number(t.trip_id) === Number(focusTripId) ? 'bg-teal-50 ring-2 ring-inset ring-teal-500' : ''}`}>
+                        <td className="px-4 py-3 font-mono text-xs text-slate-600">#{t.trip_id}</td>
+                        <td className="px-4 py-3 text-slate-700 whitespace-nowrap">{fmtDate(t.trip_date)}</td>
+                        <td className="px-4 py-3 text-slate-700 whitespace-nowrap">{clock12(t.departure_time || t.fleet_route?.start_time) || '--:--'}</td>
+                        <td className="px-4 py-3 text-slate-700 max-w-30 truncate">
+                          {t.fleet_route?.route?.route_name || '-'}
+                          {t.shift_block_id
+                            ? <span className="ml-1.5 rounded-full bg-indigo-100 px-1.5 py-0.5 text-xs font-semibold text-indigo-700" title="Auto-generated from a Shift Block">Block</span>
+                            : <span className="ml-1.5 rounded-full bg-slate-100 px-1.5 py-0.5 text-xs font-semibold text-slate-500" title="Manually created ad hoc/charter trip">Ad hoc</span>}
+                        </td>
+                        <td className="px-4 py-3 text-slate-700">{t.fleet_route?.fleet?.plate_number || '-'} <RunInfoChips runPattern={t.run_info?.run_pattern} service={t.run_info?.service} serviceType={t.service_type} showRunPattern /></td>
+                        <td className="px-4 py-3">
+                          {driverName ? <span className="text-slate-700">{driverName}</span>
+                            : <span className="text-xs text-slate-400">Not assigned</span>}
+                        </td>
+                        <td className="px-4 py-3">
+                          {conductorName ? <span className="text-slate-700">{conductorName}</span>
+                            : <span className="text-xs text-slate-400">Not assigned</span>}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`rounded-full px-2 py-0.5 text-xs font-semibold whitespace-nowrap ${STATUS_CHIP[t.status] ?? 'bg-slate-100 text-slate-600'}`}>{t.status}</span>
+                          {/* Batch 46: a trip waiting for its crew cannot start boarding. */}
+                          {needsCrew(t) && ['scheduled', 'delayed'].includes(t.status) && (
+                            <span className="ml-1.5 inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800 whitespace-nowrap">Crew needed</span>
+                          )}
+                          {isOverdueUnclosed(t) && (
+                            <span
+                              className="ml-1.5 inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700 whitespace-nowrap"
+                              title="Scheduled date has passed and this trip was never marked completed or cancelled."
+                            >
+                              <AlertTriangle className="h-3 w-3" /> Overdue
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex gap-1">
+                            {needsCrew(t) && ['scheduled', 'delayed'].includes(t.status) && (
+                              <button type="button" onClick={() => { setAssignModal({ trip: t, type: 'crew' }); setMsg('') }} className="rounded px-2 py-1 text-xs font-semibold bg-teal-600 text-white hover:bg-teal-700 whitespace-nowrap">Assign crew</button>
+                            )}
+                            {['scheduled', 'delayed'].includes(t.status) && !needsCrew(t) && <button type="button" onClick={() => handleAction(t.trip_id,'boarding')} disabled={actionInFlight === t.trip_id} className="rounded px-2 py-1 text-xs bg-blue-100 text-blue-700 hover:bg-blue-200 disabled:opacity-50">{actionInFlight === t.trip_id ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Board'}</button>}
+                            {t.status === 'boarding'     && <button type="button" onClick={() => handleAction(t.trip_id,'depart')} disabled={actionInFlight === t.trip_id} className="rounded px-2 py-1 text-xs bg-amber-100 text-amber-700 hover:bg-amber-200 disabled:opacity-50">{actionInFlight === t.trip_id ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Depart'}</button>}
+                            {['departed','in-progress'].includes(t.status) && <button type="button" onClick={() => handleAction(t.trip_id,'complete')} disabled={actionInFlight === t.trip_id} className="rounded px-2 py-1 text-xs bg-emerald-100 text-emerald-700 hover:bg-emerald-200 disabled:opacity-50">Complete</button>}
+                            {['scheduled', 'delayed', 'boarding', 'departed', 'in-progress'].includes(t.status) && <button type="button" onClick={() => setCancelTarget(t)} className="rounded px-2 py-1 text-xs bg-red-50 text-red-700 hover:bg-red-100">Cancel</button>}
+                            {isOverdueUnclosed(t) && <button type="button" onClick={() => setSelectedTrip(t)} className="rounded px-2 py-1 text-xs bg-red-100 text-red-700 hover:bg-red-200">Update Status</button>}
+                            <button type="button" onClick={() => setSelectedTrip(t)} className="rounded px-2 py-1 text-xs bg-slate-100 text-slate-600 hover:bg-slate-200"><Eye className="h-3.5 w-3.5" /></button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })
+                }
               </tbody>
             </table>
           </div>
         </div>
-      );
-    }
+      ))}
 
-    if (reportType === 'channels') {
-      const rows = report.channels || [];
-      return (
-        <div className="overflow-x-auto rounded-xl border border-slate-700">
-          <table className="min-w-full divide-y divide-slate-700 bg-slate-950 text-sm">
-            <thead className="bg-slate-900/80 text-slate-300">
-              <tr>
-                <th className="px-4 py-3 text-left font-semibold">Channel</th>
-                <th className="px-4 py-3 text-left font-semibold">Total Amount</th>
-                <th className="px-4 py-3 text-left font-semibold">Transactions</th>
-                <th className="px-4 py-3 text-left font-semibold">Average Ticket</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800 text-slate-200">
-              {rows.length === 0 ? (
-                <tr>
-                  <td colSpan={4} className="px-4 py-6 text-center text-slate-400">No payment channel activity for this period.</td>
-                </tr>
-              ) : (
-                rows.map((row) => (
-                  <tr key={row.channel || 'unknown'} className="hover:bg-slate-900/70">
-                    <td className="px-4 py-3 font-medium text-slate-100">{String(row.channel || 'unknown').replaceAll('_', ' ')}</td>
-                    <td className="px-4 py-3">{asCurrency(row.total_amount)}</td>
-                    <td className="px-4 py-3">{Number(row.transaction_count || 0)}</td>
-                    <td className="px-4 py-3">{asCurrency(row.average_transaction)}</td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      );
-    }
-
-    const rows = toRows(report);
-    return (
-      <div className="overflow-x-auto rounded-xl border border-slate-700">
-        <table className="min-w-full divide-y divide-slate-700 bg-slate-950 text-sm">
-          <thead className="bg-slate-900/80 text-slate-300">
-            <tr>
-              <th className="px-4 py-3 text-left font-semibold">Label</th>
-              <th className="px-4 py-3 text-left font-semibold">Metric A</th>
-              <th className="px-4 py-3 text-left font-semibold">Metric B</th>
-              <th className="px-4 py-3 text-left font-semibold">Metric C</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-800 text-slate-200">
-            {rows.length === 0 ? (
-              <tr>
-                <td colSpan={4} className="px-4 py-6 text-center text-slate-400">No report rows available for this range.</td>
-              </tr>
-            ) : (
-              rows.map((row, idx) => {
-                const label = row.route_name || row.name || row.channel || row.label || row.date || `Row ${idx + 1}`;
-                const a = row.revenue ?? row.value ?? row.total ?? row.amount ?? row.count ?? '-';
-                const b = row.trips ?? row.rate ?? row.percentage ?? row.volume ?? '-';
-                const c = row.occupancy ?? row.status ?? row.share ?? row.change ?? '-';
-
-                return (
-                  <tr key={`${label}-${idx}`} className="hover:bg-slate-900/70">
-                    <td className="px-4 py-3 font-medium text-slate-100">{String(label)}</td>
-                    <td className="px-4 py-3">{typeof a === 'number' && reportType !== 'adherence' ? asCurrency(a) : String(a)}</td>
-                    <td className="px-4 py-3">{String(b)}</td>
-                    <td className="px-4 py-3">{String(c)}</td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
-    );
-  };
-
-  return (
-    <div className="flex h-screen bg-linear-to-br from-slate-900 to-slate-800 text-slate-200">
-      {/* Sidebar */}
-      <aside className="w-80 bg-slate-950 border-r border-slate-700 p-6 flex flex-col overflow-y-auto">
-        <div className="mb-8">
-          <div className="mb-2 inline-flex items-center gap-2 text-2xl font-bold text-blue-400">
-            <Bus className="h-6 w-6" />
-            Smart Transit
-          </div>
-          <div className="text-xs uppercase tracking-wider text-slate-500">Operator</div>
-        </div>
-
-        {profile && (
-          <div className="flex gap-3 p-4 bg-slate-900 rounded-lg mb-8">
-            <div className="w-12 h-12 rounded-full bg-linear-to-br from-blue-500 to-blue-600 flex items-center justify-center font-bold text-lg shrink-0">
-              {(profile.name || 'O')[0].toUpperCase()}
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="font-semibold text-white truncate">{profile.name}</div>
-              <div className="text-xs text-slate-400 truncate">{profile.email}</div>
-            </div>
-          </div>
-        )}
-
-        <nav className="relative mb-8 mt-2 flex flex-1 flex-col gap-1 pl-3">
-          <div className="absolute bottom-2 left-1.75 top-2 w-px bg-slate-800" aria-hidden="true" />
-          {NAV_ITEMS.map((item) => {
-            const Icon = item.icon;
-            const isActive = activeTab === item.id;
-            return (
-              <button
-                key={item.id}
-                className="group relative flex items-center gap-3 rounded-lg py-2.5 pl-5 pr-3 text-sm font-medium"
-                onClick={() => {
-                  setActiveTab(item.id);
-                  setError('');
-                  setSuccessMsg('');
-                }}
-              >
-                <span
-                  className={[
-                    'absolute left-0 top-1/2 h-2.5 w-2.5 -translate-y-1/2 rounded-full border transition',
-                    isActive
-                      ? 'border-sky-400 bg-sky-400 shadow-[0_0_0_3px_rgba(56,189,248,0.25)]'
-                      : 'border-slate-600 bg-slate-950 group-hover:border-slate-400',
-                  ].join(' ')}
-                  aria-hidden="true"
-                />
-                <Icon className={isActive ? 'h-4 w-4 text-sky-400' : 'h-4 w-4 text-slate-500 group-hover:text-slate-300'} />
-                <span className={isActive ? 'text-white' : 'text-slate-400 group-hover:text-slate-200'}>{item.label}</span>
-              </button>
-            );
-          })}
-        </nav>
-
-        <button
-          className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20 rounded-lg transition font-medium"
-          onClick={handleLogout}
-        >
-          <LogOut size={18} /> Sign Out
-        </button>
-      </aside>
-
-      {/* Main Content */}
-      <main className="flex-1 flex flex-col">
-        <div className="flex justify-between items-center px-8 py-6 bg-slate-900/50 border-b border-slate-700">
-          <h1 className="text-3xl font-bold">{NAV_ITEMS.find(n => n.id === activeTab)?.label}</h1>
+      {visibleTripsMeta.current_page < visibleTripsMeta.last_page && (
+        <div className="flex justify-center">
           <button
-            className="px-4 py-2 bg-blue-500/10 border border-blue-500/30 text-blue-400 hover:bg-blue-500/20 rounded-lg transition"
-            onClick={loadDashboardData}
+            type="button"
+            onClick={() => void loadMoreTrips()}
+            disabled={loadingMoreTrips}
+            className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
           >
-            <span className="inline-flex items-center gap-2"><RefreshCw size={14} />Refresh</span>
+            {loadingMoreTrips ? 'Loading...' : `Load more trips (${visibleTrips.length} of ${visibleTripsMeta.total})`}
           </button>
         </div>
+      )}
 
-        {error && (
-          <div className="mx-8 mt-6 flex items-center gap-3 rounded-lg border border-red-900/50 bg-red-950/30 px-4 py-3 text-red-300">
-            <AlertCircle size={18} className="shrink-0" />
-            <span>{error}</span>
-          </div>
-        )}
-        {successMsg && (
-          <div className="mx-8 mt-6 flex items-center gap-3 rounded-lg border border-green-900/50 bg-green-950/30 px-4 py-3 text-green-300">
-            <CheckCircle size={18} className="shrink-0" />
-            <span>{successMsg}</span>
-          </div>
-        )}
 
-        <div className="flex-1 overflow-y-auto px-8 py-6">
-          {isLoading ? (
-            <div className="flex flex-col items-center justify-center h-full gap-4">
-              <Loader size={32} className="text-blue-400 animate-spin" />
-              <p className="text-slate-400">Loading operator dashboard...</p>
+      {cancelNotice && <p role="status" className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{cancelNotice}</p>}
+      {cancelTarget && (
+        <CancelTripModal trip={cancelTarget} service={OperatorService} onClose={() => setCancelTarget(null)} onDone={(text) => { setCancelNotice(text); onRefresh() }} />
+      )}
+
+      {assignModal?.type === 'crew' && (
+        <AssignCrewModal
+          trip={assignModal.trip}
+          drivers={dateDrivers}
+          conductors={conductors}
+          loadingDrivers={loadingDateDrivers}
+          driversError={dateDriversError}
+          saving={saving}
+          msg={msg}
+          onClose={() => setAssignModal(null)}
+          onAssign={(ids) => assignCrew(assignModal.trip, ids)}
+        />
+      )}
+
+      {assignModal && assignModal.type !== 'crew' && (
+        <Modal title={`Assign ${assignModal.type === 'conductor' ? 'Chauffeur' : 'Driver'} to Trip #${assignModal.trip.trip_id}`} onClose={() => setAssignModal(null)}>
+          <form className="space-y-4" onSubmit={handleAssign}>
+            <Field label={`Select ${assignModal.type === 'conductor' ? 'Chauffeur' : 'Driver'}`} required>
+              <select value={assignId} onChange={e => setAssignId(e.target.value)} required disabled={assignModal.type === 'driver' && (loadingDateDrivers || Boolean(dateDriversError))} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500 disabled:opacity-60">
+                <option value="">Choose...</option>
+                {sortForPicker(assignModal.type === 'driver' ? dateDrivers : conductors).map(p => (
+                  <option key={getStaffCompanyUserId(p)} value={getStaffCompanyUserId(p)} disabled={!isPickable(p)}>{crewOptionLabel(p)}</option>
+                ))}
+              </select>
+            </Field>
+            {assignModal.type === 'driver' && loadingDateDrivers && <p role="status" className="text-xs text-slate-500">Checking driver availability...</p>}
+            {assignModal.type === 'driver' && dateDriversError && <p role="alert" className="text-xs text-rose-700">{dateDriversError}</p>}
+            {msg && <p className="text-sm text-red-600">{msg}</p>}
+            <div className="flex justify-end gap-2 pt-2">
+              <button type="button" onClick={() => setAssignModal(null)} className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50">Cancel</button>
+              <button type="submit" disabled={saving || (assignModal.type === 'driver' && (loadingDateDrivers || Boolean(dateDriversError)))} className="flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-60">
+                {saving && <Loader2 className="h-4 w-4 animate-spin" />}Assign
+              </button>
             </div>
-          ) : (
-            <div className="space-y-6">
-              {/* OVERVIEW */}
-              {activeTab === 'overview' && (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                  <div className="flex gap-4 p-6 bg-slate-900 border border-slate-700 rounded-lg hover:border-slate-600 transition">
-                    <div className="inline-flex h-12 w-12 items-center justify-center rounded-xl border border-slate-700 bg-slate-950 text-sky-400"><Bus className="h-6 w-6" /></div>
-                    <div className="flex-1">
-                      <div className="text-xs uppercase text-slate-500 mb-1">Active Fleets</div>
-                      <div className="text-3xl font-bold text-blue-400">{fleets.length}</div>
-                    </div>
-                  </div>
-                  <div className="flex gap-4 p-6 bg-slate-900 border border-slate-700 rounded-lg hover:border-slate-600 transition">
-                    <div className="inline-flex h-12 w-12 items-center justify-center rounded-xl border border-slate-700 bg-slate-950 text-sky-400"><UserRound className="h-6 w-6" /></div>
-                    <div className="flex-1">
-                      <div className="text-xs uppercase text-slate-500 mb-1">Drivers</div>
-                      <div className="text-3xl font-bold text-blue-400">{drivers.length}</div>
-                    </div>
-                  </div>
-                  <div className="flex gap-4 p-6 bg-slate-900 border border-slate-700 rounded-lg hover:border-slate-600 transition">
-                    <div className="inline-flex h-12 w-12 items-center justify-center rounded-xl border border-slate-700 bg-slate-950 text-sky-400"><Users className="h-6 w-6" /></div>
-                    <div className="flex-1">
-                      <div className="text-xs uppercase text-slate-500 mb-1">Conductors</div>
-                      <div className="text-3xl font-bold text-blue-400">{conductors.length}</div>
-                    </div>
-                  </div>
-                  <div className="flex gap-4 p-6 bg-slate-900 border border-slate-700 rounded-lg hover:border-slate-600 transition">
-                    <div className="inline-flex h-12 w-12 items-center justify-center rounded-xl border border-slate-700 bg-slate-950 text-sky-400"><Calendar className="h-6 w-6" /></div>
-                    <div className="flex-1">
-                      <div className="text-xs uppercase text-slate-500 mb-1">Scheduled Trips</div>
-                      <div className="text-3xl font-bold text-blue-400">{trips.length}</div>
-                    </div>
-                  </div>
+          </form>
+        </Modal>
+      )}
+
+      {confirmComplete && (
+        <Modal title="Complete Trip?" onClose={() => setConfirmComplete(null)}>
+          <div className="space-y-4">
+            <p className="text-sm text-slate-600">This will finalize the trip and record all earnings. <strong>This cannot be undone.</strong></p>
+            <dl className="grid grid-cols-2 gap-2 rounded-lg bg-slate-50 p-3 text-sm">
+              <div><dt className="text-xs text-slate-400">Trip ID</dt><dd className="font-semibold text-slate-900">#{confirmComplete.trip_id}</dd></div>
+              <div><dt className="text-xs text-slate-400">Route</dt><dd className="font-semibold text-slate-900">{confirmComplete.fleet_route?.route?.route_name || '-'}</dd></div>
+              <div><dt className="text-xs text-slate-400">Fleet</dt><dd className="font-semibold text-slate-900">{confirmComplete.fleet_route?.fleet?.plate_number || '-'}</dd></div>
+              <div><dt className="text-xs text-slate-400">Date</dt><dd className="font-semibold text-slate-900">{fmtDate(confirmComplete.trip_date)}</dd></div>
+            </dl>
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setConfirmComplete(null)} className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50">Cancel</button>
+              <button type="button" onClick={handleConfirmedComplete} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700">Yes, Complete Trip</button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {selectedTrip && (
+        <Modal title={`Trip #${selectedTrip.trip_id} Details`} onClose={() => setSelectedTrip(null)}>
+          <div className="space-y-4">
+            <dl className="grid grid-cols-2 gap-3 text-sm">
+              {[['Date', fmtDate(selectedTrip.trip_date)],['Status', selectedTrip.status],['Route', selectedTrip.fleet_route?.route?.route_name],['Fleet', selectedTrip.fleet_route?.fleet?.plate_number],['Driver', getStaffFullName(selectedTrip.driver) || selectedTrip.driver?.user?.email || 'Unassigned'],['Chauffeur', getStaffFullName(selectedTrip.conductor) || selectedTrip.conductor?.user?.email || 'Unassigned'],['Revenue', fmt(selectedTrip.total_revenue)]].map(([label, value]) => (
+                <div key={label}>
+                  <dt className="text-xs font-medium uppercase tracking-wide text-slate-400">{label}</dt>
+                  <dd className="mt-0.5 font-semibold text-slate-900">{value || '-'}</dd>
                 </div>
-              )}
+              ))}
+            </dl>
 
-              {/* FLEETS */}
-              {activeTab === 'fleets' && (
-                <div className="space-y-6">
-                  <div className="rounded-2xl border border-slate-700 bg-slate-900/70 p-6">
-                    <h2 className="text-xl font-bold mb-4">Add New Fleet</h2>
-                    <div className="space-y-4">
-                      <input type="text" placeholder="Plate Number *" value={fleetForm.plate_number} onChange={(e) => setFleetForm({ ...fleetForm, plate_number: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white placeholder-slate-500 outline-none transition focus:border-sky-500" />
-                      <select value={fleetForm.fleet_type} onChange={(e) => setFleetForm({ ...fleetForm, fleet_type: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white outline-none transition focus:border-sky-500">
-                        <option value="public">Public</option>
-                        <option value="private">Private</option>
-                      </select>
-                      <div className="grid grid-cols-2 gap-4">
-                        <input type="number" placeholder="Seated Capacity *" value={fleetForm.seated_capacity} onChange={(e) => setFleetForm({ ...fleetForm, seated_capacity: e.target.value })} className="rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white placeholder-slate-500 outline-none transition focus:border-sky-500" />
-                        <input type="number" placeholder="Standing Capacity *" value={fleetForm.standing_capacity} onChange={(e) => setFleetForm({ ...fleetForm, standing_capacity: e.target.value })} className="rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white placeholder-slate-500 outline-none transition focus:border-sky-500" />
-                      </div>
-                      <button className="flex w-full items-center justify-center gap-2 rounded-xl bg-sky-600 px-4 py-2 text-white font-semibold transition hover:bg-sky-500 disabled:cursor-not-allowed disabled:opacity-50" onClick={handleAddFleet} disabled={addingFleet}>
-                        {addingFleet ? <Loader size={18} className="animate-spin" /> : <Plus size={18} />}
-                        Add Fleet
-                      </button>
-                    </div>
-                  </div>
+            {isOverdueUnclosed(selectedTrip) && (
+              <div className="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-700">
+                <AlertTriangle className="h-4 w-4 shrink-0" />
+                Overdue — this trip's scheduled date has passed and it was never marked completed or cancelled.
+              </div>
+            )}
 
-                  <div className="rounded-2xl border border-slate-700 bg-slate-900/70 p-6">
-                    <h2 className="text-xl font-bold mb-4">Your Fleets ({fleets.length})</h2>
-                    <div className="space-y-3">
-                      {fleets.length === 0 ? <p className="text-slate-500 text-center py-8">No fleets yet. Add your first vehicle above to start route assignments.</p> : fleets.map(fleet => <div key={fleet.fleet_id} className="p-4 bg-slate-800 border border-slate-700 rounded-lg"><h3 className="font-semibold text-white">{fleet.plate_number}</h3><p className="text-sm text-slate-400 mt-1">Type: {fleet.fleet_type}</p><p className="text-sm text-slate-400">Seated: {fleet.seated_capacity} | Standing: {fleet.standing_capacity}</p></div>)}
-                    </div>
-                  </div>
+            {(['departed', 'in-progress'].includes(selectedTrip.status) || isOverdueUnclosed(selectedTrip)) && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+                <p className="text-sm font-semibold text-amber-900">Update Status</p>
+                <p className="mt-1 text-xs text-amber-700">
+                  {['departed', 'in-progress'].includes(selectedTrip.status)
+                    ? 'Use this if the driver forgot to complete the trip on their end.'
+                    : "This trip's scheduled date has passed without departing. Operators can only close out a trip that already departed \u2014 if it never departed, ask an Admin to resolve it."}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => handleStatusOverride(selectedTrip.trip_id, 'completed')}
+                  disabled={statusOverrideSaving}
+                  className="mt-2 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700 disabled:opacity-60"
+                >
+                  {statusOverrideSaving ? 'Updating...' : 'Complete anyway'}
+                </button>
+                {statusOverrideMsg && <p className="mt-2 text-xs font-medium text-amber-800">{statusOverrideMsg}</p>}
+              </div>
+            )}
 
-                  <div className="rounded-2xl border border-slate-700 bg-slate-900/70 p-6">
-                    <h2 className="text-xl font-bold mb-4">Assign Route To Fleet</h2>
-                    <div className="space-y-4">
-                      <select
-                        value={routeAssignForm.fleet_id}
-                        onChange={(e) => setRouteAssignForm({ ...routeAssignForm, fleet_id: e.target.value })}
-                        className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white outline-none transition focus:border-sky-500"
-                      >
-                        <option value="">Select fleet *</option>
-                        {fleets.map((fleet) => (
-                          <option key={fleet.fleet_id} value={fleet.fleet_id}>{fleet.plate_number}</option>
-                        ))}
-                      </select>
-                      <select
-                        value={routeAssignForm.route_id}
-                        onChange={(e) => setRouteAssignForm({ ...routeAssignForm, route_id: e.target.value })}
-                        className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white outline-none transition focus:border-sky-500"
-                      >
-                        <option value="">Select route *</option>
-                        {routes.map((route) => (
-                          <option key={route.route_id} value={route.route_id}>{route.route_name || `Route ${route.route_id}`}</option>
-                        ))}
-                      </select>
-                      <div className="grid grid-cols-2 gap-4">
-                        <input
-                          type="time"
-                          value={routeAssignForm.start_time}
-                          onChange={(e) => setRouteAssignForm({ ...routeAssignForm, start_time: e.target.value })}
-                          className="rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white outline-none transition focus:border-sky-500"
-                        />
-                        <input
-                          type="time"
-                          value={routeAssignForm.end_time}
-                          onChange={(e) => setRouteAssignForm({ ...routeAssignForm, end_time: e.target.value })}
-                          className="rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white outline-none transition focus:border-sky-500"
-                        />
-                      </div>
-                      <button
-                        className="w-full px-4 py-2 bg-linear-to-r from-cyan-600 to-cyan-700 hover:from-cyan-700 hover:to-cyan-800 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition flex items-center justify-center gap-2"
-                        onClick={handleAssignRouteToFleet}
-                        disabled={assigningRoute}
-                      >
-                        {assigningRoute ? <Loader size={18} className="animate-spin" /> : <Plus size={18} />}
-                        Assign Route
-                      </button>
-                    </div>
-                  </div>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <p className="text-sm font-semibold text-slate-900">GPS History</p>
+                <button
+                  type="button"
+                  onClick={() => { void loadTripGpsHistory(selectedTrip.trip_id) }}
+                  disabled={gpsLoading}
+                  className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-60"
+                >
+                  {gpsLoading ? 'Loading...' : 'Load GPS Trail'}
+                </button>
+              </div>
 
-                  <div className="rounded-2xl border border-slate-700 bg-slate-900/70 p-6">
-                    <h2 className="text-xl font-bold mb-4">Create Route</h2>
-                    <div className="space-y-4">
-                      <input
-                        type="text"
-                        placeholder="Route Name *"
-                        value={routeForm.route_name}
-                        onChange={(e) => setRouteForm({ ...routeForm, route_name: e.target.value })}
-                        className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white placeholder-slate-500 outline-none transition focus:border-sky-500"
-                      />
-                      <div className="grid grid-cols-2 gap-4">
-                        <input
-                          type="text"
-                          placeholder="Origin *"
-                          value={routeForm.origin}
-                          onChange={(e) => setRouteForm({ ...routeForm, origin: e.target.value })}
-                          className="rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white placeholder-slate-500 outline-none transition focus:border-sky-500"
-                        />
-                        <input
-                          type="text"
-                          placeholder="Destination *"
-                          value={routeForm.destination}
-                          onChange={(e) => setRouteForm({ ...routeForm, destination: e.target.value })}
-                          className="rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white placeholder-slate-500 outline-none transition focus:border-sky-500"
-                        />
-                      </div>
-                      <button
-                        className="w-full px-4 py-2 bg-linear-to-r from-violet-600 to-violet-700 hover:from-violet-700 hover:to-violet-800 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition flex items-center justify-center gap-2"
-                        onClick={handleCreateRoute}
-                        disabled={creatingRoute}
-                      >
-                        {creatingRoute ? <Loader size={18} className="animate-spin" /> : <Plus size={18} />}
-                        Create Route
-                      </button>
-                    </div>
-                  </div>
+              {gpsMessage && <p className="mb-2 text-xs text-slate-500">{gpsMessage}</p>}
 
-                  <div className="rounded-2xl border border-slate-700 bg-slate-900/70 p-6">
-                    <h2 className="text-xl font-bold mb-4">Create Fare Rule</h2>
-                    <div className="space-y-4">
-                      <select
-                        value={fareRuleForm.fleet_id}
-                        onChange={(e) => setFareRuleForm({ ...fareRuleForm, fleet_id: e.target.value })}
-                        className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white outline-none transition focus:border-sky-500"
-                      >
-                        <option value="">Select fleet *</option>
-                        {fleets.map((fleet) => (
-                          <option key={fleet.fleet_id} value={fleet.fleet_id}>{fleet.plate_number}</option>
-                        ))}
-                      </select>
-                      <select
-                        value={fareRuleForm.seat_type}
-                        onChange={(e) => setFareRuleForm({ ...fareRuleForm, seat_type: e.target.value })}
-                        className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white outline-none transition focus:border-sky-500"
-                      >
-                        <option value="seated">Seated</option>
-                        <option value="standing">Standing</option>
-                      </select>
-                      <div className="grid grid-cols-2 gap-4">
-                        <input
-                          type="number"
-                          step="0.01"
-                          placeholder="Base Fare *"
-                          value={fareRuleForm.base_fare}
-                          onChange={(e) => setFareRuleForm({ ...fareRuleForm, base_fare: e.target.value })}
-                          className="rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white placeholder-slate-500 outline-none transition focus:border-sky-500"
-                        />
-                        <input
-                          type="number"
-                          step="0.01"
-                          placeholder="Fare Per KM *"
-                          value={fareRuleForm.fare_per_km}
-                          onChange={(e) => setFareRuleForm({ ...fareRuleForm, fare_per_km: e.target.value })}
-                          className="rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white placeholder-slate-500 outline-none transition focus:border-sky-500"
-                        />
-                      </div>
-                      <button
-                        className="w-full px-4 py-2 bg-linear-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition flex items-center justify-center gap-2"
-                        onClick={handleCreateFareRule}
-                        disabled={creatingFareRule}
-                      >
-                        {creatingFareRule ? <Loader size={18} className="animate-spin" /> : <Plus size={18} />}
-                        Create Fare Rule
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="rounded-2xl border border-slate-700 bg-slate-900/70 p-6">
-                    <h2 className="text-xl font-bold mb-4">Create Stop</h2>
-                    <div className="space-y-4">
-
-                      {/* ── Always-visible map ────────────────────────────── */}
-                      <div className="overflow-hidden rounded-xl border border-slate-700">
-                        <iframe
-                          key={stopMapPin ? `${stopMapPin.lat},${stopMapPin.lon}` : 'default'}
-                          title="Stop location map"
-                          width="100%"
-                          height="260"
-                          loading="lazy"
-                          className="w-full block"
-                          src={
-                            stopMapPin
-                              ? `https://www.openstreetmap.org/export/embed.html?bbox=${stopMapPin.lon - 0.005},${stopMapPin.lat - 0.005},${stopMapPin.lon + 0.005},${stopMapPin.lat + 0.005}&layer=mapnik&marker=${stopMapPin.lat},${stopMapPin.lon}`
-                              : `https://www.openstreetmap.org/export/embed.html?bbox=125.5047,7.0207,125.7047,7.1207&layer=mapnik`
-                          }
-                        />
-                        {!stopMapPin && (
-                          <p className="bg-slate-800 px-4 py-2 text-xs text-slate-500 text-center">
-                            Search a location above to pin it on the map
-                          </p>
-                        )}
-                        {stopMapPin && !stopLocationConfirm && (
-                          <p className="bg-emerald-950/60 px-4 py-2 text-xs text-emerald-300 text-center">
-                            📍 {stopForm.latitude}, {stopForm.longitude} — location confirmed
-                          </p>
-                        )}
-                      </div>
-
-                      {/* ── Confirmation banner (appears when result is picked) */}
-                      {stopLocationConfirm && (
-                        <div className="rounded-xl border border-sky-700 bg-sky-950/30 px-4 py-3">
-                          <p className="text-xs font-semibold uppercase tracking-widest text-sky-400 mb-1">
-                            Confirm Location
-                          </p>
-                          <p className="text-sm font-bold text-slate-100">{stopLocationConfirm.short_name}</p>
-                          <p className="text-xs text-slate-400 mt-0.5 truncate">{stopLocationConfirm.display_name}</p>
-                          <p className="font-mono text-xs text-sky-300 mt-1">
-                            {stopLocationConfirm.lat}, {stopLocationConfirm.lon}
-                          </p>
-                          <div className="flex gap-2 mt-3">
-                            <button
-                              type="button"
-                              onClick={handleConfirmStopLocation}
-                              className="flex-1 rounded-xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400"
-                            >
-                              ✓ Yes, use this location
-                            </button>
-                            <button
-                              type="button"
-                              onClick={handleRejectStopLocation}
-                              className="flex-1 rounded-xl border border-slate-600 bg-slate-800 px-4 py-2 text-sm font-semibold text-slate-300 transition hover:border-slate-400"
-                            >
-                              ← Search again
-                            </button>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* ── Search (hidden while confirming) ──────────────── */}
-                      {!stopLocationConfirm && (
-                        <div>
-                          <label className="block text-xs font-semibold uppercase tracking-widest text-slate-500 mb-1">
-                            Search Location
-                          </label>
-                          <div className="flex gap-2">
-                            <input
-                              type="text"
-                              placeholder="Type address or landmark…"
-                              value={stopLocationQuery}
-                              onChange={(e) => setStopLocationQuery(e.target.value)}
-                              onKeyDown={(e) => e.key === 'Enter' && handleSearchStopLocation()}
-                              className="flex-1 rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white placeholder-slate-500 outline-none transition focus:border-sky-500"
-                            />
-                            <button
-                              type="button"
-                              onClick={handleSearchStopLocation}
-                              disabled={searchingStopLocation || !stopLocationQuery.trim()}
-                              className="rounded-xl bg-sky-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-sky-400 disabled:opacity-50"
-                            >
-                              {searchingStopLocation ? '…' : 'Search'}
-                            </button>
-                          </div>
-
-                          {stopLocationResults.length > 0 && (
-                            <ul className="mt-2 max-h-52 overflow-y-auto rounded-xl border border-slate-700 bg-slate-800 divide-y divide-slate-700">
-                              {stopLocationResults.map((result) => (
-                                <li key={result.place_id}>
-                                  <button
-                                    type="button"
-                                    onClick={() => handlePickStopLocation(result)}
-                                    className="w-full px-4 py-3 text-left hover:bg-slate-700 transition"
-                                  >
-                                    <p className="text-sm font-semibold text-slate-100 truncate">
-                                      {result.display_name.split(',')[0].trim()}
-                                    </p>
-                                    <p className="text-xs text-slate-500 truncate">{result.display_name}</p>
-                                    <p className="font-mono text-xs text-sky-400 mt-0.5">
-                                      {parseFloat(result.lat).toFixed(6)}, {parseFloat(result.lon).toFixed(6)}
-                                    </p>
-                                  </button>
-                                </li>
-                              ))}
-                            </ul>
-                          )}
-
-                          {stopLocationSearched && stopLocationResults.length === 0 && !searchingStopLocation && (
-                            <p className="mt-2 rounded-xl border border-amber-800 bg-amber-950/30 px-4 py-3 text-sm text-amber-300">
-                              No results found for <strong>"{stopLocationQuery || 'that query'}"</strong>. Try a different spelling or nearby landmark.
-                            </p>
-                          )}
-                        </div>
-                      )}
-
-                      {/* ── Stop Name only (lat/lng stored internally) ────── */}
-                      <input
-                        type="text"
-                        placeholder="Stop Name *"
-                        value={stopForm.stop_name}
-                        onChange={(e) => setStopForm({ ...stopForm, stop_name: e.target.value })}
-                        className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white placeholder-slate-500 outline-none transition focus:border-sky-500"
-                      />
-
-                      <button
-                        className="w-full px-4 py-2 bg-linear-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition flex items-center justify-center gap-2"
-                        onClick={handleCreateStop}
-                        disabled={creatingStop || !!stopLocationConfirm || !stopForm.latitude || !stopForm.longitude}
-                      >
-                        {creatingStop ? <Loader size={18} className="animate-spin" /> : <Plus size={18} />}
-                        {!stopForm.latitude ? 'Search and confirm a location first' : 'Create Stop'}
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="rounded-2xl border border-slate-700 bg-slate-900/70 p-6">
-                    <h2 className="text-xl font-bold mb-4">Apply Stop To Route</h2>
-                    <div className="space-y-4">
-
-                      <select
-                        value={routeStopForm.route_id}
-                        onChange={(e) => handleRouteStopRouteChange(e.target.value)}
-                        className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white outline-none transition focus:border-sky-500"
-                      >
-                        <option value="">Select route *</option>
-                        {routes.map((route) => (
-                          <option key={route.route_id} value={route.route_id}>{route.route_name || `Route ${route.route_id}`}</option>
-                        ))}
-                      </select>
-
-                      {loadingRouteStops && (
-                        <p className="text-xs text-slate-500 animate-pulse">Loading existing stops for this route…</p>
-                      )}
-
-                      {selectedRouteStops.length > 0 && (
-                        <div className="rounded-xl border border-slate-700 bg-slate-800/60 px-4 py-3">
-                          <p className="text-xs font-semibold uppercase tracking-widest text-slate-500 mb-2">
-                            Existing stops on this route
-                          </p>
-                          <ol className="space-y-1">
-                            {selectedRouteStops.map((rs) => {
-                              const name = rs.stop?.stop_name ?? `Stop ${rs.stop_id}`;
-                              return (
-                                <li key={rs.id ?? rs.stop_id} className="flex items-center gap-2 text-sm text-slate-300">
-                                  <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-slate-700 text-xs font-semibold text-slate-200">
-                                    {rs.stop_order}
-                                  </span>
-                                  {name}
-                                  <span className="font-mono text-xs text-slate-500 ml-auto">
-                                    {rs.distance_from_origin_km != null ? `${rs.distance_from_origin_km} km` : ''}
-                                  </span>
-                                </li>
-                              );
-                            })}
-                          </ol>
-                        </div>
-                      )}
-
-                      <select
-                        value={routeStopForm.stop_id}
-                        onChange={(e) => handleRouteStopStopChange(e.target.value)}
-                        className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white outline-none transition focus:border-sky-500"
-                        disabled={!routeStopForm.route_id}
-                      >
-                        <option value="">Select stop to add *</option>
-                        {stops
-                          .filter((stop) =>
-                            !selectedRouteStops.some((rs) => rs.stop_id === stop.stop_id)
-                          )
-                          .map((stop) => (
-                            <option key={stop.stop_id} value={stop.stop_id}>{stop.stop_name}</option>
-                          ))
-                        }
-                      </select>
-
-                      <input
-                        type="number"
-                        min="1"
-                        placeholder="Stop Order / Sequence *"
-                        value={routeStopForm.stop_order}
-                        onChange={(e) => setRouteStopForm({ ...routeStopForm, stop_order: e.target.value })}
-                        className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white placeholder-slate-500 outline-none transition focus:border-sky-500"
-                      />
-
-                      {routeStopForm.stop_id && (
-                        <div className={`rounded-xl border px-4 py-3 text-sm ${
-                          routeStopForm.distance_from_origin_km === '0' || routeStopForm.distance_from_origin_km === ''
-                            ? 'border-slate-700 bg-slate-800/60 text-slate-400'
-                            : 'border-sky-800 bg-sky-950/30 text-sky-300'
-                        }`}>
-                          <span className="text-xs uppercase tracking-widest font-semibold block mb-0.5 opacity-70">
-                            Auto-calculated distance from origin
-                          </span>
-                          <span className="font-mono font-bold text-base">
-                            {routeStopForm.distance_from_origin_km || '0'} km
-                          </span>
-                          {routeStopForm.distance_from_origin_km === '0' && (
-                            <span className="ml-2 text-xs text-slate-500">(origin stop)</span>
-                          )}
-                        </div>
-                      )}
-
-                      <button
-                        className="w-full px-4 py-2 bg-linear-to-r from-teal-600 to-teal-700 hover:from-teal-700 hover:to-teal-800 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition flex items-center justify-center gap-2"
-                        onClick={handleAddStopToRoute}
-                        disabled={addingStopToRoute || !routeStopForm.route_id || !routeStopForm.stop_id || !routeStopForm.stop_order}
-                      >
-                        {addingStopToRoute ? <Loader size={18} className="animate-spin" /> : <Plus size={18} />}
-                        Apply Stop To Route
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="rounded-2xl border border-slate-700 bg-slate-900/70 p-6">
-                    <h2 className="text-xl font-bold mb-4">Stops ({stops.length})</h2>
-                    <div className="space-y-3">
-                      {stops.length === 0 ? <p className="text-slate-500 text-center py-8">No stops yet. Create a stop, then attach it to a route segment.</p> : stops.map(stop => <div key={stop.stop_id} className="p-4 bg-slate-800 border border-slate-700 rounded-lg"><h3 className="font-semibold text-white">{stop.stop_name}</h3><p className="text-sm text-slate-400 mt-1">Lat: {stop.latitude} | Lng: {stop.longitude}</p></div>)}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* EMPLOYEES */}
-              {activeTab === 'employees' && (
-                <div className="space-y-6">
-                  <div className="rounded-2xl border border-slate-700 bg-slate-900/70 p-6">
-                    <h2 className="text-xl font-bold mb-4">Add Employee Account</h2>
-                    <div className="space-y-4">
-                      <input type="text" placeholder="Full Name *" value={empForm.name} onChange={(e) => setEmpForm({ ...empForm, name: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white placeholder-slate-500 outline-none transition focus:border-sky-500" />
-                      <input type="email" placeholder="Email *" value={empForm.email} onChange={(e) => setEmpForm({ ...empForm, email: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white placeholder-slate-500 outline-none transition focus:border-sky-500" />
-                      <input type="tel" placeholder="Phone *" value={empForm.phone_num} onChange={(e) => setEmpForm({ ...empForm, phone_num: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white placeholder-slate-500 outline-none transition focus:border-sky-500" />
-                      <input type="password" placeholder="Password *" value={empForm.password} onChange={(e) => setEmpForm({ ...empForm, password: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white placeholder-slate-500 outline-none transition focus:border-sky-500" />
-                      <select value={empForm.role} onChange={(e) => setEmpForm({ ...empForm, role: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white outline-none transition focus:border-sky-500">
-                        <option value="driver">Driver</option>
-                        <option value="conductor">Conductor</option>
-                      </select>
-                      <button className="flex w-full items-center justify-center gap-2 rounded-xl bg-sky-600 px-4 py-2 text-white font-semibold transition hover:bg-sky-500 disabled:cursor-not-allowed disabled:opacity-50" onClick={handleCreateEmployee} disabled={creatingEmp}>
-                        {creatingEmp ? <Loader size={18} className="animate-spin" /> : <Plus size={18} />}
-                        Create Account
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="rounded-2xl border border-slate-700 bg-slate-900/70 p-6">
-                    <h2 className="text-xl font-bold mb-4">Drivers ({drivers.length})</h2>
-                    <div className="space-y-3">
-                      {drivers.length === 0 ? <p className="text-slate-500 text-center py-8">No drivers yet. Create a driver account to allow trip assignment.</p> : drivers.map(d => <div key={d.company_user_id} className="p-4 bg-slate-800 border border-slate-700 rounded-lg"><h3 className="font-semibold text-white">{d.name}</h3><p className="text-sm text-slate-400 mt-1">{d.email}</p><p className="text-sm text-slate-400">{d.phone_num}</p></div>)}
-                    </div>
-                  </div>
-
-                  <div className="rounded-2xl border border-slate-700 bg-slate-900/70 p-6">
-                    <h2 className="text-xl font-bold mb-4">Conductors ({conductors.length})</h2>
-                    <div className="space-y-3">
-                      {conductors.length === 0 ? <p className="text-slate-500 text-center py-8">No conductors yet. Create a conductor account for fare collection staffing.</p> : conductors.map(c => <div key={c.company_user_id} className="p-4 bg-slate-800 border border-slate-700 rounded-lg"><h3 className="font-semibold text-white">{c.name}</h3><p className="text-sm text-slate-400 mt-1">{c.email}</p><p className="text-sm text-slate-400">{c.phone_num}</p></div>)}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* TRIPS */}
-              {activeTab === 'trips' && (
-                <div className="space-y-6">
-                  <div className="rounded-2xl border border-slate-700 bg-slate-900/70 p-6">
-                    <h2 className="text-xl font-bold mb-4">Schedule New Trip</h2>
-                    <div className="space-y-4">
-                      <select value={tripForm.fleet_route_id} onChange={(e) => setTripForm({ ...tripForm, fleet_route_id: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white outline-none transition focus:border-sky-500">
-                        <option value="">Select fleet route *</option>
-                        {fleetRouteOptions.map((fr) => (
-                          <option key={fr.fleet_route_id} value={fr.fleet_route_id}>
-                            {fr.route?.route_name || `Route ${fr.route_id}`} ({fr.fleet?.plate_number || `Fleet ${fr.fleet_id}`})
-                          </option>
-                        ))}
-                      </select>
-                      <input type="date" value={tripForm.trip_date} onChange={(e) => setTripForm({ ...tripForm, trip_date: e.target.value })} min={new Date().toISOString().split('T')[0]} className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white outline-none transition focus:border-sky-500" />
-                      <select value={tripForm.driver_id} onChange={(e) => setTripForm({ ...tripForm, driver_id: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white outline-none transition focus:border-sky-500">
-                        <option value="">Select driver *</option>
-                        {drivers.map(d => <option key={d.company_user_id} value={d.company_user_id}>{d.name}</option>)}
-                      </select>
-                      <select value={tripForm.conductor_id} onChange={(e) => setTripForm({ ...tripForm, conductor_id: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white outline-none transition focus:border-sky-500">
-                        <option value="">Select conductor *</option>
-                        {conductors.map(c => <option key={c.company_user_id} value={c.company_user_id}>{c.name}</option>)}
-                      </select>
-                      <button className="flex w-full items-center justify-center gap-2 rounded-xl bg-sky-600 px-4 py-2 text-white font-semibold transition hover:bg-sky-500 disabled:cursor-not-allowed disabled:opacity-50" onClick={handleScheduleTrip} disabled={creatingTrip}>
-                        {creatingTrip ? <Loader size={18} className="animate-spin" /> : <Plus size={18} />}
-                        Schedule Trip
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="rounded-2xl border border-slate-700 bg-slate-900/70 p-6">
-                    <h2 className="text-xl font-bold mb-4">Upcoming Trips ({trips.length})</h2>
-                    <div className="space-y-3">
-                      {trips.length === 0 ? <p className="text-slate-500 text-center py-8">No trips scheduled. Pick a fleet route, date, and crew to publish the first trip.</p> : trips.map(trip => <div key={trip.trip_id} className="p-4 bg-slate-800 border border-slate-700 rounded-lg"><h3 className="font-semibold text-white">{formatTripSchedule(trip)} • {trip.fleet_route?.route?.route_name || `Route ${trip.fleet_route?.route_id || '-'}`}</h3><p className="text-sm text-slate-400 mt-1">Fleet: {trip.fleet_route?.fleet?.plate_number || `Fleet ${trip.fleet_route?.fleet_id || '-'}`}</p><p className="text-sm text-slate-400">Status: {trip.status}</p></div>)}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* REPORTS */}
-              {activeTab === 'reports' && (
-                <div className="space-y-6">
-                  <div className="rounded-2xl border border-slate-700 bg-slate-900/70 p-6">
-                    <h2 className="text-xl font-bold mb-4">Advanced Report Filters</h2>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <div>
-                        <label className="block text-xs uppercase text-slate-500 mb-2">Start Date</label>
-                        <input
-                          type="date"
-                          value={reportRange.start_date}
-                          onChange={(e) => setReportRange(prev => ({ ...prev, start_date: e.target.value }))}
-                          max={reportDateMax}
-                          className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white outline-none transition focus:border-sky-500"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs uppercase text-slate-500 mb-2">End Date</label>
-                        <input
-                          type="date"
-                          value={reportRange.end_date}
-                          onChange={(e) => setReportRange(prev => ({ ...prev, end_date: e.target.value, date: e.target.value }))}
-                          max={reportDateMax}
-                          className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white outline-none transition focus:border-sky-500"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs uppercase text-slate-500 mb-2">Fleet</label>
-                        <select
-                          value={selectedFleet}
-                          onChange={(e) => setSelectedFleet(e.target.value)}
-                          className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-white outline-none transition focus:border-sky-500"
-                        >
-                          <option value="">Choose a fleet</option>
-                          {fleets.map((f) => <option key={f.fleet_id} value={f.fleet_id}>{f.plate_number}</option>)}
-                        </select>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-                    {REPORT_ACTIONS.map((action) => {
-                      const Icon = action.icon;
-                      const isActive = reportType === action.id;
-                      return (
-                        <button
-                          key={action.id}
-                          onClick={() => loadAdvancedReport(action.id)}
-                          disabled={loadingReport}
-                          className={[
-                            'group relative overflow-hidden rounded-xl border bg-slate-900 p-4 text-left transition',
-                            isActive
-                              ? 'border-sky-500 shadow-[0_0_0_1px_rgba(56,189,248,0.25)]'
-                              : 'border-slate-700 hover:border-slate-500',
-                          ].join(' ')}
-                        >
-                          <span className="absolute inset-x-0 top-0 h-1 bg-linear-to-r from-sky-500 via-cyan-400 to-transparent" aria-hidden="true" />
-                          <div className="mb-2 inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-700 bg-slate-950">
-                            <Icon className={`h-5 w-5 ${action.color}`} />
-                          </div>
-                          <div className="font-semibold text-slate-100">{action.label}</div>
-                          <div className="mt-1 text-xs text-slate-500">Generate and render this report in table/cards below.</div>
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  {Object.keys(advancedReports).length > 0 && (
-                    <div className="rounded-2xl border border-slate-700 bg-slate-900/70 p-6">
-                      <div className="mb-4 flex items-center justify-between gap-3">
-                        <div>
-                          <h2 className="mb-1 text-xl font-bold">{reportType.charAt(0).toUpperCase() + reportType.slice(1)} Report</h2>
-                          <p className="text-sm text-slate-500">Latest generated payload for this metric group.</p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={printReportsPdf}
-                          className="rounded-xl border border-slate-600 bg-slate-950 px-3 py-2 text-xs font-semibold text-slate-200 transition hover:border-slate-400"
-                        >
-                          Print PDF
-                        </button>
-                      </div>
-                      {renderReportBody()}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* TRIP MANAGEMENT */}
-              {activeTab === 'trip-mgmt' && (
-                <div className="space-y-6">
-                  <div className="rounded-2xl border border-slate-700 bg-slate-900/70 p-6">
-                    <h2 className="text-xl font-bold mb-3">Trip Management</h2>
-                    <p className="text-sm text-slate-400">Use the Schedule Trips tab to create trips and assign crews. Use Advanced Reports for analytics.</p>
-                  </div>
-                  <div className="rounded-2xl border border-slate-700 bg-slate-900/70 p-6">
-                    <h3 className="text-lg font-semibold mb-3">Recent Trips</h3>
-                    <div className="space-y-3">
-                      {trips.length === 0 ? (
-                        <p className="text-slate-500 text-center py-8">No trips available.</p>
-                      ) : (
-                        trips.slice(0, 8).map((item) => (
-                          <div key={item.trip_id} className="rounded-lg border border-slate-700 bg-slate-800 p-3">
-                            <div className="font-semibold text-white">Trip #{item.trip_id} • {item.fleet_route?.route?.route_name || `Route ${item.fleet_route?.route_id || '-'}`}</div>
-                            <div className="mt-1 text-sm text-slate-400">Schedule: {formatTripSchedule(item)} • Status: {item.status}</div>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
+              {gpsHistory.length > 0 && (
+                <div className="max-h-48 overflow-y-auto rounded-lg border border-slate-200 bg-white">
+                  <table className="w-full text-xs">
+                    <thead className="bg-slate-50">
+                      <tr className="border-b border-slate-200">
+                        <th className="px-2 py-1.5 text-left text-slate-500">Time</th>
+                        <th className="px-2 py-1.5 text-left text-slate-500">Latitude</th>
+                        <th className="px-2 py-1.5 text-left text-slate-500">Longitude</th>
+                        <th className="px-2 py-1.5 text-left text-slate-500">Speed</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {gpsHistory.slice(0, 50).map((point, index) => (
+                        <tr key={`gps-${point.history_id ?? index}`} className="border-b border-slate-100">
+                          <td className="px-2 py-1.5 text-slate-700">{fmtDate(point.recorded_at)}</td>
+                          <td className="px-2 py-1.5 text-slate-700">{point.latitude ?? '-'}</td>
+                          <td className="px-2 py-1.5 text-slate-700">{point.longitude ?? '-'}</td>
+                          <td className="px-2 py-1.5 text-slate-700">{point.speed_kmh ?? '-'} km/h</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               )}
             </div>
-          )}
-        </div>
-      </main>
+          </div>
+        </Modal>
+      )}
     </div>
-  );
+  )
 }
+
+// Batch 30: the Schedule page. One page for what used to be three sidebar items (Trips, Calendar, Shift Blocks): the
+// views are Calendar, Blocks (Schedule/ShiftBlocksView.jsx) and Trips, and the one "+ Schedule" button opens the
+// existing create form from any of them. A schedule created from one view refreshes the others.
+function ScheduleTab({ trips, drivers, conductors, onRefresh, view, onViewChange, calendarFocus, createOnOpen = false, onCreateHandled = () => {}, openTripId = null, onOpenTripHandled = () => {} }) {
+  const [reloadToken, setReloadToken] = useState(0)
+  const refreshAll = useCallback(() => {
+    onRefresh()
+    setReloadToken((token) => token + 1)
+  }, [onRefresh])
+  const tripsState = useTripsTab({ trips, onRefresh: refreshAll })
+  const views = viewsForRole('schedule', OPERATOR_ROLE)
+  // Batch 60 item 4: the dashboard's "Schedule a trip" quick action opens the Schedule Service form here.
+  const { setShowModal, setMsg } = tripsState
+  useEffect(() => {
+    if (!createOnOpen) return
+    setShowModal(true)
+    setMsg('')
+    onCreateHandled()
+  }, [createOnOpen, onCreateHandled, setShowModal, setMsg])
+  // Batch 46: a trip chosen in the calendar pop-up opens the Trips view with that trip shown (filter set to All).
+  // Batch 60: a dashboard alert about missing crew opens Schedule on Trips (the portal sets the view) with its trip shown
+  // and highlighted. This page is always opened fresh from the dashboard, so the trip is the starting value.
+  const [focusTripId, setFocusTripId] = useState(() => (openTripId ? Number(openTripId) : null))
+  const { setTripFilter } = tripsState
+  useEffect(() => {
+    if (!openTripId) return
+    setTripFilter('all')
+    onOpenTripHandled()
+  }, [openTripId, onOpenTripHandled, setTripFilter])
+  const openTripFromCalendar = (item) => {
+    setFocusTripId(Number(item.trip_id))
+    tripsState.setTripFilter('all')
+    onViewChange('trips')
+  }
+
+  return (
+    <>
+      <SchedulePage
+        views={views}
+        view={view}
+        onViewChange={onViewChange}
+        onCreate={() => { tripsState.setShowModal(true); tripsState.setMsg('') }}
+      >
+        {(active) => (
+          <>
+            {tripsState.msg && <p className="rounded-lg border border-teal-200 bg-teal-50 px-4 py-2 text-sm text-teal-800">{tripsState.msg}</p>}
+            {active === 'calendar' && <StaffCalendar key={calendarFocus || 'today'} service={OperatorService} initialDate={calendarFocus} refreshKey={reloadToken} onOpenTrip={openTripFromCalendar} />}
+            {active === 'blocks' && <ShiftBlocksView reloadToken={reloadToken} />}
+            {active === 'trips' && <TripsTab drivers={drivers} conductors={conductors} onRefresh={refreshAll} tripsState={tripsState} focusTripId={focusTripId} onDismissFocus={() => setFocusTripId(null)} />}
+            {active === 'requests' && <TripRequestsPanel onDecided={refreshAll} showEmpty />}
+            {/* 2026-11-14 (user): the cancelled-trip tickets needing a person moved to Finance > Refunds. */}
+          </>
+        )}
+      </SchedulePage>
+      <ScheduleServiceModal state={tripsState} drivers={drivers} conductors={conductors} />
+    </>
+  )
+}
+
+function ReportsTab({ fleets }) {
+  return <OperatorReportsPage fleets={fleets} />
+}
+
+export default function OperatorDashboard() {
+  // The day the Calendar page opens on when reached from the dashboard widget (null = today).
+  const [calendarFocus, setCalendarFocus] = useState(null)
+  // Batch 60 item 4: set by the dashboard's "Schedule a trip"; the Schedule page opens its form and clears it.
+  const [createOnOpen, setCreateOnOpen] = useState(false)
+  const clearCreateOnOpen = useCallback(() => setCreateOnOpen(false), [])
+  // Batch 60: an alert opens a bus's Track popup on Fleets, or a trip on Schedule > Trips.
+  const [trackRequest, setTrackRequest] = useState(null)
+  const clearTrackRequest = useCallback(() => setTrackRequest(null), [])
+  const [openTripId, setOpenTripId] = useState(null)
+  const clearOpenTripId = useCallback(() => setOpenTripId(null), [])
+  const {
+    activeTab, setActiveTab,
+    view, setView,
+    loading,
+    profile,
+    trips,
+    drivers,
+    conductors,
+    fleets,
+    routes,
+    stops,
+    loadFull,
+    handleLogout,
+  } = useOperatorDashboardData()
+  const crewAlerts = useOperatorAlerts()
+  const textMessages = useTextMessages(OperatorService, profile) // Batch 67
+
+  if (loading) {
+    return (
+      <SkeletonPage variant="portal" label="Loading dashboard..." />
+    )
+  }
+
+  return (
+    // 2026-11-06: screens hide changes a dispatcher (not a company admin) may not make; the server refuses them anyway.
+    <CompanyAdminContext.Provider value={Boolean(profile?.is_company_admin)}>
+    <StaffPortalLayout
+      brandLabel="Operator Portal"
+      brandIcon={Bus}
+      navItems={NAV}
+      activeTab={activeTab}
+      onTabChange={setActiveTab}
+      profile={profile ? { name: profile?.name || profile?.user?.name || profile?.user?.username || profile?.user?.email || 'Operator', company: profile?.company ?? null } : null}
+      profileRoleLabel="Operator"
+      profileInitialFallback="O"
+      onLogout={handleLogout}
+      profileAction={<NotificationBell />}
+      mainClassName="bg-slate-50"
+    >
+        {/* w-0 min-w-full: a wide table inside a page must scroll in its card, not widen the whole portal column. */}
+        <div className="w-0 min-w-full">
+        {/* Batch 58: crew alerts on every Operator page. */}
+        <OperatorAlerts alerts={crewAlerts} onTrackBus={(request) => { setTrackRequest(request); setActiveTab('fleets') }} />
+        {activeTab === 'dashboard'  && (
+          <OperatorDashboardPage
+            trips={trips}
+            drivers={drivers}
+            conductors={conductors}
+            fleets={fleets}
+            operatorName={profile?.name || profile?.user?.name || ''}
+            topSlot={<TripRequestsPanel onDecided={loadFull} />}
+            onRefresh={loadFull}
+            onOpenCalendar={(date) => { setCalendarFocus(date); setActiveTab('schedule', 'calendar') }}
+            onOpenSchedule={() => setActiveTab('schedule')}
+            onCreateSchedule={() => { setCreateOnOpen(true); setActiveTab('schedule') }}
+            onOpenApprovals={() => setActiveTab('schedule', 'requests')}
+            onOpenStaffs={() => setActiveTab('staffs')}
+            onOpenFleets={() => setActiveTab('fleets')}
+            onTrackTrip={(tripId) => { setTrackRequest({ tripId }); setActiveTab('fleets') }}
+            onOpenTrip={(tripId) => { setOpenTripId(tripId); setActiveTab('schedule', 'trips') }}
+          />
+        )}
+        {activeTab === 'schedule'   && (
+          <ScheduleTab
+            trips={trips}
+            drivers={drivers}
+            conductors={conductors}
+            onRefresh={loadFull}
+            view={view}
+            onViewChange={setView}
+            calendarFocus={calendarFocus}
+            createOnOpen={createOnOpen}
+            onCreateHandled={clearCreateOnOpen}
+            openTripId={openTripId}
+            onOpenTripHandled={clearOpenTripId}
+          />
+        )}
+        {activeTab === 'staffs'     && (
+          <div className="space-y-6">
+            <OpPageHeader title="Staff" subtitle="Your Drivers and Chauffeurs, and when their shifts started and ended" />
+            {/* Batch 61 (advisor): the directory and the crew time in/out are two tabs, not one long page. */}
+            <ViewTabs label="Staff views" tabs={viewsForRole('staffs', OPERATOR_ROLE)} value={view || 'directory'} onChange={setView} />
+            {/* Batch 46: the directory pages and counts on the server; a change also refreshes the scheduling pickers. */}
+            {(view || 'directory') === 'directory' && <StaffDirectory fleetCount={fleets.length} onChanged={loadFull} />}
+            {view === 'shifts' && <CrewShiftTimes staff={[...drivers, ...conductors]} />}
+          </div>
+        )}
+        {activeTab === 'fleets'     && <FleetsPage fleets={fleets} routes={routes} trips={trips} onRefresh={loadFull} companyName={profile?.company?.company_name ?? null} trackRequest={trackRequest} onTrackHandled={clearTrackRequest} view={view || 'fleets'} onViewChange={setView} />}
+        {activeTab === 'routes'     && <RoutesPage routes={routes} stops={stops} trips={trips} fleets={fleets} onRefresh={loadFull} onOpenSchedule={() => setActiveTab('schedule')} onOpenFleets={() => setActiveTab('fleets')} view={view || 'routes'} onViewChange={setView} />}
+        {activeTab === 'finance'    && <FinancePage views={viewsForRole('finance', OPERATOR_ROLE)} view={view} onViewChange={setView} />}
+        {activeTab === 'reports'    && <ReportsTab fleets={fleets} />}
+        {activeTab === 'account'    && (
+          <div className="space-y-6">
+            <OpPageHeader title="Account" subtitle="Your profile, sign-in security and password" />
+            <ProfilePage role="operator" profile={profile} loading={loading} textMessages={textMessages} onSignOut={handleLogout} />
+          </div>
+        )}
+        </div>
+    </StaffPortalLayout>
+    </CompanyAdminContext.Provider>
+  )
+}
+
+
+
 

@@ -1,12 +1,16 @@
 import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, waitFor, fireEvent, screen, act } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import { StrictMode } from 'react';
 import DriverDashboard from '../DriverDashboard';
 import ConductorDashboard from '../ConductorDashboard';
 import PairingScreen from '../PairingScreen';
 import { BaseService } from '../../../api/BaseService';
+import { getBusinessToday } from '../../../utils/dates';
 
-const todayIso = new Date().toISOString();
+// See networkFetch.audit.test.jsx for why this must be a Manila-anchored
+// date-only value rather than the raw UTC 'now'.
+const todayIso = getBusinessToday();
 
 function renderWithRouter(ui) {
   return render(<MemoryRouter>{ui}</MemoryRouter>);
@@ -96,10 +100,11 @@ describe('Network Fetch Audit - BaseService endpoint call counts', () => {
     });
   });
 
-  test('occupancy endpoint is called exactly once when Occupancy tab opens', async () => {
+  test('occupancy endpoint is called exactly once when Ticketing tab opens', async () => {
     renderWithRouter(<ConductorDashboard />);
 
-    const occupancyTab = await screen.findByRole('button', { name: /Occupancy/i });
+    // Batch 61: the tab is "Tickets", in the sidebar and in the phone's bottom bar.
+    const occupancyTab = (await screen.findAllByRole('button', { name: /^Tickets$/ }))[0];
     fireEvent.click(occupancyTab);
 
     await waitFor(() => {
@@ -107,7 +112,9 @@ describe('Network Fetch Audit - BaseService endpoint call counts', () => {
     });
   });
 
-  test('driver pairing endpoint respects 12-second polling interval', async () => {
+  test('driver pairing endpoint respects 90-second polling interval', async () => {
+    // DriverDashboard.jsx polls every 90000ms while unpaired (see the
+    // "Poll every 90 seconds while unpaired." comment on its setInterval).
     vi.useFakeTimers();
     Object.defineProperty(document, 'hidden', {
       configurable: true,
@@ -123,7 +130,7 @@ describe('Network Fetch Audit - BaseService endpoint call counts', () => {
     expect(callCounts['GET /driver/pairing-status'] || 0).toBe(1);
 
     await act(async () => {
-      vi.advanceTimersByTime(11999);
+      vi.advanceTimersByTime(89999);
       await Promise.resolve();
     });
     expect(callCounts['GET /driver/pairing-status'] || 0).toBe(1);

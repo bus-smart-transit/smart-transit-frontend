@@ -1,0 +1,230 @@
+import { qrDataUrl } from './qr';
+import { isMobileDevice } from './inAppBrowser';
+import { busLabelText } from './busLabel';
+import { serviceLabel, servedStopsText } from './runInfo';
+import { clock12 } from './clock';
+
+// One-click "Save QR to device". The image is drawn with the same qrDataUrl() as the
+// on-screen QR, rendered ahead of the click (useTicketImage), and handed to the device
+// with the share sheet on phones (iOS offers "Save Image") or a normal download.
+// Only a ticket whose QR the screen would show can produce an image: no payload, no image.
+
+const shortId = (uuid) => String(uuid || '').slice(0, 8).toUpperCase();
+
+const MANILA = 'Asia/Manila';
+
+/** "2026-10-01 6:30 AM". Stored trip values are already Manila wall-clock; the label does not name the timezone. */
+export function manilaDepartureLabel(ticket) {
+  if (ticket?.trip_date) {
+    const time = ticket.departure_time ? ` ${clock12(ticket.departure_time) || String(ticket.departure_time).slice(0, 5)}` : '';
+    return `${ticket.trip_date}${time}`;
+  }
+  const instant = ticket?.valid_from ? new Date(ticket.valid_from) : null;
+  if (!instant || Number.isNaN(instant.getTime())) return '-';
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-CA', {
+      timeZone: MANILA, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+    }).formatToParts(instant).map((p) => [p.type, p.value]),
+  );
+  return `${parts.year}-${parts.month}-${parts.day} ${clock12(`${parts.hour}:${parts.minute}`)}`;
+}
+
+/** What the image says, as plain data (drawn by renderTicketCanvas; testable without a canvas). */
+export function buildTicketImageModel(ticket, { group = false, groupSize = 1 } = {}) {
+  const content = group ? ticket?.group_qr_content : ticket?.qr_content;
+  const journey = [
+    { label: 'Boarding', value: ticket?.origin || '-' },
+    { label: 'Alighting', value: ticket?.destination || '-' },
+    { label: 'Bus', value: busLabelText(ticket?.bus_label) },
+    // Batch 62: never a blank line on the saved ticket.
+    { label: 'Service', value: serviceLabel(ticket?.run_info?.service, ticket?.service_type ?? ticket?.trip?.service_type) || 'Not provided' },
+    ...(servedStopsText(ticket?.run_info?.service) ? [{ label: 'Stops', value: servedStopsText(ticket.run_info.service).replace(/^[^:]+: /, '') }] : []),
+    { label: 'Departs', value: manilaDepartureLabel(ticket) },
+  ];
+  const lines = group
+    ? [
+      { label: 'Group ID', value: ticket?.transaction_reference || '-' },
+      { label: 'Passengers', value: String(groupSize) },
+      ...journey,
+    ]
+    : [
+      { label: 'Ticket ID', value: shortId(ticket?.ticket_uuid) || '-' },
+      ...journey,
+      ...(ticket?.priority_label ? [{ label: 'Priority seat', value: ticket.priority_label }] : []),
+      ...(ticket?.has_baggage ? [{ label: 'Baggage', value: 'In the compartment (in the fare)' }] : []),
+      ...(Number(ticket?.discount_amount) > 0 ? [
+        { label: 'Original fare', value: `PHP ${Number(ticket.original_amount).toFixed(2)}` },
+        { label: `${ticket.discount_label || 'Onsite'} discount`, value: `-PHP ${Number(ticket.discount_amount).toFixed(2)}` },
+        ...(ticket.discount_id_checked_at ? [{ label: 'ID check', value: 'Verified by Chauffeur' }] : []),
+      ] : []),
+      { label: 'Fare paid', value: ticket?.amount != null ? `PHP ${Number(ticket.amount).toFixed(2)}` : '-' },
+      { label: 'Transaction', value: ticket?.transaction_reference || '-' },
+    ];
+
+  // Batch 50 item 7 (user): the tracking code is on the saved ticket, set apart, so it can be typed at Track my bus.
+  const code = String(ticket?.tracking_code || '').trim();
+  return {
+    title: group ? 'SmartTransit Group Ticket' : 'SmartTransit Ticket',
+    // Batch 80: the route under the title in the header band, like the ticket on screen.
+    route: [ticket?.origin, ticket?.destination].filter(Boolean).join('  →  '),
+    qrContent: content || null,
+    tracking: code ? { code: `${code.slice(0, 4)} ${code.slice(4)}`.trim(), hint: 'Type this code at Track my bus to see where your bus is' } : null,
+    lines,
+    footer: group ? 'Show this QR once to board everyone in this order' : 'Present this QR code to the chauffeur when boarding',
+  };
+}
+
+export function ticketFileName(ticket, { group = false } = {}) {
+  const id = group
+    ? String(ticket?.transaction_reference || 'group').replace(/[^A-Za-z0-9-]/g, '')
+    : shortId(ticket?.ticket_uuid) || 'ticket';
+  return `smart-transit-${group ? 'group' : 'ticket'}-${id}.png`;
+}
+
+const fit = (ctx, text, maxWidth) => {
+  let out = String(text);
+  if (ctx.measureText(out).width <= maxWidth) return out;
+  while (out.length > 1 && ctx.measureText(`${out}...`).width > maxWidth) out = out.slice(0, -1);
+  return `${out}...`;
+};
+
+const loadImage = (src) => new Promise((resolve, reject) => {
+  const image = new Image();
+  image.onload = () => resolve(image);
+  image.onerror = () => reject(new Error('The QR image could not be prepared.'));
+  image.src = src;
+});
+
+/** Draws the ticket onto a new canvas (browser only). */
+export async function renderTicketCanvas(model) {
+  if (!model.qrContent) throw new Error('This ticket has no QR to save yet.');
+
+  // Text metrics are wrong until the fonts are ready; draw only after they are.
+  if (document.fonts?.ready) await document.fonts.ready;
+
+  const width = 900;
+  const rowHeight = 64;
+  const qrSize = 600; // quiet zone is part of the generated image
+  const trackingHeight = model.tracking ? 170 : 0;
+  const height = 220 + qrSize + 60 + trackingHeight + model.lines.length * rowHeight + 120;
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Image rendering is not supported on this device.');
+
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, width, height);
+  // Batch 80 (user, 2026-11-19): the designer's ticket: a navy-to-ocean band with the title and the route.
+  const band = ctx.createLinearGradient(0, 0, width, 0);
+  band.addColorStop(0, '#153a6b');
+  band.addColorStop(1, '#05588a');
+  ctx.fillStyle = band;
+  ctx.fillRect(0, 0, width, 170);
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 50px Arial, sans-serif';
+  ctx.fillText(model.title, 48, 84);
+  if (model.route) {
+    ctx.font = '28px Arial, sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    ctx.fillText(fit(ctx, model.route, width - 96), 48, 132);
+  }
+
+  const qrImage = await loadImage(await qrDataUrl(model.qrContent, qrSize));
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(qrImage, (width - qrSize) / 2, 200, qrSize, qrSize);
+
+  const tearY = 200 + qrSize + 24;
+  ctx.fillStyle = '#f1f5f9';
+  ctx.beginPath(); ctx.arc(0, tearY, 18, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(width, tearY, 18, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#d6e5ec';
+  ctx.lineWidth = 3;
+  ctx.setLineDash([14, 10]);
+  ctx.beginPath(); ctx.moveTo(40, tearY); ctx.lineTo(width - 40, tearY); ctx.stroke();
+  ctx.setLineDash([]);
+
+  let y = 200 + qrSize + 80;
+  if (model.tracking) {
+    ctx.fillStyle = '#f1f5f9';
+    ctx.fillRect(48, y - 40, width - 96, 140);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#475569';
+    ctx.font = '26px Arial, sans-serif';
+    ctx.fillText('Tracking code', width / 2, y);
+    ctx.fillStyle = '#0f172a';
+    ctx.font = 'bold 52px Arial, sans-serif';
+    ctx.fillText(model.tracking.code, width / 2, y + 56);
+    ctx.fillStyle = '#475569';
+    ctx.font = '22px Arial, sans-serif';
+    ctx.fillText(fit(ctx, model.tracking.hint, width - 120), width / 2, y + 90);
+    y += trackingHeight;
+  }
+  model.lines.forEach((line) => {
+    ctx.fillStyle = '#64748b';
+    ctx.font = '28px Arial, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText(line.label, 48, y);
+    ctx.fillStyle = '#0f172a';
+    ctx.font = 'bold 30px Arial, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText(fit(ctx, line.value, width - 96 - 220), width - 48, y);
+    y += rowHeight;
+  });
+
+  ctx.fillStyle = '#153a6b';
+  ctx.font = 'bold 26px Arial, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(fit(ctx, model.footer, width - 96), width / 2, y + 40);
+
+  return canvas;
+}
+
+/** Draws the model and returns a PNG File. */
+export async function renderTicketFile(model, fileName) {
+  const canvas = await renderTicketCanvas(model);
+  const blob = await new Promise((resolve, reject) => {
+    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('The image could not be created.'))), 'image/png');
+  });
+  return new File([blob], fileName, { type: 'image/png' });
+}
+
+/** True when this device should get the share sheet rather than a download. */
+export function canShareFile(file, env = {}) {
+  const nav = env.navigator ?? globalThis.navigator;
+  return Boolean(nav && isMobileDevice(nav) && typeof nav.share === 'function' && nav.canShare?.({ files: [file] }));
+}
+
+function download(file, env = {}) {
+  const doc = env.document ?? globalThis.document;
+  const urlApi = env.URL ?? globalThis.URL;
+  const href = urlApi.createObjectURL(file);
+  const anchor = doc.createElement('a');
+  anchor.href = href;
+  anchor.download = file.name;
+  doc.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  setTimeout(() => urlApi.revokeObjectURL(href), 10000);
+}
+
+/**
+ * Hands a ready File to the device. Call it straight from the click handler with an
+ * already-rendered file: Safari can reject navigator.share if image generation was awaited
+ * first. Returns 'shared' | 'downloaded' | 'cancelled'. A dismissed share sheet
+ * (AbortError) is a cancel, not a failure.
+ */
+export async function deliverFile(file, env = {}) {
+  const nav = env.navigator ?? globalThis.navigator;
+  if (canShareFile(file, env)) {
+    try {
+      await nav.share({ files: [file], title: 'SmartTransit ticket' });
+      return 'shared';
+    } catch (error) {
+      if (error?.name === 'AbortError') return 'cancelled';
+      // Any other share failure falls through to a plain download.
+    }
+  }
+  download(file, env);
+  return 'downloaded';
+}

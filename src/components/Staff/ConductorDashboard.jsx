@@ -1,39 +1,71 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
 import {
   AlertCircle,
-  BarChart3,
   Bus,
-  Camera,
-  Calendar,
-  CheckCircle2,
-  KeyRound,
-  LogOut,
-  QrCode,
+  CalendarDays,
+  Download,
+  Gauge,
+  Play,
   RefreshCw,
   Ticket,
-  TrendingUp,
   UserCheck,
-  Users,
-  XCircle,
 } from 'lucide-react';
-import QrScanner from 'qr-scanner';
-import StaffService from '../../api/StaffService/StaffService';
-import usePassengersByTrip from '../../api/hooks/Staff/usePassengersByTrip';
-import useOnsiteReceiptPrinter from '../../api/hooks/Staff/useOnsiteReceiptPrinter';
+import DropOffGroups from './DropOffGroups';
 import PairingScreen from './PairingScreen';
+import StaffPortalLayout from './StaffPortalLayout';
+import ProfilePage from '../Account/ProfilePage';
+import FirstPasswordPrompt from '../Account/FirstPasswordPrompt';
+import AssignmentSection from './AssignmentSection';
+import MyScheduleList from './MyScheduleList';
+import CalendarSummaryStrip from './CalendarSummaryStrip';
+import Modal, { ModalShell } from '../ui/Modal';
+import PairWithCrewCard from './PairWithCrewCard';
+import CrewAlertCard from './CrewAlertCard';
+import StaffCalendar from './StaffCalendar';
+import NotificationBellButton from './NotificationBellButton';
+import NextStepCard from './Crew/NextStepCard';
+import CrewTodayCard from './Crew/CrewTodayCard';
+import TextSizeControl from './Crew/TextSizeControl';
+import useCrewTextSize from '../../api/hooks/Staff/useCrewTextSize';
+import useTextMessages from '../../api/hooks/useTextMessages';
+import { chauffeurNextStep } from '../../utils/crewNextStep';
+import { useConductorPairing, useConductorDashboardData } from '../../api/hooks/Staff/useConductorDashboard';
+import useOnsiteQuote from '../../api/hooks/Staff/useOnsiteQuote';
+import { getBusinessToday, getBusinessTodayLabel } from '../../utils/dates';
+import { downloadShiftSummary } from '../../utils/shiftSummaryReport';
+import ChauffeurScannerCard from './ChauffeurScannerCard';
+import { DEFAULT_FILE_TYPE } from '../../utils/tableExport';
+import FileTypeSelect from '../ui/FileTypeSelect';
+import { todaySummary } from '../../utils/assignmentCards';
+import { BOARDING_NOT_STARTED, BOARDING_OPEN_STATUSES, ticketingReason } from '../../utils/actionReasons';
+import { claimReviewState } from '../../utils/discountClaim';
+import { passengerCountRows } from '../../utils/passengerCount';
+import DiscountReviewDialog from './Crew/DiscountReviewDialog';
+import { boardingStopsForLeg, checkInLabel, destinationsAhead, destinationsNotPassed, isOnsiteFormComplete, orderedStopsForLeg, placesLeft, stopLabel } from '../../utils/cashTicket';
+import { isExpress } from '../../utils/serviceType';
+import ServiceTypeChip from '../ui/ServiceTypeChip';
+import { deriveTripStatus } from '../../utils/tripStatus';
+import { FOR_APPROVAL_LABEL, isForApproval } from '../../utils/assignmentRequest';
+import ConductorService from '../../api/StaffService/ConductorService';
 
+import { SkeletonPage } from '../ui/Skeleton';
+import { clock12 } from '../../utils/clock';
+// Batch 19 Part A: consolidated sidebar. Ticketing & Fares is the
+// confirmed default landing screen (adviser requirement, Batch 15).
+// "Assigned Routes" folds into Dashboard; Live Passengers, Shift Blocks,
+// and Shift Summary merge into Active Shift (live operational state, not
+// planning — so it groups here, not with Schedule); Calendar becomes
+// Schedule. Start/End Shift move to the persistent header, matching the
+// Driver portal's existing pattern (see header buttons below).
 const NAV_ITEMS = [
-  { key: 'trip', label: 'Current Trip', icon: Bus },
-  { key: 'assigned', label: 'Assigned Trips', icon: Calendar },
-  { key: 'occupancy', label: 'Occupancy', icon: BarChart3 },
-  { key: 'scan', label: 'Scan Ticket', icon: QrCode },
-  { key: 'passengers', label: 'Passengers', icon: Users },
-  { key: 'earnings', label: 'Earnings', icon: TrendingUp },
-  { key: 'pin', label: 'Daily PIN', icon: KeyRound },
+  // Batch 61 (advisor): short labels for the phone's bottom bar.
+  { key: 'dashboard', label: 'Home', icon: Gauge },
+  { key: 'occupancy', label: 'Tickets', icon: Ticket },
+  { key: 'activeShift', label: 'Shift', icon: Bus },
+  { key: 'schedule', label: 'Schedule', icon: CalendarDays },
+  // Batch 45 Feature B: the Daily PIN tab is now the "Pair with crew" pop-up on the Dashboard.
+  { key: 'account', label: 'Account', icon: UserCheck },
 ];
-
-const UUID_PATTERN = /[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i;
 
 const formatDateTime = (value) => {
   if (!value) return '-';
@@ -45,16 +77,14 @@ const formatDateTime = (value) => {
   const mm = String(date.getMonth() + 1).padStart(2, '0');
   const dd = String(date.getDate()).padStart(2, '0');
   if (isDateOnly) return `${yyyy}/${mm}/${dd}`;
-  const hh = String(date.getHours()).padStart(2, '0');
-  const min = String(date.getMinutes()).padStart(2, '0');
-  return `${yyyy}/${mm}/${dd} - ${hh}:${min}`;
+  return `${yyyy}/${mm}/${dd} - ${clock12(`${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}`)}`;
 };
 
 const toCompactTime = (value) => {
   if (!value) return '';
   const str = String(value).trim();
   const hhmmss = str.match(/^(\d{2}:\d{2})(?::\d{2})?$/);
-  if (hhmmss) return hhmmss[1];
+  if (hhmmss) return clock12(hhmmss[1]);
   return str;
 };
 
@@ -69,96 +99,39 @@ const formatDateOnly = (value) => {
 const formatTripSchedule = (tripLike) => {
   if (!tripLike) return '-';
   const dateLabel = formatDateOnly(tripLike?.trip_date);
-  const start = toCompactTime(tripLike?.fleet_route?.start_time);
-  const end = toCompactTime(tripLike?.fleet_route?.end_time);
-  if (start && end) return `${dateLabel} - ${start} to ${end}`;
-  if (start) return `${dateLabel} - ${start}`;
+  // Batch 10 fix (Issue #2) applied here too: bind to the trip's actual
+  // departure_time, not fleet_route.start_time/end_time — that's the
+  // fleet route's general daily operating-hours window (e.g. 05:00-21:00),
+  // not this specific trip's scheduled departure time.
+  const departureTime = toCompactTime(tripLike?.departure_time || tripLike?.fleet_route?.start_time);
+  if (departureTime) return `${dateLabel} - ${departureTime}`;
   return dateLabel;
 };
 
-const isSameDay = (value) => {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return false;
-
-  const today = new Date();
-  return (
-    date.getFullYear() === today.getFullYear()
-    && date.getMonth() === today.getMonth()
-    && date.getDate() === today.getDate()
-  );
-};
-
-const isCurrentOrSameDayTrip = (tripLike) => {
-  if (!tripLike?.trip_id) return false;
-  if (!isSameDay(tripLike?.trip_date)) return false;
-
-  const status = String(tripLike?.status || '').toLowerCase();
-  return status !== 'completed' && status !== 'cancelled';
-};
-
-const getUpcomingTrip = (trips) => {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  return (trips || [])
-    .filter((item) => {
-      const date = new Date(item?.trip_date);
-      if (Number.isNaN(date.getTime())) return false;
-      const status = String(item?.status || '').toLowerCase();
-      return date >= today && status !== 'completed' && status !== 'cancelled';
-    })
-    .sort((a, b) => new Date(a.trip_date).getTime() - new Date(b.trip_date).getTime())[0] || null;
+const resolveConductorHeaderBadge = ({
+  pairingLoading,
+  isPaired,
+  hasTodayAssignedTrip,
+  forApproval,
+  hasOpenShift,
+  isAvailable,
+  hasActiveTrip,
+  tripStatus,
+}) => {
+  if (pairingLoading) return { label: 'Checking pairing', tone: 'border-slate-200 bg-slate-50 text-slate-600' };
+  if (!isPaired) return { label: 'Pairing required', tone: 'border-amber-200 bg-amber-50 text-amber-700' };
+  if (!hasTodayAssignedTrip) return { label: 'No assigned trip', tone: 'border-slate-200 bg-slate-50 text-slate-600' };
+  // C6: assignment-level status, shown through this single badge (D6).
+  if (forApproval) return { label: FOR_APPROVAL_LABEL, tone: 'border-amber-200 bg-amber-50 text-amber-700' };
+  if (!hasOpenShift) return { label: 'Shift not started', tone: 'border-sky-200 bg-sky-50 text-sky-700' };
+  if (!isAvailable) return { label: 'Marked unavailable', tone: 'border-slate-200 bg-slate-50 text-slate-600' };
+  // A1: once the trip is live the badge is the trip's own derived status.
+  if (hasActiveTrip && tripStatus) return { label: tripStatus.label, tone: tripStatus.tone };
+  return { label: 'Ready', tone: 'border-emerald-200 bg-emerald-50 text-emerald-700' };
 };
 
 export default function ConductorDashboard() {
-  const navigate = useNavigate();
-
-  const [pairing, setPairing] = useState({ loading: false, paired: false, reason: '' });
-  const didInitialPairingCheck = useRef(false);
-  const pairingRequestRef = useRef(null);
-
-  const refreshPairingStatus = useCallback(async () => {
-    if (pairingRequestRef.current) {
-      return pairingRequestRef.current;
-    }
-
-    pairingRequestRef.current = (async () => {
-      try {
-        const res = await StaffService.getPairingStatus('conductor');
-        const data = res?.data ?? {};
-        const nextPaired = data?.paired === true;
-        const nextReason = data?.reason || '';
-        setPairing((prev) => {
-          if (!prev.loading && prev.paired === nextPaired && prev.reason === nextReason) {
-            return prev;
-          }
-
-          return {
-            loading: false,
-            paired: nextPaired,
-            reason: nextReason,
-          };
-        });
-      } catch {
-        setPairing((prev) => ({ ...prev, loading: false, paired: false }));
-      } finally {
-        pairingRequestRef.current = null;
-      }
-    })();
-
-    return pairingRequestRef.current;
-  }, []);
-
-  useEffect(() => {
-    if (didInitialPairingCheck.current) return;
-    didInitialPairingCheck.current = true;
-    void refreshPairingStatus();
-  }, [refreshPairingStatus]);
-
-  const handleLogout = async () => {
-    await StaffService.logout('conductor').catch(() => {});
-    navigate('/employee/login');
-  };
+  const { pairing, refreshPairingStatus, handleLogout } = useConductorPairing();
 
   return (
     <ConductorDashboardInner
@@ -169,605 +142,293 @@ export default function ConductorDashboard() {
   );
 }
 
+
+
 function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
-  const [activeTab, setActiveTab] = useState('trip');
-  const [profile, setProfile] = useState(null);
-  const [trip, setTrip] = useState(null);
-  const [assignedTrips, setAssignedTrips] = useState([]);
-  const [occupancy, setOccupancy] = useState(null);
-  const [passengers, setPassengers] = useState([]);
-  const [earnings, setEarnings] = useState(null);
-  const [pinInput, setPinInput] = useState('');
-  const [pinStatus, setPinStatus] = useState('');
-  const [scanUuid, setScanUuid] = useState('');
-  const [scanResult, setScanResult] = useState(null);
-  const [groupScanResult, setGroupScanResult] = useState(null);
-  const [scannerRunning, setScannerRunning] = useState(false);
-  const [scannerBusy, setScannerBusy] = useState(false);
-  const [scannerError, setScannerError] = useState('');
-  const [scannerStatus, setScannerStatus] = useState('');
-  const [onsiteReceipt, setOnsiteReceipt] = useState(null);
-  const [onsiteForm, setOnsiteForm] = useState({
-    origin_stop_id: '',
-    destination_stop_id: '',
-    seat_type: 'seated',
-    passenger_id: '',
+  const [onsiteDiscountTypes, setOnsiteDiscountTypes] = useState([]);
+  const [onsiteDiscountError, setOnsiteDiscountError] = useState('');
+  const [onsiteDiscountTypeKey, setOnsiteDiscountTypeKey] = useState('');
+  const [onsiteDiscountIdChecked, setOnsiteDiscountIdChecked] = useState(false);
+  // Batch 76: the cash sale's priority seat and baggage.
+  const [onsitePriority, setOnsitePriority] = useState('');
+  const [onsiteBaggage, setOnsiteBaggage] = useState(false);
+  const [confirmStart, setConfirmStart] = useState(false);
+  // 2026-10-28 (§4.5): no opening cash at Start Shift. Chauffeurs are not given petty cash, so a shift starts at 0.
+  // Batch 29: End Shift asks for the cash counted and handed over; the Operator confirms it on the web dashboard.
+  const [confirmEnd, setConfirmEnd] = useState(false);
+  // 2026-11-08 (advisor, user): the shift summary downloads as PDF or CSV.
+  const [summaryFileType, setSummaryFileType] = useState(DEFAULT_FILE_TYPE);
+  const [closingCash, setClosingCash] = useState('');
+  const closingCashValue = Number(closingCash);
+  const closingCashInvalid = closingCash === '' || !Number.isFinite(closingCashValue) || closingCashValue < 0;
+  // The day the full calendar opens on when reached from the dashboard widget (null = today).
+  const [calendarFocus] = useState(null); // Batch 61: the Home calendar widget is gone, so it stays today.
+  const {
+    activeTab, setActiveTab, pairingOpen, setPairingOpen,
+    focusTripId, openTripFromNotification, dismissTripFocus,
+    focusBlockId, assignments,
+    assignedTrips,
+    assignedTripFilter,
+    profile,
+    trip,
+    occupancy,
+    expectedBoarding,
+    discountReview,
+    discountReviewBusy,
+    discountReviewError,
+    openDiscountReview,
+    closeDiscountReview,
+    decideDiscount,
+    passengers,
+    earnings,
+    pinInput, setPinInput,
+    pinStatus, setPinStatus,
+    scanUuid, setScanUuid,
+    scanResult, setScanResult,
+    groupScanResult, setGroupScanResult,
+    scannerRunning,
+    scannerBusy,
+    scannerError,
+    scannerStatus,
+    scannerPhase,
+    onsiteReceipt,
+    onsiteForm, setOnsiteForm,
+    cashForm,
+    midTripAvailable,
+    boardingPoint,
+    boardingView,
+    refreshBoardingPoint,
+    checkIns,
+    checkInBusy,
+    handlePassengerIn,
+    quoteNonce,
+    loading,
+    error,
+    actionMsg, setActionMsg,
+    twoFactorEnabled,
+    saving2fa,
+    checkoutInFlight,
+    confirmCheckout, setConfirmCheckout,
+    actionInFlight,
+    isAvailable,
+    shiftState,
+    videoRef,
+    isPaired,
+    pairingReason,
+    hasActiveTrip,
+    hasTodayAssignedTrip,
+    todayAssignedTrip,
+    hasOpenShift,
+    upcomingTrip,
+    showNoCurrentTripState,
+    routeStops,
+    groupedPassengers,
+    tripDetailsModal, setTripDetailsModal,
+    shiftBlocks,
+    printOnsiteReceipt,
+    occSeated,
+    occStanding,
+    occSeatedCap,
+    occStandingCap,
+    occTotalCap,
+    occupiedTotal,
+    cashCapacity,
+    pageTitle,
+    handleAssignedTripFilterChange,
+    handleTwoFactorToggle,
+    availabilitySaving,
+    handleToggleAvailability,
+    stopScanner,
+    loadData,
+    loadOccupancy,
+    loadEarnings,
+    handleStartShift,
+  refreshEndBlockedReason,
+    handleEndShift,
+    handleScan,
+    startScanner,
+    handleAlight,
+    handleConfirmDropOff,
+    dropOffGroups,
+    handleVerifyPin,
+    handleOnsiteCheckout,
+    handleConfirmedOnsiteCheckout,
+    handleLogout,
+  } = useConductorDashboardData({ onLogout, pairing });
+  useEffect(() => {
+    let active = true;
+    ConductorService.getOnsiteDiscountTypes()
+      .then((response) => {
+        if (active) setOnsiteDiscountTypes(Array.isArray(response?.data) ? response.data : []);
+      })
+      .catch((err) => {
+        if (active) setOnsiteDiscountError(err?.message || 'Discount options could not be loaded.');
+      });
+    return () => { active = false; };
+  }, []);
+
+  const selectedOnsiteDiscount = onsiteDiscountTypes.find((type) => type.key === onsiteDiscountTypeKey) ?? null;
+  const requestOnsiteCheckout = () => {
+    if (onsiteDiscountTypeKey && !onsiteDiscountIdChecked) {
+      setActionMsg('Check the passenger ID before applying this discount.');
+      return;
+    }
+    handleOnsiteCheckout();
+  };
+  const confirmOnsiteCheckout = async () => {
+    const completed = await handleConfirmedOnsiteCheckout({
+      discount_type_key: onsiteDiscountTypeKey,
+      discount_id_checked: onsiteDiscountIdChecked,
+      priority_type: onsitePriority,
+      baggage: onsiteBaggage,
+    }, onsiteQuote.status === 'ready' ? onsiteQuote.amount : null);
+    if (completed) {
+      setOnsiteDiscountTypeKey('');
+      setOnsiteDiscountIdChecked(false);
+      setOnsitePriority('');
+      setOnsiteBaggage(false);
+    }
+  };
+  // Batch 27: the cash ticket offers real stopping stops in the order this leg travels
+  // them, and only stops ahead of the boarding stop as destinations. The server
+  // computes the fare either way.
+  const legStops = orderedStopsForLeg(routeStops, trip?.leg_direction, trip?.service_type);
+  // Batch 60 item 2: the leg's destination is never a boarding stop.
+  const boardingStops = boardingStopsForLeg(legStops);
+  const tripIsExpress = isExpress(trip?.service_type);
+  // Task 6: by bus position the server names the stops ahead of the bus; by stop, the stops after the boarding stop.
+  const byBusPosition = cashForm.boarding_mode === 'gps';
+  // Passenger In (2026-10-26): a checked-in passenger's fare counts from the stop kept at check-in.
+  const byCheckIn = cashForm.boarding_mode === 'checkin';
+  const selectedCheckIn = byCheckIn ? checkIns.find((c) => String(c.id) === String(cashForm.pending_boarding_id)) ?? null : null;
+  const destinationOptions = byBusPosition
+    ? boardingView.destinations.map((d) => ({ stop_id: d.stop_id, stop_name: `${d.stop_name} (${d.distance_km} km)` }))
+    : destinationsNotPassed(
+      destinationsAhead(legStops, byCheckIn ? selectedCheckIn?.stop_id : onsiteForm.origin_stop_id),
+      legStops,
+      ['departed', 'in-progress'].includes(trip?.status) ? trip?.last_acknowledged_stop_id : null,
+    );
+  const boardingReady = byBusPosition ? boardingView.good : byCheckIn ? Boolean(selectedCheckIn) : Boolean(onsiteForm.origin_stop_id);
+  const formReady = isOnsiteFormComplete(cashForm, boardingView);
+  // The exact fare, asked of the server as soon as the boarding point and destination are chosen; by bus position it is
+  // asked again whenever the position is refreshed.
+  const onsiteQuote = useOnsiteQuote({
+    tripId: trip?.trip_id,
+    form: cashForm,
+    ready: formReady,
+    refreshKey: `${byBusPosition ? boardingView.distanceFromOriginKm : 0}-${quoteNonce}`,
+    discount: { discount_type_key: onsiteDiscountTypeKey, discount_id_checked: onsiteDiscountIdChecked },
+    baggage: onsiteBaggage,
   });
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [actionMsg, setActionMsg] = useState('');
-  const isPaired = pairing?.paired === true;
-  const pairingReason = pairing?.reason || 'Waiting for pairing with your Driver before live trip features unlock.';
-  const hasActiveTrip = isCurrentOrSameDayTrip(trip);
-  const didBootstrap = useRef(false);
-  const videoRef = useRef(null);
-  const scannerStreamRef = useRef(null);
-  const scannerTimerRef = useRef(null);
-  const scannerBusyRef = useRef(false);
-  const lastDetectedRef = useRef({ value: '', at: 0 });
-  const upcomingTrip = getUpcomingTrip(assignedTrips);
-  const showNoCurrentTripState = !loading && isPaired && !hasActiveTrip && ['trip', 'occupancy', 'passengers', 'pin', 'scan'].includes(activeTab);
-  const routeStops = trip?.fleet_route?.route?.route_stops || trip?.fleet_route?.route?.routeStops || [];
-  const groupedPassengers = usePassengersByTrip(passengers, trip);
-  const { printOnsiteReceipt } = useOnsiteReceiptPrinter();
 
-  const stopScanner = useCallback(() => {
-    if (scannerTimerRef.current) {
-      clearInterval(scannerTimerRef.current);
-      scannerTimerRef.current = null;
-    }
+  const headerBadge = resolveConductorHeaderBadge({
+    pairingLoading: pairing.loading,
+    isPaired,
+    hasTodayAssignedTrip,
+    forApproval: isForApproval(todayAssignedTrip, 'conductor'),
+    hasOpenShift,
+    isAvailable,
+    hasActiveTrip,
+    tripStatus: deriveTripStatus(trip || todayAssignedTrip),
+  });
 
-    if (scannerStreamRef.current) {
-      // destroy() stops scanning AND releases all camera resources
-      if (typeof scannerStreamRef.current.destroy === 'function') {
-        scannerStreamRef.current.destroy();
-      } else if (typeof scannerStreamRef.current.stop === 'function') {
-        scannerStreamRef.current.stop();
-      } else if (typeof scannerStreamRef.current.getTracks === 'function') {
-        scannerStreamRef.current.getTracks().forEach((track) => track.stop());
-      }
-      scannerStreamRef.current = null;
-    }
-
-    if (videoRef.current) {
-      videoRef.current.srcObject = null;
-    }
-
-    scannerBusyRef.current = false;
-    setScannerRunning(false);
-  }, []);
-
-  const extractTicketUuid = useCallback((rawValue) => {
-    if (!rawValue) return '';
-
-    const trimmed = String(rawValue).trim();
-    const directMatch = trimmed.match(UUID_PATTERN);
-    if (directMatch?.[0]) return directMatch[0];
-
-    try {
-      const url = new URL(trimmed);
-      const fromQuery =
-        url.searchParams.get('ticket_uuid') ||
-        url.searchParams.get('uuid') ||
-        url.searchParams.get('ticket');
-
-      if (fromQuery && UUID_PATTERN.test(fromQuery)) {
-        const queryMatch = fromQuery.match(UUID_PATTERN);
-        return queryMatch?.[0] || '';
-      }
-    } catch {
-      return '';
-    }
-
-    return '';
-  }, []);
-
-  const loadData = useCallback(async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const [profileRes, tripRes, tripsRes] = await Promise.allSettled([
-        StaffService.getProfile('conductor'),
-        StaffService.getConductorTrip(),
-        StaffService.getConductorTrips(),
-      ]);
-      if (profileRes.status === 'fulfilled') setProfile(profileRes.value?.data);
-      if (tripRes.status === 'fulfilled') setTrip(tripRes.value?.data);
-      if (tripsRes.status === 'fulfilled') setAssignedTrips(tripsRes.value?.data ?? []);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  const loadOccupancy = useCallback(async () => {
-    if (!trip?.trip_id) {
-      setOccupancy(null);
-      return;
-    }
-    try {
-      const res = await StaffService.getTripOccupancy();
-      setOccupancy(res?.data);
-    } catch (err) {
-      setError(err.message);
-    }
-  }, [trip?.trip_id]);
-
-  const loadPassengers = useCallback(async () => {
-    if (!trip?.trip_id) {
-      setPassengers([]);
-      return;
-    }
-    try {
-      const res = await StaffService.getCurrentPassengers();
-      const payload = res?.data;
-      if (Array.isArray(payload)) {
-        setPassengers(payload);
-      } else {
-        setPassengers(payload?.passengers ?? []);
-      }
-    } catch (err) {
-      setError(err.message);
-    }
-  }, [trip?.trip_id]);
-
-  const loadPin = useCallback(async () => {
-    if (!trip?.trip_id) {
-      return;
-    }
-    try {
-      await StaffService.getConductorPin();
-    } catch (err) {
-      setError(err.message);
-    }
-  }, [trip?.trip_id]);
-
-  const loadEarnings = useCallback(async () => {
-    if (!trip?.trip_id || !isPaired) {
-      setEarnings(null);
-      return;
-    }
-    try {
-      const res = await StaffService.getTripEarnings('conductor');
-      setEarnings(res?.data ?? null);
-    } catch {
-      setEarnings(null);
-    }
-  }, [isPaired, trip?.trip_id]);
-
-  useEffect(() => {
-    if (didBootstrap.current) return;
-    didBootstrap.current = true;
-    void loadData();
-  }, [loadData]);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (activeTab === 'occupancy' && hasActiveTrip && isPaired) void loadOccupancy();
-    }, 0);
-
-    return () => clearTimeout(timer);
-  }, [activeTab, hasActiveTrip, isPaired, loadOccupancy]);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (activeTab === 'passengers' && hasActiveTrip && isPaired) void loadPassengers();
-    }, 0);
-
-    return () => clearTimeout(timer);
-  }, [activeTab, hasActiveTrip, isPaired, loadPassengers]);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (activeTab === 'pin' && hasActiveTrip && isPaired) void loadPin();
-    }, 0);
-
-    return () => clearTimeout(timer);
-  }, [activeTab, hasActiveTrip, isPaired, loadPin]);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (activeTab === 'earnings' && hasActiveTrip && isPaired) void loadEarnings();
-    }, 0);
-
-    return () => clearTimeout(timer);
-  }, [activeTab, hasActiveTrip, isPaired, loadEarnings]);
-
-  useEffect(() => {
-    if (activeTab !== 'scan') {
-      const timer = setTimeout(() => {
-        stopScanner();
-      }, 0);
-      return () => clearTimeout(timer);
-    }
-    return undefined;
-  }, [activeTab, stopScanner]);
-
-  useEffect(() => () => stopScanner(), [stopScanner]);
-
-  const handleScan = useCallback(async (scannedUuid = scanUuid) => {
-    const ticketUuid = String(scannedUuid || '').trim();
-
-    if (!isPaired) {
-      setScanResult({ success: false, msg: pairingReason });
-      return;
-    }
-
-    if (!trip?.trip_id) {
-      setScanResult({ success: false, msg: 'No active trip assigned. Ticket scanning is unavailable.' });
-      return;
-    }
-
-    if (!ticketUuid) {
-      setScanResult({ success: false, msg: 'Please provide a ticket UUID before scanning.' });
-      return;
-    }
-
-    setGroupScanResult(null);
-    setScanResult(null);
-    try {
-      const res = await StaffService.scanTicket(ticketUuid);
-      setScanResult({ success: true, data: res?.data, msg: res?.message });
-      setActionMsg('Ticket scanned successfully.');
-      setScanUuid(ticketUuid);
-      void loadOccupancy();
-    } catch (err) {
-      setScanResult({ success: false, msg: err.message });
-    }
-  }, [isPaired, loadOccupancy, pairingReason, scanUuid, trip?.trip_id]);
-
-  const handleGroupScan = useCallback(async (transactionRef) => {
-    if (!isPaired) {
-      setGroupScanResult({ success: false, msg: pairingReason });
-      return;
-    }
-
-    if (!trip?.trip_id) {
-      setGroupScanResult({ success: false, msg: 'No active trip assigned. Group scanning is unavailable.' });
-      return;
-    }
-
-    setScanResult(null);
-    setGroupScanResult(null);
-    try {
-      const res = await StaffService.scanGroupTickets(transactionRef);
-      setGroupScanResult({ success: true, data: res?.data, msg: res?.message });
-      setActionMsg(`${res?.data?.boarded_count ?? 0} ticket(s) boarded.`);
-      void loadOccupancy();
-    } catch (err) {
-      setGroupScanResult({ success: false, msg: err.message });
-    }
-  }, [isPaired, loadOccupancy, pairingReason, trip?.trip_id]);
-
-  const startScanner = useCallback(async () => {
-    setScannerError('');
-    setScannerStatus('');
-    setScanResult(null);
-
-    if (!trip?.trip_id) {
-      setScannerError('No active trip assigned. Camera scanning is unavailable.');
-      return;
-    }
-
-    if (!isPaired) {
-      setScannerError(pairingReason);
-      return;
-    }
-
-    if (!navigator?.mediaDevices?.getUserMedia) {
-      setScannerError('Camera API is not available on this device/browser.');
-      return;
-    }
-
-    if (!videoRef.current) {
-      setScannerError('Scanner element is not ready. Please try again.');
-      return;
-    }
-
-    try {
-      // Initialize QR Scanner with cross-browser support
-      const qrScanner = new QrScanner(
-        videoRef.current,
-        async (result) => {
-          const rawValue = result?.data;
-          if (!rawValue) return;
-
-          if (scannerBusyRef.current) return;          // drop scan — one already in flight
-          scannerBusyRef.current = true;
-          setScannerBusy(true);
-
-          // Prevent duplicate detections within 3 seconds
-          const now = Date.now();
-          const isRecentDuplicate =
-            lastDetectedRef.current.value === rawValue && now - lastDetectedRef.current.at < 3000;
-          if (isRecentDuplicate) {
-            scannerBusyRef.current = false;
-            setScannerBusy(false);
-            return;
-          }
-
-          lastDetectedRef.current = { value: rawValue, at: now };
-          setScannerStatus('⏳ Processing scan…');
-
-          // Group QR path — encodes "grp:{transaction_reference}"
-          if (typeof rawValue === 'string' && rawValue.startsWith('grp:')) {
-            const transactionRef = rawValue.slice(4).trim();
-            setScannerStatus('Group QR detected. Boarding all tickets in this order...');
-            try {
-              await handleGroupScan(transactionRef);
-            } finally {
-              scannerBusyRef.current = false;
-              setScannerBusy(false);
-            }
-            return;
-          }
-
-          // Single ticket path
-          const parsedUuid = extractTicketUuid(rawValue);
-          if (!parsedUuid) {
-            setScannerStatus('QR detected, but no valid ticket UUID was found.');
-            scannerBusyRef.current = false;
-            setScannerBusy(false);
-            return;
-          }
-
-          setScanUuid(parsedUuid);
-          setScannerStatus(`QR captured: ${parsedUuid}. Validating ticket...`);
-          try {
-            await handleScan(parsedUuid);
-          } finally {
-            scannerBusyRef.current = false;
-            setScannerBusy(false);
-          }
-        },
-        {
-          onDecodeError: () => {
-            setScannerStatus('Scanning... keep QR centered and well-lit.');
-          },
-          maxScansPerSecond: 2,
-          preferredCamera: 'environment',
-          workerPath: '/qr-scanner-worker.min.js',
-        }
-      );
-
-      scannerStreamRef.current = qrScanner;
-      await qrScanner.start();
-
-      // Guard: scanner may have been stopped while start() was awaiting (e.g. tab change)
-      if (!scannerStreamRef.current) return;
-
-      setScannerRunning(true);
-      setScannerStatus('Camera is active. Point it at a ticket QR code.');
-    } catch (err) {
-      stopScanner();
-      setScannerError(err?.message || 'Unable to access camera for QR scanning.');
-    }
-  }, [extractTicketUuid, handleGroupScan, handleScan, isPaired, pairingReason, stopScanner, trip?.trip_id]);
-
-  const handleAlight = async (ticketId) => {
-    if (!isPaired) {
-      setActionMsg(pairingReason);
-      return;
-    }
-
-    try {
-      await StaffService.recordAlighting(ticketId);
-      setActionMsg('Alighting recorded.');
-      void loadPassengers();
-    } catch (err) {
-      setActionMsg(err.message);
-    }
+  // Batch 29: the vehicle and trip tiles read the same card (and so the same fleet, route and status) as the Assigned
+  // Routes list; the live trip fills in only what the card lacks. Nothing is invented: a missing value says so.
+  const cardToday = todaySummary(assignments.cards, getBusinessToday());
+  const todayInfo = {
+    plate: cardToday?.plate ?? todayAssignedTrip?.fleet_route?.fleet?.plate_number ?? 'Unavailable',
+    route: cardToday?.route ?? todayAssignedTrip?.fleet_route?.route?.route_name ?? 'Unavailable',
+    status: cardToday?.status ?? todayAssignedTrip?.status ?? 'Unavailable',
+    schedule: cardToday?.schedule ?? (todayAssignedTrip ? formatTripSchedule(todayAssignedTrip) : 'Unavailable'),
   };
 
-  const handleVerifyPin = async () => {
-    if (!isPaired) {
-      setPinStatus(pairingReason);
-      return;
-    }
-
-    if (!trip?.trip_id) {
-      setPinStatus('No active trip assigned. PIN verification is unavailable.');
-      return;
-    }
-    try {
-      await StaffService.verifyConductorPin(pinInput);
-      setPinStatus('PIN verified successfully.');
-    } catch (err) {
-      setPinStatus(err.message);
-    }
+  // Batch 29: the shift (and the pairing key) unlock only after the assignment is accepted.
+  // The shift's cash comes with the shift status (it does not depend on an active trip: by End Shift every leg is finished).
+  const endCash = shiftState?.cash ?? earnings?.shift ?? null;
+  const needsAcceptance = Boolean(todayAssignedTrip) && !todayAssignedTrip.conductor_accepted_at;
+  // Batch 61 (advisor, 2026-11-13): the Home shows one big button, the next step (it replaces the header's shift button).
+  const textSize = useCrewTextSize();
+  const textMessages = useTextMessages(ConductorService, profile); // Batch 67
+  const step = chauffeurNextStep({
+    hasWork: hasActiveTrip || hasTodayAssignedTrip,
+    forApproval: isForApproval(todayAssignedTrip, 'conductor'),
+    needsAcceptance,
+    isPaired,
+    hasOpenShift,
+    hasActiveTrip,
+    tripStatus: trip?.status,
+    endBlockedReason: shiftState?.endBlockedReason || '',
+    inFlight: actionInFlight,
+  });
+  const pressStep = (key) => {
+    if (key === 'accept') setActiveTab('schedule');
+    else if (key === 'pair') setPairingOpen(true);
+    else if (key === 'startShift') setConfirmStart(true);
+    else if (key === 'endShift') { void refreshEndBlockedReason(); setConfirmEnd(true); }
+    else if (key === 'tickets') setActiveTab('occupancy');
   };
-
-  const handleOnsiteCheckout = async () => {
-    if (!isPaired) {
-      setActionMsg(pairingReason);
-      return;
-    }
-
-    if (!trip?.trip_id) {
-      setActionMsg('No active trip assigned. Onsite checkout is unavailable.');
-      return;
-    }
-
-    if (!onsiteForm.origin_stop_id || !onsiteForm.destination_stop_id) {
-      setActionMsg('Please select origin and destination stops for onsite checkout.');
-      return;
-    }
-
-    try {
-      const res = await StaffService.checkoutOnsite({
-        items: [
-          {
-            trip_id: Number(trip.trip_id),
-            seat_type: onsiteForm.seat_type,
-            origin_stop_id: Number(onsiteForm.origin_stop_id),
-            destination_stop_id: Number(onsiteForm.destination_stop_id),
-            passenger_id: onsiteForm.passenger_id ? Number(onsiteForm.passenger_id) : null,
-          },
-        ],
-      });
-
-      const checkoutData = res?.data ?? res ?? {};
-      setOnsiteReceipt({
-        payment: checkoutData?.payment || null,
-        tickets: checkoutData?.tickets || [],
-        createdAtLabel: formatDateTime(new Date().toISOString()),
-      });
-
-      setActionMsg('Onsite checkout recorded successfully.');
-      setOnsiteForm({
-        origin_stop_id: '',
-        destination_stop_id: '',
-        seat_type: 'seated',
-        passenger_id: '',
-      });
-      void loadPassengers();
-      void loadOccupancy();
-    } catch (err) {
-      setOnsiteReceipt(null);
-      setActionMsg(err.message || 'Failed to record onsite checkout.');
-    }
-  };
-
-  const handleLogout = onLogout;
-
-  const capPct = occupancy
-    ? Math.min(
-        100,
-        Math.round(
-          ((Number(occupancy?.boarded?.seated ?? occupancy?.current_seated ?? 0) +
-            Number(occupancy?.boarded?.standing ?? occupancy?.current_standing ?? 0)) /
-            (Number(occupancy?.capacity?.total ?? occupancy?.total_capacity ?? 1) || 1)) *
-            100,
-        ),
-      )
-    : 0;
-
-  const occSeated = Number(occupancy?.boarded?.seated ?? occupancy?.current_seated ?? 0);
-  const occStanding = Number(occupancy?.boarded?.standing ?? occupancy?.current_standing ?? 0);
-  const occSeatedCap = Number(occupancy?.capacity?.seated ?? occupancy?.seated_capacity ?? 0);
-  const occStandingCap = Number(occupancy?.capacity?.standing ?? occupancy?.standing_capacity ?? 0);
-  const occTotalCap = Number(occupancy?.capacity?.total ?? occupancy?.total_capacity ?? 0);
-
-  const pageTitle =
-    activeTab === 'trip'
-      ? 'Current Trip'
-      : activeTab === 'assigned'
-        ? 'Assigned Trips'
-        : activeTab === 'occupancy'
-          ? 'Trip Occupancy'
-          : activeTab === 'scan'
-            ? 'Scan Ticket'
-            : activeTab === 'passengers'
-              ? 'Current Passengers'
-              : activeTab === 'earnings'
-                ? 'Trip Earnings'
-                : 'Daily PIN Verification';
+  const ticketingBlocked = ticketingReason({ isPaired, hasOpenShift, hasActiveTrip, isFull: cashCapacity.isFull, tripStatus: trip?.status });
+  // Batch 74: scanning, Passenger In and cash sales wait until the Driver presses Start boarding.
+  const boardingOpen = BOARDING_OPEN_STATUSES.includes(String(trip?.status || '').toLowerCase());
+  // Batch 75: passengers whose online discount claim still needs the ID check.
+  const pendingClaims = (passengers || []).filter((p) => claimReviewState(p.discount_claim).reviewable);
 
   return (
-    <div className="grid min-h-screen grid-cols-1 bg-slate-950 text-slate-200 lg:grid-cols-[280px_1fr]">
-      <aside className="flex flex-col justify-between border-b border-slate-800 bg-slate-900/70 p-4 lg:border-b-0 lg:border-r">
-        <div>
-          <div className="mb-4 inline-flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-sm font-semibold text-slate-100">
-            <Ticket className="h-4 w-4 text-sky-400" />
-            Conductor Portal
+    <>
+    <StaffPortalLayout
+      brandLabel="Chauffeur Portal"
+      brandIcon={Bus}
+      navItems={NAV_ITEMS}
+      activeTab={activeTab}
+      onTabChange={(key) => { setActiveTab(key); setActionMsg(''); setScanResult(null); }}
+      profile={profile}
+      profileRoleLabel="Chauffeur"
+      profileInitialFallback="C"
+      onLogout={handleLogout}
+      bottomNav
+      mobileAction={<TextSizeControl compact size={textSize.size} sizes={textSize.sizes} onChange={textSize.setSize} />}
+    >
+        <FirstPasswordPrompt profile={profile} />
+        <header className="crew-header mb-4">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h1 className="font-display text-2xl font-bold text-slate-900">{pageTitle}</h1>
+            <p className="text-xs text-slate-500">
+              {getBusinessTodayLabel()}
+            </p>
           </div>
-
-          {profile && (
-            <div className="mb-4 rounded-2xl border border-slate-800 bg-slate-900 p-3">
-              <div className="flex items-center gap-3">
-                <div className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-linear-to-br from-blue-600 to-indigo-600 font-semibold text-white">
-                  {(profile.name || 'C')[0].toUpperCase()}
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-slate-100">{profile.name}</p>
-                  <p className="text-xs text-slate-500">Conductor</p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          <nav className="relative mt-4 flex flex-col gap-1 pl-3">
-            <div className="absolute bottom-2 left-1.75 top-2 w-px bg-slate-800" aria-hidden="true" />
-            {NAV_ITEMS.map((item) => {
-              const Icon = item.icon;
-              const isActive = activeTab === item.key;
-              return (
-                <button
-                  key={item.key}
-                  className="group relative flex items-center gap-3 rounded-lg py-2.5 pl-5 pr-3 text-sm font-medium"
-                  onClick={() => {
-                    setActiveTab(item.key);
-                    setActionMsg('');
-                    setScanResult(null);
-                  }}
-                >
-                  <span
-                    className={[
-                      'absolute left-0 top-1/2 h-2.5 w-2.5 -translate-y-1/2 rounded-full border transition',
-                      isActive
-                        ? 'border-sky-400 bg-sky-400 shadow-[0_0_0_3px_rgba(56,189,248,0.25)]'
-                        : 'border-slate-600 bg-slate-950 group-hover:border-slate-400',
-                    ].join(' ')}
-                    aria-hidden="true"
-                  />
-                  <Icon className={isActive ? 'h-4 w-4 text-sky-400' : 'h-4 w-4 text-slate-500 group-hover:text-slate-300'} />
-                  <span className={isActive ? 'text-white' : 'text-slate-400 group-hover:text-slate-200'}>{item.label}</span>
-                </button>
-              );
-            })}
-          </nav>
-        </div>
-
-        <button
-          className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-900 bg-red-950/30 px-3 py-2 text-sm font-semibold text-red-300 transition hover:bg-red-950/50"
-          onClick={handleLogout}
-        >
-          <LogOut className="h-4 w-4" />
-          Sign Out
-        </button>
-      </aside>
-
-      <main className="p-4 sm:p-6">
-        <header className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <h1 className="text-xl font-bold text-slate-100">{pageTitle}</h1>
-          <div className="flex items-center gap-2">
-            <span
-              className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${
-                pairing.loading
-                  ? 'border-slate-700 bg-slate-900 text-slate-400'
-                  : isPaired
-                    ? 'border-emerald-700 bg-emerald-950/40 text-emerald-300'
-                    : 'border-amber-700 bg-amber-950/40 text-amber-300'
-              }`}
-            >
-              {pairing.loading ? 'Checking pairing...' : isPaired ? 'Paired' : 'Not paired'}
+          <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+            <span className={`crew-chip ${headerBadge.tone}`}>
+              {headerBadge.label}
             </span>
             <button
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-semibold text-slate-300 transition hover:border-slate-500"
+              className="crew-chip-button"
               onClick={loadData}
             >
               <RefreshCw className="h-3.5 w-3.5" />
               Refresh
             </button>
-            {actionMsg && <span className="rounded-xl border border-emerald-900 bg-emerald-950/40 px-3 py-2 text-xs text-emerald-300">{actionMsg}</span>}
+            <NotificationBellButton service={ConductorService} role="conductor" onOpenNotification={openTripFromNotification} />
+            {actionMsg && <span className="basis-full rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">{actionMsg}</span>}
+          </div>
           </div>
         </header>
-
-        {loading && <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6 text-sm text-slate-400">Loading dashboard data...</div>}
+        {loading && <SkeletonPage variant="crew" label="Loading dashboard data..." />}
         {error && (
-          <div className="mb-4 inline-flex items-center gap-2 rounded-xl border border-red-900 bg-red-950/40 px-3 py-2 text-sm text-red-300">
-            <AlertCircle className="h-4 w-4" />
+          <div className="mb-4 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700">
+            <AlertCircle className="h-4 w-4 shrink-0" />
             {error}
           </div>
         )}
 
-        {showNoCurrentTripState && (
-          <section className="rounded-2xl border border-dashed border-slate-800 bg-slate-900 p-6">
-            <h3 className="text-lg font-semibold text-slate-100">No Current Trip Available</h3>
-            <p className="mt-2 text-sm text-slate-400">
+        {showNoCurrentTripState && activeTab === 'occupancy' && (
+          <section className="staff-card staff-card-roomy">
+            <h3 className="text-lg font-bold text-slate-900">No Current Trip Available</h3>
+            <p className="mt-2 text-sm text-slate-500">
               You currently do not have an active or same-day trip assignment.
             </p>
             {upcomingTrip ? (
-              <p className="mt-3 text-sm text-sky-300">
+              <p className="mt-3 text-sm text-teal-600">
                 Upcoming trip: {upcomingTrip?.fleet_route?.route?.origin || '-'} to {upcomingTrip?.fleet_route?.route?.destination || '-'} on {formatTripSchedule(upcomingTrip)}.
               </p>
             ) : (
@@ -776,365 +437,566 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
               </p>
             )}
             <button
-              className="mt-4 rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-xs font-semibold text-slate-300 transition hover:border-slate-500"
-              onClick={() => setActiveTab('assigned')}
+              className="mt-4 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
+              onClick={() => setActiveTab('occupancy')}
             >
-              View Assigned Trips
+              Go to Ticketing
             </button>
           </section>
         )}
 
-        {!loading && activeTab === 'trip' && !isPaired && (
-          <section className="rounded-2xl border border-amber-800 bg-amber-950/20 p-6">
-            <h3 className="text-lg font-semibold text-amber-300">Current trip is locked</h3>
-            <p className="mt-2 text-sm text-amber-200/90">{pairingReason}</p>
-          </section>
+        {/* Batch 19 Part B: dashboard/ticketing data (assigned route,
+            schedule, vehicle) always displays — pairing only disables
+            the specific live actions below (each individually gated with
+            a tooltip), not the whole tab. */}
+        {/* Batch 45 Feature B: the "Pair with crew" card opens the pairing and Daily PIN pop-up. */}
+        {!loading && activeTab === 'occupancy' && (
+          <PairWithCrewCard paired={isPaired} reason={pairingReason} partner="Driver" onOpen={() => setPairingOpen(true)} />
         )}
 
-        {!loading && activeTab === 'trip' && isPaired && !showNoCurrentTripState && (
-          <section className="grid gap-4 md:grid-cols-2">
-            {!trip ? (
-              <article className="rounded-2xl border border-dashed border-slate-800 bg-slate-900 p-6">
-                <h3 className="text-lg font-semibold text-slate-100">No Active Trip</h3>
-                <p className="mt-2 text-sm text-slate-500">No trip currently assigned.</p>
-              </article>
-            ) : (
-              <article className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
-                <div className="mb-4 flex items-center justify-between">
-                  <h3 className="text-lg font-semibold text-slate-100">Trip #{trip.trip_id}</h3>
-                  <span className="rounded-full border border-sky-500/40 bg-sky-500/10 px-3 py-1 text-xs text-sky-300">{trip.status}</span>
-                </div>
-                <div className="space-y-3 text-sm">
-                  <div className="flex items-center justify-between"><span className="text-slate-500">Schedule</span><strong className="font-data text-slate-100">{formatTripSchedule(trip)}</strong></div>
-                  <div className="flex items-center justify-between"><span className="text-slate-500">Seated Passengers</span><strong className="font-data text-slate-100">{trip.current_seated_capacity ?? 0}</strong></div>
-                  <div className="flex items-center justify-between"><span className="text-slate-500">Standing Passengers</span><strong className="font-data text-slate-100">{trip.current_standing_capacity ?? 0}</strong></div>
-                  <div className="flex items-center justify-between"><span className="text-slate-500">Total Occupancy</span><strong className="font-data text-slate-100">{trip.total_occupancy ?? 0}</strong></div>
-                </div>
-              </article>
+        {/* Batch 61 (advisor, 2026-11-13): Home is the next step, the alert button and today's bus and trip, in large text.
+            Assignments and the calendar are on Schedule. */}
+        {!loading && activeTab === 'dashboard' && (
+          <NextStepCard step={step} onPress={pressStep}>
+            {step.key === 'none' && upcomingTrip && (
+              <p className="mt-2 text-base text-slate-700">
+                Next trip: {upcomingTrip?.fleet_route?.route?.origin || 'Not provided'} to {upcomingTrip?.fleet_route?.route?.destination || 'Not provided'} on {formatTripSchedule(upcomingTrip)}.
+              </p>
             )}
+            {step.key === 'pair' && pairingReason && <p className="mt-2 text-base text-slate-700">{pairingReason}</p>}
+          </NextStepCard>
+        )}
+
+        {/* Batch 58: "Alert operator" while the trip is boarding, delayed or on the road. */}
+        {!loading && activeTab === 'dashboard' && <CrewAlertCard service={ConductorService} trip={trip} />}
+
+        {!loading && activeTab === 'dashboard' && !showNoCurrentTripState && (hasActiveTrip || hasTodayAssignedTrip) && (
+          <CrewTodayCard
+            route={todayInfo.route === 'Unavailable' ? null : todayInfo.route}
+            rows={[
+              ['Bus', todayInfo.plate === 'Unavailable' ? null : todayInfo.plate],
+              ['Leaves', todayInfo.schedule === 'Unavailable' ? null : todayInfo.schedule],
+              ['Status', todayInfo.status === 'Unavailable' ? null : String(todayInfo.status).replace('-', ' ')],
+            ]}
+          />
+        )}
+
+        {/* Batch 20 Item 2: Ticketing & Fares' own "not started yet" state
+            — distinct from Dashboard's hero, no duplicated Welcome/Confirm
+            & Start Shift block. Points the conductor back to Dashboard to
+            review/start their shift instead of repeating it here. */}
+        {!loading && activeTab === 'occupancy' && !hasActiveTrip && !showNoCurrentTripState && (
+          <section className="mx-auto max-w-md rounded-xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center">
+            <Ticket className="mx-auto mb-3 h-8 w-8 text-slate-400" />
+            <h3 className="text-base font-bold text-slate-900">Ticketing isn't active yet</h3>
+            <p className="mt-2 text-sm text-slate-500">
+              Start your shift from Home to unlock the ticket scanner and fare handling for today's trip.
+            </p>
+            <button
+              type="button"
+              onClick={() => setActiveTab('dashboard')}
+              className="mt-4 rounded-lg bg-teal-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-teal-600"
+            >
+              Go to Home
+            </button>
           </section>
         )}
 
-        {!loading && activeTab === 'assigned' && (
-          <section className="grid gap-4 md:grid-cols-2">
-            {assignedTrips.length === 0 ? (
-              <article className="rounded-2xl border border-dashed border-slate-800 bg-slate-900 p-6">
-                <h3 className="text-lg font-semibold text-slate-100">No Assigned Trips</h3>
-                <p className="mt-2 text-sm text-slate-500">You do not have any upcoming assigned trips.</p>
-              </article>
-            ) : (
-              assignedTrips.map((item) => (
-                <article key={item.trip_id} className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
-                  <div className="mb-4 flex items-center justify-between">
-                    <h3 className="text-lg font-semibold text-slate-100">Trip #{item.trip_id}</h3>
-                    <span className="rounded-full border border-sky-500/40 bg-sky-500/10 px-3 py-1 text-xs text-sky-300">{item.status}</span>
+        {/* Batch 19 Part A: folded into Dashboard (was the standalone
+            "Assigned Routes" nav item). Accept/decline never depended on
+            pairing, so no gating needed here. */}
+        {!loading && activeTab === 'schedule' && (
+          <section className="staff-grid md:grid-cols-2">
+            <div className="md:col-span-2 flex flex-wrap items-center justify-between gap-2">
+              <h4 className="text-lg font-bold text-slate-900">My trips</h4>
+              <label htmlFor="conductor-assigned-filter" className="text-xs font-semibold uppercase tracking-wide text-slate-500">Filter</label>
+              <select
+                id="conductor-assigned-filter"
+                value={assignedTripFilter}
+                onChange={(event) => { void handleAssignedTripFilterChange(event.target.value); }}
+                className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-700"
+              >
+                <option value="all">All</option>
+                <option value="scheduled">Scheduled</option>
+                <option value="completed">Completed</option>
+              </select>
+            </div>
+            <AssignmentSection
+              role="conductor"
+              assignments={assignments}
+              assignedTrips={assignedTrips}
+              filter={assignedTripFilter}
+              focusTripId={focusTripId}
+              focusBlockId={focusBlockId}
+              onDismissFocus={dismissTripFocus}
+            />
+          </section>
+        )}
+
+        {/* C-2: the dashboard widget opens a day in a modal; the Schedule page is the full calendar. Both read the
+            server's calendar endpoints, scoped to the signed-in Chauffeur. */}
+        {!loading && activeTab === 'schedule' && <CalendarSummaryStrip service={ConductorService} className="mb-4" />}
+        {!loading && activeTab === 'schedule' && (
+          <StaffCalendar key={calendarFocus || 'today'} service={ConductorService} initialDate={calendarFocus} />
+        )}
+
+
+        {/* Batch 19 Part A: Shift Blocks folds into Active Shift (live
+            operational state, not a planning view). Independent of
+            pairing — eligibility/hand-off is checked per-block against the
+            block's own final-leg + GPS state. */}
+        {!loading && activeTab === 'schedule' && (
+          <section className="staff-card">
+            <h3 className="mb-4 text-lg font-bold text-slate-900">My shifts</h3>
+            {/* 2026-10-27: no hand-off button. A shift finishes with its last trip; End Shift hands over the cash. */}
+            <MyScheduleList blocks={shiftBlocks} />
+          </section>
+        )}
+
+        {/* Batch 20 Item 2: quick-tiles + seat layout only make sense once a
+            trip is actually active (earnings/passenger counts would
+            otherwise show stale/zero data before any shift has started) —
+            the !hasActiveTrip case is covered by the placeholder above. */}
+        {!loading && activeTab === 'occupancy' && hasActiveTrip && !showNoCurrentTripState && (
+          <section className="max-w-5xl">
+            {/* Bus + Passenger Load Header */}
+            {occupancy && (
+              <div className="crew-load-strip mb-4 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-lg font-bold text-slate-900 sm:text-2xl">
+                    {trip?.fleet_route?.fleet?.plate_number ?? 'Bus unavailable'} - {trip?.fleet_route?.route?.route_name || `${trip?.fleet_route?.route?.origin || 'Route'} - ${trip?.fleet_route?.route?.destination || 'Pending'}`}
+                  </p>
+                </div>
+                <div className="flex flex-1 items-center gap-3">
+                  <span className="shrink-0 text-xs text-slate-500">Passenger Load</span>
+                  <div className="flex-1 overflow-hidden rounded-full bg-slate-100 h-2.5">
+                    <div
+                      className="h-full rounded-full bg-slate-500 transition-all"
+                      style={{ width: `${occTotalCap > 0 ? Math.round((occupiedTotal / occTotalCap) * 100) : 0}%` }}
+                    />
                   </div>
-                  <div className="space-y-3 text-sm">
-                    <div className="flex items-center justify-between"><span className="text-slate-500">Schedule</span><strong className="font-data text-slate-100">{formatTripSchedule(item)}</strong></div>
-                    <div className="flex items-center justify-between"><span className="text-slate-500">Fleet</span><strong className="text-slate-100">{item.fleet_route?.fleet?.plate_number || `Fleet ${item.fleet_route?.fleet_id || '-'}`}</strong></div>
-                    <div className="flex items-center justify-between"><span className="text-slate-500">Route</span><strong className="text-slate-100">{item.fleet_route?.route?.route_name || `Route ${item.fleet_route?.route_id || '-'}`}</strong></div>
-                  </div>
-                </article>
-              ))
-            )}
-          </section>
-        )}
-
-        {!loading && activeTab === 'occupancy' && !isPaired && (
-          <section className="rounded-2xl border border-amber-800 bg-amber-950/20 p-6">
-            <h3 className="text-lg font-semibold text-amber-300">Occupancy view is locked</h3>
-            <p className="mt-2 text-sm text-amber-200/90">{pairingReason}</p>
-          </section>
-        )}
-
-        {!loading && activeTab === 'occupancy' && isPaired && !showNoCurrentTripState && (
-          <section className="max-w-2xl">
-            {!occupancy ? (
-              <article className="rounded-2xl border border-dashed border-slate-800 bg-slate-900 p-6">
-                <h3 className="text-lg font-semibold text-slate-100">No Occupancy Data</h3>
-              </article>
-            ) : (
-              <article className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
-                <div className="mb-3 flex items-center justify-between">
-                  <h3 className="text-lg font-semibold text-slate-100">Live Occupancy</h3>
-                  <span className="font-data rounded-full border border-slate-700 bg-slate-950 px-3 py-1 text-xs text-slate-300">{capPct}% Full</span>
+                  <span className="shrink-0 font-data text-xs font-semibold text-slate-700">{occupiedTotal} / {occTotalCap} seats</span>
                 </div>
-                <div className="h-2.5 overflow-hidden rounded-full bg-slate-800">
-                  <div
-                    className="h-full rounded-full"
-                    style={{ width: `${capPct}%`, backgroundColor: capPct > 90 ? '#ef4444' : capPct > 70 ? '#f59e0b' : '#22c55e' }}
-                  />
-                </div>
-                <div className="mt-4 space-y-3 text-sm">
-                  <div className="flex items-center justify-between"><span className="text-slate-500">Seated</span><strong className="font-data text-slate-100">{occSeated} / {occSeatedCap}</strong></div>
-                  <div className="flex items-center justify-between"><span className="text-slate-500">Standing</span><strong className="font-data text-slate-100">{occStanding} / {occStandingCap}</strong></div>
-                  <div className="flex items-center justify-between"><span className="text-slate-500">Total Capacity</span><strong className="font-data text-slate-100">{occTotalCap}</strong></div>
-                </div>
-                <button
-                  className="mt-4 inline-flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-xs font-semibold text-slate-300 transition hover:border-slate-500"
-                  onClick={loadOccupancy}
-                >
-                  <RefreshCw className="h-3.5 w-3.5" />
-                  Refresh
-                </button>
-              </article>
-            )}
-          </section>
-        )}
-
-        {!loading && activeTab === 'scan' && !isPaired && (
-          <section className="rounded-2xl border border-amber-800 bg-amber-950/20 p-6">
-            <h3 className="text-lg font-semibold text-amber-300">Ticket scanning is locked</h3>
-            <p className="mt-2 text-sm text-amber-200/90">{pairingReason}</p>
-          </section>
-        )}
-
-        {!loading && activeTab === 'scan' && isPaired && (
-          <section className="grid gap-4 lg:grid-cols-2">
-            <article className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
-              <h3 className="text-lg font-semibold text-slate-100">Scan QR Ticket</h3>
-              <p className="mt-2 text-sm text-slate-500">Use smartphone camera scanning, or enter ticket UUID manually.</p>
-
-              <div className="mt-4 rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-                <div className="mb-3 flex flex-wrap items-center gap-2">
-                  {!scannerRunning ? (
-                    <button
-                      type="button"
-                      className="inline-flex items-center gap-2 rounded-xl border border-emerald-700 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-300 transition hover:bg-emerald-500/20"
-                      onClick={() => void startScanner()}
-                    >
-                      <Camera className="h-4 w-4" />
-                      Start Camera Scanner
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      className="inline-flex items-center gap-2 rounded-xl border border-amber-700 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-300 transition hover:bg-amber-500/20"
-                      onClick={stopScanner}
-                    >
-                      <Camera className="h-4 w-4" />
-                      Stop Camera
-                    </button>
-                  )}
-
-                  <span className="text-xs text-slate-400">
-                    {scannerRunning ? 'Live scanner is active' : 'Scanner is idle'}
-                  </span>
-                </div>
-
-                <div className="relative overflow-hidden rounded-lg border border-slate-800 bg-slate-950">
-                  <video
-                    ref={videoRef}
-                    className="aspect-video w-full bg-slate-950 object-cover"
-                    muted
-                    playsInline
-                    autoPlay
-                  />
-                  {scannerBusy && (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-slate-950/80 backdrop-blur-sm">
-                      <div className="h-8 w-8 animate-spin rounded-full border-4 border-slate-700 border-t-sky-400" />
-                      <p className="text-xs font-semibold text-sky-300">Validating…</p>
-                    </div>
-                  )}
-                </div>
-
-                {scannerStatus && <p className="mt-2 text-xs text-slate-400">{scannerStatus}</p>}
-                {scannerError && <p className="mt-2 text-xs text-red-300">{scannerError}</p>}
               </div>
+            )}
 
-              <div className="mt-4 flex gap-2">
-                <input
-                  type="text"
-                  placeholder="ticket-uuid-here"
-                  value={scanUuid}
-                  onChange={(e) => {
-                    setScanUuid(e.target.value);
-                    setScanResult(null);
-                    setGroupScanResult(null);
-                  }}
-                  className="font-data h-11 w-full rounded-xl border border-slate-800 bg-slate-950 px-3 text-sm text-slate-100 outline-none placeholder:text-slate-500 focus:border-sky-400"
-                />
-                <button
-                  className="inline-flex items-center gap-2 rounded-xl bg-sky-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-50"
-                  onClick={handleScan}
-                  disabled={scannerBusy}
-                >
-                  {scannerBusy
-                    ? <><div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-950/30 border-t-slate-950" />Validating…</>
-                    : <><QrCode className="h-4 w-4" />Scan</>}
-                </button>
-              </div>
-
-              {/* Single-ticket result */}
-              {scanResult && (
-                <div
-                  className={`mt-4 rounded-xl border px-4 py-3 text-sm ${
-                    scanResult.success
-                      ? 'border-emerald-900 bg-emerald-950/40 text-emerald-300'
-                      : 'border-red-900 bg-red-950/40 text-red-300'
-                  }`}
-                >
-                  <div className="flex items-start gap-2">
-                    {scanResult.success ? <CheckCircle2 className="mt-0.5 h-4 w-4" /> : <XCircle className="mt-0.5 h-4 w-4" />}
-                    <div>
-                      <p className="font-semibold">{scanResult.msg}</p>
-                      {scanResult.success && scanResult.data && (
-                        <div className="mt-2 space-y-1 text-xs text-slate-300">
-                          <div>Destination: {scanResult.data.destination || 'N/A'}</div>
-                          <div>Seat Type: {scanResult.data.seat_type}</div>
-                          <div className="font-data">Amount: PHP {scanResult.data.amount}</div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
+            {/* Batch 15, Item 8: consolidated "at a glance" strip — earnings
+                and passenger count are visible here directly, without
+                navigating to the separate Earnings/Passengers tabs. Those
+                tabs still exist for full detail (breakdown table, per-
+                passenger list). */}
+            <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+              <button type="button" onClick={() => setActiveTab('activeShift')} className="staff-card staff-card-compact text-left transition hover:bg-slate-50">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Earnings So Far</p>
+                <p className="font-data mt-1 text-lg font-bold text-slate-900">₱{earnings ? Number(earnings.net_total ?? earnings.total_fare).toFixed(2) : '0.00'}</p>
+              </button>
+              <button type="button" onClick={() => setActiveTab('activeShift')} className="staff-card staff-card-compact text-left transition hover:bg-slate-50">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Passengers Onboard</p>
+                {/* Batch 77: the same "on board now" as the passenger count (scanned in or sold on the bus, not yet off); it used to count every listed ticket, scanned or not. */}
+                <p className="font-data mt-1 text-lg font-bold text-slate-900" data-testid="onboard-box">{expectedBoarding?.passenger_count?.on_board ?? (passengers ? passengers.filter((p) => p.is_boarded).length : 'Not provided')}</p>
+              </button>
+{/* Batch 53 item 9: hidden once paired. */}
+              {!isPaired && (
+              <button type="button" onClick={() => setPairingOpen(true)} className="staff-card staff-card-compact text-left transition hover:bg-slate-50">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Daily PIN</p>
+                <p className="mt-1 text-sm font-semibold text-teal-600">Pair with crew →</p>
+              </button>
               )}
+            </div>
+            {!occupancy ? (
+              <article className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-6">
+                <h3 className="text-lg font-bold text-slate-900">No Occupancy Data</h3>
+              </article>
+            ) : (
+              <>
+              {/* Batch 75 (panel): discounts claimed online that still need the ID check. */}
+              {pendingClaims.length > 0 && (
+                <article data-testid="discounts-to-check" className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+                  <p className="text-sm font-bold text-amber-900">{pendingClaims.length === 1 ? '1 discount to check' : `${pendingClaims.length} discounts to check`}</p>
+                  <ul className="mt-2 space-y-2">
+                    {pendingClaims.map((p) => (
+                      <li key={p.ticket_id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                        <span className="text-slate-800">{p.passenger_name || 'Guest'} · {p.discount_claim.label}{p.is_boarded ? '' : ' · not scanned yet'}</span>
+                        <button type="button" onClick={() => openDiscountReview({ ticketId: p.ticket_id, passengerName: p.passenger_name, claim: p.discount_claim })} disabled={!boardingOpen} className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-amber-700 disabled:opacity-60" data-testid={`review-discount-${p.ticket_id}`}>
+                          Review discount
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </article>
+              )}
+              {/* Batch 75 (user): who to expect at the next stop: paid tickets not scanned yet, per boarding stop. */}
+              {expectedBoarding?.next_stop && (
+                <article data-testid="expected-boarding" className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-teal-200 bg-teal-50 px-4 py-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-teal-800">Next stop</p>
+                    <p className="text-xl font-bold text-slate-900">{expectedBoarding.next_stop.stop_name || 'Not provided'}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-3xl font-bold text-teal-800" data-testid="expected-boarding-count">{expectedBoarding.next_stop.waiting_count}</p>
+                    <p className="text-xs font-semibold text-teal-900">{expectedBoarding.next_stop.waiting_count === 1 ? 'passenger to board here' : 'passengers to board here'}</p>
+                  </div>
+                  {(expectedBoarding.next_stop.priority_count > 0 || expectedBoarding.next_stop.baggage_count > 0) && (
+                    <p className="w-full text-sm font-semibold text-teal-900" data-testid="expected-boarding-extras">
+                      {[
+                        expectedBoarding.next_stop.priority_count > 0 && `${expectedBoarding.next_stop.priority_count} need a priority seat`,
+                        expectedBoarding.next_stop.baggage_count > 0 && `${expectedBoarding.next_stop.baggage_count} with baggage for the compartment`,
+                      ].filter(Boolean).join(' · ')}
+                    </p>
+                  )}
+                  <p className="w-full text-xs text-teal-900">{expectedBoarding.waiting_total === 1 ? '1 paid passenger' : `${expectedBoarding.waiting_total ?? 0} paid passengers`} still to board on this trip.</p>
+                </article>
+              )}
+              {/* Batch 76 (user): the leg's passenger count, for an inspector to compare with the people on the bus. */}
+              {expectedBoarding?.passenger_count && (
+                <article data-testid="passenger-count" className="mb-4 rounded-xl border border-slate-200 bg-white px-4 py-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Passenger count for this trip</p>
+                  <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-sm sm:grid-cols-4">
+                    {passengerCountRows(expectedBoarding.passenger_count).map((row) => (
+                      <div key={row.key} className={row.key === 'on_board' ? 'col-span-2 sm:col-span-1' : ''}>
+                        <dt className="text-xs text-slate-500">{row.label}</dt>
+                        <dd className={`font-data font-bold ${row.key === 'on_board' ? 'text-2xl text-slate-900' : 'text-slate-800'}`} data-testid={`count-${row.key}`}>{row.value ?? 'Not provided'}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                  <p className="mt-2 text-xs text-slate-500">On board now should match the people on the bus. Tickets never scanned are not counted as passengers.</p>
+                </article>
+              )}
+              <div className="staff-grid lg:grid-cols-[1.1fr_1fr]">
+                {/* Batch 51 item 9 (user's design): the scanner card takes the capacity card's place; the capacity numbers and
+                    the full-bus notice are in the cash ticket card. */}
+                <ChauffeurScannerCard
+                  videoRef={videoRef}
+                  scannerRunning={scannerRunning}
+                  scannerBusy={scannerBusy}
+                  scannerPhase={scannerPhase}
+                  scannerStatus={scannerStatus}
+                  scannerError={scannerError}
+                  canScan={hasOpenShift && isPaired && boardingOpen}
+                  blockedReason={!isPaired ? 'Pair with your Driver first to scan tickets.' : !hasOpenShift ? 'Start your shift to scan tickets.' : !boardingOpen ? BOARDING_NOT_STARTED : ''}
+                  onStart={() => void startScanner()}
+                  onStop={stopScanner}
+                  ticketCode={scanUuid}
+                  onTicketCodeChange={(value) => { setScanUuid(value); setScanResult(null); setGroupScanResult(null); }}
+                  onBoardByCode={handleScan}
+                  scanResult={scanResult}
+                  groupScanResult={groupScanResult}
+                />
 
-              {/* Group-ticket result */}
-              {groupScanResult && (
-                <div
-                  className={`mt-4 rounded-xl border px-4 py-3 text-sm ${
-                    groupScanResult.success
-                      ? 'border-emerald-900 bg-emerald-950/40 text-emerald-300'
-                      : 'border-red-900 bg-red-950/40 text-red-300'
-                  }`}
-                >
-                  <div className="flex items-start gap-2">
-                    {groupScanResult.success ? <CheckCircle2 className="mt-0.5 h-4 w-4" /> : <XCircle className="mt-0.5 h-4 w-4" />}
-                    <div className="w-full">
-                      <p className="font-semibold">{groupScanResult.msg}</p>
-                      {groupScanResult.success && groupScanResult.data?.tickets?.length > 0 && (
-                        <div className="mt-2 space-y-1">
-                          {groupScanResult.data.tickets.map((t, i) => (
-                            <div
-                              key={t.ticket_uuid || i}
-                              className={`flex items-center justify-between rounded-lg px-3 py-1.5 text-xs ${
-                                t.skipped
-                                  ? 'bg-slate-800/50 text-slate-400'
-                                  : 'bg-emerald-900/30 text-emerald-300'
-                              }`}
+                <article className="staff-card">
+                  <h3 className="mb-4 flex items-center gap-2 text-2xl font-bold text-slate-900">Manual Cash Ticket <ServiceTypeChip serviceType={trip?.service_type} /></h3>
+                  {tripIsExpress && (
+                    <p role="status" data-testid="express-fare-note" className="mb-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
+                      Express trip: only the stops it serves are listed. A ticket is issued only where an express fare exists for this bus class; if not, the system says &quot;Fare unavailable&quot; and nothing is sold.
+                    </p>
+                  )}
+
+                  <div className="space-y-3">
+                    {midTripAvailable && (
+                      <div className="rounded-lg border border-teal-200 bg-teal-50 p-3" data-testid="passenger-in">
+                        <button
+                          type="button"
+                          onClick={handlePassengerIn}
+                          disabled={checkInBusy || !isPaired || !hasOpenShift || !boardingOpen}
+                          className="w-full rounded-lg bg-teal-600 px-3 py-2.5 text-sm font-bold text-white transition hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {checkInBusy ? 'Checking in...' : 'Passenger In'}
+                        </button>
+                        <p className="mt-1 text-xs text-teal-900">Tap as someone boards between stops. Their fare counts from the last stop passed, however late you collect it.</p>
+                        <p className="mt-1 text-xs font-semibold text-teal-900">{checkIns.length === 1 ? '1 passenger waiting to pay' : `${checkIns.length} passengers waiting to pay`}</p>
+                      </div>
+                    )}
+
+                    {midTripAvailable && (
+                      <div>
+                        <p className="mb-1 text-sm font-semibold text-slate-700">Where does the passenger board?</p>
+                        <div role="group" aria-label="Boarding point" data-testid="boarding-mode" className="grid grid-cols-3 gap-2">
+                          {[['checkin', 'Checked in'], ['stop', 'At a stop'], ['gps', 'Bus position now']].map(([mode, label]) => (
+                            <button
+                              key={mode}
+                              type="button"
+                              aria-pressed={cashForm.boarding_mode === mode}
+                              onClick={() => setOnsiteForm((prev) => ({ ...prev, boarding_mode: mode, pending_boarding_id: '', destination_stop_id: '' }))}
+                              className={`rounded-lg border px-3 py-2 text-sm font-semibold transition ${cashForm.boarding_mode === mode ? 'border-teal-500 bg-teal-50 text-teal-800' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'}`}
                             >
-                              <span>{t.passenger_name} → {t.destination || 'N/A'} ({t.seat_type})</span>
-                              <span className="font-semibold">
-                                {t.skipped ? t.skip_reason : 'Boarded'}
-                              </span>
-                            </div>
+                              {label}
+                            </button>
                           ))}
                         </div>
+                      </div>
+                    )}
+
+                    {byBusPosition && (
+                      <div data-testid="boarding-point-status" role="status" className={`rounded-lg border px-3 py-2 text-sm ${boardingView.good ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-amber-200 bg-amber-50 text-amber-800'}`}>
+                        {boardingPoint.loading && !boardingPoint.response ? (
+                          <p>Reading the bus position...</p>
+                        ) : boardingView.good ? (
+                          <p>No check-in: the fare counts from the last stop the bus has passed now ({boardingView.distanceFromOriginKm} km along). Use Passenger In as people board so a late collection does not lower the fare.</p>
+                        ) : (
+                          <>
+                            <p className="font-semibold">The bus position can't be used right now.</p>
+                            <p className="mt-0.5 text-xs">{boardingPoint.error || boardingView.message} Pick the boarding stop instead; the fare is then counted from that stop.</p>
+                            <button
+                              type="button"
+                              className="mt-2 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100"
+                              onClick={() => setOnsiteForm((prev) => ({ ...prev, boarding_mode: 'stop', destination_stop_id: '' }))}
+                            >
+                              Pick the boarding stop
+                            </button>
+                          </>
+                        )}
+                        <button
+                          type="button"
+                          className="mt-2 block text-xs font-semibold underline"
+                          onClick={refreshBoardingPoint}
+                          disabled={boardingPoint.loading}
+                        >
+                          Refresh position
+                        </button>
+                      </div>
+                    )}
+
+                    {byCheckIn && (
+                    <div>
+                      <label htmlFor="onsite-checkin" className="mb-1 block text-sm font-semibold text-slate-700">Checked-in passenger</label>
+                      <select
+                        id="onsite-checkin"
+                        value={cashForm.pending_boarding_id}
+                        onChange={(e) => setOnsiteForm((prev) => ({ ...prev, pending_boarding_id: e.target.value, destination_stop_id: '' }))}
+                        className="h-11 w-full rounded-lg border border-slate-300 bg-slate-800 px-3 text-sm text-white outline-none focus:border-teal-500"
+                      >
+                        <option value="">{checkIns.length ? 'Select who is paying' : 'Nobody is waiting to pay'}</option>
+                        {checkIns.map((checkIn) => (
+                          <option key={`checkin-${checkIn.id}`} value={checkIn.id}>{checkInLabel(checkIn)}</option>
+                        ))}
+                      </select>
+                    </div>
+                    )}
+
+                    {!byBusPosition && !byCheckIn && (
+                    <div>
+                      <label htmlFor="onsite-origin" className="mb-1 block text-sm font-semibold text-slate-700">Boarding stop</label>
+                      <select
+                        id="onsite-origin"
+                        value={onsiteForm.origin_stop_id}
+                        onChange={(e) => setOnsiteForm((prev) => ({ ...prev, origin_stop_id: e.target.value, destination_stop_id: '' }))}
+                        className="h-11 w-full rounded-lg border border-slate-300 bg-slate-800 px-3 text-sm text-white outline-none focus:border-teal-500"
+                      >
+                        <option value="">Select boarding stop</option>
+                        {boardingStops.map((stop) => (
+                          <option key={`onsite-origin-${stop.stop_id}`} value={stop.stop_id}>
+                            {stopLabel(stop)}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    )}
+
+                    <div>
+                      <label htmlFor="onsite-destination" className="mb-1 block text-sm font-semibold text-slate-700">Select Destination</label>
+                      <select
+                        id="onsite-destination"
+                        value={onsiteForm.destination_stop_id}
+                        onChange={(e) => setOnsiteForm((prev) => ({ ...prev, destination_stop_id: e.target.value }))}
+                        disabled={!boardingReady}
+                        className="h-11 w-full rounded-lg border border-slate-300 bg-slate-800 px-3 text-sm text-white outline-none focus:border-teal-500 disabled:opacity-60"
+                      >
+                        <option value="">{boardingReady ? 'Select destination stop' : 'Choose the boarding point first'}</option>
+                        {destinationOptions.map((stop) => (
+                          <option key={`onsite-destination-${stop.stop_id}`} value={stop.stop_id}>
+                            {byBusPosition ? stop.stop_name : stopLabel(stop)}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="mb-1 block text-sm font-semibold text-slate-700">Passenger Type</label>
+                      <select
+                        value={cashForm.seat_type}
+                        onChange={(e) => setOnsiteForm((prev) => ({ ...prev, seat_type: e.target.value }))}
+                        className="h-11 w-full rounded-lg border border-slate-300 bg-slate-800 px-3 text-sm text-white outline-none focus:border-teal-500"
+                      >
+                        <option value="seated">Regular</option>
+                        {cashCapacity.standingOpen && <option value="standing">Standing</option>}
+                      </select>
+                      {!cashCapacity.standingOpen && (
+                        <p className="mt-1 text-xs text-slate-500">Standing is offered once every seat is sold.</p>
+                      )}
+                    </div>
+
+
+                    <div>
+                      <label htmlFor="onsite-discount-type" className="mb-1 block text-sm font-semibold text-slate-700">Onsite discount</label>
+                      <select
+                        id="onsite-discount-type"
+                        value={onsiteDiscountTypeKey}
+                        onChange={(event) => { setOnsiteDiscountTypeKey(event.target.value); setOnsiteDiscountIdChecked(false); }}
+                        className="h-11 w-full rounded-lg border border-slate-300 bg-slate-800 px-3 text-sm text-white outline-none focus:border-teal-500"
+                      >
+                        <option value="">No discount</option>
+                        {onsiteDiscountTypes.map((type) => <option key={type.key} value={type.key}>{type.label} ({Math.round(Number(type.rate) * 100)}%)</option>)}
+                      </select>
+                      {onsiteDiscountError && <p role="status" className="mt-1 text-xs text-amber-700">{onsiteDiscountError}</p>}
+                      {selectedOnsiteDiscount && (
+                        <label className="mt-2 flex items-start gap-2 text-xs text-slate-700">
+                          <input
+                            type="checkbox"
+                            checked={onsiteDiscountIdChecked}
+                            onChange={(event) => setOnsiteDiscountIdChecked(event.target.checked)}
+                            className="mt-0.5 h-4 w-4 rounded border-slate-300 accent-teal-700"
+                          />
+                          <span>I checked the passenger&apos;s valid ID. No ID number or photo is recorded.</span>
+                        </label>
+                      )}
+                    </div>
+
+                    {/* Batch 76: a priority seat and baggage in the compartment (the baggage fee is added to the fare). */}
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div>
+                        <label htmlFor="onsite-priority" className="mb-1 block text-sm font-semibold text-slate-700">Priority seat</label>
+                        <select
+                          id="onsite-priority"
+                          value={onsitePriority}
+                          onChange={(event) => setOnsitePriority(event.target.value)}
+                          className="h-11 w-full rounded-lg border border-slate-300 bg-slate-800 px-3 text-sm text-white outline-none focus:border-teal-500"
+                        >
+                          <option value="">No</option>
+                          <option value="senior">Senior citizen</option>
+                          <option value="pwd">Person with disability</option>
+                          <option value="pregnant">Pregnant</option>
+                        </select>
+                      </div>
+                      <label className="flex items-center gap-2 self-end pb-2 text-sm font-semibold text-slate-700">
+                        <input
+                          type="checkbox"
+                          checked={onsiteBaggage}
+                          onChange={(event) => setOnsiteBaggage(event.target.checked)}
+                          className="h-4 w-4 rounded border-slate-300 accent-teal-700"
+                          data-testid="onsite-baggage"
+                        />
+                        Baggage in the compartment
+                      </label>
+                    </div>
+
+                    <div data-testid="onsite-fare">
+                      <label htmlFor="onsite-fare-amount" className="mb-1 block text-sm font-semibold text-slate-700">Fare Amount (PHP)</label>
+                      <output
+                        id="onsite-fare-amount"
+                        aria-live="polite"
+                        className={`flex min-h-14 w-full items-center rounded-lg border px-3 py-2 ${onsiteQuote.status === 'ready' ? 'border-emerald-300 bg-emerald-50' : onsiteQuote.status === 'error' ? 'border-red-200 bg-red-50' : 'border-slate-300 bg-slate-100'}`}
+                      >
+                        {onsiteQuote.status === 'ready' && <span className="font-data text-3xl font-bold text-emerald-800">&#8369;{onsiteQuote.amount.toFixed(2)}</span>}
+                        {onsiteQuote.status === 'loading' && <span className="text-sm text-slate-600">Working out the fare...</span>}
+                        {onsiteQuote.status === 'error' && <span role="alert" className="text-sm font-semibold text-red-700">{onsiteQuote.message}</span>}
+                        {onsiteQuote.status === 'idle' && <span className="text-sm text-slate-600">Select boarding point and destination first</span>}
+                      </output>
+                      {onsiteQuote.status === 'ready' && onsiteQuote.baggageFee > 0 && (
+                        <p className="mt-1 text-sm font-semibold text-slate-800" data-testid="onsite-baggage-fee">
+                          Plus baggage &#8369;{onsiteQuote.baggageFee.toFixed(2)}. Collect &#8369;{(onsiteQuote.amount + onsiteQuote.baggageFee).toFixed(2)}.
+                        </p>
+                      )}
+                      {onsiteQuote.status === 'ready' && onsiteQuote.discountAmount > 0 && (
+                        <p className="mt-1 text-xs text-slate-600" data-testid="onsite-fare-discount">
+                          Regular fare &#8369;{onsiteQuote.originalAmount.toFixed(2)}, {onsiteQuote.discountLabel} discount -&#8369;{onsiteQuote.discountAmount.toFixed(2)}.
+                        </p>
+                      )}
+                      {onsiteQuote.status === 'ready' && onsiteDiscountTypeKey && !onsiteDiscountIdChecked && (
+                        <p className="mt-1 text-xs text-amber-700">Tick the ID check to see the discounted fare.</p>
+                      )}
+                      {byBusPosition && onsiteQuote.status === 'ready' && (
+                        <p className="mt-1 text-xs text-slate-500">Without a check-in the fare follows the bus. Use Refresh position just before you sell.</p>
+                      )}
+                      {byCheckIn && onsiteQuote.status === 'ready' && (
+                        <p className="mt-1 text-xs text-slate-500">Counted from {selectedCheckIn?.stop_name}, where this passenger was checked in.</p>
+                      )}
+                    </div>
+
+                    <div className="grid gap-2">
+                      <button
+                        type="button"
+                        className="rounded-lg bg-cyan-700 px-3 py-2 text-sm font-semibold text-white transition hover:bg-cyan-800 disabled:cursor-not-allowed disabled:opacity-60"
+                        onClick={requestOnsiteCheckout}
+                        disabled={checkoutInFlight || !hasActiveTrip || !isPaired || !hasOpenShift || !boardingOpen || cashCapacity.isFull || onsiteQuote.status !== 'ready' || Boolean(onsiteDiscountTypeKey && !onsiteDiscountIdChecked)}
+                      >
+                        {checkoutInFlight ? 'Processing...' : 'Make sale'}
+                      </button>
+                    </div>
+                    {ticketingBlocked && <p data-testid="ticketing-reason" className="text-xs text-amber-700">{ticketingBlocked}</p>}
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
+                        onClick={loadOccupancy}
+                      >
+                        Refresh Load
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                        onClick={() => {
+                          const didPrint = printOnsiteReceipt({ receipt: onsiteReceipt, routeStops });
+                          if (!didPrint) {
+                            setActionMsg('No onsite checkout receipt available to print yet.');
+                          }
+                        }}
+                        disabled={!onsiteReceipt || !onsiteReceipt?.tickets?.length}
+                      >
+                        Print Last Ticket
+                      </button>
+                    </div>
+
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600" data-testid="capacity-summary">
+                      <p className="font-semibold text-slate-800">On board {cashCapacity.onboard} / {cashCapacity.capacity || '-'} · Tickets sold {cashCapacity.sold} · Places left {cashCapacity.remaining ?? '-'}</p>
+                      {cashCapacity.isFull && (
+                        <p role="alert" data-testid="bus-full-notice" className="mt-1 font-semibold text-red-700">The bus is full. No more tickets can be issued.</p>
+                      )}
+                      <p>Total capacity: {occTotalCap} seats</p>
+                      <p>Seated: {occSeated} / {occSeatedCap}</p>
+                      <p>Standing: {occStanding} / {occStandingCap}</p>
+                      {onsiteReceipt?.payment?.transaction_reference && (
+                        <p className="mt-1 text-slate-700">Last receipt: {onsiteReceipt.payment.transaction_reference}</p>
                       )}
                     </div>
                   </div>
-                </div>
-              )}
-            </article>
-
-            <article className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
-              <h3 className="text-lg font-semibold text-slate-100">Onsite Checkout (Cash)</h3>
-              <p className="mt-2 text-sm text-slate-500">Record an onboard payment for passengers who pay in cash.</p>
-
-              <div className="mt-4 space-y-3">
-                <div className="grid grid-cols-2 gap-2">
-                  <select
-                    value={onsiteForm.origin_stop_id}
-                    onChange={(e) => setOnsiteForm((prev) => ({ ...prev, origin_stop_id: e.target.value }))}
-                    className="rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none focus:border-sky-400"
-                  >
-                    <option value="">Select origin stop</option>
-                    {routeStops.map((stop) => (
-                      <option key={`onsite-origin-${stop.stop_id}`} value={stop.stop_id}>
-                        {stop?.stop?.stop_name || stop?.stop_name || `Stop ${stop.stop_id}`}
-                      </option>
-                    ))}
-                  </select>
-                  <select
-                    value={onsiteForm.destination_stop_id}
-                    onChange={(e) => setOnsiteForm((prev) => ({ ...prev, destination_stop_id: e.target.value }))}
-                    className="rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none focus:border-sky-400"
-                  >
-                    <option value="">Select destination stop</option>
-                    {routeStops.map((stop) => (
-                      <option key={`onsite-destination-${stop.stop_id}`} value={stop.stop_id}>
-                        {stop?.stop?.stop_name || stop?.stop_name || `Stop ${stop.stop_id}`}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <select
-                    value={onsiteForm.seat_type}
-                    onChange={(e) => setOnsiteForm((prev) => ({ ...prev, seat_type: e.target.value }))}
-                    className="rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none focus:border-sky-400"
-                  >
-                    <option value="seated">Seated</option>
-                    <option value="standing">Standing</option>
-                  </select>
-                  <input
-                    type="number"
-                    min="1"
-                    placeholder="Passenger ID (optional)"
-                    value={onsiteForm.passenger_id}
-                    onChange={(e) => setOnsiteForm((prev) => ({ ...prev, passenger_id: e.target.value }))}
-                    className="rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-sm text-slate-100 outline-none placeholder:text-slate-500 focus:border-sky-400"
-                  />
-                </div>
-
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-2 rounded-xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400"
-                  onClick={handleOnsiteCheckout}
-                  disabled={!hasActiveTrip || !isPaired}
-                >
-                  Record Cash Checkout
-                </button>
-
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-950 px-4 py-2 text-sm font-semibold text-slate-300 transition hover:border-slate-500 disabled:cursor-not-allowed disabled:opacity-60"
-                  onClick={() => {
-                    const didPrint = printOnsiteReceipt({ receipt: onsiteReceipt, routeStops });
-                    if (!didPrint) {
-                      setActionMsg('No onsite checkout receipt available to print yet.');
-                    }
-                  }}
-                  disabled={!onsiteReceipt || !onsiteReceipt?.tickets?.length}
-                >
-                  Print Last Onsite Ticket
-                </button>
-
-                {onsiteReceipt?.payment?.transaction_reference && (
-                  <p className="text-xs text-slate-400">
-                    Last receipt: {onsiteReceipt.payment.transaction_reference} ({onsiteReceipt.tickets?.length || 0} ticket/s)
-                  </p>
-                )}
+                </article>
               </div>
-            </article>
+              </>
+            )}
+
           </section>
         )}
 
-        {!loading && activeTab === 'passengers' && !isPaired && (
-          <section className="rounded-2xl border border-amber-800 bg-amber-950/20 p-6">
-            <h3 className="text-lg font-semibold text-amber-300">Passengers and alighting are locked</h3>
-            <p className="mt-2 text-sm text-amber-200/90">{pairingReason}</p>
-          </section>
-        )}
-
-        {!loading && activeTab === 'passengers' && isPaired && !showNoCurrentTripState && (
-          <section className="rounded-2xl border border-slate-800 bg-slate-900 p-4 sm:p-6">
+        {/* Batch 19 Part B: Live Passengers data always shows — only the
+            Record Alight action is pairing-gated. */}
+        {!loading && activeTab === 'activeShift' && !showNoCurrentTripState && (
+          <section className="staff-card">
             {groupedPassengers.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-slate-800 bg-slate-950 p-6">
-                <h3 className="text-lg font-semibold text-slate-100">No Passengers</h3>
+              <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-6">
+                <h3 className="text-lg font-semibold text-slate-900">No Passengers</h3>
                 <p className="mt-2 text-sm text-slate-500">No passengers currently on this trip.</p>
               </div>
             ) : (
               <div className="space-y-4">
+                <DropOffGroups
+                  groups={dropOffGroups}
+                  passengers={passengers}
+                  disabled={!isPaired}
+                  disabledReason="You must be paired before you can confirm a drop-off."
+                  onConfirm={handleConfirmDropOff}
+                />
+                {/* §7: one at a time is the exception path; the groups above are the usual way. */}
+                <details className="rounded-xl border border-slate-200 bg-white p-3" open={!dropOffGroups.length}>
+                  <summary className="cursor-pointer text-sm font-semibold text-slate-700">Each passenger, one at a time</summary>
+                  <div className="mt-3 space-y-4">
                 {groupedPassengers.map((group) => (
-                  <div key={`passenger-group-${group.key}`} className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+                  <div key={`passenger-group-${group.key}`} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                     <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                      <h3 className="text-sm font-semibold text-slate-100">
+                      <h3 className="text-sm font-semibold text-slate-900">
                         Trip #{group.tripId}
                       </h3>
-                      <div className="text-xs text-slate-400">
+                      <div className="text-xs text-slate-500">
                         {group.routeName ? `${group.routeName} • ` : ''}
                         {group.passengers.length} passenger(s)
                       </div>
@@ -1143,33 +1005,40 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                     <div className="overflow-x-auto">
                       <table className="w-full min-w-180 text-left text-sm">
                         <thead>
-                          <tr className="border-b border-slate-800 text-xs uppercase tracking-[0.16em] text-slate-500">
+                          <tr className="border-b border-slate-200 text-xs uppercase tracking-[0.16em] text-slate-500">
                             <th className="py-3">#</th>
                             <th className="py-3">Name</th>
-                            <th className="py-3">Seat Type</th>
+                            <th className="py-3">Passenger Type</th>
                             <th className="py-3">Destination</th>
-                            <th className="py-3">Status</th>
                             <th className="py-3">Action</th>
                           </tr>
                         </thead>
                         <tbody>
                           {group.passengers.map((p, i) => {
-                            const status = p.status ?? 'boarded';
                             return (
-                              <tr key={p.ticket_id ?? `${group.key}-${i}`} className="border-b border-slate-800/70">
-                                <td className="py-3 font-data text-slate-400">{p.row_number}</td>
-                                <td className="py-3 text-slate-100">{p.passenger_name ?? p.passenger?.name ?? 'Guest'}</td>
-                                <td className="py-3"><span className="rounded-full border border-slate-700 px-2 py-1 text-xs capitalize text-slate-300">{p.seat_type}</span></td>
-                                <td className="py-3 text-slate-300">{p.destination_display}</td>
-                                <td className="py-3"><span className="rounded-full border border-emerald-900 bg-emerald-950/30 px-2 py-1 text-xs capitalize text-emerald-300">{status}</span></td>
+                              <tr key={p.ticket_id ?? `${group.key}-${i}`} className="border-b border-slate-100">
+                                <td className="py-3 font-data text-slate-500">{p.row_number}</td>
+                                <td className="py-3 text-slate-900">
+                                  {p.passenger_name ?? p.passenger?.name ?? 'Guest'}
+                                  {/* Batch 76: priority seat and baggage, so the Chauffeur can seat and load them. */}
+                                  {p.priority_label && <span className="ml-1.5 rounded-full bg-violet-100 px-2 py-0.5 text-xs font-semibold text-violet-800">Priority: {p.priority_label}</span>}
+                                  {p.baggage && <span className="ml-1.5 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700">Baggage</span>}
+                                </td>
+                                <td className="py-3"><span className="rounded-full border border-slate-200 px-2 py-1 text-xs capitalize text-slate-600">{p.seat_type}</span></td>
+                                <td className="py-3 text-slate-600">{p.destination_display}{p.discount_claim && <span className="block text-xs font-semibold text-amber-800">{claimReviewState(p.discount_claim).text}</span>}</td>
                                 <td className="py-3">
+                                  {claimReviewState(p.discount_claim).reviewable && (
+                                    <button type="button" onClick={() => openDiscountReview({ ticketId: p.ticket_id, passengerName: p.passenger_name, claim: p.discount_claim })} disabled={!boardingOpen} className="mb-1 mr-1 inline-flex rounded-lg bg-amber-600 px-2.5 py-1.5 text-xs font-bold text-white hover:bg-amber-700 disabled:opacity-60">Review discount</button>
+                                  )}
                                   {!p.alighted_at && (
                                     <button
-                                      className="inline-flex items-center gap-1 rounded-lg border border-slate-700 bg-slate-950 px-2.5 py-1.5 text-xs font-semibold text-slate-300 transition hover:border-slate-500"
+                                      className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
                                       onClick={() => handleAlight(p.ticket_id)}
+                                      disabled={!isPaired}
+                                      title={!isPaired ? 'You must be paired before you can mark a drop-off.' : undefined}
                                     >
                                       <UserCheck className="h-3.5 w-3.5" />
-                                      Record Alight
+                                      Mark as dropped off
                                     </button>
                                   )}
                                 </td>
@@ -1181,71 +1050,135 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                     </div>
                   </div>
                 ))}
+                  </div>
+                </details>
               </div>
             )}
           </section>
         )}
 
-        {!loading && activeTab === 'earnings' && !isPaired && (
-          <section className="rounded-2xl border border-amber-800 bg-amber-950/20 p-6">
-            <h3 className="text-lg font-semibold text-amber-300">Earnings locked</h3>
-            <p className="mt-2 text-sm text-amber-200/90">{pairingReason}</p>
-          </section>
+
+        {!loading && activeTab === 'activeShift' && showNoCurrentTripState && (
+          <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-6 text-sm text-slate-500">No active trip. Shift summary is available during an active trip.</div>
         )}
 
-        {!loading && activeTab === 'earnings' && isPaired && showNoCurrentTripState && (
-          <div className="rounded-2xl border border-dashed border-slate-800 bg-slate-900 p-6 text-sm text-slate-400">No active trip. Earnings are only available during an active trip.</div>
-        )}
-
-        {!loading && activeTab === 'earnings' && isPaired && !showNoCurrentTripState && (
-          <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            <article className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
-              <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Total Fare Collected</p>
-              <h3 className="font-data mt-2 text-2xl font-bold text-slate-100">
-                PHP {earnings ? Number(earnings.total_fare).toFixed(2) : '—'}
-              </h3>
-              <p className="mt-1 text-sm text-slate-400">{earnings?.passenger_count ?? 0} passengers</p>
-            </article>
-            <article className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
-              <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Onsite (Cash)</p>
-              <h3 className="font-data mt-2 text-2xl font-bold text-emerald-300">
-                PHP {earnings ? Number(earnings.onsite_amount).toFixed(2) : '—'}
-              </h3>
-            </article>
-            <article className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
-              <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Online (PayMongo)</p>
-              <h3 className="font-data mt-2 text-2xl font-bold text-sky-300">
-                PHP {earnings ? Number(earnings.online_amount).toFixed(2) : '—'}
-              </h3>
-            </article>
-            <article className="rounded-2xl border border-slate-800 bg-slate-900 p-4 md:col-span-2 xl:col-span-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Average Fare</p>
-                  <p className="font-data mt-1 text-lg font-semibold text-slate-100">
-                    PHP {earnings ? Number(earnings.average_fare).toFixed(2) : '—'} per passenger
-                  </p>
-                </div>
+        {/* Batch 19 Part A: Shift Summary folds into Active Shift. Part B:
+            revenue/passenger data always shows — the End Shift action is
+            individually disabled below (also available in the header). */}
+        {!loading && activeTab === 'activeShift' && !showNoCurrentTripState && (
+          <section>
+            {/* Shift Summary Header */}
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <h2 className="font-display text-lg font-bold text-slate-900">Shift Summary</h2>
+              <div className="flex flex-wrap items-center gap-2">
+                <FileTypeSelect id="summary-file-type" value={summaryFileType} onChange={setSummaryFileType} />
                 <button
-                  className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-xs font-semibold text-slate-300 transition hover:border-slate-500"
-                  onClick={loadEarnings}
+                  type="button"
+                  onClick={() => { void downloadShiftSummary(earnings, { chauffeur: profile?.name ?? '', date: getBusinessToday() }, summaryFileType); }}
+                  disabled={!earnings}
+                  className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  <RefreshCw className="inline h-3.5 w-3.5 mr-1" />Refresh
+                  <Download className="h-3.5 w-3.5" />
+                  Download Summary Report
                 </button>
+                <button
+                  type="button"
+                  className="rounded-lg bg-teal-500 px-3 py-2 text-xs font-semibold text-white transition hover:bg-teal-600 disabled:cursor-not-allowed disabled:opacity-60"
+                  onClick={() => { void refreshEndBlockedReason(); setConfirmEnd(true); }}
+                  disabled={actionInFlight || !hasOpenShift || Boolean(shiftState?.endBlockedReason)}
+                >
+                  Verify &amp; End Shift
+                </button>
+                {!hasOpenShift && <p className="basis-full text-xs text-amber-700">No shift is open, so there is nothing to end.</p>}
               </div>
-              <p className="mt-2 text-xs text-slate-500">
-                Computed server-side from verified payment records. Only boarded/alighted passengers are counted.
-              </p>
-            </article>
+            </div>
+            {actionMsg && <p className="mb-3 rounded-lg border border-teal-200 bg-teal-50 px-3 py-2 text-xs text-teal-700">{actionMsg}</p>}
+
+            {/* Stats row */}
+            <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4">
+              <div className="staff-card">
+                <p className="text-xs text-slate-400">Net Revenue{Number(earnings?.refunded_amount) > 0 ? ` (after ₱${Number(earnings.refunded_amount).toFixed(2)} refunds)` : ''}</p>
+                <p className="font-data mt-1 text-xl font-bold text-slate-900">₱{earnings ? Number(earnings.net_total ?? earnings.total_fare).toFixed(2) : '0.00'}</p>
+              </div>
+              <div className="staff-card">
+                <p className="text-xs text-slate-400">Fare Collected</p>
+                <p className="font-data mt-1 text-xl font-bold text-slate-900">₱{earnings ? Number(earnings.onsite_amount).toFixed(2) : '0.00'}</p>
+              </div>
+              <div className="staff-card">
+                <p className="text-xs text-slate-400">Digital Payments</p>
+                <p className="font-data mt-1 text-xl font-bold text-slate-900">₱{earnings ? Number(earnings.online_amount).toFixed(2) : '0.00'}</p>
+              </div>
+              <div className="staff-card">
+                <p className="text-xs text-slate-400">Passengers</p>
+                <p className="font-data mt-1 text-xl font-bold text-slate-900">{earnings?.passenger_count ?? 0}</p>
+              </div>
+            </div>
+
+            {earnings?.shift && (
+              <div className="staff-card mb-4" data-testid="shift-cash">
+                <p className="text-xs text-slate-400">Expected cash on hand (this shift)</p>
+                <p className="font-data mt-1 text-xl font-bold text-slate-900">₱{Number(earnings.shift.expected_cash).toFixed(2)}</p>
+                <p className="mt-1 text-xs text-slate-500">{Number(earnings.shift.opening_cash) > 0 ? `Opening ₱${Number(earnings.shift.opening_cash).toFixed(2)} + ` : ''}Cash sales ₱{Number(earnings.shift.cash_sales).toFixed(2)} - cash refunds ₱{Number(earnings.shift.cash_refunds).toFixed(2)}</p>
+              </div>
+            )}
+            {Array.isArray(earnings?.unpaid_check_ins) && earnings.unpaid_check_ins.length > 0 && (
+              <div className="staff-card mb-4 border-amber-200 bg-amber-50" data-testid="unpaid-check-ins">
+                <p className="text-sm font-bold text-amber-900">Checked in but not paid ({earnings.unpaid_check_ins.length})</p>
+                <p className="mt-1 text-xs text-amber-800">These passengers were checked in on this shift and no fare was collected before the trip ended. Your Operator sees this list too.</p>
+                <ul className="mt-2 space-y-1 text-sm text-amber-900">
+                  {earnings.unpaid_check_ins.map((checkIn) => <li key={checkIn.id}>{checkInLabel(checkIn)}</li>)}
+                </ul>
+              </div>
+            )}
+            {/* Trip breakdown */}
+            <div className="staff-card staff-card-flush overflow-hidden">
+              <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+                <p className="text-sm font-bold text-slate-900">Trip Breakdown</p>
+                <button className="text-xs text-teal-600 hover:text-teal-700" onClick={loadEarnings}>Refresh</button>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-96 text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-100 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                      <th className="px-4 py-3">Trip No</th>
+                      <th className="px-4 py-3">Route</th>
+                      <th className="px-4 py-3">Entry Time</th>
+                      <th className="px-4 py-3">Exit Time</th>
+                      <th className="px-4 py-3">Fare Paid</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {earnings?.trips && earnings.trips.length > 0 ? (
+                      earnings.trips.map((t, i) => (
+                        <tr key={t.trip_id ?? i}>
+                          <td className="px-4 py-3 font-data text-slate-500">TRP-{String(t.trip_id ?? i + 1).padStart(3, '0')}</td>
+                          <td className="px-4 py-3 text-slate-900">{t.origin ?? '-'} → {t.destination ?? '-'}</td>
+                          <td className="px-4 py-3 font-data text-slate-600">{toCompactTime(t.entry_time) || '-'}</td>
+                          <td className="px-4 py-3 font-data text-slate-600">{toCompactTime(t.exit_time) || '-'}</td>
+                          <td className="px-4 py-3 font-data font-semibold text-teal-600">₱{Number(t.fare ?? 0).toFixed(2)}</td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={5} className="px-4 py-6 text-center text-slate-400 text-xs">No trip breakdown available yet.</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </section>
         )}
 
-        {!loading && activeTab === 'pin' && (
-          <section className="space-y-4">
+        {/* Batch 45 Feature B: the former Daily PIN tab, unchanged inside the "Pair with crew" pop-up (opened from the
+            Dashboard card, the Ticketing & Fares tile, or an old ?tab=pin link). */}
+        <Modal open={!loading && pairingOpen} onClose={() => setPairingOpen(false)} title="Pair with crew" fullScreenOnMobile>
+          <section className="space-y-4" data-testid="pair-with-crew-modal">
             <PairingScreen
               role="conductor"
               paired={isPaired}
               pairingReason={pairingReason}
+              pairingOpensAt={pairing?.opensAt}
               onPaired={() => {
                 void refreshPairingStatus();
                 void loadData();
@@ -1253,8 +1186,8 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
             />
 
             {isPaired && !showNoCurrentTripState && (
-              <article className="max-w-xl rounded-2xl border border-slate-800 bg-slate-900 p-6">
-                <h3 className="text-lg font-semibold text-slate-100">Verify Daily PIN</h3>
+              <article className="max-w-xl staff-card staff-card-roomy">
+                <h3 className="text-lg font-bold text-slate-900">Verify Daily PIN</h3>
                 <p className="mt-1 text-xs text-slate-500">Manual PIN verification uses the same assignment checks and trip context.</p>
                 <div className="mt-4 flex gap-2">
                   <input
@@ -1269,7 +1202,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                     className="font-data h-11 w-full rounded-xl border border-slate-800 bg-slate-950 px-3 text-sm text-slate-100 outline-none placeholder:text-slate-500 focus:border-sky-400"
                   />
                   <button
-                    className="inline-flex items-center gap-2 rounded-xl bg-sky-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-sky-400"
+                    className="inline-flex items-center gap-2 rounded-xl bg-sky-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sky-400"
                     onClick={handleVerifyPin}
                   >
                     Verify
@@ -1283,8 +1216,144 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
               </article>
             )}
           </section>
+        </Modal>
+
+        {activeTab === 'account' && (
+          <section className="staff-card" aria-label="Text size setting">
+            <h3 className="text-lg font-bold text-slate-900">Text size</h3>
+            <p className="mb-3 mt-1 text-base text-slate-600">Make the words and buttons bigger or smaller on this phone.</p>
+            <TextSizeControl size={textSize.size} sizes={textSize.sizes} onChange={textSize.setSize} />
+          </section>
         )}
-      </main>
-    </div>
+        {activeTab === 'account' && (
+          <ProfilePage
+            role="conductor"
+            profile={profile}
+            loading={loading}
+            twoFactor={{ enabled: twoFactorEnabled, saving: saving2fa, message: actionMsg, onChange: (enabled) => handleTwoFactorToggle({ target: { checked: enabled } }) }}
+            availability={{ value: isAvailable, saving: availabilitySaving, onChange: handleToggleAvailability }}
+            textMessages={textMessages}
+            assignment={{
+              route: todayInfo.route === 'Unavailable' ? null : todayInfo.route,
+              fleet: todayInfo.plate === 'Unavailable' ? null : todayInfo.plate,
+            }}
+            onSignOut={handleLogout}
+          />
+        )}
+    </StaffPortalLayout>
+
+      {/* Batch 75: the ID check for a discount claimed online. */}
+      <DiscountReviewDialog target={discountReview} busy={discountReviewBusy} error={discountReviewError} onDecide={decideDiscount} onClose={closeDiscountReview} />
+
+      {/* End Shift confirmation: the Chauffeur declares the cash handed over (Batch 29). */}
+      {confirmEnd && (
+        <ModalShell label="End shift" onClose={() => setConfirmEnd(false)} closeOnOverlay={false} overlayClassName="bg-black/60">
+          <div className="w-full max-w-sm rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl">
+            <h3 className="mb-2 text-base font-bold text-slate-100">End Shift?</h3>
+            <p className="mb-4 text-sm text-slate-400">Count the cash you are handing over. The Operator will confirm it later.</p>
+            {endCash && (
+              <dl className="mb-4 space-y-2 rounded-lg bg-slate-800 p-3 text-sm" data-testid="end-shift-cash">
+                {Number(endCash.opening_cash) > 0 && <div className="flex justify-between"><dt className="text-slate-500">Opening cash</dt><dd className="font-data text-slate-100">₱{Number(endCash.opening_cash).toFixed(2)}</dd></div>}
+                <div className="flex justify-between"><dt className="text-slate-500">Cash sales</dt><dd className="font-data text-slate-100">₱{Number(endCash.cash_sales).toFixed(2)}</dd></div>
+                <div className="flex justify-between"><dt className="text-slate-500">Cash refunds</dt><dd className="font-data text-slate-100">- ₱{Number(endCash.cash_refunds).toFixed(2)}</dd></div>
+                <div className="flex justify-between border-t border-slate-700 pt-2"><dt className="text-slate-400">Expected cash</dt><dd className="font-data font-semibold text-slate-100">₱{Number(endCash.expected_cash).toFixed(2)}</dd></div>
+              </dl>
+            )}
+            <label htmlFor="closing-cash" className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">Closing cash count (₱)</label>
+            <input id="closing-cash" type="number" inputMode="decimal" min="0" step="0.01" value={closingCash} onChange={(e) => setClosingCash(e.target.value)} aria-invalid={closingCashInvalid} placeholder="0.00" className="mb-1 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 outline-none focus:ring-2 focus:ring-teal-500" />
+            <p className="mb-4 text-xs text-slate-500">Enter the amount you counted, even if it is 0.</p>
+            <div className="flex gap-2">
+              <button type="button" onClick={() => setConfirmEnd(false)} className="flex-1 rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800">Cancel</button>
+              <button type="button" disabled={closingCashInvalid || actionInFlight} onClick={() => { setConfirmEnd(false); handleEndShift(closingCashValue); setClosingCash(''); }} className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-teal-500 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-600 disabled:opacity-50">End Shift</button>
+            </div>
+          </div>
+        </ModalShell>
+      )}
+
+      {/* Start Shift confirmation (header toggle is the only entry point) */}
+      {confirmStart && (
+        <ModalShell label="Start shift" onClose={() => setConfirmStart(false)} closeOnOverlay={false} overlayClassName="bg-black/60">
+          <div className="w-full max-w-sm rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl">
+            <h3 className="mb-2 text-base font-bold text-slate-100">Start Shift?</h3>
+            <p className="mb-4 text-sm text-slate-400">Confirm your assignment. You will be taken to the Ticketing screen.</p>
+            <dl className="mb-4 space-y-2 rounded-lg bg-slate-800 p-3 text-sm">
+              <div className="flex justify-between"><dt className="text-slate-500">Fleet</dt><dd className="font-semibold text-slate-100">{todayAssignedTrip?.fleet_route?.fleet?.plate_number ?? '-'}</dd></div>
+              <div className="flex justify-between"><dt className="text-slate-500">Route</dt><dd className="font-semibold text-slate-100">{todayAssignedTrip?.fleet_route?.route?.route_name ?? '-'}</dd></div>
+              <div className="flex justify-between"><dt className="text-slate-500">Schedule</dt><dd className="font-data text-slate-100">{formatTripSchedule(todayAssignedTrip)}</dd></div>
+            </dl>
+            <div className="flex gap-2">
+              <button type="button" onClick={() => setConfirmStart(false)} className="flex-1 rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800">Cancel</button>
+              <button type="button" onClick={() => { setConfirmStart(false); handleStartShift(); }} className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-teal-500 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-600 disabled:opacity-50">Start Shift <Play className="h-4 w-4" /></button>
+            </div>
+          </div>
+        </ModalShell>
+      )}
+
+      {/* ── Onsite Checkout Confirmation Modal ─────────────────────── */}
+      {confirmCheckout && (
+        <ModalShell label="Record cash payment" onClose={() => setConfirmCheckout(false)} closeOnOverlay={false} overlayClassName="bg-black/60">
+          <div className="w-full max-w-sm rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl">
+            <h3 className="mb-2 text-base font-bold text-slate-100">Save this cash payment?</h3>
+            <p className="mb-4 text-sm text-slate-400">This will create a payment record. <strong className="text-amber-300">This cannot be undone.</strong></p>
+            <dl className="mb-4 grid grid-cols-2 gap-2 rounded-lg bg-slate-800 p-3 text-sm">
+              <div><dt className="text-xs text-slate-500">Passenger Type</dt><dd className="font-semibold text-slate-100 capitalize">{cashForm.seat_type}</dd></div>
+              <div><dt className="text-xs text-slate-500">Trip ID</dt><dd className="font-semibold text-slate-100">#{trip?.trip_id}</dd></div>
+              {onsiteQuote.status === 'ready' && (
+                <div className="col-span-2">
+                  <dt className="text-xs text-slate-500">{onsiteQuote.baggageFee > 0 ? 'Fare and baggage to collect' : 'Fare to collect'}</dt>
+                  <dd className="font-data text-2xl font-bold text-emerald-300">&#8369;{(onsiteQuote.amount + (onsiteQuote.baggageFee || 0)).toFixed(2)}</dd>
+                </div>
+              )}
+            </dl>
+            <div className="flex gap-2">
+              <button type="button" onClick={() => setConfirmCheckout(false)} className="flex-1 rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800">Cancel</button>
+              <button type="button" onClick={confirmOnsiteCheckout} className="flex-1 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700">Confirm Payment</button>
+            </div>
+          </div>
+        </ModalShell>
+      )}
+
+      {tripDetailsModal && (() => {
+        const td = tripDetailsModal;
+        const route = td.fleet_route?.route || {};
+        const fleet = td.fleet_route?.fleet || {};
+        return (
+          <ModalShell label="Trip details" onClose={() => setTripDetailsModal(null)}>
+            <section
+              className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900 p-6 text-slate-200"
+            >
+              <div className="mb-4 flex items-start justify-between">
+                <div>
+                  <h3 className="text-base font-bold text-slate-100">Trip Details</h3>
+                  <p className="text-xs text-slate-500">RTE-{td.trip_id}</p>
+                </div>
+                <button type="button" onClick={() => setTripDetailsModal(null)} className="text-slate-500 hover:text-slate-300 text-lg leading-none">✕</button>
+              </div>
+
+              <div className="space-y-2 text-sm">
+                {[
+                  ['Route', `${route.origin || '—'} → ${route.destination || '—'}`],
+                  ['Route name', route.route_name || '—'],
+                  ['Date & time', formatDateTime(td.trip_date)],
+                  ['Status', td.status],
+                  ['Fleet', fleet.plate_number || '—'],
+                  ['Fleet type', fleet.fleet_type || '—'],
+                  ['Total capacity', fleet.capacity ?? '—'],
+                  ['Seats left', placesLeft(fleet, td, 'seated')],
+                  ['Standing places left', placesLeft(fleet, td, 'standing')],
+                ].map(([k, v]) => (
+                  <div key={k} className="flex items-center justify-between gap-4 border-b border-slate-800 pb-2">
+                    <span className="text-slate-500 capitalize">{k}</span>
+                    <strong className="text-slate-100 capitalize text-right">{String(v)}</strong>
+                  </div>
+                ))}
+              </div>
+            </section>
+          </ModalShell>
+        );
+      })()}
+    </>
   );
 }
+
+

@@ -1,0 +1,277 @@
+import { useMemo, useState } from 'react';
+import { Plus, RefreshCw, Search, Route as RouteIcon, Bus, Ban, MapPin } from 'lucide-react';
+import { OpPageHeader, OpCard, OpChip, OpStat, OpTable, OpPager } from './OperatorUI';
+import { OP_SPACE } from './operatorUiTokens';
+import Modal from '../../ui/Modal';
+import ViewTabs from '../../ui/ViewTabs';
+import RouteDetailPage from './RouteDetailPage';
+import PlaceSearch from './PlaceSearch';
+import StopPinPicker from './StopPinPicker';
+import { isPinned, roundCoord } from '../../../utils/stopPin';
+import { useCanManageCompany } from './companyAdmin';
+import { useRoutesTab } from '../../../api/hooks/Staff/useOperatorDashboard';
+import {
+  buildRouteRows, filterRouteRows, municipalityOptions, formatDuration, filterStops, pageOf,
+} from '../../../utils/operatorRouteView';
+
+const STOPS_PAGE_SIZE = 10;
+
+const INPUT = 'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500';
+const PRIMARY = 'inline-flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-500 disabled:opacity-60';
+const SECONDARY = 'inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50';
+
+const EMPTY_STOP = { stop_name: '', latitude: '', longitude: '' };
+
+const isFailure = (text) => /failed|could not/i.test(text);
+
+function Message({ text }) {
+  if (!text) return null;
+  const failed = isFailure(text);
+  return <p role={failed ? 'alert' : 'status'} className={`mt-3 rounded-lg border px-3 py-2 text-sm ${failed ? 'border-rose-200 bg-rose-50 text-rose-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}>{text}</p>;
+}
+
+function AddRouteModal({ open, onClose, form, setForm, saving, message, onSubmit }) {
+  const set = (key) => (event) => setForm((prev) => ({ ...prev, [key]: event.target.value }));
+  return (
+    <Modal open={open} onClose={onClose} title="Add route" fullScreenOnMobile>
+      <form onSubmit={onSubmit}>
+        <div className="grid gap-4">
+          <label className="block text-xs font-medium text-slate-600">Route name<input value={form.route_name} onChange={set('route_name')} required className={`${INPUT} mt-1`} /></label>
+          <label className="block text-xs font-medium text-slate-600">Origin<input value={form.origin} onChange={set('origin')} required className={`${INPUT} mt-1`} /></label>
+          <label className="block text-xs font-medium text-slate-600">Destination<input value={form.destination} onChange={set('destination')} required className={`${INPUT} mt-1`} /></label>
+        </div>
+        <Message text={message} />
+        <div className="mt-6 flex justify-end gap-2">
+          <button type="button" onClick={onClose} className={SECONDARY}>Cancel</button>
+          <button type="submit" disabled={saving} className={PRIMARY}>{saving ? 'Creating...' : 'Create route'}</button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+/**
+ * 2026-11-06 (Batch 47 part A): a stop is a name, an optional area label ("Downtown / Poblacion") and a pin on the
+ * map. Finding a place moves the map and the pin; the stop is saved where the pin is.
+ */
+function StopModal({ open, onClose, editing, needsPin, form, setForm, saving, message, onSubmit, otherStops }) {
+  const [focusKey, setFocusKey] = useState(0);
+  const set = (key) => (event) => setForm((prev) => ({ ...prev, [key]: event.target.value }));
+  const setPin = (pin) => setForm((prev) => ({ ...prev, latitude: pin.latitude, longitude: pin.longitude }));
+  const pickPlace = (place) => {
+    setForm((prev) => ({ ...prev, latitude: String(roundCoord(place.latitude)), longitude: String(roundCoord(place.longitude)) }));
+    setFocusKey((n) => n + 1);
+  };
+  return (
+    <Modal open={open} onClose={onClose} title={editing ? 'Edit stop' : 'Add stop'} fullScreenOnMobile>
+      <form onSubmit={onSubmit}>
+        <div className="grid gap-4">
+          {needsPin && <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">This stop was placed from its name, so it may be in the wrong spot. Check the pin and save.</p>}
+          <label className="block text-xs font-medium text-slate-600">Stop name<input value={form.stop_name} onChange={set('stop_name')} required maxLength={255} className={`${INPUT} mt-1`} /></label>
+          {/* Batch 56 (user, 2026-11-10): the city or town comes from the pin (filled on the server), not typed here. */}
+          <p className="text-xs text-slate-500" data-testid="stop-town-note">
+            {editing && form.municipality ? <>City or town: <strong className="text-slate-800">{form.municipality}</strong>. </> : null}
+            The city or town is filled in from the pin when you save.
+          </p>
+          <PlaceSearch onPick={pickPlace} />
+          {open && <StopPinPicker latitude={form.latitude} longitude={form.longitude} onChange={setPin} otherStops={otherStops} focusKey={focusKey} />}
+        </div>
+        <Message text={message} />
+        <div className="mt-6 flex justify-end gap-2">
+          <button type="button" onClick={onClose} className={SECONDARY}>Cancel</button>
+          <button type="submit" disabled={saving} className={PRIMARY}>{editing ? 'Update stop' : 'Create stop'}</button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+/**
+ * Batch 31 Phase 4: the Operator's Routes page. A list of routes (open one to see its detail) and the stops directory.
+ * Forms moved into modals with the same fields and handlers; nothing was removed except the "Route Adherence" column,
+ * which was really a completion rate and now appears under that name on the route's Overview.
+ */
+export default function RoutesPage({ routes, stops, trips, fleets, onRefresh, onOpenSchedule, onOpenFleets, view = 'routes', onViewChange = () => {} }) {
+  // Batch 61 (advisor, 2026-11-13): the stops directory was below the route list; it is its own tab now.
+  const showRoutes = view !== 'stops';
+  const routesTab = useRoutesTab({ onRefresh });
+  const canManage = useCanManageCompany();
+  const {
+    manageMsg, clearManageMsg, manageSaving, editingStopId, setEditingStopId, stopForm, setStopForm,
+    routeForm, handleCreateStop, handleDeleteStop, handleCreateRoute, setRouteForm, handleDeleteRoute,
+  } = routesTab;
+
+  const [query, setQuery] = useState('');
+  const [municipality, setMunicipality] = useState('');
+  const [stopQuery, setStopQuery] = useState('');
+  const [stopPage, setStopPage] = useState(1);
+  const [modal, setModal] = useState(null); // 'route' | 'stop' | null
+  const [selectedRouteId, setSelectedRouteId] = useState(null);
+
+  const rows = useMemo(() => buildRouteRows({ routes, fleets }), [routes, fleets]);
+  const shown = filterRouteRows(rows, { query, municipality });
+  const municipalities = municipalityOptions(rows);
+  const matchingStops = useMemo(() => filterStops(stops, stopQuery), [stops, stopQuery]);
+  const stopPaging = pageOf(matchingStops, stopPage, STOPS_PAGE_SIZE);
+  const selected = rows.find((row) => row.routeId === selectedRouteId) || null;
+
+  const open = (which) => { clearManageMsg(); setModal(which); };
+  const closeModal = () => { setModal(null); if (modal === 'stop') { setEditingStopId(null); setStopForm(EMPTY_STOP); } };
+  const submitRoute = async (event) => { if (await handleCreateRoute(event)) setModal(null); };
+  const submitStop = async (event) => { if (await handleCreateStop(event)) setModal(null); };
+  const openEditStop = (stop) => {
+    clearManageMsg();
+    setEditingStopId(stop.stop_id);
+    setStopForm({
+      stop_name: stop.stop_name || '',
+      municipality: stop.municipality || '', // shown only; the server fills it from the pin
+      latitude: stop.latitude === null || stop.latitude === undefined ? '' : String(stop.latitude),
+      longitude: stop.longitude === null || stop.longitude === undefined ? '' : String(stop.longitude),
+    });
+    setModal('stop');
+  };
+  const openAddStop = () => { setEditingStopId(null); setStopForm(EMPTY_STOP); open('stop'); };
+  const editingStop = stops.find((stop) => Number(stop.stop_id) === Number(editingStopId)) || null;
+  const otherStops = useMemo(() => stops.filter((stop) => Number(stop.stop_id) !== Number(editingStopId)), [stops, editingStopId]);
+  const unpinned = stops.filter((stop) => !isPinned(stop));
+
+  if (selected) {
+    return (
+      <RouteDetailPage
+        row={selected}
+        routes={routes}
+        fleets={fleets}
+        stops={stops}
+        trips={trips}
+        routesTab={routesTab}
+        onBack={() => setSelectedRouteId(null)}
+        onRefresh={onRefresh}
+        onOpenSchedule={onOpenSchedule}
+        onOpenFleets={onOpenFleets}
+      />
+    );
+  }
+
+  const withFleet = rows.filter((row) => row.status.key === 'active').length;
+  const columns = [
+    { key: 'route', header: 'Route', render: (row) => (
+      <span className="whitespace-nowrap">
+        <strong className="text-slate-900">{row.route.route_name}</strong>
+        <span className="block text-xs text-slate-500">{row.route.origin || '-'} to {row.route.destination || '-'}</span>
+      </span>
+    ) },
+    { key: 'municipalities', header: 'Municipalities', render: (row) => (row.municipalities.length ? <span className="text-xs">{row.municipalities.join(', ')}</span> : <span className="text-slate-400">-</span>) },
+    { key: 'stops', header: 'Stops', render: (row) => row.stopCount },
+    { key: 'distance', header: 'Distance', className: 'whitespace-nowrap', render: (row) => (row.distanceKm === null ? '-' : `${row.distanceKm} km`) },
+    { key: 'duration', header: 'Travel time', className: 'whitespace-nowrap', render: (row) => formatDuration(row.durationMin) ?? '-' },
+    { key: 'fleets', header: 'Active fleets', render: (row) => (row.activeFleets.length ? <span className="text-xs">{row.activeFleets.length}<span className="block text-slate-500">{row.activeFleets.map((item) => item.plate).join(', ')}</span></span> : <span className="text-slate-400">0</span>) },
+    { key: 'status', header: 'Status', render: (row) => <span className="inline-flex flex-wrap gap-1"><OpChip tone={row.status.tone}>{row.status.label}</OpChip>{row.geometryIssue && <OpChip tone="warning">Line needs to be redrawn</OpChip>}</span> },
+    { key: 'open', header: '', render: (row) => (
+      <span className="inline-flex gap-2">
+        <button type="button" aria-label={`Open route ${row.route.route_name}`} onClick={() => setSelectedRouteId(row.routeId)} className={SECONDARY}>Open</button>
+        {/* Batch 59 (user): only a route never used (no stops, no bus) offers Delete; the server checks fare rules too. */}
+        {canManage && row.stopCount === 0 && row.activeFleets.length === 0 && (
+          <button type="button" aria-label={`Delete route ${row.route.route_name}`} disabled={manageSaving} onClick={() => { void handleDeleteRoute(row.route); }} className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-50">Delete</button>
+        )}
+      </span>
+    ) },
+  ];
+
+  const stopColumns = [
+    { key: 'stop', header: 'Stop', render: (stop) => <span className="whitespace-nowrap"><strong className="text-slate-900">{stop.stop_name}</strong></span> },
+    // Batch 56 (user): the city or town filled from the pin (was a typed "Area or landmark").
+    { key: 'town', header: 'City or town', render: (stop) => (stop.municipality ? <span className="text-xs">{stop.municipality}</span> : <span className="text-xs text-slate-400">Not provided</span>) },
+    { key: 'place', header: 'Place on map', render: (stop) => (
+      <span className="whitespace-nowrap text-xs">
+        {isPinned(stop) ? <OpChip tone="success">Pinned</OpChip> : <OpChip tone="warning">Placed from name</OpChip>}
+        <span className="mt-1 block text-slate-500">{stop.latitude ?? '-'}, {stop.longitude ?? '-'}</span>
+      </span>
+    ) },
+    { key: 'actions', header: '', render: (stop) => (canManage && (
+      <span className="inline-flex gap-2">
+        <button type="button" aria-label={`${isPinned(stop) ? 'Edit' : 'Re-pin'} stop ${stop.stop_name}`} onClick={() => openEditStop(stop)} className={SECONDARY}>{isPinned(stop) ? 'Edit' : 'Re-pin'}</button>
+        <button type="button" aria-label={`Delete stop ${stop.stop_name}`} disabled={manageSaving} onClick={() => { void handleDeleteStop(stop.stop_id); }} className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-50">Delete</button>
+      </span>
+    )) },
+  ];
+
+  return (
+    <div className={OP_SPACE.stack}>
+      <OpPageHeader
+        title="Routes"
+        subtitle="Where your buses run, the stops on each route and who serves it"
+        action={canManage && showRoutes ? <button type="button" onClick={() => open('route')} className={PRIMARY}><Plus className="h-4 w-4" aria-hidden="true" /> Add route</button> : null}
+      />
+      <ViewTabs label="Routes views" tabs={[{ key: 'routes', label: 'Routes' }, { key: 'stops', label: 'Stops' }]} value={showRoutes ? 'routes' : 'stops'} onChange={onViewChange} />
+
+      {manageMsg && !modal && (
+        <p role="status" className={`rounded-lg border px-3 py-2 text-sm ${isFailure(manageMsg) ?'border-rose-200 bg-rose-50 text-rose-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}>{manageMsg}</p>
+      )}
+
+      {showRoutes && (<>
+      <section aria-label="Route summary" className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+        <OpStat icon={RouteIcon} accent="blue" label="Routes" value={rows.length} />
+        <OpStat icon={Bus} accent="green" label="With an active fleet" value={withFleet} tone="success" />
+        <OpStat icon={Ban} accent="orange" label="No active fleet" value={rows.length - withFleet} tone={rows.length - withFleet ? 'warning' : 'neutral'} />
+        <OpStat icon={MapPin} accent="violet" label="Stops" value={stops.length} hint="in your directory" />
+      </section>
+
+      <OpCard
+        title="Route list"
+        badge={<button type="button" onClick={onRefresh} className={SECONDARY}><RefreshCw className="h-3.5 w-3.5" aria-hidden="true" /> Refresh</button>}
+      >
+        <div className="mb-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_14rem]">
+          <label className="relative block">
+            <span className="sr-only">Search routes</span>
+            <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-400" aria-hidden="true" />
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search by name, origin or destination" className={`${INPUT} pl-9`} />
+          </label>
+          <select aria-label="Filter by municipality" value={municipality} onChange={(event) => setMunicipality(event.target.value)} className={INPUT}>
+            <option value="">All municipalities</option>
+            {municipalities.map((name) => <option key={name} value={name}>{name}</option>)}
+          </select>
+        </div>
+        <OpTable caption="Routes" columns={columns} rows={shown} rowKey={(row) => row.routeId} empty={rows.length === 0 ? 'No routes yet. Use Add route to create your first one.' : 'No route matches this search.'} />
+      </OpCard>
+
+      </>)}
+
+      {!showRoutes && (
+      <OpCard
+        title="Stops directory"
+        subtitle="Stops you can place on routes."
+        badge={canManage ? <button type="button" onClick={openAddStop} className={PRIMARY}><Plus className="h-4 w-4" aria-hidden="true" /> Add stop</button> : null}
+      >
+        {canManage && unpinned.length > 0 && (
+          <div role="note" className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            <p>{unpinned.length === 1 ? '1 stop was' : `${unpinned.length} stops were`} placed from the name only and may be in the wrong spot. Open each one and check its pin:</p>
+            <span className="mt-2 flex flex-wrap gap-2">
+              {unpinned.map((stop) => (
+                <button key={stop.stop_id} type="button" onClick={() => openEditStop(stop)} className="rounded-full border border-amber-300 bg-white px-3 py-1 text-xs font-semibold text-amber-800 hover:bg-amber-100">Re-pin {stop.stop_name}</button>
+              ))}
+            </span>
+          </div>
+        )}
+        <div className="mb-4">
+          <label className="relative block">
+            <span className="sr-only">Search stops</span>
+            <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-400" aria-hidden="true" />
+            <input
+              type="search"
+              value={stopQuery}
+              onChange={(event) => { setStopQuery(event.target.value); setStopPage(1); }}
+              placeholder="Search stops by name, code or location"
+              className={`${INPUT} pl-9`}
+            />
+          </label>
+        </div>
+        <OpTable caption="Stops" columns={stopColumns} rows={stopPaging.rows} rowKey={(stop) => stop.stop_id} empty={stops.length === 0 ? 'No stops yet.' : 'No stop matches this search.'} />
+        <OpPager paging={stopPaging} onPage={setStopPage} label="Stops pages" noun="stops" />
+      </OpCard>
+      )}
+
+      <AddRouteModal open={modal === 'route'} onClose={closeModal} form={routeForm} setForm={setRouteForm} saving={manageSaving} message={manageMsg} onSubmit={submitRoute} />
+      <StopModal open={modal === 'stop'} onClose={closeModal} editing={Boolean(editingStopId)} needsPin={Boolean(editingStop && !isPinned(editingStop))} otherStops={otherStops} form={stopForm} setForm={setStopForm} saving={manageSaving} message={manageMsg} onSubmit={submitStop} />
+    </div>
+  );
+}

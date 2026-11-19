@@ -1,0 +1,971 @@
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
+import DriverService from '../../StaffService/DriverService';
+import { haversineM } from '../../../utils/geo';
+import { isSameBusinessDay, getBusinessToday, getBusinessNowMs, toBusinessScheduleMs, debugLogBusinessTime } from '../../../utils/dates';
+import { fetchTrafficStatus } from '../../../services/trafficService';
+import { initFcmAndGetToken } from '../../../services/fcmService';
+import { MAP_CONFIG } from '../../../config/mapConfig';
+import { approxMeters, shouldSendPing } from '../../../utils/gpsPing';
+import { readDeepLink } from '../../../utils/notificationTarget';
+import useAssignmentCards from './useAssignmentCards';
+
+// Architecture audit follow-up (CONF-03): DriverDashboard.jsx previously
+// called DriverService directly from ~24 sites spread across the
+// component body, with no hook layer in between (component owned all
+// state/effects/network calls itself). This hook now owns all of that;
+// DriverDashboard.jsx only renders, consuming the values/handlers this
+// hook returns — mirrors the existing usePassengerDashboard.js pattern.
+
+const isSameDay = (value) => isSameBusinessDay(value);
+
+const isCurrentOrSameDayTrip = (tripLike) => {
+  if (!tripLike?.trip_id) return false;
+  if (!isSameDay(tripLike?.trip_date)) return false;
+
+  const status = String(tripLike?.status || '').toLowerCase();
+  return status !== 'completed' && status !== 'cancelled';
+};
+
+const toTripScheduleMs = (tripLike) => {
+  const dateValue = String(tripLike?.trip_date || '').trim();
+  if (!dateValue) return Number.NaN;
+
+  const timeRaw = String(tripLike?.departure_time || tripLike?.fleet_route?.start_time || '00:00:00').trim();
+  return toBusinessScheduleMs(dateValue, timeRaw);
+};
+
+const getUpcomingTrip = (trips) => {
+  const nowMs = getBusinessNowMs();
+
+  return (trips || [])
+    .filter((item) => {
+      const status = String(item?.status || '').toLowerCase();
+      if (status === 'completed' || status === 'cancelled') return false;
+
+      const scheduleMs = toTripScheduleMs(item);
+      if (!Number.isFinite(scheduleMs)) return false;
+      return scheduleMs >= nowMs;
+    })
+    .sort((a, b) => toTripScheduleMs(a) - toTripScheduleMs(b))[0] || null;
+};
+
+const deriveJourneyProgressFromStops = (stops = [], tripStatus) => {
+  const normalized = (Array.isArray(stops) ? stops : [])
+    .map((stop, idx) => ({
+      ...stop,
+      sequence: Number(stop?.sequence_number ?? stop?.stop_order ?? idx + 1),
+      is_acknowledged: Boolean(stop?.is_acknowledged),
+    }))
+    .sort((a, b) => a.sequence - b.sequence);
+
+  const totalStops = normalized.length;
+  const status = String(tripStatus || '').toLowerCase();
+
+  if (totalStops === 0) {
+    return {
+      totalStops: 0,
+      completedStops: status === 'completed' ? 1 : 0,
+      progressPercent: status === 'completed' ? 100 : 0,
+      nextStopName: null,
+    };
+  }
+
+  const acknowledgedCount = normalized.filter((stop) => stop.is_acknowledged).length;
+  const completedStops = status === 'completed' ? totalStops : acknowledgedCount;
+  const clampedCompleted = Math.max(0, Math.min(totalStops, completedStops));
+  const progressPercent = totalStops > 0
+    ? Math.round((clampedCompleted / totalStops) * 100)
+    : 0;
+  const nextStop = normalized.find((stop) => !stop.is_acknowledged) ?? null;
+
+  return {
+    totalStops,
+    completedStops: clampedCompleted,
+    progressPercent,
+    nextStopName: nextStop?.stop_name ?? nextStop?.name ?? null,
+  };
+};
+
+const filterTripsByStatus = (trips, statusFilter) => {
+  if (statusFilter === 'completed') {
+    return (trips || []).filter((item) => String(item?.status || '').toLowerCase() === 'completed');
+  }
+
+  if (statusFilter === 'scheduled') {
+    return (trips || []).filter((item) => ['scheduled', 'delayed', 'boarding', 'departed', 'in-progress'].includes(String(item?.status || '').toLowerCase()));
+  }
+
+  return trips || [];
+};
+
+/**
+ * Pairing-check bootstrap + polling, previously the top-level
+ * `DriverDashboard()` component's own state. Kept separate from
+ * useDriverDashboardData() below since it wraps the inner dashboard and
+ * runs even before pairing/trip data would make sense to load.
+ */
+export function useDriverPairing() {
+  const navigate = useNavigate();
+
+  // Start loading:false so the badge never flashes "Checking pairing..." on
+  // initial mount; the first API call fills in the real state within ~1 s.
+  const [pairing, setPairing] = useState({ loading: false, paired: false, reason: '' });
+  const didInitialPairingCheck = useRef(false);
+  const pairingRequestRef = useRef(null);
+
+  const refreshPairingStatus = useCallback(async () => {
+    if (pairingRequestRef.current) {
+      return pairingRequestRef.current;
+    }
+
+    pairingRequestRef.current = (async () => {
+      try {
+        const res = await DriverService.getPairingStatus('driver');
+        const data = res?.data ?? {};
+        const nextPaired = data?.paired === true;
+        const nextReason = data?.reason || '';
+        const nextOpensAt = data?.pairing_opens_at || null;
+        setPairing((prev) => {
+          if (!prev.loading && prev.paired === nextPaired && prev.reason === nextReason && prev.opensAt === nextOpensAt) {
+            return prev;
+          }
+
+          return {
+            loading: false,
+            paired: nextPaired,
+            reason: nextReason,
+            opensAt: nextOpensAt,
+          };
+        });
+      } catch {
+        setPairing((prev) => ({ ...prev, loading: false, paired: false }));
+      } finally {
+        pairingRequestRef.current = null;
+      }
+    })();
+
+    return pairingRequestRef.current;
+  }, []);
+
+  useEffect(() => {
+    if (didInitialPairingCheck.current) return;
+    didInitialPairingCheck.current = true;
+    void refreshPairingStatus();
+  }, [refreshPairingStatus]);
+
+  useEffect(() => {
+    if (pairing.paired) {
+      return undefined;
+    }
+    const timer = setInterval(() => {
+      if (!document.hidden && navigator.onLine) {
+        void refreshPairingStatus();
+      }
+    }, 90000); // Poll every 90 seconds while unpaired.
+
+    return () => clearInterval(timer);
+  }, [pairing.paired, refreshPairingStatus]);
+
+  const handleLogout = async () => {
+    await DriverService.logoutDriver().catch(() => {});
+    navigate('/employee/login');
+  };
+
+  return { pairing, refreshPairingStatus, handleLogout };
+}
+
+/**
+ * All state, effects, and handlers for the driver dashboard's main content
+ * (everything DriverDashboardInner renders). `onLogout`/`pairing`/
+ * `refreshPairingStatus` come from useDriverPairing() above, passed down
+ * unchanged — this hook only derives `handleLogout` from `onLogout`.
+ */
+export function useDriverDashboardData({ onLogout, pairing }) {
+  // Batch 27, Task 1: a push tap or link may open straight onto a trip
+  // (?tab=dashboard&trip=ID). Read once, as initial state.
+  const [initialLink] = useState(() => readDeepLink(typeof window !== 'undefined' ? window.location.search : '', 'driver'));
+  // Batch 45 Feature B: the Daily PIN tab is now the "Pair with crew" pop-up; an old ?tab=pin link opens it.
+  const [pairingOpen, setPairingOpen] = useState(initialLink.tab === 'pin');
+  const [activeTab, setActiveTab] = useState(initialLink.tab && initialLink.tab !== 'pin' ? initialLink.tab : 'dashboard');
+  const [focusTripId, setFocusTripId] = useState(initialLink.tripId);
+  const [focusBlockId, setFocusBlockId] = useState(initialLink.blockId);
+  const [assignedTripFilter, setAssignedTripFilter] = useState('all');
+  const [profile, setProfile] = useState(null);
+  const [trip, setTrip] = useState(null);
+  const [assignedTrips, setAssignedTrips] = useState([]);
+  const [assignedTripsForView, setAssignedTripsForView] = useState([]);
+  const [stops, setStops] = useState([]);
+  const [requestedStops, setRequestedStops] = useState([]);
+  const [pin, setPin] = useState(null);
+  const [showTripPin, setShowTripPin] = useState(false);
+  const [pinInput, setPinInput] = useState('');
+  const [pinStatus, setPinStatus] = useState('');
+  const [earnings, setEarnings] = useState(null);
+  const [shiftState, setShiftState] = useState({ openShift: null, latestShift: null, isBlockShift: false, endBlockedReason: null, loading: false });
+  // Batch 18: Shift Block Hand-off System.
+  const [shiftBlocks, setShiftBlocks] = useState([]);
+  const [shiftBlockActionInFlight, setShiftBlockActionInFlight] = useState(false);
+  const [tripDetailsModal, setTripDetailsModal] = useState(null); // suggestion: trip info modal
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [actionMsg, setActionMsg] = useState('');
+  const [actionInFlight, setActionInFlight] = useState(false);
+  const [confirmComplete, setConfirmComplete] = useState(false);
+  const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
+  const [saving2fa, setSaving2fa] = useState(false);
+  const [msg2fa, setMsg2fa] = useState('');
+  // Batch 15, Item 4: "Available" status — distinct from shift/pairing
+  // state; can be toggled on even while off-shift.
+  const [isAvailable, setIsAvailable] = useState(false);
+  const [availabilitySaving, setAvailabilitySaving] = useState(false);
+  const [gpsActive, setGpsActive] = useState(false);
+  const [lastGps, setLastGps] = useState(null);
+  const [trafficStatus, setTrafficStatus] = useState({
+    level: 'unknown',
+    label: 'Live traffic unavailable',
+    etaMinutes: null,
+    delayMinutes: null,
+    segmentLabel: 'Current position to next stop',
+    updatedAt: null,
+    dataSource: 'fallback',
+    suggestion: 'Live provider traffic data is unavailable right now.',
+  });
+  const isPaired = pairing?.paired === true;
+  const pairingReason = pairing?.reason || 'Waiting for pairing with your Chauffeur before enabling session-synced features.';
+  const hasActiveTrip = isCurrentOrSameDayTrip(trip);
+  // Batch 13, Issue #1: `hasActiveTrip` (derived from /driver/trips/current,
+  // which only resolves once a shift is OPEN) can never be true before the
+  // driver starts their shift — using it to gate the Start Shift button (or
+  // the tabs that contain it) created a deadlock: no shift can start
+  // because the button/section that starts it was hidden until a shift
+  // already existed. This is a day-based (not time-based) check against the
+  // driver's ASSIGNED trips, independent of whether a shift is open yet.
+  const hasTodayAssignedTrip = (assignedTrips || []).some((t) => {
+    const status = String(t?.status || '').toLowerCase();
+    if (['completed', 'cancelled'].includes(status)) return false;
+    return isSameDay(t?.trip_date);
+  });
+  // S2 (Batch 12) decline needs a trip reference even before a shift is
+  // open (trip/`getCurrentTrip()` is null until then) — fall back to the
+  // matching today-assigned trip from the trips list, same as Conductor.
+  const todayAssignedTrip = trip || (assignedTrips || []).find((t) => {
+    const status = String(t?.status || '').toLowerCase();
+    if (['completed', 'cancelled'].includes(status)) return false;
+    return isSameDay(t?.trip_date);
+  }) || null;
+  const hasOpenShift = Boolean(shiftState?.openShift && !shiftState?.openShift?.ended_at);
+  const didBootstrap = useRef(false);
+  const stopsLoadedRef = useRef(false);
+  const upcomingTrip = getUpcomingTrip(assignedTrips);
+
+  const gpsIntervalRef = useRef(null);
+  const gpsWatchRef = useRef(null);
+  const lastGpsRef = useRef(null);
+  const lastSentGpsRef = useRef(null); // tracks last successfully sent position for deduplication
+  const [proximityAlert, setProximityAlert] = useState(null); // { stop_name, count } | null
+  const showNoCurrentTripState = !loading && isPaired && !hasActiveTrip && !hasTodayAssignedTrip && ['dashboard', 'activeTrip'].includes(activeTab);
+
+  // S3 (Batch 17): before shift starts, `trip` (from /trips/current) is
+  // still null — fall back to the today-assigned trip so the dashboard can
+  // show known route/schedule/vehicle info read-only instead of a blank
+  // placeholder state. Live-only data (stops/GPS/progress) still requires
+  // an actual open shift and is unaffected by this fallback.
+  const currentRoute = trip?.fleet_route?.route ?? todayAssignedTrip?.fleet_route?.route;
+  const currentFleet = trip?.fleet_route?.fleet ?? todayAssignedTrip?.fleet_route?.fleet;
+  const nextStop = stops.find((stop) => !stop.is_acknowledged) ?? null;
+  const filteredAssignedTrips = assignedTripFilter === 'all' ? assignedTrips : assignedTripsForView;
+  const todayStart = getBusinessToday();
+  debugLogBusinessTime('DriverDashboard: assigned trips today/upcoming filter');
+  const todayAssignedTrips = filteredAssignedTrips.filter((item) => isSameBusinessDay(item?.trip_date, todayStart));
+  const upcomingAssignedTrips = filteredAssignedTrips.filter((item) => {
+    const tripDateStr = String(item?.trip_date || '').match(/^(\d{4}-\d{2}-\d{2})/)?.[1];
+    return !!tripDateStr && tripDateStr > todayStart;
+  });
+
+  const handleAssignedTripFilterChange = useCallback(async (value) => {
+    setAssignedTripFilter(value);
+
+    if (value === 'all') {
+      setAssignedTripsForView([]);
+      return;
+    }
+
+    try {
+      const res = await DriverService.getDriverTrips(value);
+      setAssignedTripsForView(Array.isArray(res?.data) ? res.data : []);
+    } catch {
+      setAssignedTripsForView([]);
+    }
+  }, []);
+
+  const stopProgress = deriveJourneyProgressFromStops(stops, trip?.status);
+  const tripProgress = stopProgress.progressPercent;
+
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    setShiftState((prev) => ({ ...prev, loading: true }));
+    try {
+      const [profileRes, tripRes, tripsRes, shiftRes, shiftBlocksRes] = await Promise.allSettled([
+        DriverService.getProfile('driver'),
+        DriverService.getCurrentTrip(),
+        DriverService.getDriverTrips(),
+        DriverService.getDriverShiftStatus(),
+        DriverService.getMyShiftBlocks(),
+      ]);
+      if (profileRes.status === 'fulfilled') {
+        setProfile(profileRes.value?.data);
+        if (typeof profileRes.value?.data?.user?.two_factor_enabled === 'boolean') {
+          setTwoFactorEnabled(profileRes.value.data.user.two_factor_enabled);
+        }
+        if (typeof profileRes.value?.data?.is_available === 'boolean') {
+          setIsAvailable(profileRes.value.data.is_available);
+        }
+      }
+      if (tripRes.status === 'fulfilled') setTrip(tripRes.value?.data);
+      if (tripsRes.status === 'fulfilled') {
+        const tripsData = tripsRes.value?.data ?? [];
+        setAssignedTrips(tripsData);
+        if (assignedTripFilter !== 'all') {
+          setAssignedTripsForView(filterTripsByStatus(tripsData, assignedTripFilter));
+        }
+      }
+      if (shiftBlocksRes.status === 'fulfilled') {
+        setShiftBlocks(Array.isArray(shiftBlocksRes.value?.data) ? shiftBlocksRes.value.data : []);
+      }
+      if (shiftRes.status === 'fulfilled') {
+        const payload = shiftRes.value?.data ?? {};
+        setShiftState({
+          openShift: payload?.open_shift ?? null,
+          latestShift: payload?.latest_shift ?? null,
+          isBlockShift: payload?.is_block_shift === true,
+          endBlockedReason: payload?.end_blocked_reason ?? null,
+          loading: false,
+        });
+      } else {
+        setShiftState((prev) => ({ ...prev, loading: false }));
+      }
+    } catch {
+      setError('Failed to load dashboard data.');
+      setShiftState((prev) => ({ ...prev, loading: false }));
+    } finally {
+      setLoading(false);
+    }
+  }, [assignedTripFilter]);
+
+  const loadStops = useCallback(async () => {
+    if (!isPaired || !hasActiveTrip) {
+      setStops([]);
+      setRequestedStops([]);
+      stopsLoadedRef.current = false;
+      return;
+    }
+    try {
+      const res = await DriverService.getCurrentTripStops();
+      const payload = res?.data ?? null;
+      if (Array.isArray(payload)) {
+        setStops(payload);
+        setRequestedStops([]);
+      } else {
+        setStops(payload?.stops ?? []);
+        // D5: custom drop-offs passengers asked for; display only, placed after the stop they follow.
+        setRequestedStops(payload?.requested_stops ?? []);
+      }
+      stopsLoadedRef.current = true;
+    } catch (err) {
+      setError(err.message);
+    }
+  }, [hasActiveTrip, isPaired]);
+
+  const loadPin = useCallback(async () => {
+    if (!isPaired || !hasActiveTrip) {
+      setPin(null);
+      setShowTripPin(false);
+      return;
+    }
+    try {
+      const res = await DriverService.getDriverPin();
+      setPin(res?.data);
+    } catch (err) {
+      setError(err.message);
+    }
+  }, [hasActiveTrip, isPaired]);
+
+  const loadEarnings = useCallback(async () => {
+    if (!isPaired || !hasActiveTrip) {
+      setEarnings(null);
+      return;
+    }
+    try {
+      const res = await DriverService.getTripEarnings('driver');
+      setEarnings(res?.data ?? null);
+    } catch {
+      setEarnings(null);
+    }
+  }, [hasActiveTrip, isPaired]);
+
+  useEffect(() => {
+    if (didBootstrap.current) return;
+    didBootstrap.current = true;
+    void loadData();
+  }, [loadData]);
+
+  // Batch 15, Item 2: register for push notifications (new trip assignment
+  // alerts) once on mount. Fail-soft — initFcmAndGetToken() resolves to
+  // null on any failure (unsupported browser, permission denied, missing
+  // config) and this effect simply does nothing further in that case.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const token = await initFcmAndGetToken();
+      if (!cancelled && token) {
+        try {
+          await DriverService.registerFcmToken(token);
+        } catch {
+          // Non-critical — silently ignore, matches FcmService's fail-soft design.
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // ── GPS push: runs only while driver has an active same-day trip ────────────
+  useEffect(() => {
+    if (!isPaired || !hasActiveTrip) {
+      // Clean up any running watcher/interval when trip becomes inactive
+      if (gpsWatchRef.current !== null) {
+        navigator.geolocation?.clearWatch(gpsWatchRef.current);
+        gpsWatchRef.current = null;
+      }
+      clearInterval(gpsIntervalRef.current);
+      gpsIntervalRef.current = null;
+      lastGpsRef.current = null;
+      lastSentGpsRef.current = null;
+      return;
+    }
+
+    if (!navigator.geolocation) return;
+
+    const pushLocation = (position) => {
+      const { latitude, longitude, heading, speed, accuracy } = position.coords;
+      const nextLocation = {
+        latitude,
+        longitude,
+        accuracy: Number.isFinite(accuracy) ? Number(accuracy.toFixed(1)) : undefined,
+        recordedAt: Number.isFinite(position.timestamp) ? position.timestamp : Date.now(),
+        heading: Number.isFinite(heading) ? heading : undefined,
+        speed_kmh: Number.isFinite(speed) ? Number((speed * 3.6).toFixed(1)) : undefined,
+      };
+      lastGpsRef.current = nextLocation;
+      setLastGps(nextLocation);
+      setGpsActive(true);
+    };
+
+    // Watch position continuously so lastGpsRef stays fresh
+    gpsWatchRef.current = navigator.geolocation.watchPosition(
+      pushLocation,
+      () => {
+        setGpsActive(false);
+      },
+      { enableHighAccuracy: true, maximumAge: 10000 }
+    );
+
+    // Push to backend every 10 seconds - when the bus moved at least 30 m, or on a 45 s heartbeat so a parked
+    // or queued bus does not go stale on the server (its limit is 90 s). Backoff: after 3 consecutive failures
+    // pause 30s before retrying.
+    let lastSentAt = 0;
+    let consecutiveFailures = 0;
+    let backoffUntil = 0;
+    const sendPing = async () => {
+      if (!lastGpsRef.current) return;
+      if (Date.now() < backoffUntil) return; // in backoff window — skip
+      // Weak fixes are never sent: they would move the bus off its real position.
+      const fixAccuracy = lastGpsRef.current.accuracy;
+      if (Number.isFinite(fixAccuracy) && fixAccuracy > MAP_CONFIG.maxAccuracyM) return;
+      const last = lastSentGpsRef.current;
+      if (!shouldSendPing({
+        movedMeters: last ? approxMeters(lastGpsRef.current, last) : null,
+        msSinceLastSend: last && lastSentAt ? Date.now() - lastSentAt : null,
+      })) return; // not moved enough and the heartbeat is not due yet
+      try {
+        await DriverService.updateLocation(
+          lastGpsRef.current.latitude,
+          lastGpsRef.current.longitude,
+          lastGpsRef.current.heading ?? null,
+          lastGpsRef.current.speed_kmh ?? null,
+          lastGpsRef.current.accuracy ?? null,
+        );
+        lastSentGpsRef.current = { latitude: lastGpsRef.current.latitude, longitude: lastGpsRef.current.longitude };
+        lastSentAt = Date.now();
+        consecutiveFailures = 0; // reset on success
+      } catch {
+        consecutiveFailures++;
+        if (consecutiveFailures >= 3) {
+          backoffUntil = Date.now() + 30000; // pause 30s after 3 failures
+          consecutiveFailures = 0;
+        }
+      }
+    };
+
+    void sendPing();
+    gpsIntervalRef.current = setInterval(() => { void sendPing(); }, 10000);
+    // A hidden tab may have its timers slowed by the browser: send as soon as it is visible again.
+    const onVisible = () => { if (!document.hidden) void sendPing(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      navigator.geolocation?.clearWatch(gpsWatchRef.current);
+      gpsWatchRef.current = null;
+      clearInterval(gpsIntervalRef.current);
+      gpsIntervalRef.current = null;
+    };
+  }, [hasActiveTrip, isPaired]);
+
+  useEffect(() => {
+    // Fetch stops once per active trip — not on every tab switch.
+    // Re-fetch is triggered explicitly by handleAcknowledgeStop.
+    if (!hasActiveTrip || !isPaired) {
+      stopsLoadedRef.current = false;
+      return;
+    }
+    if (stopsLoadedRef.current) return;
+    if (['activeTrip', 'dashboard'].includes(activeTab)) {
+      const timer = setTimeout(() => { void loadStops(); }, 0);
+      return () => clearTimeout(timer);
+    }
+    return undefined;
+  }, [activeTab, hasActiveTrip, isPaired, loadStops]);
+
+  // ── Alighting proximity check (Feature 4) ─────────────────────────────────
+  // Runs every 15 seconds while a trip is active. When the driver is within
+  // 500m of an unacknowledged stop that has passengers alighting, show a
+  // batched banner notification instead of per-passenger spam.
+  useEffect(() => {
+    if (!hasActiveTrip || !isPaired) {
+      const timer = setTimeout(() => {
+        setProximityAlert(null);
+      }, 0);
+      return () => clearTimeout(timer);
+    }
+
+    const PROXIMITY_M = 500;
+
+    const check = () => {
+      const pos = lastGpsRef.current;
+      if (!pos) return;
+
+      const unacked = stops.filter(
+        (s) => !s.is_acknowledged && Number.isFinite(Number(s.latitude)) && Number.isFinite(Number(s.longitude))
+      );
+
+      for (const stop of unacked) {
+        const dist = haversineM(pos.latitude, pos.longitude, Number(stop.latitude), Number(stop.longitude));
+        if (dist <= PROXIMITY_M) {
+          // Count passengers alighting at this stop (from the occupancy by-stop data if available,
+          // otherwise we can't know per-passenger, so just show the stop name).
+          setProximityAlert({ stop_name: stop.stop_name ?? stop.name ?? 'next stop', distance_m: Math.round(dist) });
+          return;
+        }
+      }
+      setProximityAlert(null);
+    };
+
+    check();
+    const id = setInterval(check, 15000);
+    return () => clearInterval(id);
+  }, [hasActiveTrip, isPaired, stops]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if ((pairingOpen || activeTab === 'account') && hasActiveTrip && isPaired) {
+        void loadPin();
+      }
+    }, 0);
+
+    return () => clearTimeout(timer);
+  }, [activeTab, pairingOpen, hasActiveTrip, isPaired, loadPin]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (activeTab === 'earnings' && hasActiveTrip && isPaired) {
+        void loadEarnings();
+      }
+    }, 0);
+
+    return () => clearTimeout(timer);
+  }, [activeTab, hasActiveTrip, isPaired, loadEarnings]);
+
+  useEffect(() => {
+    if (activeTab !== 'earnings' || !hasActiveTrip || !isPaired) return undefined;
+
+    const intervalId = setInterval(() => {
+      void loadEarnings();
+    }, 15000);
+
+    return () => clearInterval(intervalId);
+  }, [activeTab, hasActiveTrip, isPaired, loadEarnings]);
+
+  const handleVerifyPin = async () => {
+    if (!trip?.trip_id) {
+      setPinStatus('No active trip assigned. PIN verification is unavailable.');
+      return;
+    }
+    try {
+      await DriverService.verifyDriverPin(pinInput);
+      setPinStatus('PIN verified successfully.');
+    } catch (err) {
+      setPinStatus(err.message);
+    }
+  };
+
+  // Immediately flush current GPS to backend — called on stop acknowledge so
+  // passengers see the updated bus position right away rather than waiting
+  // for the next 10-second scheduled ping.
+  const pushLocationNow = useCallback(async () => {
+    if (!lastGpsRef.current) return;
+    try {
+      await DriverService.updateLocation(
+        lastGpsRef.current.latitude,
+        lastGpsRef.current.longitude,
+        lastGpsRef.current.heading ?? null,
+        lastGpsRef.current.speed_kmh ?? null,
+      );
+    } catch {
+      // Silent — don't surface network errors on stop acknowledge
+    }
+  }, []);
+
+  const handleAcknowledgeStop = async (stopId) => {
+    if (actionInFlight) {
+      return;
+    }
+    if (!isPaired) {
+      setActionMsg(pairingReason);
+      return;
+    }
+    if (!stopId) {
+      setActionMsg('Stop identifier is missing. Please refresh route data.');
+      return;
+    }
+
+    setActionInFlight(true);
+    try {
+      await DriverService.acknowledgeStop(stopId);
+      setStops((prev) => {
+        const target = (prev || []).find((stop) => Number(stop?.stop_id) === Number(stopId));
+        const targetSeq = Number(target?.sequence_number ?? target?.stop_order ?? Number.POSITIVE_INFINITY);
+        return (prev || []).map((stop) => {
+          const seq = Number(stop?.sequence_number ?? stop?.stop_order ?? Number.POSITIVE_INFINITY);
+          if (Number.isFinite(targetSeq) && Number.isFinite(seq) && seq <= targetSeq) {
+            return { ...stop, is_acknowledged: true };
+          }
+          if (Number(stop?.stop_id) === Number(stopId)) {
+            return { ...stop, is_acknowledged: true };
+          }
+          return stop;
+        });
+      });
+      // Relay current GPS position immediately so passenger map
+      // reflects the bus at this stop without waiting for the next ping.
+      void pushLocationNow();
+      setActionMsg('Stop acknowledged. Location sent to passengers.');
+      void loadStops();
+    } catch (err) {
+      setActionMsg(err.message);
+    } finally {
+      setActionInFlight(false);
+    }
+  };
+
+  const handleTripAction = async (action) => {
+    const targetTripId = Number(trip?.trip_id ?? shiftState?.openShift?.trip_id ?? 0);
+    if (!targetTripId) return;
+    if (!isPaired && action === 'depart') {
+      setActionMsg(pairingReason);
+      return;
+    }
+    if ((action === 'boarding' || action === 'depart') && !hasOpenShift) {
+      setActionMsg('Start your shift first.');
+      return;
+    }
+    if (action === 'complete') {
+      setConfirmComplete(true);
+      return;
+    }
+    setActionInFlight(true);
+    try {
+      if (action === 'boarding') await DriverService.startBoardingTrip(targetTripId);
+      if (action === 'depart') {
+        await DriverService.departTrip(targetTripId);
+        // 2026-11-13 (user): the starting terminal's button is Depart, so leaving it also records it as reached (the
+        // live ETAs start from the last stop reached). Best effort: the trip has departed even if this one fails.
+        const terminalId = stops?.[0]?.stop_id;
+        if (terminalId && !stops[0]?.is_acknowledged) await DriverService.acknowledgeStop(terminalId).catch(() => null);
+      }
+      setActionMsg(action === 'depart' ? 'You have left the terminal.' : action === 'boarding' ? 'Boarding is open.' : `Trip ${action} action completed.`);
+      await loadData();
+    } catch (err) {
+      setActionMsg(err.message);
+    } finally {
+      setActionInFlight(false);
+    }
+  };
+
+  const handleStartShift = async () => {
+    setActionInFlight(true);
+    try {
+      const res = await DriverService.startDriverShift();
+      const shift = res?.data?.shift ?? null;
+      setShiftState((prev) => ({
+        ...prev,
+        openShift: shift,
+        latestShift: shift,
+      }));
+      setActionMsg(res?.message || 'Driver shift started');
+      await loadData();
+    } catch (err) {
+      setActionMsg(err?.message || 'Unable to start shift right now.');
+    } finally {
+      setActionInFlight(false);
+    }
+  };
+
+  const handleConfirmedComplete = async () => {
+    setConfirmComplete(false);
+    setActionInFlight(true);
+    try {
+      await DriverService.completeTrip(trip.trip_id);
+      setActionMsg('Trip completed successfully.');
+      void loadData();
+    } catch (err) {
+      setActionMsg(err.message);
+    } finally {
+      setActionInFlight(false);
+    }
+  };
+
+  // Batch 27 Part 2, Task 1: a shift block is one shift. End Trip closes only the leg; the driver ends the
+  // shift once every leg is completed or cancelled, and the server decides when (end_blocked_reason).
+  const handleEndShift = async () => {
+    setActionInFlight(true);
+    try {
+      const res = await DriverService.endDriverShift();
+      setActionMsg(res?.message || 'Shift ended.');
+      await loadData();
+    } catch (err) {
+      setActionMsg(err?.message || 'Unable to end your shift right now.');
+      await loadData();
+    } finally {
+      setActionInFlight(false);
+    }
+  };
+
+  const handleLogout = onLogout;
+
+  // Batch 18: Shift Block Hand-off System.
+  const handleConfirmShiftBlockTakeover = async (shiftBlockId) => {
+    setShiftBlockActionInFlight(true);
+    setActionMsg('');
+    try {
+      await DriverService.confirmShiftBlockTakeover(shiftBlockId);
+      setActionMsg('Takeover confirmed. Shift block is now in progress.');
+      void loadData();
+    } catch (err) {
+      setActionMsg(err.message);
+    } finally {
+      setShiftBlockActionInFlight(false);
+    }
+  };
+
+  // Batch 15, Item 4: toggle "Available for extra assignment" — independent
+  // of shift/pairing state, visible to the Operator on the staff list.
+  const handleToggleAvailability = async () => {
+    const next = !isAvailable;
+    setIsAvailable(next);
+    setAvailabilitySaving(true);
+    try {
+      await DriverService.updateDriverAvailability(next);
+    } catch (err) {
+      setIsAvailable(!next);
+      setActionMsg(err.message);
+    } finally {
+      setAvailabilitySaving(false);
+    }
+  };
+
+  // Extracted from an inline JSX onChange handler (architecture audit
+  // follow-up) so the render layer never calls DriverService directly.
+  const handleToggleTwoFactor = useCallback(async (enabled) => {
+    setTwoFactorEnabled(enabled);
+    setSaving2fa(true);
+    setMsg2fa('');
+    try {
+      await DriverService.setTwoFactorPreference(enabled, 'driver');
+      setMsg2fa(enabled ? 'Extra login security is on.' : 'Extra login security is off.');
+    } catch (err) {
+      setTwoFactorEnabled(!enabled);
+      setMsg2fa(err?.message || 'Failed to update.');
+    } finally {
+      setSaving2fa(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const pos = lastGps;
+    const targetStop = nextStop ?? stops[0];
+    if (!pos || !targetStop || !Number.isFinite(Number(targetStop.latitude)) || !Number.isFinite(Number(targetStop.longitude))) {
+      return;
+    }
+
+    let cancelled = false;
+    void (async () => {
+      const nextStatus = await fetchTrafficStatus({
+        currentLat: pos.latitude,
+        currentLng: pos.longitude,
+        nextStop: targetStop,
+        route: currentRoute,
+        stops,
+      });
+      if (!cancelled) {
+        setTrafficStatus(nextStatus);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentRoute, lastGps, nextStop, stops]);
+
+  const notifications = [
+    {
+      title: trip?.status === 'boarding' ? 'Trip Ready for Departure' : 'Trip Status Updated',
+      note: currentRoute ? `${currentRoute.origin} to ${currentRoute.destination}` : 'Your assigned route is active.',
+      tone: 'danger',
+      time: 'Now',
+    },
+    {
+      title: nextStop ? `Next stop: ${nextStop.stop_name ?? nextStop.name ?? 'Pending stop'}` : 'Route on schedule',
+      note: nextStop
+        ? `${trafficStatus.etaMinutes == null ? 'ETA unavailable' : `ETA ${trafficStatus.etaMinutes} min`} • ${trafficStatus.label.toLowerCase()}`
+        : 'All available stops are acknowledged.',
+      tone: trafficStatus.level === 'heavy' ? 'warn' : 'info',
+      time: 'Updated',
+    },
+    {
+      title: trafficStatus.level === 'heavy' ? 'Traffic alert' : 'Route update available',
+      note: trafficStatus.suggestion,
+      tone: trafficStatus.level === 'heavy' ? 'warn' : 'info',
+      time: 'Today',
+    },
+    ...((Array.isArray(trafficStatus?.alerts) ? trafficStatus.alerts : []).slice(0, 3).map((alert, idx) => ({
+      title: `${String(alert?.road || 'Route segment')} • ${alert?.etaMinutes == null ? 'ETA unavailable' : `${String(alert?.etaMinutes)} min`}`,
+      note: String(alert?.detail || 'Traffic segment update available.'),
+      tone: alert?.severity === 'danger' ? 'danger' : alert?.severity === 'warn' ? 'warn' : 'info',
+      time: idx === 0 ? 'Live' : 'Updated',
+    }))),
+  ];
+
+  const journeyStatusLabel =
+    trip?.status === 'completed'
+      ? 'Journey Completed'
+      : trip?.status === 'departed' || trip?.status === 'in-progress'
+        ? 'Journey In Progress'
+        : 'Ready to Start';
+
+  const pageTitle =
+    activeTab === 'dashboard'
+      ? 'Home' // Batch 61: the tab names of the phone's bottom bar
+      : activeTab === 'activeTrip'
+        ? 'Trip'
+        : activeTab === 'schedule'
+          ? 'Schedule'
+          : activeTab === 'earnings'
+            ? 'Trip Earnings'
+              : 'Account';
+
+  // Batch 27, Task 1: open a trip from a notification (bell click) and clear the focus.
+  // Batch 28: a block notification opens that block's card instead.
+  const assignments = useAssignmentCards({ service: DriverService, onChanged: loadData });
+  const openTripFromNotification = (target) => {
+    if (!target) return;
+    if (target.tab === 'pin') setPairingOpen(true);
+    else setActiveTab(target.tab);
+    setFocusTripId(target.tripId ?? null);
+    setFocusBlockId(target.blockId ?? null);
+  };
+  const dismissTripFocus = () => {
+    setFocusTripId(null);
+    setFocusBlockId(null);
+    if (typeof window !== 'undefined' && window.location.search) {
+      window.history.replaceState(null, '', window.location.pathname);
+    }
+  };
+
+  return {
+    activeTab, setActiveTab, pairingOpen, setPairingOpen,
+    focusTripId, openTripFromNotification, dismissTripFocus,
+    focusBlockId, assignments,
+    assignedTripFilter,
+    profile,
+    trip,
+    assignedTrips,
+    stops,
+    requestedStops,
+    pin,
+    showTripPin, setShowTripPin,
+    pinInput, setPinInput,
+    pinStatus, setPinStatus,
+    earnings,
+    shiftState,
+    tripDetailsModal, setTripDetailsModal,
+    loading,
+    error,
+    actionMsg, setActionMsg,
+    actionInFlight,
+    confirmComplete, setConfirmComplete,
+    twoFactorEnabled,
+    saving2fa,
+    msg2fa,
+    isAvailable,
+    availabilitySaving,
+    gpsActive,
+    trafficStatus,
+    proximityAlert, setProximityAlert,
+    isPaired,
+    pairingReason,
+    hasActiveTrip,
+    hasTodayAssignedTrip,
+    todayAssignedTrip,
+    hasOpenShift,
+    upcomingTrip,
+    showNoCurrentTripState,
+    currentRoute,
+    currentFleet,
+    nextStop,
+    filteredAssignedTrips,
+    todayAssignedTrips,
+    upcomingAssignedTrips,
+    stopProgress,
+    tripProgress,
+    notifications,
+    journeyStatusLabel,
+    pageTitle,
+    lastGpsRef,
+    shiftBlocks,
+    shiftBlockActionInFlight,
+    handleAssignedTripFilterChange,
+    loadData,
+    loadEarnings,
+    handleVerifyPin,
+    handleAcknowledgeStop,
+    handleTripAction,
+    handleStartShift,
+    handleEndShift,
+    handleConfirmedComplete,
+    handleConfirmShiftBlockTakeover,
+    handleLogout,
+    handleToggleAvailability,
+    handleToggleTwoFactor,
+  };
+}

@@ -1,0 +1,73 @@
+import { describe, expect, it } from 'vitest';
+import { busEtaSummary, etaMinutesLabel } from '../busEta';
+import { driverEtaMinutes, minutesFromNow, placeInMinutes } from '../busEta';
+
+const now = Date.parse('2026-10-29T10:00:00+08:00');
+const stop = (id, name, progress, eta, source = 'live') => ({
+  stop_id: id, name, progress, eta_time: eta ? eta.slice(11, 16) : null, eta: eta ? `${eta}+08:00` : null, eta_source: eta ? source : null, custom: false,
+});
+const timeline = {
+  stops: [
+    stop(1, 'Tagum Terminal', 'passed', '2026-10-29T09:40:00'),
+    stop(2, 'Carmen', 'current', '2026-10-29T10:06:00'),
+    stop(3, 'Panabo Market', 'upcoming', '2026-10-29T10:25:00'),
+  ],
+};
+
+describe('busEtaSummary', () => {
+  it('gives the stop the bus is heading to and the final stop, in minutes from now', () => {
+    const eta = busEtaSummary(timeline, now);
+
+    expect(eta.next).toMatchObject({ name: 'Carmen', time: '10:06 AM', minutes: 6, live: true });
+    expect(eta.destination).toMatchObject({ name: 'Panabo Market', minutes: 25 });
+    expect(eta.nearYou).toBeNull();
+  });
+
+  it('gives the stop near the passenger, and says when the bus has passed it', () => {
+    expect(busEtaSummary(timeline, now, 3).nearYou).toMatchObject({ name: 'Panabo Market', passed: false });
+    expect(busEtaSummary(timeline, now, 1).nearYou).toMatchObject({ name: 'Tagum Terminal', passed: true });
+  });
+
+  it('uses the first stop not passed when no stop is marked current, and nothing when there are no stops', () => {
+    const before = { stops: [stop(1, 'Tagum Terminal', 'upcoming', '2026-10-29T10:30:00', 'scheduled')] };
+
+    expect(busEtaSummary(before, now).next).toMatchObject({ name: 'Tagum Terminal', minutes: 30, live: false });
+    expect(busEtaSummary({ stops: [] }, now)).toBeNull();
+  });
+
+  it('labels the minutes', () => {
+    expect(etaMinutesLabel(6)).toBe('in 6 min');
+    expect(etaMinutesLabel(0)).toBe('due now');
+    expect(etaMinutesLabel(null)).toBe('');
+  });
+});
+
+// Batch 50: at its last stop the trip is finished even before the Driver ends it.
+describe('busEtaSummary at the last stop', () => {
+  it('is finished when the server says the bus has arrived', () => {
+    const timeline = { refresh: { arrived: true }, stops: [stop(1, 'First', 'passed', null), stop(2, 'Last', 'current', null)] };
+    expect(busEtaSummary(timeline, now).finished).toBe(true);
+    expect(busEtaSummary(timeline, now).destination.name).toBe('Last');
+  });
+});
+
+// Batch 51 item 1 (user, 2026-11-09): "{place} in n min".
+describe('placeInMinutes', () => {
+  it('says the place and the minutes, now at 0, and only the place when the time is unknown', () => {
+    expect(placeInMinutes('Carmen Terminal', 12)).toBe('Carmen Terminal in 12 min');
+    expect(placeInMinutes('Carmen Terminal', 0)).toBe('Carmen Terminal now');
+    expect(placeInMinutes('Carmen Terminal', null)).toBe('Carmen Terminal');
+    expect(minutesFromNow('2026-11-09T06:12:00Z', Date.parse('2026-11-09T06:00:00Z'))).toBe(12);
+    expect(minutesFromNow('not a time')).toBeNull();
+  });
+});
+
+// Batch 52 item 2: the Driver's minutes come from live traffic when it has them, else the trip timeline.
+describe('driverEtaMinutes', () => {
+  it('uses live traffic, then the timeline time, then nothing', () => {
+    const now = Date.parse('2026-11-09T12:00:00Z');
+    expect(driverEtaMinutes({ etaMinutes: 7 }, { eta: '2026-11-09T12:20:00Z' }, now)).toBe(7);
+    expect(driverEtaMinutes({ etaMinutes: null }, { eta: '2026-11-09T12:20:00Z' }, now)).toBe(20);
+    expect(driverEtaMinutes({ etaMinutes: null }, { eta: null }, now)).toBeNull();
+  });
+});

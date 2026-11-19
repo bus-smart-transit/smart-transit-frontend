@@ -1,0 +1,123 @@
+// Booking links carry readable stop codes and a date, never internal ids or a mode:
+//   /passenger/book?from=<stop-code>&to=<stop-code>&date=YYYY-MM-DD[&time=HH:MM]
+// Everything here is untrusted input until the server has checked it (GET /booking/link).
+
+const CODE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const DATE = /^\d{4}-\d{2}-\d{2}$/;
+const TIME = /^\d{2}:\d{2}$/;
+
+// Id-based links from before stop codes. A stray `mode` is simply ignored: the mode is page state.
+const LEGACY_KEYS = ['origin_stop_id', 'destination_stop_id'];
+
+/** The query string for a journey: { from, to, date?, time? } with stop codes. Empty values are left out. */
+export function buildBookingQuery({ from, to, date, time } = {}) {
+  const params = new URLSearchParams();
+  if (from) params.set('from', from);
+  if (to) params.set('to', to);
+  if (date) {
+    params.set('date', date);
+    if (time) params.set('time', time);
+  }
+  return params.toString();
+}
+
+/** The booking page for a trip from the available-trips list: its own stops (codes), date and departure time. */
+/** Batch 54: `toCode` books to another drop-off on the same trip ("Get off here" in View route stops). */
+export function tripBookingPath(trip, toCode = '') {
+  return `/passenger/book?${buildBookingQuery({ from: trip.origin?.stop_code, to: toCode || trip.destination?.stop_code, date: trip.trip_date, time: trip.boarding_time })}`;
+}
+
+export function bookingReturnPath(state) {
+  return state?.returnTo === '/passenger/dashboard' ? '/passenger/dashboard' : '/';
+}
+
+/** What a page URL asks for. Shapes are pre-checked so odd input never reaches state; the server still has the last word. */
+export function parseBookingQuery(searchParams) {
+  const read = (key) => String(searchParams.get(key) || '').trim();
+  const from = read('from').toLowerCase();
+  const to = read('to').toLowerCase();
+  const date = read('date');
+  const time = read('time');
+  const tripId = read('trip_id');
+  const legacy = LEGACY_KEYS.some((key) => searchParams.has(key));
+
+  return {
+    from: CODE.test(from) ? from : (from ? '!' : ''), // '!' = present but malformed; the server words the message
+    to: CODE.test(to) ? to : (to ? '!' : ''),
+    date: DATE.test(date) ? date : (date ? '!' : ''),
+    time: TIME.test(time) ? time : '',
+    ...(/^[1-9]\d*$/.test(tripId) ? { tripId } : {}),
+    legacy,
+    present: Boolean(from || to || date || legacy),
+  };
+}
+
+/** The id (string) of the stop with a public code in the server's grouped stop list, or '' when it is not there. */
+export function findStopId(groups, stopCode) {
+  if (!stopCode) return '';
+  for (const group of groups || []) {
+    const stop = group.stops?.find((candidate) => candidate.stop_code === stopCode);
+    if (stop) return String(stop.stop_id);
+  }
+  return '';
+}
+
+/** The public code of a stop in the server's grouped stop list, or '' when it is not there. */
+export function findStopCode(groups, stopId) {
+  if (!stopId) return '';
+  for (const group of groups || []) {
+    const stop = group.stops?.find((candidate) => String(candidate.stop_id) === String(stopId));
+    if (stop) return stop.stop_code || '';
+  }
+  return '';
+}
+
+/** The page URL params with the booking keys replaced by the journey, other params (for example a tab) kept. */
+export function withBookingParams(current, journey) {
+  const next = new URLSearchParams(current);
+  ['from', 'to', 'date', 'time', 'trip_id'].forEach((key) => next.delete(key));
+  new URLSearchParams(buildBookingQuery(journey)).forEach((value, key) => next.set(key, value));
+  return next;
+}
+
+/**
+ * The last date a passenger may book (inclusive). The server sends it (booking window, Batch 29); the sum from
+ * today is only the fallback for an older response. '' = no limit known.
+ */
+export function lastBookableDateOf({ today = '', maxAdvanceDays = null, lastBookableDate = null } = {}) {
+  if (lastBookableDate) return lastBookableDate;
+  return today && Number(maxAdvanceDays) > 0 ? addDaysToDate(today, Number(maxAdvanceDays)) : '';
+}
+
+/** "Nov 4, 2026" from a YYYY-MM-DD calendar date, without a timezone shifting the day. */
+export function formatCalendarDate(isoDate) {
+  if (!DATE.test(isoDate || '')) return '';
+  return new Date(`${isoDate}T00:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+}
+
+/** The short sentence under a date picker explaining why later dates are greyed out. */
+export function bookingWindowHint({ maxAdvanceDays = null, lastBookableDate = '' } = {}) {
+  if (!lastBookableDate) return '';
+  const days = Number(maxAdvanceDays) > 0 ? `${Number(maxAdvanceDays)} days ahead` : 'a limited time ahead';
+  return `Tickets open up to ${days}. Latest date: ${formatCalendarDate(lastBookableDate)}.`;
+}
+
+/** A calendar date (YYYY-MM-DD) plus whole days; pure date arithmetic, so no timezone can shift it. */
+export function addDaysToDate(isoDate, days) {
+  if (!DATE.test(isoDate || '')) return '';
+  const [year, month, day] = isoDate.split('-').map(Number);
+  const moved = new Date(Date.UTC(year, month - 1, day + days));
+  return moved.toISOString().slice(0, 10);
+}
+
+/**
+ * Batch 29: a warning (never a block) when the service is dated beyond what passengers can book yet. The window comes
+ * from the server (same numbers as the passenger date picker); the schedule is still saved.
+ */
+export function bookingWindowWarning(tripDate, window) {
+  const last = window?.last_bookable_date
+  if (!tripDate || !last || tripDate <= last) return ''
+  const opens = Number(window.max_advance_days) > 0 ? addDaysToDate(tripDate, -Number(window.max_advance_days)) : ''
+  return `Passengers cannot book this date yet.${opens ? ` Booking opens on ${formatCalendarDate(opens)}.` : ''}`
+}
+

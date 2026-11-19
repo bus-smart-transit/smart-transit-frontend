@@ -1,0 +1,112 @@
+import { describe, it, expect } from 'vitest';
+import { render, screen, within } from '@testing-library/react';
+import { OpPageHeader, OpCard, OpChip, OpStat, OpBar, OpStackedBar, OpTable, OpEmpty, OpDelta, OpSparkline } from '../OperatorUI';
+import { toneOf, OP_TONES } from '../operatorUiTokens';
+
+describe('Operator UI primitives', () => {
+  it('page header renders the title, subtitle and a single action', () => {
+    render(<OpPageHeader title="Fleets" subtitle="Your buses" action={<button type="button">Add fleet</button>} />);
+    expect(screen.getByRole('heading', { name: 'Fleets' })).toBeInTheDocument();
+    expect(screen.getByText('Your buses')).toBeInTheDocument();
+    expect(screen.getAllByRole('button')).toHaveLength(1);
+  });
+
+  it('card shows its title and badge', () => {
+    render(<OpCard title="Alerts" badge={<OpChip tone="warning">2 open</OpChip>}>body</OpCard>);
+    expect(screen.getByRole('heading', { name: 'Alerts' })).toBeInTheDocument();
+    expect(screen.getByText('2 open')).toBeInTheDocument();
+    expect(screen.getByText('body')).toBeInTheDocument();
+  });
+
+  it('stat shows label, value and hint', () => {
+    render(<OpStat label="Tickets sold" value={42} hint="today" />);
+    expect(screen.getByText('Tickets sold')).toBeInTheDocument();
+    expect(screen.getByText('42')).toBeInTheDocument();
+    expect(screen.getByText('today')).toBeInTheDocument();
+  });
+
+  it('bar exposes its percentage and caps it at 100', () => {
+    render(<><OpBar label="Route A" value={30} max={40} valueLabel="30 of 40" /><OpBar label="Route B" value={50} max={40} /></>);
+    expect(screen.getByRole('progressbar', { name: 'Route A' })).toHaveAttribute('aria-valuenow', '75');
+    expect(screen.getByRole('progressbar', { name: 'Route B' })).toHaveAttribute('aria-valuenow', '100');
+    expect(screen.getByText('30 of 40')).toBeInTheDocument();
+  });
+
+  it('bar with no maximum shows 0 instead of dividing by zero', () => {
+    render(<OpBar label="Empty" value={5} max={0} />);
+    expect(screen.getByRole('progressbar', { name: 'Empty' })).toHaveAttribute('aria-valuenow', '0');
+  });
+
+  it('stacked bar writes every count in its legend', () => {
+    render(<OpStackedBar segments={[{ key: 'a', label: 'Completed', value: 3, tone: 'success' }, { key: 'b', label: 'Delayed', value: 0, tone: 'danger' }]} />);
+    const legend = screen.getByRole('list');
+    expect(within(legend).getByText('Completed')).toBeInTheDocument();
+    expect(within(legend).getByText('Delayed')).toBeInTheDocument();
+  });
+
+  it('table renders rows, custom cells and the empty state', () => {
+    const columns = [{ key: 'name', header: 'Name' }, { key: 'n', header: 'Count', render: (row) => `${row.n} trips` }];
+    const { rerender } = render(<OpTable columns={columns} rows={[{ id: 1, name: 'Davao - Tagum', n: 4 }]} rowKey={(row) => row.id} />);
+    expect(screen.getByRole('columnheader', { name: 'Name' })).toBeInTheDocument();
+    expect(screen.getByText('4 trips')).toBeInTheDocument();
+    rerender(<OpTable columns={columns} rows={[]} rowKey={(row) => row.id} empty="No routes." />);
+    expect(screen.getByText('No routes.')).toBeInTheDocument();
+  });
+
+  it('table cells carry their column header so a phone can show each row as a card', () => {
+    const columns = [{ key: 'name', header: 'Name' }, { key: 'act', header: '', render: () => <button type="button">Open</button> }];
+    render(<OpTable caption="Routes" columns={columns} rows={[{ id: 1, name: 'Davao - Tagum' }]} rowKey={(row) => row.id} />);
+    const table = screen.getByRole('table', { name: 'Routes' });
+    expect(within(table).getAllByRole('row')).toHaveLength(2);
+    expect(within(table).getByText('Davao - Tagum').closest('td')).toHaveAttribute('data-label', 'Name');
+    expect(within(table).getByRole('button', { name: 'Open' })).toBeInTheDocument();
+  });
+
+  it('empty state is plain text', () => {
+    render(<OpEmpty>Nothing here.</OpEmpty>);
+    expect(screen.getByText('Nothing here.')).toBeInTheDocument();
+  });
+
+  it('unknown tones fall back to neutral', () => {
+    expect(toneOf('nope')).toBe(OP_TONES.neutral);
+  });
+});
+
+// 2026-11-13: change against an earlier period, and the stat card's trend line.
+describe('OpDelta', () => {
+  it('shows the rise in green with the period it is compared with', () => {
+    render(<OpDelta current={12} previous={10} label="vs yesterday" />);
+    expect(screen.getByLabelText('Up 20% vs yesterday').className).toMatch(/emerald/);
+    expect(screen.getByTestId('op-delta').textContent).toBe('20%vs yesterday');
+  });
+
+  it('shows a fall in rose, and in green when less is better', () => {
+    const { rerender } = render(<OpDelta current={5} previous={10} label="vs yesterday" />);
+    expect(screen.getByLabelText('Down 50% vs yesterday').className).toMatch(/rose/);
+    rerender(<OpDelta current={5} previous={10} label="vs yesterday" upIsGood={false} />);
+    expect(screen.getByLabelText('Down 50% vs yesterday').className).toMatch(/emerald/);
+  });
+
+  it('shows nothing when there is nothing to compare with', () => {
+    const { container } = render(<OpDelta current={5} previous={0} label="vs yesterday" />);
+    expect(container.firstChild).toBeNull();
+  });
+});
+
+describe('OpSparkline', () => {
+  it('names every point for screen readers', () => {
+    render(<OpSparkline label="Trips per day" points={[{ label: 'Mon', value: 3 }, { label: 'Tue', value: 5 }]} />);
+    expect(screen.getByRole('img', { name: 'Trips per day. Mon: 3, Tue: 5' })).toBeInTheDocument();
+  });
+
+  it('draws nothing with fewer than two points', () => {
+    const { container } = render(<OpSparkline label="x" points={[{ label: 'Mon', value: 3 }]} />);
+    expect(container.firstChild).toBeNull();
+  });
+
+  it('sits beside the figure in a stat card', () => {
+    render(<OpStat label="Trips today" value={8} chart={<OpSparkline label="Trips per day" points={[{ label: 'a', value: 1 }, { label: 'b', value: 2 }]} />} />);
+    expect(screen.getByTestId('op-sparkline')).toBeInTheDocument();
+    expect(screen.getByText('8')).toBeInTheDocument();
+  });
+});

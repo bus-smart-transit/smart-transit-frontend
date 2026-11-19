@@ -1,0 +1,83 @@
+import { getBusinessToday } from './dates';
+import {
+  LIVE_STATUSES, tripsToday, fleetIdOf, routeNameOf, departureLabel, gpsStatus, ticketsSold, capacityOf, locationForTrip, lastSeenLabel,
+} from './operatorDashboardView';
+
+/**
+ * Batch 31 Phase 3: what the Operator's Fleets page shows for each bus.
+ *
+ * The database stores only `fleets.status` (in practice "active"); there is no maintenance state and none is
+ * invented. The states below are DERIVED from today's trips:
+ *
+ *   active    in service today: a trip is under way, or one is still to run
+ *   idle      no trip left to run today
+ *
+ * Batch 60 item 4 (user, 2026-11-11): "On route" and "Offline" were folded into Active. A running bus that stopped
+ * sending GPS still shows it on its card (the GPS chip) and in the dashboard Alerts.
+ *
+ * A fleet whose stored status is not "active" is shown as "inactive" and is never derived into the above.
+ */
+
+export const FLEET_STATUS = {
+  active: { label: 'Active', tone: 'info' },
+  idle: { label: 'Idle', tone: 'neutral' },
+  inactive: { label: 'Inactive', tone: 'danger' },
+};
+
+export const FLEET_FILTERS = [
+  { value: 'all', label: 'All' },
+  { value: 'active', label: 'Active' },
+  { value: 'idle', label: 'Idle' },
+  // Batch 54 (production test): a bus switched off is counted in All, so it gets its own chip (shown when there is one).
+  { value: 'inactive', label: 'Inactive' },
+];
+
+const OPEN_LATER = ['scheduled', 'delayed'];
+
+export function fleetLocation(fleetId, locations = []) {
+  return locations.find((row) => Number(row?.fleet_id) === Number(fleetId)) || null;
+}
+
+export function buildFleetRows({ fleets = [], trips = [], locations = [], today = getBusinessToday(), nowMs = Date.now() } = {}) {
+  const todays = tripsToday(trips, today);
+  return fleets.map((fleet) => {
+    const mine = todays.filter((trip) => fleetIdOf(trip) === Number(fleet.fleet_id));
+    const live = mine.find((trip) => LIVE_STATUSES.includes(String(trip.status).toLowerCase())) || null;
+    const later = mine.filter((trip) => OPEN_LATER.includes(String(trip.status).toLowerCase()));
+    const location = live ? locationForTrip(live, locations) : fleetLocation(fleet.fleet_id, locations);
+    const gps = gpsStatus(location, nowMs);
+
+    let key;
+    if (String(fleet.status || 'active').toLowerCase() !== 'active') key = 'inactive';
+    else if (live || later.length > 0) key = 'active';
+    else key = 'idle';
+
+    const next = live || later[0] || null;
+    // Batch 60 (user, 2026-11-11): Track also opens for a trip that is late leaving, so the Operator can answer its
+    // advice from the bus's own popup (no live position until it leaves).
+    const delayed = mine.find((trip) => String(trip.status).toLowerCase() === 'delayed') || null;
+    const trackTrip = live || delayed;
+    return {
+      fleet,
+      fleetId: Number(fleet.fleet_id),
+      status: { key, ...FLEET_STATUS[key] },
+      liveTrip: live,
+      trackable: Boolean(trackTrip),
+      trackTrip,
+      todaysTrips: mine,
+      nextTrip: next,
+      nextTripLabel: next ? `${routeNameOf(next)} - ${departureLabel(next)}` : null,
+      tripsToday: mine.length,
+      location,
+      gps,
+      lastSeen: lastSeenLabel(location, nowMs),
+      routes: (fleet.fleet_routes || []).map((link) => link?.route?.route_name).filter(Boolean),
+      ticketsSold: live ? ticketsSold(live) : null,
+      capacity: live ? capacityOf(live) : Number(fleet.capacity) || null,
+    };
+  });
+}
+
+export function filterFleetRows(rows, filter) {
+  return filter === 'all' ? rows : rows.filter((row) => row.status.key === filter);
+}

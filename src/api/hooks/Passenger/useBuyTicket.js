@@ -1,41 +1,30 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import PassengerService from '../../PassengerService/PassengerService';
-import useDropoffPicker from './useDropoffPicker';
-
+import { checkoutIdempotencyKey, clearCheckoutIdempotencyKey, shouldDropCheckoutKey } from '../../../utils/checkoutIdempotency';
+import { getBookingWindow, getTripDiscountTypes, readApiError } from '../../../services/bookingService';
+import { itemsWithClaims } from '../../../utils/discountClaim';
+import { baggageSummary, itemsWithExtras, priorityFromClaim } from '../../../utils/ticketExtras';
+import { useBookingStops, useDepartures, useTripResolution } from './useBookingSearch';
+import useBookingLink from './useBookingLink';
+import useTripTimeline from './useTripTimeline';
+import { findStopCode, withBookingParams } from '../../../utils/bookingQuery';
+import { groupQrPayload, openPrintWindow } from '../../../utils/qr';
+import { ticketExtraRows, ticketPrintHtml } from '../../../utils/ticketPrint';
+import { normalizeContact } from '../../../utils/travellerContact';
+import { ratePercentLabel, transactionFee } from '../../../utils/transactionFee';
+import { clock12 } from '../../../utils/clock';
 const CHECKOUT_EVENT_KEY = 'smart_transit_checkout_event';
 const CHECKOUT_PENDING_KEY = 'smart_transit_checkout_pending';
 const CHECKOUT_LOOKUP_CACHE_KEY = 'smart_transit_checkout_lookup_cache_v1';
 const TICKET_QR_CACHE_KEY = 'smart_transit_ticket_qr_cache_v1';
 const LOOKUP_CACHE_TTL_MS = 60 * 1000;
 const QR_CACHE_TTL_MS = 5 * 60 * 1000;
+// PayMongo checkout sessions are short-lived; treat a pending-checkout flag
+// older than this as abandoned/stale rather than trusting it forever.
+const CHECKOUT_PENDING_TTL_MS = 30 * 60 * 1000;
+const DEFAULT_MAX_SEATS = 20;
 
-const toDateInputValue = (value = new Date()) => {
-  const yyyy = value.getFullYear();
-  const mm = String(value.getMonth() + 1).padStart(2, '0');
-  const dd = String(value.getDate()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd}`;
-};
-
-const toTripDateValue = (value) => {
-  if (!value) return '';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '';
-  return toDateInputValue(date);
-};
-
-const toRad = (deg) => (deg * Math.PI) / 180;
-const distanceKm = (aLat, aLng, bLat, bLng) => {
-  const earthRadiusKm = 6371;
-  const dLat = toRad(bLat - aLat);
-  const dLng = toRad(bLng - aLng);
-  const lat1 = toRad(aLat);
-  const lat2 = toRad(bLat);
-
-  const aa = Math.sin(dLat / 2) ** 2
-    + Math.sin(dLng / 2) ** 2 * Math.cos(lat1) * Math.cos(lat2);
-
-  return 2 * earthRadiusKm * Math.asin(Math.sqrt(aa));
-};
 
 const pickStopName = (value) => {
   if (!value) return null;
@@ -88,63 +77,75 @@ const formatDateTime = (value) => {
   const mm = String(date.getMonth() + 1).padStart(2, '0');
   const dd = String(date.getDate()).padStart(2, '0');
   if (isDateOnly) return `${yyyy}/${mm}/${dd}`;
-  const hh = String(date.getHours()).padStart(2, '0');
-  const min = String(date.getMinutes()).padStart(2, '0');
-  return `${yyyy}/${mm}/${dd} - ${hh}:${min}`;
+  return `${yyyy}/${mm}/${dd} - ${clock12(`${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}`)}`;
 };
 
-const extractStopCoordinates = (stopLike) => {
-  if (!stopLike) return null;
-  const lat = Number(stopLike?.stop?.latitude ?? stopLike?.latitude);
-  const lng = Number(stopLike?.stop?.longitude ?? stopLike?.longitude);
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-    return null;
-  }
-  return { lat, lng };
-};
 
-const findNearestStop = (lat, lng, stops) => {
-  const withCoords = stops
-    .map((stopItem) => {
-      const sLat = Number(stopItem?.stop?.latitude ?? stopItem?.latitude);
-      const sLng = Number(stopItem?.stop?.longitude ?? stopItem?.longitude);
-      return Number.isFinite(sLat) && Number.isFinite(sLng)
-        ? { stop: stopItem, lat: sLat, lng: sLng }
-        : null;
-    })
-    .filter(Boolean);
-
-  if (withCoords.length === 0) return null;
-
-  let nearest = withCoords[0];
-  let minDist = Number.POSITIVE_INFINITY;
-
-  for (const item of withCoords) {
-    const dLat = lat - item.lat;
-    const dLng = lng - item.lng;
-    const dist = dLat * dLat + dLng * dLng;
-    if (dist < minDist) {
-      minDist = dist;
-      nearest = item;
-    }
-  }
-
-  return nearest.stop;
+// What a ticket row says about itself, from the server's own data (a custom drop-off
+// carries its label; nothing here names a place).
+const ticketMeta = (ticket) => {
+  const transactionRef = ticket?.payment?.transaction_reference ?? null;
+  return {
+    origin: pickStopName(ticket?.origin_stop) || pickStopName(ticket?.originStop) || ticket?.origin || null,
+    destination:
+      ticket?.destination_label ||
+      pickStopName(ticket?.destination_stop) ||
+      pickStopName(ticket?.destinationStop) ||
+      ticket?.destination ||
+      ticket?.trip?.fleet_route?.route?.destination ||
+      ticket?.trip?.fleetRoute?.route?.destination ||
+      'Not specified',
+    transaction_reference: transactionRef,
+    group_qr_content: groupQrPayload(transactionRef),
+    seat_type: ticket?.seat_type,
+    amount: ticket?.amount,
+    discount_type_key: ticket?.discount_type_key ?? null,
+    discount_label: ticket?.discount_label ?? null,
+    discount_rate: ticket?.discount_rate ?? null,
+    original_amount: ticket?.original_amount ?? null,
+    discount_amount: ticket?.discount_amount ?? null,
+    discount_id_checked_at: ticket?.discount_id_checked_at ?? null,
+    trip_date: ticket?.trip_date ?? ticket?.trip?.trip_date ?? null,
+    departure_time: ticket?.departure_time ?? ticket?.trip?.departure_time ?? null,
+    valid_from: ticket?.valid_from ?? null,
+    expires_at: ticket?.expires_at ?? null,
+    // The link that follows this ticket's bus (the owner's own; set by the server).
+    tracking_token: ticket?.tracking_token ?? null,
+    // Batch 49 item 5: the short code typed at "Track my bus".
+    tracking_code: ticket?.tracking_code ?? null,
+  };
 };
 
 export default function useBuyTicket({ onTicketPurchased }) {
-  const [trips, setTrips] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const bookingLink = useBookingLink(searchParams);
   const [error, setError] = useState('');
   const [formErrors, setFormErrors] = useState({});
-  const [routeWarning, setRouteWarning] = useState('');
+  // Batch 75: each e-wallet's transaction fee rate (percent) from the server; null until it answers.
+  const [feeRates, setFeeRates] = useState(null);
+  // Batch 49 item 1: the most tickets in one purchase comes from the server (it checks it too); 20 until it answers.
+  const [maxSeatsPerPurchase, setMaxSeatsPerPurchase] = useState(DEFAULT_MAX_SEATS);
+  // Batch 76: the priority seat types and the baggage fee percent from the server (none / 0 until it answers).
+  const [priorityTypes, setPriorityTypes] = useState([]);
+  const [baggagePercent, setBaggagePercent] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    getBookingWindow()
+      .then((window) => {
+        const rates = window?.transaction_fee_rates;
+        const maxSeats = Number(window?.max_seats_per_purchase);
+        if (cancelled) return;
+        setFeeRates(rates && typeof rates === 'object' ? rates : null);
+        if (Number.isInteger(maxSeats) && maxSeats > 0) setMaxSeatsPerPurchase(maxSeats);
+        setPriorityTypes(Array.isArray(window?.priority_types) ? window.priority_types : []);
+        setBaggagePercent(Number(window?.baggage_percent) > 0 ? Number(window.baggage_percent) : 0);
+      })
+      .catch(() => { if (!cancelled) setFeeRates(null); });
+    return () => { cancelled = true; };
+  }, []);
   const [success, setSuccess] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [fare, setFare] = useState(null);
-  const [fareQuoteKey, setFareQuoteKey] = useState('');
-  const [locatingOrigin, setLocatingOrigin] = useState(false);
-  const [dropoffMode, setDropoffMode] = useState('stop');
-  const [destinationQuery, setDestinationQuery] = useState('');
   const [isGuestCheckout] = useState(() => !(localStorage.getItem('passenger_token') || sessionStorage.getItem('passenger_token')));
   const [pendingCheckout, setPendingCheckout] = useState(null);
   const [checkoutStatus, setCheckoutStatus] = useState('idle');
@@ -152,7 +153,6 @@ export default function useBuyTicket({ onTicketPurchased }) {
   const [loadingQr, setLoadingQr] = useState(false);
   const [availableRewardPoints, setAvailableRewardPoints] = useState(0);
   const [loadingRewards, setLoadingRewards] = useState(false);
-  const checkoutStartCounterRef = useRef(1);
   const lookupCacheRef = useRef(readSessionCache(CHECKOUT_LOOKUP_CACHE_KEY));
   const qrCacheRef = useRef(readSessionCache(TICKET_QR_CACHE_KEY));
   const inFlightLookupRef = useRef(new Set());
@@ -160,108 +160,166 @@ export default function useBuyTicket({ onTicketPurchased }) {
   const lastCheckoutEventTsRef = useRef(0);
   const pendingCheckoutRef = useRef(null);
 
-  const [form, setForm] = useState({
-    trip_id: '',
-    seat_type: 'seated',
-    payment_method: 'online',
-    payment_channel: 'gcash',
+  // The journey a passenger describes: where from, where to, and when. A shared or searched
+  // booking link (stop codes + date) fills it in once the server has checked the link.
+  const [form, setForm] = useState(() => ({
+    origin_stop_id: '',
+    destination_stop_id: '',
     booking_option: 'now',
-    booking_date: toDateInputValue(),
-    search_from: '',
-    search_to: '',
-    search_date: toDateInputValue(),
+    booking_date: '',
+    booking_time: '',
+    seat_type: 'seated',
+    payment_channel: 'gcash',
     ticket_quantity: '1',
+    // §4.10: several tickets get one group QR in the email by default; unticked, one QR per ticket.
+    email_group_qr: true,
     use_rewards: false,
     reward_points_to_use: '',
     guest_email: '',
-    origin_stop_id: '',
-    destination_stop_id: '',
-    destination_lat: '',
-    destination_lng: '',
-  });
+    // Batch 51 item 7: booking for someone else (their name and an email or mobile number).
+    for_someone_else: false,
+    traveller_name: '',
+    traveller_contact: '',
+    // Batch 75: the discount claimed for each ticket ({ ticketIndex: 'student' }); checked on the bus.
+    discount_claims: {},
+    // Batch 76: each ticket's priority seat and baggage ({ ticketIndex: { priority_type: 'pwd', baggage: true } }).
+    ticket_extras: {},
+  }));
+  // Apply the checked link once (derived-state update during render, not an effect).
+  const [linkApplied, setLinkApplied] = useState(false);
+  if (!linkApplied && bookingLink.status === 'ok' && bookingLink.journey) {
+    setLinkApplied(true);
+    setForm((prev) => ({ ...prev, ...bookingLink.journey }));
+  }
+  // null = follow the destination the passenger searched for; a stop id = picked on the timeline.
+  const [alightingStopId, setAlightingStopId] = useState(null);
 
-  const selectedTrip = trips.find((trip) => trip.trip_id === parseInt(form.trip_id, 10));
-  const selectedRoute = selectedTrip?.fleet_route?.route || null;
-  const selectedStops = useMemo(
-    () => selectedRoute?.routeStops || selectedRoute?.route_stops || [],
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [selectedRoute?.route_id],
-  );
-  const selectedOriginStop = selectedStops.find((stop) => String(stop.stop_id) === String(form.origin_stop_id));
-  const stopLabel = useCallback((stop) => stop?.stop?.stop_name || stop?.stop_name || `Stop ${stop?.stop_id}`, []);
+  const stopsData = useBookingStops(form.origin_stop_id);
+
+  // Once the passenger changes the journey, the address bar becomes a readable, shareable link:
+  // stop codes and a date, no internal ids and no mode. Other query params (a tab) are kept.
+  const journeyTouchedRef = useRef(false);
+  const originCode = findStopCode(stopsData.originGroups, form.origin_stop_id);
+  const destinationCode = findStopCode(stopsData.destinationGroups, form.destination_stop_id)
+    || findStopCode(stopsData.originGroups, form.destination_stop_id);
+  // The travel date is a Manila calendar date; until one is chosen it is today (from the server).
+  const travelDate = form.booking_date || stopsData.today;
+  const isToday = Boolean(travelDate) && travelDate === stopsData.today;
+  // Batch 76 (user, 2026-11-17): Book Now / Book Later is gone; the passenger always picks from the date's departures
+  // ("Select departure time", the next one selected first). The mode is page state, never part of the URL.
+  const bookingMode = 'later';
+
+
+  // Book Now: the server picks the next departure today. Book Later: the passenger picks one of the
+  // date's departures (a compact time selector); the first is selected until they choose another.
+  const [selectedDepartureId, setSelectedDepartureId] = useState('');
+  const nowResolution = useTripResolution({
+    mode: 'now',
+    originStopId: bookingMode === 'now' ? form.origin_stop_id : '',
+    destinationStopId: form.destination_stop_id,
+    seatType: form.seat_type,
+  });
+  const departuresState = useDepartures({
+    enabled: bookingMode === 'later',
+    originStopId: form.origin_stop_id,
+    destinationStopId: form.destination_stop_id,
+    date: travelDate,
+    seatType: form.seat_type,
+  });
+  const preferredDepartureId = selectedDepartureId || form.selected_trip_id;
+  const selectedDeparture = preferredDepartureId
+    ? departuresState.departures.find((item) => String(item.trip_id) === String(preferredDepartureId)) || null
+    : (form.booking_time ? departuresState.departures.find((item) => item.boarding_time === form.booking_time) : null)
+      || departuresState.departures[0]
+      || null;
+  const resolution = bookingMode === 'now'
+    ? nowResolution
+    : {
+      trip: selectedDeparture,
+      message: preferredDepartureId && !selectedDeparture && !departuresState.loading
+        ? 'This trip is no longer available. Choose another departure.'
+        : departuresState.message,
+      error: departuresState.error,
+      loading: departuresState.loading,
+      ready: departuresState.ready,
+    };
+  const trip = resolution.trip;
+  // Batch 75: the discounts this bus's Operator offers, which a passenger may claim online (empty when none or unknown).
+  const [discountTypes, setDiscountTypes] = useState([]);
+  const discountTripId = trip?.trip_id ?? null;
+  useEffect(() => {
+    if (!discountTripId) return undefined;
+    let cancelled = false;
+    getTripDiscountTypes(discountTripId)
+      .then((types) => { if (!cancelled) setDiscountTypes(Array.isArray(types) ? types : []); })
+      .catch(() => { if (!cancelled) setDiscountTypes([]); });
+    return () => { cancelled = true; };
+  }, [discountTripId]);
+  const setDiscountClaim = useCallback((index, key) => {
+    setForm((prev) => {
+      // Batch 76: a senior or PWD claim asks for a priority seat too (the passenger can still turn it off).
+      const implied = priorityFromClaim(key, priorityTypes);
+      const current = prev.ticket_extras?.[index] || {};
+      const extras = implied && !current.priority_type
+        ? { ...prev.ticket_extras, [index]: { ...current, priority_type: implied } }
+        : prev.ticket_extras;
+      return { ...prev, discount_claims: { ...prev.discount_claims, [index]: key || null }, ticket_extras: extras };
+    });
+  }, [priorityTypes]);
+  // Batch 76: one ticket's priority seat ('' for none) or baggage (true / false).
+  const setTicketExtra = useCallback((index, field, value) => {
+    setForm((prev) => ({
+      ...prev,
+      ticket_extras: { ...prev.ticket_extras, [index]: { ...(prev.ticket_extras?.[index] || {}), [field]: value } },
+    }));
+  }, []);
+
+  // The link mirrors the choice: stops, date and (for Book Later) the departure time.
+  const linkTime = bookingMode === 'later' && trip ? trip.boarding_time : '';
+  useEffect(() => {
+    if (!journeyTouchedRef.current) return;
+    const next = withBookingParams(searchParams, { from: originCode, to: destinationCode, date: travelDate, time: linkTime });
+    if (next.toString() !== searchParams.toString()) setSearchParams(next, { replace: true });
+  }, [originCode, destinationCode, travelDate, linkTime, searchParams, setSearchParams]);
+  const effectiveAlightingStopId = alightingStopId ?? (form.destination_stop_id || null);
+  const timelineState = useTripTimeline({
+    tripId: trip?.trip_id ?? null,
+    boardingStopId: form.origin_stop_id || null,
+    alightingStopId: effectiveAlightingStopId,
+    seatType: form.seat_type,
+  });
+  const { timeline } = timelineState;
+
+  // The fare comes from the same server computation the ticket is priced with (D4); it is
+  // only usable while the timeline on screen matches the current selection.
+  const fareAmount = Number(timeline?.fare?.amount);
+  const journeyMatches = Boolean(timeline)
+    && String(timeline.journey?.boarding_stop_id ?? '') === String(form.origin_stop_id)
+    && String(timeline.journey?.alighting_stop_id ?? '') === String(effectiveAlightingStopId ?? '');
+  const canProceedToOnlinePayment = journeyMatches
+    && !timelineState.loading
+    && !timelineState.error
+    && Number.isFinite(fareAmount);
+  const unitFare = canProceedToOnlinePayment ? fareAmount : NaN;
+  const hasFareQuote = canProceedToOnlinePayment;
 
   const quantity = Math.max(1, parseInt(form.ticket_quantity, 10) || 1);
-  const unitFare = Number(fare ?? 0);
   const grossTotal = Number.isFinite(unitFare) ? Number((unitFare * quantity).toFixed(2)) : 0;
+  // Batch 76: baggage is a share of each ticket's full fare, added to the payment (the server works out the same).
+  const baggage = baggageSummary(Number.isFinite(unitFare) ? unitFare : 0, quantity, form.ticket_extras, baggagePercent);
+  const payableBeforeRewards = Number((grossTotal + baggage.total).toFixed(2));
   const requestedRewardPoints = Math.max(0, parseInt(form.reward_points_to_use, 10) || 0);
-  const maxRedeemableByTotal = Math.max(0, Math.floor(grossTotal - 1));
+  const maxRedeemableByTotal = Math.max(0, Math.floor(payableBeforeRewards - 1));
   const maxRedeemableRewardPoints = Math.min(availableRewardPoints, maxRedeemableByTotal);
   const rewardPointsToApply = form.use_rewards ? Math.min(requestedRewardPoints, maxRedeemableRewardPoints) : 0;
   const isRewardRequestInsufficient = form.use_rewards && requestedRewardPoints > maxRedeemableRewardPoints;
-  const netTotal = Number(Math.max(0, grossTotal - rewardPointsToApply).toFixed(2));
+  const netTotal = Number(Math.max(0, payableBeforeRewards - rewardPointsToApply).toFixed(2));
+  // Batch 75: the transaction fee at the chosen e-wallet's rate (one per payment, whatever the number of tickets).
+  // null until the rates have loaded; the page then says it is not known yet instead of showing a made-up amount.
+  const bookingFee = transactionFee(feeRates, form.payment_channel, netTotal);
+  const bookingFeeRate = ratePercentLabel(feeRates, form.payment_channel);
+  const totalDue = bookingFee === null ? null : Number((netTotal + bookingFee).toFixed(2));
   const hasRewardPoints = availableRewardPoints > 0;
-
-  const filteredTrips = trips.filter((trip) => {
-    const route = trip?.fleet_route?.route || {};
-    const origin = String(route?.origin || '').toLowerCase();
-    const destination = String(route?.destination || '').toLowerCase();
-    const fromQuery = String(form.search_from || '').trim().toLowerCase();
-    const toQuery = String(form.search_to || '').trim().toLowerCase();
-    const dateQuery = form.search_date || '';
-
-    const fromMatch = !fromQuery || origin.includes(fromQuery);
-    const toMatch = !toQuery || destination.includes(toQuery);
-    const dateMatch = !dateQuery || toTripDateValue(trip?.trip_date) === dateQuery;
-
-    return fromMatch && toMatch && dateMatch;
-  });
-
-  const suggestedTrips = filteredTrips.length === 0 && form.search_date
-    ? trips
-      .filter((trip) => {
-        const route = trip?.fleet_route?.route || {};
-        const origin = String(route?.origin || '').toLowerCase();
-        const destination = String(route?.destination || '').toLowerCase();
-        const fromQuery = String(form.search_from || '').trim().toLowerCase();
-        const toQuery = String(form.search_to || '').trim().toLowerCase();
-        const tripDate = toTripDateValue(trip?.trip_date);
-
-        if (!tripDate) return false;
-        if (tripDate < form.search_date) return false;
-
-        const fromMatch = !fromQuery || origin.includes(fromQuery);
-        const toMatch = !toQuery || destination.includes(toQuery);
-        return fromMatch && toMatch;
-      })
-      .sort((a, b) => String(a?.trip_date || '').localeCompare(String(b?.trip_date || '')))
-      .slice(0, 8)
-    : [];
-
-  const visibleTrips = filteredTrips.length > 0 ? filteredTrips : suggestedTrips;
-  const showingSuggestedTrips = filteredTrips.length === 0 && suggestedTrips.length > 0;
-  const todayDateValue = toDateInputValue();
-  const hasBookNowOption = visibleTrips.some((trip) => toTripDateValue(trip?.trip_date) === todayDateValue);
-  const minBookingDate = (() => {
-    const today = todayDateValue;
-    const selectedTripDate = toTripDateValue(selectedTrip?.trip_date);
-    if (form.booking_option !== 'later') return today;
-    if (!selectedTripDate) return today;
-    return selectedTripDate > today ? selectedTripDate : today;
-  })();
-
-  const currentFareQuoteKey = [
-    form.trip_id,
-    selectedRoute?.route_id || '',
-    selectedTrip?.fleet_route?.fleet_id || '',
-    dropoffMode,
-    form.origin_stop_id,
-    form.destination_stop_id,
-    form.destination_lat,
-    form.destination_lng,
-    form.seat_type,
-  ].join('|');
-
-  const canProceedToOnlinePayment = fare != null && fareQuoteKey === currentFareQuoteKey;
 
   const handleChange = useCallback((field, value) => {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -273,159 +331,78 @@ export default function useBuyTicket({ onTicketPurchased }) {
     });
     setError('');
     setSuccess('');
-    if (field === 'origin_stop_id' || field === 'trip_id') {
-      setRouteWarning('');
-    }
   }, []);
 
-  const setDestinationLat = useCallback((value) => {
-    handleChange('destination_lat', value);
-  }, [handleChange]);
-
-  const setDestinationLng = useCallback((value) => {
-    handleChange('destination_lng', value);
-  }, [handleChange]);
-
-  const {
-    mapContainerRef,
-    locatingDropoff,
-    destinationPinnedLabel,
-    originPinnedLabel,
-    clearDestinationPinnedLabel,
-  } = useDropoffPicker({
-    dropoffMode,
-    selectedOriginStop,
-    selectedStops,
-    destinationLat: form.destination_lat,
-    destinationLng: form.destination_lng,
-    stopLabel,
-    setError,
-    setOriginStopId: (value) => handleChange('origin_stop_id', value),
-    setDestinationLat,
-    setDestinationLng,
-  });
-
-  const loadTrips = useCallback(async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const res = await PassengerService.getAvailableTrips();
-      setTrips(res?.data ?? []);
-    } catch (err) {
-      setError(err.message || 'Failed to load available trips');
-    } finally {
-      setLoading(false);
-    }
+  // Changing where/when starts a fresh journey, so the previous alighting choice no longer applies.
+  const resetJourneyChoices = useCallback(() => {
+    setSelectedDepartureId('');
+    setAlightingStopId(null);
   }, []);
+
+  const handleJourneyChange = useCallback((field, value) => {
+    journeyTouchedRef.current = true;
+    handleChange(field, value);
+    handleChange('selected_trip_id', '');
+    // A departure picked from the results only applies to the journey it came from.
+    if (field !== 'booking_option') handleChange('booking_time', '');
+    if (field === 'origin_stop_id') {
+      handleChange('destination_stop_id', '');
+    }
+    resetJourneyChoices();
+  }, [handleChange, resetJourneyChoices]);
+
+  // Choosing another departure starts the trip-specific choices over (its direction may differ).
+  const selectDeparture = useCallback((tripId) => {
+    setAlightingStopId(null);
+    journeyTouchedRef.current = true;
+    setSelectedDepartureId(String(tripId));
+  }, []);
+
+  const selectAlightingStop = useCallback((stopId) => setAlightingStopId(stopId), []);
 
   const printQrTicket = useCallback((ticket, idx) => {
-    if (!ticket?.qr_url) return;
+    if (!ticket?.qr_content) return;
 
-    const popup = window.open('', '_blank', 'width=900,height=700');
-    if (!popup) return;
-
-    popup.document.write(`
-      <html>
-        <head>
-          <title>Ticket QR ${idx + 1}</title>
-          <style>
-            body { font-family: Arial, sans-serif; padding: 18px; color: #0f172a; background: #f8fafc; }
-            .ticket { max-width: 760px; border: 1px solid #d6dbe5; border-radius: 12px; overflow: hidden; background: #fff; }
-            .head { background: linear-gradient(145deg, #2ab557, #31c964); color: #fff; padding: 18px; }
-            .head h1 { margin: 0; font-size: 20px; }
-            .head h2 { margin: 4px 0 0; font-size: 32px; line-height: 1.05; }
-            .strip { margin-top: 14px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-            .strip span { display: block; font-size: 10px; text-transform: uppercase; opacity: 0.85; }
-            .strip strong { display: block; margin-top: 2px; font-size: 13px; }
-            .body { padding: 14px; display: grid; grid-template-columns: 160px 1fr; gap: 14px; border-top: 2px dashed #d6dbe5; }
-            .qr-wrap { width: 160px; height: 160px; border: 1px solid #d7dee8; border-radius: 10px; display: grid; place-items: center; background: #fff; }
-            img { width: 146px; height: 146px; object-fit: contain; }
-            .meta { display: grid; gap: 8px; }
-            .meta div { display: flex; justify-content: space-between; border-bottom: 1px solid #ebeff5; padding-bottom: 6px; }
-            .meta .k { color: #64748b; font-size: 12px; }
-            .meta .v { color: #0f172a; font-size: 13px; font-weight: 700; }
-            .foot { margin: 0 14px 14px; border: 1px solid #9dd7af; background: #eaf9f0; color: #166534; border-radius: 10px; padding: 9px 10px; font-size: 12px; text-align: center; font-weight: 700; }
-          </style>
-        </head>
-        <body>
-          <article class="ticket">
-            <header class="head">
-              <h1>Ecoland Terminal</h1>
-              <h2>${ticket.destination || 'Tagum Terminal'}</h2>
-              <div class="strip">
-                <div><span>Departure</span><strong>${formatDateTime(ticket.valid_from)}</strong></div>
-                <div><span>Seat</span><strong>${ticket.seat_type || '-'}</strong></div>
-                <div><span>Route</span><strong>Same sa Route</strong></div>
-              </div>
-            </header>
-            <div class="body">
-              <div class="qr-wrap"><img src="${ticket.qr_url}" alt="Ticket QR" /></div>
-              <div class="meta">
-                <div><span class="k">Valid</span><span class="v">${formatDateTime(ticket.valid_from)}</span></div>
-                <div><span class="k">Expires</span><span class="v">${formatDateTime(ticket.expires_at)}</span></div>
-                <div><span class="k">Status</span><span class="v">Valid</span></div>
-                <div><span class="k">Fare Paid</span><span class="v">PHP ${Number(ticket.amount || 0).toFixed(2)}</span></div>
-              </div>
-            </div>
-            <div class="foot">Valid Ticket — Present QR code to board</div>
-          </article>
-          <script>window.onload = function () { window.print(); };</script>
-        </body>
-      </html>
-    `);
-    popup.document.close();
+    // The QR is drawn locally (same renderer as the screen); the window opens first so the
+    // browser allows it, and is filled once the image is ready.
+    // Batch 80: the designer's ticket design, shared with My Tickets (utils/ticketPrint.js).
+    openPrintWindow(ticket.qr_content, (qrSrc) => ticketPrintHtml({
+      title: `Ticket QR ${idx + 1}`,
+      from: ticket.origin,
+      to: ticket.destination,
+      departure: formatDateTime(ticket.valid_from),
+      fare: ticket.amount ?? null,
+      status: 'valid',
+      ticketId: String(ticket.ticket_uuid || '').slice(0, 8).toUpperCase(),
+      traveller: ticket.traveller_name || '',
+      rows: ticketExtraRows(ticket),
+      qrSrc,
+    }));
   }, []);
 
   const toGuestQrTicket = useCallback((ticket) => {
-    const qrContent = ticket.ticket_uuid;
-    const destinationName =
-      pickStopName(ticket?.destination_stop) ||
-      pickStopName(ticket?.destinationStop) ||
-      ticket?.destination ||
-      ticket?.trip?.fleet_route?.route?.destination ||
-      ticket?.trip?.fleetRoute?.route?.destination ||
-      null;
-
-    const transactionRef = ticket?.payment?.transaction_reference ?? null;
-    const groupQrContent = transactionRef ? `grp:${transactionRef}` : null;
-
-    return {
-      ticket_uuid: ticket.ticket_uuid,
-      qr_content: qrContent,
-      qr_url: `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qrContent)}`,
-      group_qr_url: groupQrContent
-        ? `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(groupQrContent)}`
-        : null,
-      transaction_reference: transactionRef,
-      destination: destinationName || 'Not specified',
-      seat_type: ticket?.seat_type,
-      amount: ticket?.amount,
-      valid_from: ticket?.valid_from ?? null,
-      expires_at: ticket?.expires_at ?? null,
-    };
-  }, []);
-
-  const toPassengerTicketCardData = useCallback((ticket) => {
-    const destinationName =
-      pickStopName(ticket?.destination_stop) ||
-      pickStopName(ticket?.destinationStop) ||
-      ticket?.destination ||
-      ticket?.trip?.fleet_route?.route?.destination ||
-      ticket?.trip?.fleetRoute?.route?.destination ||
-      null;
+    const meta = ticketMeta(ticket);
 
     return {
       ticket_uuid: ticket.ticket_uuid,
       qr_content: ticket.ticket_uuid,
-      qr_url: null,
-      destination: destinationName || 'Not specified',
-      seat_type: ticket?.seat_type,
-      amount: ticket?.amount,
-      valid_from: ticket?.valid_from ?? null,
-      expires_at: ticket?.expires_at ?? null,
+      ...meta,
     };
   }, []);
 
+  const toPassengerTicketCardData = useCallback((ticket) => {
+    // Fallback used when a ticket's real QR isn't active yet (for example a future-dated
+    // booking) and getTicketQR() can't return the backend's payload. The ticket QR stays
+    // inactive (no qr_content); only the group payload is derived so the group section can
+    // still render, exactly as before.
+    const meta = ticketMeta(ticket);
+
+    return {
+      ticket_uuid: ticket.ticket_uuid,
+      qr_content: null,
+      ...meta,
+    };
+  }, []);
   const clearPendingCheckout = useCallback(() => {
     setPendingCheckout(null);
     pendingCheckoutRef.current = null;
@@ -479,7 +456,10 @@ export default function useBuyTicket({ onTicketPurchased }) {
       }),
     );
 
-    const resolvedQr = qrResponses.filter(Boolean);
+    // The QR payload itself carries no route text; merge in what the ticket row says.
+    const resolvedQr = qrResponses
+      .map((qr, i) => (qr ? { ...ticketMeta(matchedTickets[i]), ...qr } : null))
+      .filter(Boolean);
     if (resolvedQr.length > 0) {
       setQrTickets(resolvedQr);
     } else {
@@ -575,8 +555,20 @@ export default function useBuyTicket({ onTicketPurchased }) {
     }
     lastCheckoutEventTsRef.current = normalizedTs;
 
-    const normalized = status === 'success' ? 'success' : 'cancel';
+    // The return page reports what the server has recorded (the webhook is the source of
+    // truth): success | pending (still confirming) | failed | expired | refund (Batch 49: paid, but the bus filled up
+    // first, so the money is being given back) | cancel.
+    const normalized = ['success', 'pending', 'failed', 'expired', 'refund'].includes(status) ? status : 'cancel';
     setCheckoutStatus(normalized);
+
+    if (normalized === 'pending') {
+      setError('');
+      setSuccess('We are still confirming your payment. Your ticket will appear in My Tickets as soon as it is confirmed.');
+      localStorage.removeItem(CHECKOUT_EVENT_KEY);
+      return;
+    }
+
+    clearCheckoutIdempotencyKey('passenger-online');
 
     if (normalized === 'success') {
       setSuccess('Payment successful. We will show your ticket QR once it becomes active.');
@@ -615,24 +607,23 @@ export default function useBuyTicket({ onTicketPurchased }) {
 
     setSuccess('');
     setQrTickets([]);
-    setError('Payment was cancelled or failed. You may retry payment.');
+    setError({
+      failed: 'The payment did not go through. No ticket was issued and you were not charged. You may try again.',
+      expired: 'The payment session expired. No ticket was issued. Please start again.',
+      refund: 'The bus filled up before your payment went through, so no ticket was issued. Your full payment is being refunded automatically, and we will email you when it is done.',
+    }[normalized] || 'Payment was cancelled. No ticket was issued. You may try again.');
     clearPendingCheckout();
     localStorage.removeItem(CHECKOUT_EVENT_KEY);
   }, [onTicketPurchased, loadPurchasedQrTickets, clearPendingCheckout]);
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      void loadTrips();
-    }, 0);
-
-    return () => clearTimeout(timer);
-  }, [loadTrips]);
 
   useEffect(() => {
     if (isGuestCheckout) {
-      setAvailableRewardPoints(0);
-      setLoadingRewards(false);
-      return;
+      const timer = setTimeout(() => {
+        setAvailableRewardPoints(0);
+        setLoadingRewards(false);
+      }, 0);
+      return () => clearTimeout(timer);
     }
 
     let cancelled = false;
@@ -664,29 +655,6 @@ export default function useBuyTicket({ onTicketPurchased }) {
     };
   }, [isGuestCheckout]);
 
-  useEffect(() => {
-    if (form.booking_option === 'now' && form.booking_date !== toDateInputValue()) {
-      setForm((prev) => ({ ...prev, booking_date: toDateInputValue() }));
-    }
-  }, [form.booking_date, form.booking_option]);
-
-  useEffect(() => {
-    if (form.booking_option === 'now' && !hasBookNowOption) {
-      setForm((prev) => ({
-        ...prev,
-        booking_option: 'later',
-        booking_date: prev.booking_date < minBookingDate ? minBookingDate : prev.booking_date,
-      }));
-    }
-  }, [form.booking_option, hasBookNowOption, minBookingDate]);
-
-  useEffect(() => {
-    if (form.booking_option !== 'later') return;
-    if (!form.booking_date) return;
-    if (form.booking_date < minBookingDate) {
-      setForm((prev) => ({ ...prev, booking_date: minBookingDate }));
-    }
-  }, [form.booking_date, form.booking_option, minBookingDate]);
 
   useEffect(() => {
     const storedPending = localStorage.getItem(CHECKOUT_PENDING_KEY);
@@ -694,6 +662,21 @@ export default function useBuyTicket({ onTicketPurchased }) {
 
     try {
       const parsedPending = JSON.parse(storedPending);
+
+      // Issue #1 fix: startedAt is now a real Date.now() timestamp (it used
+      // to be a per-page-load monotonic counter, which meant a stale flag
+      // left behind by an abandoned/crashed checkout tab could never be
+      // detected as stale and would be trusted forever on every future page
+      // load). Only resume the "pending" UI if the stored session is still
+      // within a reasonable window of an actual PayMongo checkout session.
+      const startedAt = Number(parsedPending?.startedAt) || 0;
+      const age = Date.now() - startedAt;
+      if (!startedAt || age < 0 || age > CHECKOUT_PENDING_TTL_MS) {
+        localStorage.removeItem(CHECKOUT_PENDING_KEY);
+        localStorage.removeItem(CHECKOUT_EVENT_KEY);
+        return;
+      }
+
       setTimeout(() => {
         setPendingCheckout(parsedPending);
         setCheckoutStatus('pending');
@@ -752,190 +735,6 @@ export default function useBuyTicket({ onTicketPurchased }) {
     return () => clearInterval(timer);
   }, [checkoutStatus, handleCheckoutResult]);
 
-  useEffect(() => {
-    const calculateFare = async () => {
-      if (!form.trip_id || !form.origin_stop_id) {
-        setFare(null);
-        setFareQuoteKey('');
-        return;
-      }
-
-      try {
-        if (dropoffMode === 'custom') {
-          if (!form.destination_lat || !form.destination_lng) {
-            setFare(null);
-            setFareQuoteKey('');
-            return;
-          }
-
-          const originCoords = extractStopCoordinates(selectedOriginStop);
-          if (!originCoords) {
-            setFare(null);
-            setFareQuoteKey('');
-            setError('Selected origin stop has no coordinates for custom drop-off mode');
-            return;
-          }
-
-          const selectedFleetId = Number(selectedTrip?.fleet_route?.fleet_id);
-          if (!selectedFleetId) {
-            setFare(null);
-            setFareQuoteKey('');
-            return;
-          }
-
-          const res = await PassengerService.quoteFleetsByLocation({
-            origin_lat: originCoords.lat,
-            origin_lng: originCoords.lng,
-            destination_lat: Number(form.destination_lat),
-            destination_lng: Number(form.destination_lng),
-            seat_type: form.seat_type,
-          });
-
-          const fleets = res?.data?.fleets ?? [];
-          const matchedFleet = fleets.find((fleet) => Number(fleet?.fleet_id) === selectedFleetId);
-          const amount = matchedFleet?.amount ?? null;
-          setFare(amount);
-          setFareQuoteKey(amount != null ? currentFareQuoteKey : '');
-          return;
-        }
-
-        if (!form.destination_stop_id) {
-          setFare(null);
-          setFareQuoteKey('');
-          return;
-        }
-
-        const routeId = selectedRoute?.route_id;
-        const fleetId = selectedTrip?.fleet_route?.fleet_id;
-
-        if (!routeId || !fleetId) {
-          setFare(null);
-          setFareQuoteKey('');
-          return;
-        }
-
-        const res = await PassengerService.quoteFare({
-          route_id: routeId,
-          fleet_id: fleetId,
-          origin_stop_id: parseInt(form.origin_stop_id, 10),
-          destination_stop_id: parseInt(form.destination_stop_id, 10),
-          seat_type: form.seat_type,
-        });
-        const amount = res?.data?.amount ?? null;
-        setFare(amount);
-        setFareQuoteKey(amount != null ? currentFareQuoteKey : '');
-      } catch (err) {
-        setFare(null);
-        setFareQuoteKey('');
-        setError(err?.message || 'Failed to compute fare');
-      }
-    };
-
-    void calculateFare();
-  }, [
-    currentFareQuoteKey,
-    dropoffMode,
-    form.destination_lat,
-    form.destination_lng,
-    form.destination_stop_id,
-    form.origin_stop_id,
-    form.seat_type,
-    form.trip_id,
-    selectedOriginStop,
-    selectedRoute,
-    selectedTrip,
-  ]);
-
-  const useCurrentLocationAsOrigin = useCallback(() => {
-    if (!selectedStops.length || !navigator.geolocation) {
-      setError('Current location is unavailable on this device/browser');
-      return;
-    }
-
-    setLocatingOrigin(true);
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const currentLat = Number(pos.coords.latitude);
-        const currentLng = Number(pos.coords.longitude);
-        const nearest = findNearestStop(currentLat, currentLng, selectedStops);
-        if (!nearest) {
-          setError('Stops have no GPS coordinates. Please select origin manually.');
-          setLocatingOrigin(false);
-          return;
-        }
-
-        const stopLat = Number(nearest?.stop?.latitude ?? nearest?.latitude);
-        const stopLng = Number(nearest?.stop?.longitude ?? nearest?.longitude);
-        if (Number.isFinite(stopLat) && Number.isFinite(stopLng)) {
-          const km = distanceKm(currentLat, currentLng, stopLat, stopLng);
-          if (km > 2) {
-            setRouteWarning(`You appear to be ${km.toFixed(2)} km away from the nearest designated route stop. Please proceed closer to the route before booking.`);
-          } else {
-            setRouteWarning('');
-          }
-        }
-
-        handleChange('origin_stop_id', String(nearest.stop_id));
-        setLocatingOrigin(false);
-      },
-      () => {
-        setError('Unable to get your current location. Please allow location access.');
-        setLocatingOrigin(false);
-      },
-      { enableHighAccuracy: true, timeout: 12000 },
-    );
-  }, [handleChange, selectedStops]);
-
-  const handleTripSelect = useCallback((tripIdValue) => {
-    handleChange('trip_id', tripIdValue);
-    setDestinationQuery('');
-    handleChange('origin_stop_id', '');
-    handleChange('destination_stop_id', '');
-    handleChange('destination_lat', '');
-    handleChange('destination_lng', '');
-    clearDestinationPinnedLabel();
-
-    if (tripIdValue) {
-      const picked = trips.find((trip) => String(trip.trip_id) === String(tripIdValue));
-      const tripDate = picked?.trip_date ? toDateInputValue(new Date(picked.trip_date)) : '';
-      const route = picked?.fleet_route?.route || {};
-      if (tripDate) {
-        handleChange('booking_date', tripDate);
-        handleChange('search_date', tripDate);
-        if (tripDate > toDateInputValue()) {
-          handleChange('booking_option', 'later');
-        }
-      }
-      handleChange('search_from', route?.origin || '');
-      handleChange('search_to', route?.destination || '');
-    } else {
-      // Deselected — clear the search fields too
-      handleChange('search_from', '');
-      handleChange('search_to', '');
-    }
-  }, [clearDestinationPinnedLabel, handleChange, trips]);
-
-  const handleDropoffModeChange = useCallback((nextMode) => {
-    setDropoffMode(nextMode);
-    setFare(null);
-    setFareQuoteKey('');
-
-    if (nextMode === 'stop') {
-      handleChange('destination_lat', '');
-      handleChange('destination_lng', '');
-      clearDestinationPinnedLabel();
-    } else {
-      handleChange('destination_stop_id', '');
-      setDestinationQuery('');
-    }
-  }, [clearDestinationPinnedLabel, handleChange]);
-
-  const handleDestinationStopChange = useCallback((value) => {
-    handleChange('destination_stop_id', value);
-    const matched = selectedStops.find((stopItem) => String(stopItem.stop_id) === String(value));
-    setDestinationQuery(matched ? stopLabel(matched) : '');
-  }, [handleChange, selectedStops]);
-
   const handleSubmit = useCallback(async (event) => {
     event.preventDefault();
     setError('');
@@ -945,45 +744,34 @@ export default function useBuyTicket({ onTicketPurchased }) {
 
     try {
       const nextErrors = {};
-      const todayDate = toDateInputValue();
-      const selectedTripDate = selectedTrip?.trip_date ? toDateInputValue(new Date(selectedTrip.trip_date)) : null;
 
-      if (!form.trip_id) {
-        nextErrors.trip_id = 'Please select a trip.';
+      if (!trip?.trip_id) {
+        nextErrors.trip = 'Choose where you are going and when so we can find your bus.';
       }
       if (!form.origin_stop_id) {
-        nextErrors.origin_stop_id = 'Please select origin stop.';
+        nextErrors.origin_stop_id = 'Please choose where you board.';
+      }
+      // Batch 50 item 7 (user): a guest's ticket and tracking code are sent by email, so the email is required.
+      if (isGuestCheckout && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(form.guest_email || '').trim())) {
+        nextErrors.guest_email = 'Enter your email. Your ticket and tracking code are sent there.';
+      }
+      if (form.for_someone_else) {
+        if (!String(form.traveller_name || '').trim()) nextErrors.traveller_name = 'Enter the name of the person you are booking for.';
+        if (!normalizeContact(form.traveller_contact)) nextErrors.traveller_contact = 'Enter their email, or a mobile number like 09171234567.';
       }
       if (!Number.isFinite(parseInt(form.ticket_quantity, 10)) || parseInt(form.ticket_quantity, 10) < 1) {
         nextErrors.ticket_quantity = 'Ticket quantity must be at least 1.';
+      } else if (parseInt(form.ticket_quantity, 10) > maxSeatsPerPurchase) {
+        nextErrors.ticket_quantity = `You can buy up to ${maxSeatsPerPurchase} tickets in one purchase.`;
       }
-      if (dropoffMode === 'stop' && !form.destination_stop_id) {
-        nextErrors.destination_stop_id = 'Please select destination stop.';
+      if (!effectiveAlightingStopId) {
+        nextErrors.destination_stop_id = 'Please choose where you get off.';
       }
-      if (dropoffMode === 'stop' && form.origin_stop_id && form.destination_stop_id && form.origin_stop_id === form.destination_stop_id) {
-        nextErrors.destination_stop_id = 'Destination stop must be different from origin stop.';
-      }
-      if (dropoffMode === 'custom' && (!form.destination_lat || !form.destination_lng)) {
-        nextErrors.destination_lat = 'Please pin a custom drop-off on the map.';
-      }
-      if (form.booking_option === 'later') {
-        if (!form.booking_date) {
-          nextErrors.booking_date = 'Please select your planned travel date.';
-        } else if (form.booking_date <= todayDate) {
-          nextErrors.booking_date = 'Book later requires a future date.';
-        }
-      }
-      if (form.booking_option === 'now' && form.booking_date && form.booking_date !== todayDate) {
-        nextErrors.booking_date = 'Book now only supports today.';
-      }
-      if (form.booking_date && selectedTripDate && selectedTripDate !== form.booking_date) {
-        nextErrors.trip_id = `Selected trip is for ${selectedTripDate}. Please pick a trip that matches your booking date.`;
-      }
-      if (form.payment_method === 'online' && !canProceedToOnlinePayment) {
-        nextErrors.payment = 'Please get a valid fare quote before proceeding to online payment.';
+      if (!canProceedToOnlinePayment) {
+        nextErrors.payment = 'Your fare is not ready yet. Check the journey above and try again.';
       }
       if (form.use_rewards && isRewardRequestInsufficient) {
-        nextErrors.reward_points_to_use = `Insufficient reward points for this booking. Max usable now: ${maxRedeemableRewardPoints} RP.`;
+        nextErrors.reward_points_to_use = `You do not have enough reward points for this booking. You can use up to ${maxRedeemableRewardPoints} points now.`;
       }
 
       if (Object.keys(nextErrors).length > 0) {
@@ -991,163 +779,144 @@ export default function useBuyTicket({ onTicketPurchased }) {
         return;
       }
 
-      const payload = {
-        items: [],
-        return_base_url: window.location.origin,
+      const itemPayload = {
+        trip_id: trip.trip_id,
+        seat_type: form.seat_type,
+        origin_stop_id: parseInt(form.origin_stop_id, 10),
+        destination_stop_id: parseInt(effectiveAlightingStopId, 10),
       };
 
-      const itemPayload = dropoffMode === 'custom'
-        ? (() => {
-          const originCoords = extractStopCoordinates(selectedOriginStop);
-          if (!originCoords) {
-            throw new Error('Selected origin stop has no coordinates for custom drop-off mode');
-          }
-
-          return {
-            trip_id: parseInt(form.trip_id, 10),
-            seat_type: form.seat_type,
-            origin_lat: originCoords.lat,
-            origin_lng: originCoords.lng,
-            destination_lat: Number(form.destination_lat),
-            destination_lng: Number(form.destination_lng),
-          };
-        })()
-        : {
-          trip_id: parseInt(form.trip_id, 10),
-          seat_type: form.seat_type,
-          origin_stop_id: parseInt(form.origin_stop_id, 10),
-          destination_stop_id: parseInt(form.destination_stop_id, 10),
-        };
-
-      for (let i = 0; i < quantity; i += 1) {
-        payload.items.push({ ...itemPayload });
+      const payload = {
+        items: itemsWithExtras(itemsWithClaims(itemPayload, quantity, form.discount_claims, discountTypes), form.ticket_extras, priorityTypes),
+        booking_date: trip.trip_date,
+        return_base_url: window.location.origin,
+        payment_channel: form.payment_channel,
+        email_group_qr: quantity > 1 ? form.email_group_qr !== false : true,
+      };
+      // Only a guest is asked for an email, and only so we can find their ticket again;
+      // the payment page collects everything else.
+      if (isGuestCheckout) payload.guest_email = String(form.guest_email).trim();
+      // Batch 51 item 7: the ticket still goes to the buyer's email; the traveller is named on it.
+      if (form.for_someone_else) {
+        payload.traveller_name = String(form.traveller_name).trim();
+        payload.traveller_contact = normalizeContact(form.traveller_contact);
+      }
+      if (!isGuestCheckout && form.use_rewards && rewardPointsToApply > 0) {
+        payload.reward_points_to_use = rewardPointsToApply;
       }
 
-      if (form.payment_method === 'online') {
-        payload.payment_channel = form.payment_channel;
-        if (isGuestCheckout && form.guest_email) payload.guest_email = form.guest_email;
-        if (!isGuestCheckout && form.use_rewards && rewardPointsToApply > 0) {
-          payload.reward_points_to_use = rewardPointsToApply;
-        }
+      const idempotencyKey = checkoutIdempotencyKey('passenger-online', payload);
+      const res = await PassengerService.checkoutOnline(payload, idempotencyKey);
+      const checkoutUrl = res?.data?.checkout_url || res?.checkout_url || null;
 
-        const res = await PassengerService.checkoutOnline(payload);
-        const checkoutUrl = res?.data?.checkout_url || res?.checkout_url || null;
+      const paymentPayload = res?.data?.payment || res?.payment || {};
+      const checkoutMeta = {
+        paymentId: paymentPayload?.payment_id ?? null,
+        transactionReference: paymentPayload?.transaction_reference ?? null,
+        guestEmail: isGuestCheckout ? (form.guest_email || null) : null,
+        returnPath: `${window.location.pathname}${window.location.search}`,
+        // Real epoch-ms timestamp so a stale/abandoned pending flag can be detected on a later load.
+        startedAt: Date.now(),
+      };
 
-        const paymentPayload = res?.data?.payment || res?.payment || {};
-        const checkoutMeta = {
-          paymentId: paymentPayload?.payment_id ?? null,
-          transactionReference: paymentPayload?.transaction_reference ?? null,
-          guestEmail: isGuestCheckout ? (form.guest_email || null) : null,
-          returnPath: `${window.location.pathname}${window.location.search}`,
-          startedAt: checkoutStartCounterRef.current++,
-        };
-
-        if (!checkoutUrl) {
-          throw new Error('Checkout URL was not returned by the payment gateway. Please try again.');
-        }
-
-        setPendingCheckout(checkoutMeta);
-        setCheckoutStatus('pending');
-        setQrTickets([]);
-        localStorage.setItem(CHECKOUT_PENDING_KEY, JSON.stringify(checkoutMeta));
-
-        const checkoutTab = window.open(checkoutUrl, '_blank');
-        if (!checkoutTab) {
-          localStorage.removeItem(CHECKOUT_PENDING_KEY);
-          setPendingCheckout(null);
-          setCheckoutStatus('idle');
-          throw new Error('Popup was blocked. Please enable popups and try again.');
-        }
-
-        setSuccess('Secure checkout opened in a new tab. Complete payment there.');
-        return;
+      if (!checkoutUrl) {
+        throw new Error('Checkout URL was not returned by the payment gateway. Please try again.');
       }
 
-      setError('Onsite checkout is only available at the terminal with a conductor');
+      setPendingCheckout(checkoutMeta);
+      setCheckoutStatus('pending');
+      setQrTickets([]);
+      localStorage.setItem(CHECKOUT_PENDING_KEY, JSON.stringify(checkoutMeta));
+
+      const checkoutTab = window.open(checkoutUrl, '_blank');
+      if (!checkoutTab) {
+        localStorage.removeItem(CHECKOUT_PENDING_KEY);
+        setPendingCheckout(null);
+        setCheckoutStatus('idle');
+        throw new Error('Popup was blocked. Please enable popups and try again.');
+      }
+
+      setSuccess('Secure checkout opened in a new tab. Finish paying there, then come back to this page.');
     } catch (err) {
-      setError(err.message);
+      // §12: on a 422, or when the server says the earlier attempt is over, the next tap starts a fresh checkout.
+      if (shouldDropCheckoutKey(err)) clearCheckoutIdempotencyKey('passenger-online');
+      setError(err.response?.data?.errors ? readApiError(err).message : err.message);
     } finally {
       setIsSubmitting(false);
     }
   }, [
     canProceedToOnlinePayment,
-    dropoffMode,
-    form.destination_lat,
-    form.destination_lng,
-    form.destination_stop_id,
-    form.booking_date,
-    form.booking_option,
-    form.search_date,
-    form.search_from,
-    form.search_to,
+    discountTypes,
+    effectiveAlightingStopId,
+    form.discount_claims,
+    form.ticket_extras,
+    form.email_group_qr,
     form.guest_email,
+    form.for_someone_else,
+    form.traveller_name,
+    form.traveller_contact,
     form.origin_stop_id,
     form.payment_channel,
-    form.payment_method,
+    form.seat_type,
     form.ticket_quantity,
     form.use_rewards,
-    form.reward_points_to_use,
-    form.seat_type,
-    form.trip_id,
-    isRewardRequestInsufficient,
     isGuestCheckout,
+    isRewardRequestInsufficient,
     maxRedeemableRewardPoints,
-    minBookingDate,
+    maxSeatsPerPurchase,
+    priorityTypes,
     quantity,
     rewardPointsToApply,
-    selectedOriginStop,
-    selectedTrip,
+    trip,
   ]);
 
   return {
+    availableRewardPoints,
+    bookingLink,
+    bookingMode,
     canProceedToOnlinePayment,
+    departuresState,
+    isToday,
     checkoutStatus,
-    clearDestinationPinnedLabel,
-    destinationPinnedLabel,
-    destinationQuery,
-    dropoffMode,
     error,
-    fare,
     form,
     formErrors,
     formatDateTime,
     grossTotal,
     handleChange,
-    handleDestinationStopChange,
-    handleDropoffModeChange,
+    handleJourneyChange,
     handleSubmit,
-    handleTripSelect,
+    hasFareQuote,
     hasRewardPoints,
-    isRewardRequestInsufficient,
     isGuestCheckout,
+    isRewardRequestInsufficient,
     isSubmitting,
-    loadingRewards,
-    loading,
     loadingQr,
-    locatingDropoff,
-    locatingOrigin,
-    mapContainerRef,
+    loadingRewards,
     maxRedeemableRewardPoints,
     netTotal,
-    minBookingDate,
-    originPinnedLabel,
-    pinCurrentLocationAsOrigin: useCurrentLocationAsOrigin,
+    bookingFee,
+    bookingFeeRate,
+    discountTypes,
+    setDiscountClaim,
+    priorityTypes,
+    baggagePercent,
+    baggage,
+    setTicketExtra,
+    maxSeatsPerPurchase,
+    totalDue,
     printQrTicket,
     qrTickets,
+    resolution,
     rewardPointsToApply,
-    selectedRoute,
-    selectedStops,
-    selectedTrip,
-    setDestinationQuery,
-    stopLabel,
+    selectAlightingStop,
+    selectDeparture,
+    travelDate,
+    stopsData,
     success,
-    routeWarning,
-    trips: visibleTrips,
-    showingSuggestedTrips,
-    hasBookNowOption,
+    timelineState,
     totalTickets: quantity,
+    trip,
     unitFare,
-    availableRewardPoints,
-    useCurrentLocationAsOrigin,
   };
 }

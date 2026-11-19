@@ -1,0 +1,112 @@
+import { useCallback, useEffect, useState } from 'react';
+import OperatorService from '../../StaffService/OperatorService';
+import { getBusinessToday } from '../../../utils/dates';
+import { csvFileName, filtersToParams, presetRange, previousRange } from '../../../utils/financials';
+import { downloadReport } from '../../../utils/tableExport';
+
+const EXPORT_TITLES = { transactions: 'Financial transactions', refunds: 'Financial refunds', daily: 'Financial daily summary' };
+
+const BLANK = { route_id: '', fleet_id: '', trip_id: '', payment_method: '', channel: '' };
+
+/**
+ * Batch 29, Stage 2: state for the Operator's financial page. The server does every calculation; this hook only
+ * sends the filters, keeps the sort and page of the log, and downloads the CSV the server builds from the same query.
+ * "Loading" is derived (the result in hand is for another request), so no effect sets state synchronously.
+ */
+export default function useFinancials({ service = OperatorService } = {}) {
+  const today = getBusinessToday();
+  const [filters, setFilters] = useState({ from: today, to: today, ...BLANK, refund_basis: 'completed' });
+  const [table, setTable] = useState({ page: 1, sort: 'paid_at', dir: 'desc' });
+  const [reload, setReload] = useState(0);
+  const [summaryResult, setSummaryResult] = useState({ key: null, data: null, error: '' });
+  const [logResult, setLogResult] = useState({ key: null, data: null, error: '' });
+  // Batch 81: the same figures for the period of the same length just before (for "vs previous N days").
+  const [previousResult, setPreviousResult] = useState({ key: null, data: null });
+  const [exporting, setExporting] = useState('');
+  const [exportError, setExportError] = useState('');
+
+  const summaryKey = JSON.stringify({ params: filtersToParams(filters), reload });
+  const logKey = JSON.stringify({ params: filtersToParams(filters, table), reload });
+
+  useEffect(() => {
+    let cancelled = false;
+    const { params } = JSON.parse(summaryKey);
+    service.getFinancials(params)
+      .then((res) => { if (!cancelled) setSummaryResult({ key: summaryKey, data: res?.data ?? null, error: '' }); })
+      .catch((err) => { if (!cancelled) setSummaryResult({ key: summaryKey, data: null, error: err?.message || 'The figures could not be loaded.' }); });
+    return () => { cancelled = true; };
+  }, [summaryKey, service]);
+
+  const previous = previousRange(filters);
+  const previousKey = previous ? JSON.stringify({ params: filtersToParams({ ...filters, from: previous.from, to: previous.to }), reload }) : null;
+
+  useEffect(() => {
+    if (!previousKey) return undefined;
+    let cancelled = false;
+    const { params } = JSON.parse(previousKey);
+    service.getFinancials(params)
+      .then((res) => { if (!cancelled) setPreviousResult({ key: previousKey, data: res?.data ?? null }); })
+      .catch(() => { if (!cancelled) setPreviousResult({ key: previousKey, data: null }); });
+    return () => { cancelled = true; };
+  }, [previousKey, service]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const { params } = JSON.parse(logKey);
+    service.getFinancialTransactions(params)
+      .then((res) => { if (!cancelled) setLogResult({ key: logKey, data: res?.data ?? null, error: '' }); })
+      .catch((err) => { if (!cancelled) setLogResult({ key: logKey, data: null, error: err?.message || 'The transactions could not be loaded.' }); });
+    return () => { cancelled = true; };
+  }, [logKey, service]);
+
+  const updateFilters = useCallback((patch) => {
+    setFilters((prev) => ({ ...prev, ...patch }));
+    setTable((prev) => ({ ...prev, page: 1 }));
+  }, []);
+
+  const applyPreset = useCallback((key) => updateFilters(presetRange(key, getBusinessToday())), [updateFilters]);
+
+  const resetFilters = useCallback(() => updateFilters({ ...presetRange('today', getBusinessToday()), ...BLANK, refund_basis: 'completed' }), [updateFilters]);
+
+  const sortBy = useCallback((column) => {
+    setTable((prev) => ({ page: 1, sort: column, dir: prev.sort === column && prev.dir === 'desc' ? 'asc' : 'desc' }));
+  }, []);
+
+  const goToPage = useCallback((page) => setTable((prev) => ({ ...prev, page })), []);
+
+  const retry = useCallback(() => setReload((n) => n + 1), []);
+
+  // 2026-11-08 (advisor, user): the same server CSV, saved as PDF or CSV.
+  const exportReport = useCallback(async (type, format = 'pdf') => {
+    setExporting(type);
+    setExportError('');
+    try {
+      const text = await service.downloadFinancialExport(filtersToParams(filters, { ...table, type }));
+      await downloadReport({
+        format,
+        csvText: typeof text === 'string' ? text : '',
+        fileName: csvFileName(type, filters),
+        title: EXPORT_TITLES[type] ?? 'Financial report',
+        subtitle: filters.from === filters.to ? `Date: ${filters.from}` : `Period: ${filters.from} to ${filters.to}`,
+      });
+    } catch (err) {
+      setExportError(err?.message || 'The export could not be created.');
+    } finally {
+      setExporting('');
+    }
+  }, [filters, table, service]);
+
+  return {
+    filters, updateFilters, applyPreset, resetFilters,
+    table, sortBy, goToPage,
+    summary: summaryResult.key === summaryKey ? summaryResult.data : null,
+    summaryError: summaryResult.key === summaryKey ? summaryResult.error : '',
+    summaryLoading: summaryResult.key !== summaryKey,
+    previousKpis: previousKey && previousResult.key === previousKey ? (previousResult.data?.kpis ?? null) : null,
+    previousDays: previous?.days ?? 0,
+    log: logResult.key === logKey ? logResult.data : null,
+    logError: logResult.key === logKey ? logResult.error : '',
+    logLoading: logResult.key !== logKey,
+    retry, exportReport, exporting, exportError,
+  };
+}

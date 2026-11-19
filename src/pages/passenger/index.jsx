@@ -3,23 +3,28 @@ import { Routes, Route } from 'react-router-dom';
 import { GuestRoute } from '../../api/hooks/contexts/AuthGuard';
 import { AuthProvider } from '../../api/hooks/contexts/AuthProvider';
 
+import { SkeletonPage } from '../../components/ui/Skeleton';
 const LandingPage = lazy(() => import('../../components/Passenger/LandingPage/LandingPage'));
 const SignUpPage = lazy(() => import('../../components/Passenger/SignupPage/SignupPage'));
 const LoginPage = lazy(() => import('../../components/Passenger/LoginPage/LoginPage'));
+const ForgotPasswordPage = lazy(() => import('../../components/Passenger/Auth/ForgotPasswordPage'));
+const ResetPasswordPage = lazy(() => import('../../components/Passenger/Auth/ResetPasswordPage'));
 const PassengerDashboard = lazy(() => import('../../components/Passenger/Dashboard/Dashboard'));
+const BuyTicketPage = lazy(() => import('../../components/Passenger/BuyTicket/BuyTicketPage'));
+const AvailableTripsPage = lazy(() => import('../../components/Passenger/Trips/AvailableTripsPage'));
+const AddPhonePage = lazy(() => import('../../components/Passenger/Auth/AddPhonePage'));
 
 function PassengerRouteFallback() {
     return (
-        <div className="flex min-h-screen items-center justify-center bg-slate-950 px-4 text-slate-300">
-            <div className="rounded-xl border border-slate-800 bg-slate-900/70 px-4 py-3 text-sm">Loading passenger portal...</div>
-        </div>
+        <SkeletonPage label="Loading passenger portal..." />
     );
 }
 
 const GUEST_ROUTES = [
     { path: 'signup', element: <SignUpPage /> },
     { path: 'login', element: <LoginPage /> },
-    { path: 'landingpage', element: <LandingPage /> }
+    { path: 'forgot-password', element: <ForgotPasswordPage /> },
+    { path: 'reset-password', element: <ResetPasswordPage /> }
 ]
 
 export default function PassengerBaseRouter() {
@@ -28,9 +33,14 @@ export default function PassengerBaseRouter() {
             <Suspense fallback={<PassengerRouteFallback />}>
                 <Routes>
                     <Route path="/" element={<LandingPage />} />
+                    <Route path="search" element={<LandingPage />} />
+                    <Route path="book" element={<BuyTicketPage />} />
+                    <Route path="trips" element={<AvailableTripsPage />} />
                     <Route path="dashboard" element={<PassengerDashboard />} />
+                    {/* 2026-11-07: after signing up with Google, add the mobile number. */}
+                    <Route path="add-phone" element={<AddPhonePage />} />
 
-                    <Route element={<GuestRoute role="passenger" />}>
+                    <Route element={<GuestRoute role="passenger" authenticatedRedirectTo="/" />}>
                         {GUEST_ROUTES.map((route) => (
                             <Route key={route.path} path={route.path} element={route.element} />
                         ))}

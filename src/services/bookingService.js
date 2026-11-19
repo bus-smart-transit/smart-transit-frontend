@@ -1,0 +1,103 @@
+import api from './api.js'
+
+// Thin wrappers over the public, read-only passenger booking endpoints. Every
+// value (destinations, resolved trip, ETAs, fare, snapped drop-off) is computed
+// by the server; nothing here derives places or times of its own.
+
+const data = (response) => response?.data?.data ?? null
+
+/** { message, fieldErrors } from an axios error, whatever shape the server used. */
+export function readApiError(error, fallback = 'Something went wrong. Please try again.') {
+  const body = error?.response?.data
+  const fieldErrors = body?.errors && typeof body.errors === 'object' ? body.errors : {}
+  const firstField = Object.values(fieldErrors).flat()[0]
+  return {
+    message: firstField || body?.message || error?.message || fallback,
+    fieldErrors,
+  }
+}
+
+/** Boarding/alighting candidates grouped by municipality; pass an origin to narrow to routes serving it. */
+export async function getBookingStops(originStopId = null) {
+  const response = await api.get('/booking/stops', { params: originStopId ? { origin_stop_id: originStopId } : {} })
+  return data(response)
+}
+
+/** The booking window ({ today, max_advance_days, last_bookable_date }), the same numbers the passenger date pickers use. */
+/** Batch 75: the discounts a passenger may claim online for this trip (checked by the Chauffeur on the bus). */
+export async function getTripDiscountTypes(tripId) {
+  const response = await api.get('/booking/discount-types', { params: { trip_id: tripId } })
+  return data(response)
+}
+
+export async function getBookingWindow() {
+  const response = await api.get('/booking/window')
+  return data(response)
+}
+
+/** Checks the untrusted parts of a booking link (stop codes, date). Resolves to { from, to, date } or rejects with a friendly 422. */
+export async function getBookingLink({ from, to, date }) {
+  const params = {}
+  if (from) params.from = from
+  if (to) params.to = to
+  if (date) params.date = date
+  const response = await api.get('/booking/link', { params })
+  return data(response)
+}
+
+/** Book Now / Book Later: the server picks the trip. params: { mode, origin_stop_id, destination_stop_id, date?, time?, seat_type? } */
+export async function resolveTrip(params) {
+  const response = await api.get('/booking/resolve', { params })
+  return data(response)
+}
+
+/**
+ * Available trips of one Manila date (default today), paginated, optionally for a journey given as
+ * stop codes. params: { from?, to?, date?, seat_type?, page?, per_page? }. The answer carries
+ * `next_available_date` when the day is empty and the resolved `from` / `to` stops.
+ */
+export async function getTrips(params) {
+  const response = await api.get('/booking/trips', { params })
+  return data(response)
+}
+
+/** Book Later: every eligible departure of one Manila date for the journey. params: { origin_stop_id, destination_stop_id, date, seat_type? } */
+export async function getDepartures(params) {
+  const response = await api.get('/booking/departures', { params })
+  return data(response)
+}
+
+/** The lists the fleet and fare forms are built from (vehicle classes, service types, rounding modes). Public, no fare values. */
+export async function getFareOptions() {
+  const response = await api.get('/fare/options')
+  return data(response)
+}
+
+/** Timeline for a trip, recomputed for the chosen boarding/alighting stop or custom drop-off pin. */
+/** Batch 77: the buses coming to a stop (by its code), soonest first; `limit` asks for more than the first three. */
+export async function getStopArrivals(stopCode, limit = null) {
+  const params = limit ? { limit } : {}
+  const response = await api.get(`/stops/${encodeURIComponent(stopCode)}/arrivals`, { params })
+  return data(response)
+}
+
+export async function getTripTimeline(tripId, selection = {}) {
+  const params = {}
+  Object.entries(selection).forEach(([key, value]) => {
+    if (value !== null && value !== undefined && value !== '') params[key] = value
+  })
+  const response = await api.get(`/trips/${tripId}/timeline`, { params })
+  return data(response)
+}
+
+/** Address search proxy, restricted to the region server-side. */
+export async function searchAddress(query) {
+  const response = await api.get('/booking/address-search', { params: { q: query } })
+  return data(response)?.results ?? []
+}
+
+/** Read-only payment state for the checkout return page; the webhook is the source of truth. */
+export async function getPaymentStatus(reference) {
+  const response = await api.get('/payments/status', { params: { ref: reference } })
+  return data(response)
+}

@@ -1,11 +1,17 @@
-const resolveStopName = (ticket, stopId, stopLookup, key) => {
+import { formatManilaDateTime } from '../../../utils/dates';
+
+const resolveStopName = (ticket, stopId, stopLookup, key, emptyLabel = null) => {
   const stopObj = ticket?.[key];
   if (typeof stopObj === 'string') return stopObj;
   if (stopObj?.stop_name) return stopObj.stop_name;
+  // No stop recorded: a boarding taken between stops, or a pinned drop-off (Batch 27 Part 2, Tasks 6 and 7).
+  if (!stopId && emptyLabel) return emptyLabel;
 
   const routeStop = stopLookup.get(String(stopId));
   return routeStop?.stop?.stop_name || routeStop?.stop_name || `Stop ${stopId || '-'}`;
 };
+
+const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 export default function useOnsiteReceiptPrinter() {
   const printOnsiteReceipt = ({ receipt, routeStops }) => {
@@ -21,8 +27,15 @@ export default function useOnsiteReceiptPrinter() {
 
     const rows = receipt.tickets
       .map((ticket, index) => {
-        const originStop = resolveStopName(ticket, ticket?.origin_stop_id, stopLookup, 'origin_stop');
-        const destinationStop = resolveStopName(ticket, ticket?.destination_stop_id, stopLookup, 'destination_stop');
+        const originStop = escapeHtml(resolveStopName(ticket, ticket?.origin_stop_id, stopLookup, 'origin_stop', 'Boarded between stops'));
+        const destinationStop = escapeHtml(ticket?.destination_label && !ticket?.destination_stop_id
+          ? ticket.destination_label
+          : resolveStopName(ticket, ticket?.destination_stop_id, stopLookup, 'destination_stop', 'Custom drop-off'));
+        const discount = Number(ticket?.discount_amount) > 0
+          ? `${escapeHtml(ticket?.discount_label || 'Onsite')} (${Math.round(Number(ticket.discount_rate) * 100)}%) - PHP ${Number(ticket.discount_amount).toFixed(2)}`
+          : '-';
+        const originalFare = Number(ticket?.discount_amount) > 0 ? `PHP ${Number(ticket.original_amount).toFixed(2)}` : '-';
+        const verification = ticket?.discount_id_checked_at ? 'ID checked' : '-';
 
         return `
           <tr>
@@ -31,6 +44,9 @@ export default function useOnsiteReceiptPrinter() {
             <td style="text-transform: capitalize;">${ticket.seat_type || '-'}</td>
             <td>${originStop}</td>
             <td>${destinationStop}</td>
+            <td>${discount}</td>
+            <td>${originalFare}</td>
+            <td>${verification}</td>
             <td>PHP ${Number(ticket.amount || 0).toFixed(2)}</td>
           </tr>
         `;
@@ -55,10 +71,12 @@ export default function useOnsiteReceiptPrinter() {
         </head>
         <body>
           <h1>Smart Transit Onsite Checkout Receipt</h1>
-          <p class="muted">Printed: ${new Date().toLocaleString()}</p>
+          <p class="muted">Printed: ${formatManilaDateTime(new Date().toISOString())}</p>
           <div class="meta">
             <p><strong>Transaction Ref:</strong> ${payment.transaction_reference || '-'}</p>
             <p><strong>Payment ID:</strong> ${payment.payment_id || '-'}</p>
+            <p><strong>Payment:</strong> Cash</p>
+            <p><strong>Issued By:</strong> ${receipt.issuedBy || '-'}</p>
             <p><strong>Recorded At:</strong> ${receipt.createdAtLabel || '-'}</p>
           </div>
 
@@ -67,10 +85,13 @@ export default function useOnsiteReceiptPrinter() {
               <tr>
                 <th>#</th>
                 <th>Ticket UUID</th>
-                <th>Seat</th>
+                <th>Type</th>
                 <th>Origin</th>
                 <th>Destination</th>
-                <th>Amount</th>
+                <th>Discount</th>
+                <th>Original Fare</th>
+                <th>ID Check</th>
+                <th>Fare Paid</th>
               </tr>
             </thead>
             <tbody>
