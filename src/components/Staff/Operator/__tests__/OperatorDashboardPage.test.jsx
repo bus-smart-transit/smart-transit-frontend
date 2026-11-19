@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import OperatorDashboardPage from '../OperatorDashboardPage';
+import { CompanyAdminContext } from '../companyAdmin';
 import { getBusinessToday } from '../../../../utils/dates';
 
 const mocks = vi.hoisted(() => ({
@@ -13,7 +14,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('../../../../api/StaffService/OperatorService', () => ({ default: mocks }));
 vi.mock('../../CalendarSummaryStrip', () => ({ default: () => <div>calendar-summary</div> }));
-vi.mock('../../DashboardCalendar', () => ({ default: () => <div>dashboard-calendar</div> }));
+vi.mock('../../DashboardCalendar', () => ({ default: ({ children }) => <div>dashboard-calendar{children}</div> }));
 vi.mock('../../../Map/RouteMap', () => ({ default: () => <div data-testid="route-map" /> }));
 vi.mock('../../../../services/routeMapService', () => ({ fetchRouteMapData: vi.fn().mockResolvedValue({ geometry: null, stops: [] }) }));
 
@@ -101,11 +102,31 @@ describe('OperatorDashboardPage', () => {
     renderPage({ ...handlers, onOpenFleets });
     fireEvent.click(screen.getByRole('button', { name: /Schedule a trip/ }));
     fireEvent.click(screen.getByRole('button', { name: /Trip approvals/ }));
-    fireEvent.click(screen.getByRole('button', { name: /Assign staff/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Manage staff/ }));
     Object.values(handlers).forEach((handler) => expect(handler).toHaveBeenCalledOnce());
     fireEvent.click(screen.getByRole('button', { name: /Manage fleet/ }));
     fireEvent.click(screen.getByRole('button', { name: /View full map/ }));
     expect(onOpenFleets).toHaveBeenCalledTimes(2);
+    await waitFor(() => expect(mocks.getFleetLocations).toHaveBeenCalled());
+  });
+
+  // Batch 81 (user, 2026-11-19): an Operator who is not the company admin only views staff and buses.
+  it('words the staff and fleet actions as View for a read-only Operator', async () => {
+    render(
+      <CompanyAdminContext.Provider value={false}>
+        <OperatorDashboardPage trips={[]} fleets={[fleet]} onRefresh={vi.fn()} onOpenCalendar={vi.fn()} onOpenSchedule={vi.fn()} />
+      </CompanyAdminContext.Provider>,
+    );
+    expect(screen.getByRole('button', { name: /View staff/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /View fleet/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Manage staff/ })).toBeNull();
+    expect(screen.getByRole('button', { name: /Schedule a trip/ })).toBeInTheDocument();
+    await waitFor(() => expect(mocks.getFleetLocations).toHaveBeenCalled());
+  });
+
+  it("puts Today's trips in the calendar card", async () => {
+    renderPage({ trips: [trip(1)] });
+    expect(screen.getByText('dashboard-calendar').contains(screen.getByTestId('todays-trips'))).toBe(true);
     await waitFor(() => expect(mocks.getFleetLocations).toHaveBeenCalled());
   });
 

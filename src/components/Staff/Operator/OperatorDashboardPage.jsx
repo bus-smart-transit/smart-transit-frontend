@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { OpPageHeader, OpCard, OpChip, OpStat, OpEmpty, OpDelta } from './OperatorUI';
 import { accentOf } from './operatorUiTokens';
+import { useCanManageCompany } from './companyAdmin';
 import DashboardCalendar from '../DashboardCalendar';
 import OperatorService from '../../../api/StaffService/OperatorService';
 import { useFleetLocations, useNow, useOnTimeTrips } from '../../../api/hooks/Staff/useOperatorDashboardExtras';
@@ -32,13 +33,18 @@ const greetingFor = (nowMs) => {
 
 const plural = (n, word) => `${n} ${word}${Number(n) === 1 ? '' : 's'}`;
 
-/** Batch 60 item 4: one click to what an Operator does most often; each button only opens a page or form. */
+/**
+ * Batch 60 item 4: one click to what an Operator does most often; each button only opens a page or form.
+ * Batch 81 (user, 2026-11-19): the wording follows the Operator's rights. Every Operator schedules trips and handles
+ * approvals; only a company admin changes staff and buses (companyAdmin.js), so other Operators "View" them.
+ */
 function QuickActions({ onCreateSchedule, onOpenApprovals, onOpenStaffs, onOpenFleets }) {
+  const canManage = useCanManageCompany();
   const actions = [
     { key: 'schedule', label: 'Schedule a trip', icon: CalendarPlus, accent: 'teal', onClick: onCreateSchedule },
     { key: 'approvals', label: 'Trip approvals', icon: ClipboardCheck, accent: 'blue', onClick: onOpenApprovals },
-    { key: 'staffs', label: 'Assign staff', icon: Users, accent: 'violet', onClick: onOpenStaffs },
-    { key: 'fleets', label: 'Manage fleet', icon: Bus, accent: 'orange', onClick: onOpenFleets },
+    { key: 'staffs', label: canManage ? 'Manage staff' : 'View staff', icon: Users, accent: 'violet', onClick: onOpenStaffs },
+    { key: 'fleets', label: canManage ? 'Manage fleet' : 'View fleet', icon: Bus, accent: 'orange', onClick: onOpenFleets },
   ];
   return (
     <OpCard icon={Zap} accent="orange" title="Quick actions" subtitle="Common tasks for operators.">
@@ -65,18 +71,21 @@ function QuickActions({ onCreateSchedule, onOpenApprovals, onOpenStaffs, onOpenF
  * live fleet map): the trips today and On time / Delayed.
  */
 function TodaysTrips({ rows, colors, onOpenSchedule }) {
+  // Batch 81 (user): under the calendar, in the same card.
   return (
-    <OpCard
-      icon={CalendarClock}
-      accent="green"
-      title="Today's trips"
-      subtitle="Scheduled trips today, by route."
-      badge={(
-        <button type="button" onClick={onOpenSchedule} aria-label="Open Schedule" className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-50">
+    <section aria-label="Today's trips" className="mt-5 border-t border-slate-100 pt-4">
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-start gap-3">
+          <CalendarClock className={`mt-0.5 h-6 w-6 shrink-0 ${accentOf('green')}`} strokeWidth={1.5} aria-hidden="true" />
+          <div className="min-w-0">
+            <h2 className="font-display text-[1.0625rem] font-semibold leading-snug text-slate-900">Today&apos;s trips</h2>
+            <p className="mt-0.5 text-[13px] leading-relaxed text-slate-500">Scheduled trips today, by route.</p>
+          </div>
+        </div>
+        <button type="button" onClick={onOpenSchedule} aria-label="Open Schedule" className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-50">
           <ChevronRight className="h-5 w-5" aria-hidden="true" />
         </button>
-      )}
-    >
+      </div>
       {rows.length === 0 ? <OpEmpty icon={CalendarClock}>No trips are scheduled today.</OpEmpty> : (
         <ul className="space-y-2" data-testid="todays-trips">
           {rows.map((row) => {
@@ -94,7 +103,7 @@ function TodaysTrips({ rows, colors, onOpenSchedule }) {
           })}
         </ul>
       )}
-    </OpCard>
+    </section>
   );
 }
 
@@ -258,20 +267,24 @@ export default function OperatorDashboardPage({
           />
         </section>
 
+        {/* Batch 81 (user, 2026-11-19): the calendar with Today's trips under it in one card, beside the map; the alerts
+            and quick actions below, so nothing in the calendar needs a scroll to be seen. */}
         <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_24rem]">
-          <OperatorFleetMap routes={view.tripsByRoute} buses={view.mapBuses} colors={colors} onOpenFull={onOpenFleets} />
-          <TodaysTrips rows={view.tripsByRoute} colors={colors} onOpenSchedule={onOpenSchedule} />
-        </div>
-
-        <div className="grid items-start gap-6 lg:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_22rem]">
-          <AlertsAndUpdates
-            alerts={view.alerts}
-            actions={view.actions}
-            deployment={view.deployment}
-            onOpen={(alert) => (alert.kind === 'crew' ? onOpenTrip(alert.tripId) : onTrackTrip(alert.tripId))}
-          />
-          <QuickActions onCreateSchedule={onCreateSchedule} onOpenApprovals={onOpenApprovals} onOpenStaffs={onOpenStaffs} onOpenFleets={onOpenFleets} />
-          <DashboardCalendar service={OperatorService} onOpenFull={onOpenCalendar} />
+          <div className="min-w-0 space-y-6">
+            <OperatorFleetMap routes={view.tripsByRoute} buses={view.mapBuses} colors={colors} onOpenFull={onOpenFleets} />
+            <div className="grid items-start gap-6 lg:grid-cols-2">
+              <AlertsAndUpdates
+                alerts={view.alerts}
+                actions={view.actions}
+                deployment={view.deployment}
+                onOpen={(alert) => (alert.kind === 'crew' ? onOpenTrip(alert.tripId) : onTrackTrip(alert.tripId))}
+              />
+              <QuickActions onCreateSchedule={onCreateSchedule} onOpenApprovals={onOpenApprovals} onOpenStaffs={onOpenStaffs} onOpenFleets={onOpenFleets} />
+            </div>
+          </div>
+          <DashboardCalendar service={OperatorService} onOpenFull={onOpenCalendar}>
+            <TodaysTrips rows={view.tripsByRoute} colors={colors} onOpenSchedule={onOpenSchedule} />
+          </DashboardCalendar>
         </div>
       </div>
     </div>

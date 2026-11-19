@@ -11,8 +11,10 @@ import { monthStartOf } from '../../utils/staffSchedule';
  * or shifts (from the server, for the caller's own scope). Pressing a day opens a modal with only that
  * day's trips and shifts; "Full calendar" goes to the calendar page. Adds no load beyond the markers
  * for the month on screen.
+ * Batch 81 (user, 2026-11-19): `children` goes under the calendar in the same card (the Operator dashboard puts
+ * Today's trips there).
  */
-export default function DashboardCalendar({ service, onOpenFull, refreshKey = 0, className = '' }) {
+export default function DashboardCalendar({ service, onOpenFull, refreshKey = 0, className = '', children = null }) {
   const [month, setMonth] = useState(() => monthStartOf(null));
   const [day, setDay] = useState(null); // 'YYYY-MM-DD' of the open modal, or null
 
@@ -34,6 +36,7 @@ export default function DashboardCalendar({ service, onOpenFull, refreshKey = 0,
             </button>
           )}
         />
+        {children}
       </section>
 
       <Modal open={day !== null} onClose={() => setDay(null)} title="Schedule for the day" size="md" fullScreenOnMobile>
