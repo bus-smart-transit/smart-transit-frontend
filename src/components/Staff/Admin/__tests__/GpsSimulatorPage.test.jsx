@@ -57,4 +57,19 @@ describe('GpsSimulatorPage', () => {
     fireEvent.click(within(card).getByRole('button', { name: 'Stop and give control back' }));
     expect(t.control).toHaveBeenCalledWith(3, { action: 'stop' });
   });
+
+  // 2026-11-19 (user): a button that takes the bus off its route, and one that puts it back.
+  test('takes the bus off its route and back on', () => {
+    const t = tab();
+    t.data = { ...t.data, simulations: [sim] };
+    const { rerender } = render(<GpsSimulatorPage simulatorTab={t} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Go off route' }));
+    expect(t.control).toHaveBeenCalledWith(3, { action: 'deviate' });
+
+    const off = { ...t, data: { ...t.data, simulations: [{ ...sim, off_route: true }] } };
+    rerender(<GpsSimulatorPage simulatorTab={off} />);
+    expect(screen.getByText('Off route')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Back on route' }));
+    expect(t.control).toHaveBeenCalledWith(3, { action: 'rejoin' });
+  });
 });

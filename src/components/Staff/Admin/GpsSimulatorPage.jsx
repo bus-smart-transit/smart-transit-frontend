@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pause, Play, RefreshCw, Square } from 'lucide-react';
+import { CornerUpRight, Pause, Play, RefreshCw, Route as RouteIcon, Square } from 'lucide-react';
 import { OpPageHeader, OpCard, OpChip, OpEmpty } from '../Operator/OperatorUI';
 import { OP_SPACE } from '../Operator/operatorUiTokens';
 import Modal from '../../ui/Modal';
@@ -24,7 +24,12 @@ function SimulationCard({ sim, speeds, busy, onControl }) {
     <OpCard
       title={sim.route_name || `Trip ${sim.trip_id}`}
       subtitle={busLabelText(sim.bus_label)}
-      badge={<OpChip tone={status.tone}>{status.label} · Simulated</OpChip>}
+      badge={(
+        <span className="flex flex-wrap gap-1.5">
+          {sim.off_route && <OpChip tone="warning">Off route</OpChip>}
+          <OpChip tone={status.tone}>{status.label} · Simulated</OpChip>
+        </span>
+      )}
     >
       <div className="space-y-3" data-testid="gps-simulation">
         <p className="text-sm text-slate-600">
@@ -50,7 +55,12 @@ function SimulationCard({ sim, speeds, busy, onControl }) {
             {sim.stops.map((stop) => <option key={stop.stop_id} value={stop.stop_id}>{stop.name}</option>)}
           </select>
           <button type="button" disabled={busy || !stopId} onClick={() => onControl(sim.id, { action: 'jump', stop_id: Number(stopId) })} className={BUTTON}>Jump</button>
+          {/* 2026-11-19 (user): test the Off route alert, the Fleets chip and the route adherence report. */}
+          {sim.off_route
+            ? <button type="button" disabled={busy} onClick={() => onControl(sim.id, { action: 'rejoin' })} className={BUTTON} data-testid="sim-rejoin"><RouteIcon className="h-4 w-4" aria-hidden="true" /> Back on route</button>
+            : <button type="button" disabled={busy} onClick={() => onControl(sim.id, { action: 'deviate' })} className={`${BUTTON} border-amber-200 text-amber-800 hover:bg-amber-50`} data-testid="sim-deviate"><CornerUpRight className="h-4 w-4" aria-hidden="true" /> Go off route</button>}
         </div>
+        {sim.off_route && <p className="text-xs text-amber-800">The bus is reported about 300 m to the side of its route, so the Operator sees it as off route. It keeps moving with the trip until you put it back.</p>}
         {sim.route_id && (
           <div className="h-72 overflow-hidden rounded-xl ring-1 ring-slate-200" aria-label="Live map preview">
             <RouteMap
