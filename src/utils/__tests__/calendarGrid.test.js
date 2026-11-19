@@ -37,3 +37,16 @@ describe('buildCalendarGrid', () => {
     expect(leadingDay.isCurrentMonth).toBe(false);
   });
 });
+
+// Batch 81 (user, 2026-11-19): the dashboard's small calendar shows only the weeks the month needs.
+describe('buildCalendarGrid with fit', () => {
+  it('has 5 rows for November 2026, 6 for August 2026 and 4 for February 2026, always whole weeks from Sunday', () => {
+    expect(buildCalendarGrid(new Date(2026, 10, 1), {}, { fit: true })).toHaveLength(35); // starts on a Sunday, 30 days
+    expect(buildCalendarGrid(new Date(2026, 7, 1), {}, { fit: true })).toHaveLength(42);  // starts on a Saturday, 31 days
+    expect(buildCalendarGrid(new Date(2026, 1, 1), {}, { fit: true })).toHaveLength(28);  // starts on a Sunday, 28 days
+    const nov = buildCalendarGrid(new Date(2026, 10, 1), {}, { fit: true });
+    expect(nov[0].dateKey).toBe('2026-11-01');
+    expect(nov.at(-1).dateKey).toBe('2026-12-05');
+    expect(buildCalendarGrid(new Date(2026, 10, 1), {})).toHaveLength(42); // the full page keeps 6 rows
+  });
+});

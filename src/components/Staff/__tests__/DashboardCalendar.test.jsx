@@ -32,19 +32,20 @@ describe('calendar widget and full calendar', () => {
     cleanup();
   });
 
-  it('widget: asks the server for the 6-week grid of the month on screen, marks days with items and pages months', async () => {
+  // Batch 81 (user, 2026-11-19): the widget shows only the weeks the month needs (usually 5 rows).
+  it('widget: asks the server for the weeks of the month on screen, marks days with items and pages months', async () => {
     const service = makeService();
     render(<DashboardCalendar service={service} onOpenFull={vi.fn()} />);
 
-    // October 2026 starts on a Thursday: the grid runs 2026-09-27 to 2026-11-07.
-    await waitFor(() => expect(service.getCalendarDays).toHaveBeenCalledWith({ from: '2026-09-27', to: '2026-11-07' }));
+    // October 2026 starts on a Thursday and has 31 days: 5 weeks, 2026-09-27 to 2026-10-31.
+    await waitFor(() => expect(service.getCalendarDays).toHaveBeenCalledWith({ from: '2026-09-27', to: '2026-10-31' }));
     expect(await screen.findByRole('button', { name: /October 5, 2026, 3 trips, 1 shift/ })).toBeInTheDocument();
     expect(screen.getByText('October 2026')).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { pressed: false }).length).toBe(42);
+    expect(screen.getAllByRole('button', { pressed: false }).length).toBe(35);
 
     fireEvent.click(screen.getByRole('button', { name: 'Next month' }));
     expect(screen.getByText('November 2026')).toBeInTheDocument();
-    await waitFor(() => expect(service.getCalendarDays).toHaveBeenLastCalledWith({ from: '2026-11-01', to: '2026-12-12' }));
+    await waitFor(() => expect(service.getCalendarDays).toHaveBeenLastCalledWith({ from: '2026-11-01', to: '2026-12-05' })); // November 2026: 5 weeks
   });
 
   it('widget: a day opens a modal with only that day, paginated, with the leg direction and role; Esc closes', async () => {
@@ -115,6 +116,6 @@ describe('calendar widget and full calendar', () => {
     render(<DashboardCalendar service={service} onOpenFull={vi.fn()} />);
 
     expect(await screen.findByRole('alert')).toHaveTextContent('The calendar could not be loaded.');
-    expect(screen.getAllByRole('button', { pressed: false }).length).toBe(42); // still a full grid, same size
+    expect(screen.getAllByRole('button', { pressed: false }).length).toBe(35); // still the whole month
   });
 });

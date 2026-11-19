@@ -8,9 +8,9 @@ const readError = (error, fallback) => error?.message || fallback;
  * own assignments, or the operator's fleets; Manila days). Returns the 42 grid cells with each cell's
  * `trips` / `shifts` counts, plus loading/error state. `refreshKey` reloads after the page changed data.
  */
-export function useCalendarMonth(service, monthStart, refreshKey = 0) {
+export function useCalendarMonth(service, monthStart, refreshKey = 0, { fit = false } = {}) {
   const [state, setState] = useState({ key: null, byDate: {}, error: '' });
-  const grid = buildCalendarGrid(monthStart, {});
+  const grid = buildCalendarGrid(monthStart, {}, { fit });
   const from = grid[0].dateKey;
   const to = grid[grid.length - 1].dateKey;
   const key = `${from}|${to}|${refreshKey}`;

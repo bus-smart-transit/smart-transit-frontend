@@ -72,11 +72,12 @@ function CompactMonth({ month, onMonthChange, selectedDate, onSelectDate, cells,
 /**
  * One month, one page at a time, with the server's day markers (trips and shifts of the caller's
  * own scope, Manila days). `compact` is the dashboard widget: a fixed, small grid that never grows
- * with the data; the full calendar page uses the roomier cells. The grid is always 6 weeks tall, so
- * paging between months or loading markers never changes its height.
+ * with the data; the full calendar page uses the roomier cells. The full page is always 6 weeks tall, so paging
+ * between months never changes its height; the compact widget shows only the weeks the month needs (Batch 81, user:
+ * usually 5 rows).
  */
 export default function CalendarMonthGrid({ service, month, onMonthChange, selectedDate = null, onSelectDate, compact = false, refreshKey = 0, footer = null }) {
-  const { cells, loading, error } = useCalendarMonth(service, month, refreshKey);
+  const { cells, loading, error } = useCalendarMonth(service, month, refreshKey, { fit: compact });
   const weekdays = compact ? WEEKDAYS_COMPACT : WEEKDAYS_FULL;
 
   if (compact) {
