@@ -44,7 +44,7 @@ describe('OperatorDashboardPage', () => {
     await waitFor(() => expect(mocks.getCalendarDays).toHaveBeenCalledWith({ from: day(-6), to: today }));
     expect(await screen.findByLabelText('Up 20% vs yesterday')).toBeInTheDocument();
     expect(screen.getByRole('img', { name: /^Trips per day, last 7 days/ })).toBeInTheDocument();
-    expect(screen.getByRole('img', { name: 'Tickets sold today by departure hour. 08:00 trips: 8 sold, 10:00 trips: 8 sold' })).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'Tickets sold today by departure hour. 8:00 AM trips: 8 sold, 10:00 AM trips: 8 sold' })).toBeInTheDocument();
   });
 
   it('shows no change chip when yesterday had no trips, and keeps the card when the calendar fails', async () => {

@@ -1,5 +1,4 @@
 import axios from "axios";
-import { installMockApi } from "../dev/mockApi.js";
 
 const API_BASE_OVERRIDE_KEY = 'smart_transit_api_base_url';
 
@@ -72,10 +71,15 @@ const api = axios.create({
   },
 });
 
-// 2026-11-13: UI preview mode (src/dev/mockApi.js). Dev server only; `import.meta.env.DEV` is false in a build,
-// so this branch and the sample data are dropped from production.
+// 2026-11-13: UI preview mode (src/dev/mockApi.js). Dev server only. 2026-11-19: loaded with a dynamic import so
+// the sample data is never bundled into a production build (a static import kept it in the public files even though
+// it never ran). Requests made before it loads wait for it and then use its adapter.
 if (import.meta.env.DEV && import.meta.env.VITE_MOCK_API === 'true') {
-  installMockApi(api);
+  const mockReady = import('../dev/mockApi.js').then(({ installMockApi }) => installMockApi(api));
+  api.interceptors.request.use(async (config) => {
+    await mockReady;
+    return { ...config, adapter: api.defaults.adapter };
+  });
 }
 
 export default api;
