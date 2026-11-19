@@ -10,7 +10,8 @@ lerna-debug.log*
 .claude
 .gemini
 .codex
-.github
+.github/*
+!.github/workflows/
 .agents
 .impeccable
 node_modules

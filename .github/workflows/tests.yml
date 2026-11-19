@@ -1,0 +1,40 @@
+# Continuous integration (2026-11-19): every push and pull request runs lint, the Vitest suite and the production build.
+# No secret is used. VITE_* values are compiled in at build time; without them the build still runs, which is what this
+# checks. The Playwright suite (tests/e2e) needs a running backend and stays a manual run.
+# Deploys stay manual (Vercel CLI from a clean copy of murcia, after the team approves).
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npx eslint .
+
+      - name: Unit tests
+        run: npx vitest run
+
+      - name: Production build
+        run: npm run build
