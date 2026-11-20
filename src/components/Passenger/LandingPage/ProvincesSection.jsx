@@ -1,13 +1,17 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { MapPin } from 'lucide-react';
 import { useRegion } from '../../../api/hooks/useRegion';
 import { provinceCards } from '../../../utils/provinceCards';
+import { provinceHref } from '../../../utils/routePages';
 
 function ProvinceCard({ card, tall }) {
   const [broken, setBroken] = useState(false);
   return (
-    <a
-      href="#search-trips"
+    // 2026-11-20 (user): a picture opens the routes that serve the province (it used to scroll to the trip search).
+    <Link
+      to={provinceHref(card.name)}
+      aria-label={`Routes in ${card.name}`}
       className={`group relative block overflow-hidden rounded-2xl bg-navy-900 ${tall ? 'h-64 sm:h-80' : 'h-56 sm:h-72'}`}
     >
       {!broken && (
@@ -27,13 +31,13 @@ function ProvinceCard({ card, tall }) {
           {card.note}
         </span>
       </span>
-    </a>
+    </Link>
   );
 }
 
 /**
  * 2026-11-06 (passenger redesign, joshua-frontend): the provinces of the service region, with photos. Names and
- * towns come from the server's region settings (no place name in the code); a card opens the trip search.
+ * towns come from the server's region settings (no place name in the code); a card opens the province's routes.
  */
 export default function ProvincesSection() {
   const region = useRegion();
@@ -50,7 +54,7 @@ export default function ProvincesSection() {
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal-600">Where we go</p>
           <h2 id="provinces-heading" className="mt-2 font-display text-3xl font-bold text-navy-950 sm:text-4xl">Provinces we serve</h2>
           <p className="mt-3 text-base leading-relaxed text-slate-500">
-            SmartTransit covers the provinces of {region.name}. Tap one to search for a trip.
+            SmartTransit covers the provinces of {region.name}. Tap one to see its routes and stops.
           </p>
         </div>
 

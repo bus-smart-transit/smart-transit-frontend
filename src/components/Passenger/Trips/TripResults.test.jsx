@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 
 vi.mock('../../../services/bookingService', () => ({
   getTripTimeline: vi.fn(async () => ({ stops: [
@@ -60,20 +61,13 @@ describe('TripCard, Batch 54', () => {
     expect(screen.queryByTestId('trip-now-boarding')).not.toBeInTheDocument()
   })
 
-  it('loads the stops only when opened, from the boarding stop, and Get off here picks another drop-off', async () => {
-    const choose = vi.fn()
-    const t = trip({ destination: { stop_id: 4, stop_code: 'stop-e', name: 'Stop E' } })
-    render(<TripCard trip={t} onBook={vi.fn()} onChooseDropOff={choose} />)
+  // 2026-11-20 (user): the route stops moved from this card to the route's own page; the card links to it.
+  it('links to the route page instead of opening the stops in the card', () => {
+    const t = trip({ route_id: 12 })
+    render(<MemoryRouter><TripCard trip={t} onBook={vi.fn()} onChooseDropOff={vi.fn()} /></MemoryRouter>)
+
+    expect(screen.getByTestId('trip-view-route')).toHaveAttribute('href', '/routes/12')
+    expect(screen.queryByRole('button', { name: 'View route stops' })).not.toBeInTheDocument()
     expect(getTripTimeline).not.toHaveBeenCalled()
-
-    fireEvent.click(screen.getByRole('button', { name: 'View route stops' }))
-    expect(await screen.findAllByTestId('route-stop')).toHaveLength(3)
-    expect(getTripTimeline).toHaveBeenCalledWith(7, { boarding_stop_id: 3 })
-    expect(screen.getByText('You board here')).toBeInTheDocument()
-    expect(screen.getByText('Your drop-off')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Get off at Stop E' })).not.toBeInTheDocument()
-
-    fireEvent.click(screen.getByRole('button', { name: 'Get off at Stop X' }))
-    expect(choose).toHaveBeenCalledWith(t, 'stop-x')
   })
 })

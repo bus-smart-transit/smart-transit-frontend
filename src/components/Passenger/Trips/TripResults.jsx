@@ -6,7 +6,8 @@ import { formatDuration } from '../../../utils/tripTimeline'
 import { busLabelText } from '../../../utils/busLabel'
 import { FARE_UNAVAILABLE } from '../../../utils/serviceType'
 import RunInfoChips from '../../ui/RunInfoChips'
-import RouteStops from './RouteStops'
+import { Link } from 'react-router-dom'
+import { routeHref } from '../../../utils/routePages'
 import { isDeparted, seatsLeftText, tripProgressText } from '../../../utils/passengerTripProgress'
 import { groupTrips } from '../../../utils/tripGroups'
 
@@ -83,8 +84,14 @@ export function TripCard({ trip, fromName, toName, showDate = false, onBook, onC
           </Button>
         </div>
       </div>
-      {/* Batch 54 (user): every stop with its time, and another drop-off, on All available trips only. */}
-      {onChooseDropOff && <RouteStops trip={trip} onChooseDropOff={onChooseDropOff} />}
+      {/* 2026-11-20 (user): the route's stops moved to the route's own page (they were a panel in each card). */}
+      {onChooseDropOff && trip.route_id && (
+        <div className="mt-4 border-t border-slate-100 pt-3">
+          <Link to={routeHref(trip.route_id)} className="inline-flex min-h-9 items-center text-sm font-semibold text-navy-800 hover:text-navy-950" data-testid="trip-view-route">
+            View route and stops
+          </Link>
+        </div>
+      )}
     </Card>
   )
 }
