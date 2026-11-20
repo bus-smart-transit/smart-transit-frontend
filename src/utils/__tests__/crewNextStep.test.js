@@ -1,8 +1,31 @@
 import { describe, expect, it } from 'vitest';
-import { chauffeurNextStep, driverNextStep } from '../crewNextStep';
+import { chauffeurNextStep, driverNextStep, driverShowsEndShift } from '../crewNextStep';
 
 // Batch 61 (advisor, via the user, 2026-11-13): the crew Home's one big button is the next thing to do.
 const ready = { hasWork: true, isPaired: true, hasOpenShift: true };
+
+describe('driverShowsEndShift', () => {
+  // 2026-11-20 production test: on a shift block, a leg waiting to board showed End shift instead of Start boarding.
+  it('keeps Start boarding and Depart on a shift block leg that has not finished', () => {
+    const block = { hasOpenShift: true, isBlockShift: true };
+    for (const tripStatus of ['scheduled', 'delayed', 'boarding', 'departed', 'in-progress']) {
+      expect(driverShowsEndShift({ ...block, tripStatus })).toBe(false);
+    }
+    const step = driverNextStep({ ...ready, showEndShift: driverShowsEndShift({ ...block, tripStatus: 'delayed' }), tripStatus: 'delayed' });
+    expect(step).toMatchObject({ key: 'boarding', label: 'Start boarding' });
+  });
+
+  it('shows End shift once no leg of the block is waiting or running', () => {
+    for (const tripStatus of [undefined, null, '', 'completed', 'cancelled']) {
+      expect(driverShowsEndShift({ hasOpenShift: true, isBlockShift: true, tripStatus })).toBe(true);
+    }
+  });
+
+  it('never shows End shift for a single trip or without an open shift', () => {
+    expect(driverShowsEndShift({ hasOpenShift: true, isBlockShift: false, tripStatus: 'completed' })).toBe(false);
+    expect(driverShowsEndShift({ hasOpenShift: false, isBlockShift: true, tripStatus: 'completed' })).toBe(false);
+  });
+});
 
 describe('driverNextStep', () => {
   it('walks the day in order: accept, pair, start shift, boarding, depart, each stop, end trip', () => {

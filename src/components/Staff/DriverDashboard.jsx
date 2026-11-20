@@ -30,7 +30,7 @@ import CrewTodayCard from './Crew/CrewTodayCard';
 import TextSizeControl from './Crew/TextSizeControl';
 import useCrewTextSize from '../../api/hooks/Staff/useCrewTextSize';
 import useTextMessages from '../../api/hooks/useTextMessages';
-import { driverNextStep } from '../../utils/crewNextStep';
+import { driverNextStep, driverShowsEndShift } from '../../utils/crewNextStep';
 import { useDriverPairing, useDriverDashboardData } from '../../api/hooks/Staff/useDriverDashboard';
 import { getBusinessTodayLabel } from '../../utils/dates';
 import { isFinalStopAcknowledged, opensGate } from '../../utils/tripActionTiming';
@@ -223,7 +223,9 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   const finalStopDone = isFinalStopAcknowledged(stops);
   // Batch 29: the shift (and the pairing key) unlock only after the assignment is accepted.
   const needsAcceptance = Boolean(todayAssignedTrip) && !todayAssignedTrip.driver_accepted_at;
-  const showEndShift = hasOpenShift && shiftState?.isBlockShift === true && !tripIsLive;
+  // 2026-11-20: End shift only once no leg is waiting, boarding or running (before, a waiting leg showed End shift and
+  // hid Start boarding on every shift block).
+  const showEndShift = driverShowsEndShift({ hasOpenShift, isBlockShift: shiftState?.isBlockShift, tripStatus: trip?.status });
   // Batch 61 (advisor, 2026-11-13): the Home shows one big button, the next step (it replaces the header's shift button
   // and the four Quick Actions). The server still checks every action.
   const textSize = useCrewTextSize();

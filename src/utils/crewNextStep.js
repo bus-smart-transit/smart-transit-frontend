@@ -22,6 +22,18 @@ function common({ hasWork, forApproval, needsAcceptance, isPaired, partner }) {
   return null;
 }
 
+/**
+ * 2026-11-20 (production test: Start boarding never showed on a shift block's legs): End shift is the Driver's step only
+ * when a shift block's shift is open and no leg is waiting or running. A leg not yet left (scheduled, delayed) or
+ * boarding still needs Start boarding or Depart, so End shift must not take its place. The server allows End shift only
+ * once every leg is completed or cancelled (end_blocked_reason).
+ */
+export function driverShowsEndShift({ hasOpenShift, isBlockShift, tripStatus }) {
+  const status = norm(tripStatus);
+  const legStillToRun = NOT_LEFT.includes(status) || status === 'boarding' || RUNNING.includes(status);
+  return Boolean(hasOpenShift) && isBlockShift === true && !legStillToRun;
+}
+
 /** The Driver's next step. */
 export function driverNextStep({
   hasWork, forApproval = false, needsAcceptance = false, isPaired, hasOpenShift, showEndShift = false, endBlockedReason = '',
