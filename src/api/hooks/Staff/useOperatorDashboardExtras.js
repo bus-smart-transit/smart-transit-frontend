@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import OperatorService from '../../StaffService/OperatorService';
 import { getBusinessToday } from '../../../utils/dates';
+import { useLiveChannels, useLiveRefresh } from '../useLive';
 
 /**
  * Batch 31: data hooks for the reworked Operator Dashboard and Fleets pages. The page components only render.
@@ -32,6 +33,11 @@ export function useFleetLocations({ intervalMs = 20000 } = {}) {
     }, intervalMs);
     return () => { clearTimeout(first); clearInterval(timer); };
   }, [refresh, intervalMs]);
+
+  // 2026-11-20: buses move on the map as their positions arrive live (at most one reload every 4 seconds).
+  const live = useLiveChannels();
+  useLiveRefresh(live?.positions, 'bus.moved', () => { void refresh(); }, { minGapMs: 4000 });
+  useLiveRefresh(live?.trip_status, 'trip.status', () => { void refresh(); }, { minGapMs: 2000 });
 
   return { locations, loadedAt, refresh };
 }

@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { getTracking } from '../../../services/trackingService'
+import { useLiveChannels, useLiveRefresh } from '../useLive'
 
 // States after which nothing more will change; polling stops.
 const FINAL_STATES = new Set(['arrived', 'ended', 'cancelled', 'unavailable'])
@@ -12,14 +13,19 @@ const FINAL_STATES = new Set(['arrived', 'ended', 'cancelled', 'unavailable'])
  */
 export function useTicketTracking(token) {
   const [state, setState] = useState({ token: null, view: null, status: 'loading', error: '', refreshFailed: false })
+  // 2026-11-20: live updates call this to refresh now (set by the polling effect below).
+  const reloadNowRef = useRef(null)
 
   useEffect(() => {
     let cancelled = false
     let timer = null
+    let loading = false
+    let finished = false
 
     const load = async () => {
       let delay
       let final = false
+      loading = true
       try {
         const view = await getTracking(token)
         if (cancelled) return
@@ -50,6 +56,8 @@ export function useTicketTracking(token) {
           : { token, view: null, status: 'error', error: message, refreshFailed: false }))
         delay = 15000
       }
+      loading = false
+      finished = final
       if (!final && !cancelled) schedule(delay)
     }
 
@@ -60,9 +68,23 @@ export function useTicketTracking(token) {
       }, delay)
     }
 
+    // A live update refreshes at once and restarts the wait (never two loads at the same time, nothing after the end).
+    reloadNowRef.current = () => {
+      if (cancelled || loading || finished) return
+      clearTimeout(timer)
+      void load()
+    }
+
     void load()
-    return () => { cancelled = true; clearTimeout(timer) }
+    return () => { cancelled = true; clearTimeout(timer); reloadNowRef.current = null }
   }, [token])
+
+  // 2026-11-20 (live updates): this ticket's bus moving, or its trip changing status, refreshes the view at once.
+  const tripId = state.token === token ? state.view?.trip_id : null
+  const live = useLiveChannels()
+  const isThisTrip = (update) => tripId != null && Number(update?.trip_id) === Number(tripId)
+  useLiveRefresh(live?.positions, 'bus.moved', () => reloadNowRef.current?.(), { match: isThisTrip, minGapMs: 3000 })
+  useLiveRefresh(live?.trip_status, 'trip.status', () => reloadNowRef.current?.(), { match: isThisTrip })
 
   const current = state.token === token
   return {

@@ -7,6 +7,7 @@ import { openPrintWindow } from '../../../utils/qr';
 import { ticketExtraRows, ticketPrintHtml } from '../../../utils/ticketPrint';
 import { leaveAccountDeletionNotice } from '../../../utils/accountDeletionNotice';
 import { clock12 } from '../../../utils/clock';
+import { useLiveChannels, useLiveRefresh } from '../useLive';
 
 const PROTECTED_TABS = new Set(['tickets', 'rewards', 'transactions', 'profile']);
 const URL_TABS = new Set(['dashboard', 'map', 'tickets', 'transactions', 'rewards', 'profile']);
@@ -183,7 +184,7 @@ export default function usePassengerDashboard({ preloadMapView }) {
     setSelectedTicketQr(null);
   }, []);
 
-  const loadPrivateData = useCallback(async () => {
+  const loadPrivateData = useCallback(async ({ silent = false } = {}) => {
     if (privateLoadRequestRef.current) {
       return privateLoadRequestRef.current;
     }
@@ -199,7 +200,8 @@ export default function usePassengerDashboard({ preloadMapView }) {
 
     privateLoadRequestRef.current = (async () => {
       lastPrivateLoadStartedAtRef.current = Date.now();
-      setIsLoadingPrivate(true);
+      // 2026-11-20: a live refresh updates in place, without the loading state.
+      if (!silent) setIsLoadingPrivate(true);
       setPrivateError('');
 
       const getStatus = (err) => err?.cause?.response?.status ?? err?.response?.status ?? null;
@@ -530,6 +532,13 @@ export default function usePassengerDashboard({ preloadMapView }) {
 
   const points = Number(profile?.reward_points ?? user?.reward_points ?? 0).toFixed(2);
   const visibleTab = !isAuthenticated && PROTECTED_TABS.has(activeTab) ? 'dashboard' : activeTab;
+
+  // 2026-11-20 (live updates): the passenger's tickets change on screen at once: a new notification (trip cancelled,
+  // refunded, delayed, bus changed) or a ticket change (scanned on board, missed).
+  const liveChannels = useLiveChannels();
+  const reloadLive = () => { if (isAuthenticated) void loadPrivateData({ silent: true }); };
+  useLiveRefresh(liveChannels?.user, 'notification', reloadLive, { isPrivate: true, minGapMs: 2000 });
+  useLiveRefresh(liveChannels?.user, 'tickets', reloadLive, { isPrivate: true, minGapMs: 2000 });
 
   return {
     activeTab,

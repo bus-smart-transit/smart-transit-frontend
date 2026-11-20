@@ -5,7 +5,7 @@ import { initFcmAndGetToken, stopForegroundListener } from '../../../services/fc
 import { OPERATOR_ROLE, buildLocationSearch, defaultView, resolveOperatorLocation } from '../../../utils/operatorNav';
 import { isRangeSchedule, rangeKey, rangePayload } from '../../../utils/scheduleRange';
 import { planningMessage } from '../../../utils/legPlanning';
-import { useLiveChannels, useLiveEvent } from '../useLive';
+import { useLiveChannels, useLiveEvent, useLiveRefresh } from '../useLive';
 
 // Architecture audit follow-up (CONF-03): OperatorDashboard.jsx's main
 // orchestrator component and its NotificationBell sub-component both called
@@ -316,6 +316,10 @@ export function useFleetsTab({ onRefresh }) {
       clearInterval(timer);
     };
   }, [refreshFleetLocations]);
+
+  // 2026-11-20: the Fleets map follows the buses as their positions arrive live (at most one reload every 4 seconds).
+  const fleetLiveChannels = useLiveChannels();
+  useLiveRefresh(fleetLiveChannels?.positions, 'bus.moved', () => { void refreshFleetLocations(); }, { minGapMs: 4000 });
 
   useEffect(() => {
     if (!focusedTripId) return;

@@ -11,6 +11,7 @@ import { boardingPointView, buildOnsiteItem, capacityFromServer, isMidTripBoardi
 import { readDeepLink } from '../../../utils/notificationTarget';
 import useAssignmentCards from './useAssignmentCards';
 import { BOARDING_OPEN_STATUSES } from '../../../utils/actionReasons';
+import { useLiveChannels, useLiveRefresh } from '../useLive';
 
 // Architecture audit follow-up (CONF-03): ConductorDashboard.jsx previously
 // called ConductorService directly from ~22 sites spread across the
@@ -1219,6 +1220,15 @@ export function useConductorDashboardData({ onLogout, pairing }) {
       window.history.replaceState(null, '', window.location.pathname);
     }
   };
+
+  // 2026-11-20 (live updates): the trip's status (the Driver starts boarding, departs; the Operator cancels) and its
+  // tickets (a new online booking, a missed ticket) show at once instead of on the next check.
+  const liveChannels = useLiveChannels();
+  useLiveRefresh(liveChannels?.trip_status, 'trip.status', () => { void loadData({ silent: true }); }, {
+    match: (update) => Number(update?.trip_id) === Number(trip?.trip_id),
+    minGapMs: 1000,
+  });
+  useLiveRefresh(liveChannels?.user, 'tickets', () => { void loadPassengers(); void loadOccupancy(); }, { isPrivate: true, minGapMs: 2000 });
 
   return {
     activeTab, setActiveTab, pairingOpen, setPairingOpen,

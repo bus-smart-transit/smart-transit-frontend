@@ -9,6 +9,7 @@ import { MAP_CONFIG } from '../../../config/mapConfig';
 import { approxMeters, shouldSendPing } from '../../../utils/gpsPing';
 import { readDeepLink } from '../../../utils/notificationTarget';
 import useAssignmentCards from './useAssignmentCards';
+import { useLiveChannels, useLiveRefresh } from '../useLive';
 
 // Architecture audit follow-up (CONF-03): DriverDashboard.jsx previously
 // called DriverService directly from ~24 sites spread across the
@@ -901,6 +902,23 @@ export function useDriverDashboardData({ onLogout, pairing }) {
       window.history.replaceState(null, '', window.location.pathname);
     }
   };
+
+  // 2026-11-20 (live updates): a change to this trip made elsewhere (the Operator cancels it, moves it to another bus or
+  // starts boarding) shows at once instead of on the next reload.
+  const liveChannels = useLiveChannels();
+  const refreshTripLive = useCallback(async () => {
+    try {
+      const res = await DriverService.getCurrentTrip();
+      setTrip(res?.data ?? null);
+    } catch {
+      // keep the last trip; the next full load corrects it
+    }
+    void loadStops();
+  }, [loadStops]);
+  useLiveRefresh(liveChannels?.trip_status, 'trip.status', refreshTripLive, {
+    match: (update) => Number(update?.trip_id) === Number(trip?.trip_id),
+    minGapMs: 1000,
+  });
 
   return {
     activeTab, setActiveTab, pairingOpen, setPairingOpen,
