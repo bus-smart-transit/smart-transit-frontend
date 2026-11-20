@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
-import { FARE_UNAVAILABLE, isExpress, isServedOnService, serviceTypeLabel } from '../serviceType'
+import { FARE_UNAVAILABLE, isExpress, isServedOnService, servedStopsOnService, serviceTypeLabel } from '../serviceType'
 import { destinationsAhead, orderedStopsForLeg } from '../cashTicket'
 import { TripCard } from '../../components/Passenger/Trips/TripResults'
 import ServiceTypeChip from '../../components/ui/ServiceTypeChip'
@@ -67,3 +67,22 @@ describe('ServiceTypeChip', () => {
     expect(screen.getByTestId('service-type-chip')).toHaveAttribute('data-service-type', 'express')
   })
 })
+
+describe('servedStopsOnService', () => {
+  const route = (marked = []) => ['A', 'B', 'C', 'D', 'E'].map((name, i) => ({
+    stop_id: i + 1, name, stop_order: i + 1, stop_type: name === 'C' ? 'pass_through' : 'stop', served_by_express: marked.includes(name),
+  }));
+  const names = (list) => list.map((s) => s.name);
+
+  it('serves every stopping stop on a regular trip', () => {
+    expect(names(servedStopsOnService(route(), 'regular'))).toEqual(['A', 'B', 'D', 'E']);
+  });
+
+  it('runs express non-stop between the route ends when no stop is marked (2026-11-20)', () => {
+    expect(names(servedStopsOnService(route(), 'express'))).toEqual(['A', 'E']);
+  });
+
+  it('keeps the marked stops when the route marks any', () => {
+    expect(names(servedStopsOnService(route(['A', 'D']), 'express'))).toEqual(['A', 'D']);
+  });
+});

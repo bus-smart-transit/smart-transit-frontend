@@ -17,3 +17,19 @@ export function isServedOnService(routeStop, serviceType) {
   if (String(routeStop?.stop_type ?? 'stop') === 'pass_through') return false;
   return !isExpress(serviceType) || Boolean(routeStop?.served_by_express);
 }
+
+/**
+ * 2026-11-20 (user): the route stops a trip of this service may use, the same rule as the server (App\Support\ServiceType
+ * with ExpressStops). Regular: every stopping stop. Express: the stops the route marks "served by express"; a route that
+ * marks none runs express non-stop between its own first and last stopping stop.
+ */
+export function servedStopsOnService(routeStops, serviceType) {
+  const list = Array.isArray(routeStops) ? routeStops : [];
+  const stopping = list.filter((s) => String(s?.stop_type ?? 'stop') !== 'pass_through');
+  if (!isExpress(serviceType)) return stopping;
+  if (list.some((s) => Boolean(s?.served_by_express))) return stopping.filter((s) => Boolean(s?.served_by_express));
+  if (stopping.length === 0) return [];
+  const orders = stopping.map((s) => Number(s?.stop_order ?? 0));
+  const ends = [Math.min(...orders), Math.max(...orders)];
+  return stopping.filter((s) => ends.includes(Number(s?.stop_order ?? 0)));
+}

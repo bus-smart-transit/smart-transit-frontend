@@ -22,6 +22,7 @@ import CrewAlertCard from './CrewAlertCard';
 import StaffCalendar from './StaffCalendar';
 import DriverNavigationMap from './DriverNavigationMap';
 import DriverStopCard from './Crew/DriverStopCard';
+import { legFromTo } from '../../utils/legFromTo';
 import RouteConditions from './Crew/RouteConditions';
 import { groupRequestedStops } from '../../utils/requestedStops';
 import NotificationBellButton from './NotificationBellButton';
@@ -290,7 +291,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
           <div>
             <h1 className="font-display text-2xl font-bold text-slate-900">{pageTitle}</h1>
             <p className="text-xs text-slate-500">
-              {getBusinessTodayLabel()}{currentRoute?.origin && currentRoute?.destination ? ` — ${currentRoute.origin} → ${currentRoute.destination}` : ''}
+              {getBusinessTodayLabel()}{legFromTo(currentRoute, (trip ?? todayAssignedTrip)?.leg_direction) ? ` — ${legFromTo(currentRoute, (trip ?? todayAssignedTrip)?.leg_direction)}` : ''}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2 lg:justify-end">
@@ -390,7 +391,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
         {!loading && activeTab === 'dashboard' && !showNoCurrentTripState && (hasActiveTrip || hasTodayAssignedTrip) && (
           <CrewTodayCard
             route={currentRoute?.route_name}
-            fromTo={currentRoute?.origin && currentRoute?.destination ? `${currentRoute.origin} → ${currentRoute.destination}` : null}
+            fromTo={legFromTo(currentRoute, (trip ?? todayAssignedTrip)?.leg_direction)}
             rows={[
               ['Bus', currentFleet?.plate_number],
               ['Leaves', formatTripSchedule(trip || todayAssignedTrip) === '-' ? null : formatTripSchedule(trip || todayAssignedTrip)],
