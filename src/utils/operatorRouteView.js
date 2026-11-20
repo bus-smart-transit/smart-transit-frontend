@@ -153,3 +153,15 @@ export function assignmentsOnRoute(routeId, fleets = []) {
       active: String(link.status || 'active').toLowerCase() === 'active' && String(fleet.status || 'active').toLowerCase() === 'active',
     })));
 }
+
+/**
+ * 2026-11-20 (user): a new route is named from its origin and destination, "{origin} to {destination}". The server makes
+ * the name (App\Support\RouteName); this is the same text, shown as a preview in the Add route form. Empty until both
+ * places are typed.
+ */
+export function routeNameFrom(origin, destination) {
+  const tidy = (place) => String(place ?? '').replace(/\s+/g, ' ').trim();
+  const from = tidy(origin);
+  const to = tidy(destination);
+  return from && to ? `${from} to ${to}`.slice(0, 255) : '';
+}

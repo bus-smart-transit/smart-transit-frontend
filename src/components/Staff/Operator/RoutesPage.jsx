@@ -11,7 +11,7 @@ import { isPinned, roundCoord } from '../../../utils/stopPin';
 import { useCanManageCompany } from './companyAdmin';
 import { useRoutesTab } from '../../../api/hooks/Staff/useOperatorDashboard';
 import {
-  buildRouteRows, filterRouteRows, municipalityOptions, formatDuration, filterStops, pageOf,
+  buildRouteRows, filterRouteRows, municipalityOptions, formatDuration, filterStops, pageOf, routeNameFrom,
 } from '../../../utils/operatorRouteView';
 
 const STOPS_PAGE_SIZE = 10;
@@ -36,9 +36,12 @@ function AddRouteModal({ open, onClose, form, setForm, saving, message, onSubmit
     <Modal open={open} onClose={onClose} title="Add route" fullScreenOnMobile>
       <form onSubmit={onSubmit}>
         <div className="grid gap-4">
-          <label className="block text-xs font-medium text-slate-600">Route name<input value={form.route_name} onChange={set('route_name')} required className={`${INPUT} mt-1`} /></label>
           <label className="block text-xs font-medium text-slate-600">Origin<input value={form.origin} onChange={set('origin')} required className={`${INPUT} mt-1`} /></label>
           <label className="block text-xs font-medium text-slate-600">Destination<input value={form.destination} onChange={set('destination')} required className={`${INPUT} mt-1`} /></label>
+          {/* 2026-11-20 (user): no Route name box; the name is made from the origin and destination. */}
+          <p className="text-sm text-slate-600" data-testid="route-name-preview">
+            Route name: <span className="font-semibold text-slate-900">{routeNameFrom(form.origin, form.destination) || 'made from the origin and destination'}</span>
+          </p>
         </div>
         <Message text={message} />
         <div className="mt-6 flex justify-end gap-2">

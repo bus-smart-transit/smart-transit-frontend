@@ -98,16 +98,18 @@ describe('RoutesPage list', () => {
     expect(within(header).getAllByRole('button')).toHaveLength(1);
   });
 
-  it('adds a route from a modal with the same fields', async () => {
+  it('adds a route from a modal: origin and destination, the name made from them', async () => {
     const onRefresh = vi.fn();
     renderPage({ onRefresh });
     fireEvent.click(screen.getByRole('button', { name: /Add route/ }));
     const dialog = await screen.findByRole('dialog');
-    fireEvent.change(within(dialog).getByLabelText('Route name'), { target: { value: 'Davao - Digos' } });
+    // 2026-11-20 (user): no Route name box; a preview shows the name the server will give it.
+    expect(within(dialog).queryByLabelText('Route name')).not.toBeInTheDocument();
     fireEvent.change(within(dialog).getByLabelText('Origin'), { target: { value: 'Davao' } });
     fireEvent.change(within(dialog).getByLabelText('Destination'), { target: { value: 'Digos' } });
+    expect(within(dialog).getByTestId('route-name-preview')).toHaveTextContent('Route name: Davao to Digos');
     fireEvent.click(within(dialog).getByRole('button', { name: 'Create route' }));
-    await waitFor(() => expect(mocks.createOperatorRoute).toHaveBeenCalledWith({ route_name: 'Davao - Digos', origin: 'Davao', destination: 'Digos' }));
+    await waitFor(() => expect(mocks.createOperatorRoute).toHaveBeenCalledWith({ origin: 'Davao', destination: 'Digos' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     expect(screen.getByText('Route created successfully.')).toBeInTheDocument();
     expect(onRefresh).toHaveBeenCalled();
@@ -118,7 +120,6 @@ describe('RoutesPage list', () => {
     renderPage();
     fireEvent.click(screen.getByRole('button', { name: /Add route/ }));
     const dialog = await screen.findByRole('dialog');
-    fireEvent.change(within(dialog).getByLabelText('Route name'), { target: { value: 'X' } });
     fireEvent.change(within(dialog).getByLabelText('Origin'), { target: { value: 'A' } });
     fireEvent.change(within(dialog).getByLabelText('Destination'), { target: { value: 'B' } });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Create route' }));

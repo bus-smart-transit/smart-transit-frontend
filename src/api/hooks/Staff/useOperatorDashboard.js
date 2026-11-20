@@ -463,7 +463,7 @@ export function useRoutesTab({ onRefresh }) {
   const [editingStopId, setEditingStopId] = useState(null);
   // 2026-11-06 (Batch 47 part A): the stop's name, a typed area label, and its map pin.
   const [stopForm, setStopForm] = useState({ stop_name: '', latitude: '', longitude: '' });
-  const [routeForm, setRouteForm] = useState({ route_name: '', origin: '', destination: '' });
+  const [routeForm, setRouteForm] = useState({ origin: '', destination: '' }); // 2026-11-20: the server names the route
   const [routeStopForm, setRouteStopForm] = useState({ route_id: '', stop_id: '', stop_order: '' });
   const [assignedStopIds, setAssignedStopIds] = useState([]);
   const [suggestedStopOrder, setSuggestedStopOrder] = useState('');
@@ -577,7 +577,7 @@ export function useRoutesTab({ onRefresh }) {
     setManageMsg('');
     try {
       await OperatorService.createOperatorRoute(routeForm);
-      setRouteForm({ route_name: '', origin: '', destination: '' });
+      setRouteForm({ origin: '', destination: '' });
       setManageMsg('Route created successfully.');
       onRefresh();
       return true;

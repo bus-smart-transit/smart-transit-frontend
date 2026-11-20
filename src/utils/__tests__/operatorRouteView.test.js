@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  buildRouteRows, filterRouteRows, municipalityOptions, formatDuration, routeActivity, upcomingTripsFor, assignmentsOnRoute, sortedRouteStops,
+  buildRouteRows, filterRouteRows, municipalityOptions, formatDuration, routeActivity, upcomingTripsFor, assignmentsOnRoute, sortedRouteStops, routeNameFrom,
 } from '../operatorRouteView';
 
 const TODAY = '2026-10-06';
@@ -142,5 +142,16 @@ describe('stops directory helpers', () => {
     expect(formatElapsed(38)).toBe('38 s');
     expect(formatElapsed(60)).toBe('1 min');
     expect(formatElapsed(125)).toBe('2 min 5 s');
+  });
+});
+
+describe('routeNameFrom', () => {
+  it('names a route "{origin} to {destination}", like the server', () => {
+    expect(routeNameFrom('  Ecoland   Terminal ', 'Tagum Terminal')).toBe('Ecoland Terminal to Tagum Terminal');
+  });
+
+  it('is empty until both places are typed', () => {
+    expect(routeNameFrom('Ecoland Terminal', '')).toBe('');
+    expect(routeNameFrom(undefined, 'Tagum')).toBe('');
   });
 });
