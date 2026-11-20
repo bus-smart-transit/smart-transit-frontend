@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Bus, Clock3, LocateFixed, MapPin, Navigation } from 'lucide-react';
+import { Bus, Clock3, LocateFixed, MapPin, Maximize2, Minimize2, Navigation } from 'lucide-react';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import RouteMap from '../../Map/RouteMap';
 import { fetchFleetLocationsForMap } from '../../../api/hooks/Passenger/useMapView';
@@ -27,6 +27,7 @@ import { useRegion } from '../../../api/hooks/useRegion';
 import { busArrival, busesNear, busTrip, formatKm, passengersText } from '../../../utils/nearbyBuses';
 import TrackMyBusModal from '../Track/TrackMyBusModal';
 import StopArrivalsCard from './StopArrivalsCard';
+import { markerOffsets } from '../../../utils/markerOffsets';
 import { setGeoJson } from '../../Map/routeLayers';
 import drawWhenReady from '../../Map/drawWhenReady';
 // The stops of a bus's route, ordered for its leg direction, are what name its place (routeKeyOf).
@@ -87,6 +88,8 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
   const radiusKm = region?.nearbyRadiusKm ?? null;
   const [trackOpen, setTrackOpen] = useState(false);
   const [showAllBuses, setShowAllBuses] = useState(false);
+  // 2026-11-20 (user): the map can fill the screen; Esc or "Close full map" brings it back.
+  const [mapExpanded, setMapExpanded] = useState(false);
 
   // Batch 50 (user, 2026-11-08): no bus is chosen at first; every bus shows on the map. Choosing one focuses on it
   // alone (its route, ETA, location and next stop) until "Show all buses".
@@ -117,6 +120,14 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
 
   // The shared RouteMap owns the map instance; this component only adds its
   // own overlays (live bus markers, the passenger's pinned location) on top.
+  useEffect(() => {
+    const timer = setTimeout(() => mapRef.current?.resize?.(), 60);
+    if (!mapExpanded) return () => clearTimeout(timer);
+    const onKey = (event) => { if (event.key === 'Escape') setMapExpanded(false); };
+    window.addEventListener('keydown', onKey);
+    return () => { clearTimeout(timer); window.removeEventListener('keydown', onKey); };
+  }, [mapExpanded]);
+
   const handleMapReady = useCallback((map, maplibregl) => {
     mapRef.current = map;
     mapLibRef.current = maplibregl;
@@ -164,14 +175,18 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
       }
 
       const activeIds = new Set(rows.map((row) => Number(row.fleet_id)));
+      // Server-projected position keeps the bus on the route line; a bus that is genuinely off route is shown where it
+      // really is. 2026-11-20 (user): buses at the same spot (two waiting at one terminal) are set side by side.
+      const positionOf = (row) => {
+        const projected = row?.route_position?.on_route ? row.route_position : null;
+        return { lat: Number(projected ? projected.snapped_latitude : row.latitude), lng: Number(projected ? projected.snapped_longitude : row.longitude) };
+      };
+      const offsets = markerOffsets(rows.map((row) => ({ id: Number(row.fleet_id), ...positionOf(row) })));
 
       rows.forEach((row) => {
         const fleetId = Number(row.fleet_id);
-        // Server-projected position keeps the bus on the route line; a bus that
-        // is genuinely off route is shown where it really is.
-        const projected = row?.route_position?.on_route ? row.route_position : null;
-        const lat = Number(projected ? projected.snapped_latitude : row.latitude);
-        const lng = Number(projected ? projected.snapped_longitude : row.longitude);
+        const { lat, lng } = positionOf(row);
+        const offset = offsets.get(fleetId) ?? [0, 0];
         // Batch 49 item 4: a bus moved by the Super Admin's GPS simulator says so.
         const title = `${busLabelText(row?.bus_label)}${row?.is_simulated ? ' (Simulated)' : ''}${row?.waiting ? ` (${busStatusText(row)})` : ''}`;
 
@@ -193,7 +208,7 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
             flyToFleet(row);
           });
 
-          const marker = new maplibregl.Marker({ element: el })
+          const marker = new maplibregl.Marker({ element: el, offset })
             .setLngLat([lng, lat])
             .setPopup(
               new maplibregl.Popup({ offset: 18 }).setDOMContent(
@@ -205,6 +220,7 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
           markersRef.current.set(fleetId, marker);
         } else {
           markersRef.current.get(fleetId)?.setLngLat([lng, lat]);
+          markersRef.current.get(fleetId)?.setOffset(offset);
           busIconsRef.current.get(fleetId)?.setColor(busColorFor(row));
           busIconsRef.current.get(fleetId)?.setHeading(headingOf(row));
         }
@@ -550,7 +566,20 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
               </button>
             </div>
 
-            <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white">
+            <div
+              data-testid="track-map-frame"
+              className={mapExpanded ? 'fixed inset-0 z-40 overflow-hidden bg-white' : 'relative overflow-hidden rounded-2xl border border-slate-200 bg-white'}
+            >
+              <button
+                type="button"
+                onClick={() => setMapExpanded((value) => !value)}
+                aria-pressed={mapExpanded}
+                data-testid="expand-map"
+                className="absolute left-3 top-3 z-20 inline-flex min-h-9 items-center gap-1.5 rounded-full border border-slate-200 bg-white/95 px-3 text-xs font-semibold text-navy-900 shadow-sm hover:bg-white"
+              >
+                {mapExpanded ? <Minimize2 className="h-3.5 w-3.5" aria-hidden="true" /> : <Maximize2 className="h-3.5 w-3.5" aria-hidden="true" />}
+                {mapExpanded ? 'Close full map' : 'Expand map'}
+              </button>
               <StopArrivalsCard
                 key={selectedStop?.code || 'none'}
                 stop={selectedStop}
@@ -566,7 +595,7 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
                 onMapReady={handleMapReady}
                 onRouteData={handleRouteData}
                 servedStopIds={selectedServedStopIds}
-                className="relative h-90 w-full"
+                className={mapExpanded ? 'relative h-full w-full' : 'relative h-90 w-full'}
               />
             </div>
 

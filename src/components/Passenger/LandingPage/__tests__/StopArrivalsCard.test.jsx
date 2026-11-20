@@ -35,13 +35,20 @@ describe('StopArrivalsCard (Batch 77)', () => {
     expect(screen.getByText('Last updated just now')).toBeInTheDocument();
   });
 
-  it('asks for every arrival, and opens the trips from the stop', () => {
-    useStopArrivals.mockReturnValue({ loading: false, data: answer, error: '' });
+  // 2026-11-20 (user: two buses from the same terminal, only one showed): every arrival, grouped by destination, and
+  // the buses due later today apart.
+  it('lists every arrival grouped by destination, then later today, and opens the trips from the stop', () => {
+    const later = [{ trip_id: 9, bus_company: 'Sample Lines', body_no: '3001', destination: 'Sample Terminal', eta_minutes: 300, scheduled_time: '18:00', eta_time: '18:00', late_by_minutes: 0, live: false, delayed: false }];
+    useStopArrivals.mockReturnValue({ loading: false, data: { ...answer, later, later_total: 1 }, error: '' });
     const onViewTrips = vi.fn();
     render(<StopArrivalsCard stop={{ code: 'sample-stop', name: 'Sample Stop' }} onClose={() => {}} onViewTrips={onViewTrips} />);
 
-    fireEvent.click(screen.getByTestId('view-all-arrivals'));
-    expect(useStopArrivals).toHaveBeenLastCalledWith('sample-stop', true);
+    expect(useStopArrivals).toHaveBeenLastCalledWith('sample-stop');
+    expect(screen.getByTestId('arrivals-list').querySelectorAll('[data-testid="arrival-group"]')).toHaveLength(2);
+    expect(screen.getByText('To Far Town')).toBeInTheDocument();
+    expect(screen.getByTestId('arrivals-later')).toHaveTextContent('Later today (1)');
+    expect(screen.getByTestId('arrivals-later')).toHaveTextContent('3001');
+    expect(screen.queryByTestId('view-all-arrivals')).not.toBeInTheDocument();
     fireEvent.click(screen.getByTestId('stop-pin-trips'));
     expect(onViewTrips).toHaveBeenCalledWith('sample-stop');
   });

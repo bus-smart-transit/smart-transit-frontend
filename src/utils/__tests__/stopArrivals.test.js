@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { busLine, busParts, etaBand, etaText, expectedAndEta, updatedText } from '../stopArrivals';
+import { busLine, busParts, etaBand, etaText, expectedAndEta, updatedText, groupByDestination } from '../stopArrivals';
 
 // SAMPLE arrivals, shaped like the server's StopArrivalsService.
 describe('stopArrivals (Batch 77)', () => {
@@ -36,5 +36,19 @@ describe('stopArrivals (Batch 77)', () => {
     expect(updatedText(at, Date.parse(at) + 20000)).toBe('Last updated just now');
     expect(updatedText(at, Date.parse(at) + 125000)).toBe('Last updated 2 min ago');
     expect(updatedText(null)).toBe('');
+  });
+});
+
+describe('groupByDestination', () => {
+  it('groups the buses by where they go, soonest group first, soonest bus first', () => {
+    const groups = groupByDestination([
+      { trip_id: 1, destination: 'Mati Bus Terminal' },
+      { trip_id: 2, destination: 'Nabunturan Bus Terminal' },
+      { trip_id: 3, destination: 'Mati Bus Terminal' },
+      { trip_id: 4, destination: null },
+    ]);
+    expect(groups.map((g) => [g.destination, g.arrivals.map((a) => a.trip_id)])).toEqual([
+      ['Mati Bus Terminal', [1, 3]], ['Nabunturan Bus Terminal', [2]], ['Not provided', [4]],
+    ]);
   });
 });

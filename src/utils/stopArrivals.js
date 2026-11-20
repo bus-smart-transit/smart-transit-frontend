@@ -55,3 +55,17 @@ export function updatedText(updatedAt, now = Date.now()) {
   const minutes = Math.floor(Math.max(0, now - at) / 60000);
   return minutes < 1 ? 'Last updated just now' : `Last updated ${minutes} min ago`;
 }
+
+/**
+ * 2026-11-20 (user: two buses from the same terminal, one hid the other): the arrivals grouped by where the buses go,
+ * soonest group first and soonest bus first in each ("To {destination}" for each).
+ */
+export function groupByDestination(arrivals) {
+  const groups = new Map();
+  for (const arrival of Array.isArray(arrivals) ? arrivals : []) {
+    const destination = arrival?.destination || 'Not provided';
+    if (!groups.has(destination)) groups.set(destination, []);
+    groups.get(destination).push(arrival);
+  }
+  return [...groups.entries()].map(([destination, list]) => ({ destination, arrivals: list }));
+}
