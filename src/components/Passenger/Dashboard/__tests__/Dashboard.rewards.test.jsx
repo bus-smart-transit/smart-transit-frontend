@@ -70,10 +70,10 @@ describe('Passenger dashboard Rewards tab', () => {
     expect(screen.getByText(/Worth .*120\.00 off an online one-way booking/)).toBeInTheDocument();
   });
 
-  test('explains earning at 1 point per PHP 20 paid and using points at checkout', () => {
+  test('explains earning at 0.1 point per PHP 20 paid and using points at checkout', () => {
     renderTab();
 
-    expect(screen.getByText(/1 SmartPoint for every ₱20 you pay/)).toBeInTheDocument();
+    expect(screen.getByText(/0.1 SmartPoint for every ₱20 you pay/)).toBeInTheDocument();
     expect(screen.getByText(/1 SmartPoint = ₱1 off/)).toBeInTheDocument();
     expect(screen.getByText(/Use reward points/)).toBeInTheDocument();
     expect(screen.getByText(/points you used are given back/)).toBeInTheDocument();

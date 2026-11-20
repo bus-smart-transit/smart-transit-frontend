@@ -640,7 +640,7 @@ export default function Dashboard() {
           <Card className="!bg-navy-900 p-6 text-white sm:p-8">
             <p className="text-sm text-navy-200">Your Rewards Points</p>
             <p className="mt-1 font-display text-4xl font-bold">{Number(numericPoints).toFixed(0)} pts</p>
-            <p className="mt-1 text-sm text-teal-300">Worth {formatPeso(numericPoints * REWARDS.pesoValueOfPoint)} off an online one-way booking.</p>
+            <p className="mt-1 text-sm text-teal-300">Worth {formatPeso(Math.floor(numericPoints) * REWARDS.pesoValueOfPoint)} off an online one-way booking (whole points).</p>
           </Card>
 
           <Card className="p-6">
@@ -651,7 +651,7 @@ export default function Dashboard() {
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
               <div className="rounded-xl border border-slate-200 p-4">
                 <p className="text-sm font-semibold text-navy-950">1. Earn</p>
-                <p className="mt-1 text-xs leading-relaxed text-slate-500">You earn 1 SmartPoint for every ₱{REWARDS.pesosPerPointEarned} you pay, added automatically once the payment succeeds.</p>
+                <p className="mt-1 text-xs leading-relaxed text-slate-500">You earn {REWARDS.pointsEarnedPerStep} SmartPoint for every ₱{REWARDS.pesosPerPointEarned} you pay, added automatically once the payment succeeds.</p>
               </div>
               <div className="rounded-xl border border-slate-200 p-4">
                 <p className="text-sm font-semibold text-navy-950">2. Keep</p>
