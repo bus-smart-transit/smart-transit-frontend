@@ -8,6 +8,7 @@ import Modal from '../../ui/Modal';
 import RouteMap from '../../Map/RouteMap';
 import RedrawProgress from './RedrawProgress';
 import RouteFareTable from './RouteFareTable';
+import EditRouteModal from './EditRouteModal';
 import OperatorService from '../../../api/StaffService/OperatorService';
 import { routeActivity, upcomingTripsFor, assignmentsOnRoute, sortedRouteStops, formatDuration } from '../../../utils/operatorRouteView';
 import { departureLabel } from '../../../utils/operatorDashboardView';
@@ -246,6 +247,9 @@ export default function RouteDetailPage({
 }) {
   const [tab, setTab] = useState('overview');
   const [assignOpen, setAssignOpen] = useState(false);
+  // 2026-11-20 (user): the Company Admin edits the route's name and its stop order.
+  const [editOpen, setEditOpen] = useState(false);
+  const canManage = useCanManageCompany();
   const [redrawConfirmOpen, setRedrawConfirmOpen] = useState(false);
   const [redrawSaving, setRedrawSaving] = useState(false);
   // Opened while a redraw (started here or by someone else) is still running: keep watching it.
@@ -305,6 +309,17 @@ export default function RouteDetailPage({
     }
   };
 
+  const saveRoute = async ({ details, order }) => {
+    if (Object.keys(details).length > 0) await OperatorService.updateOperatorRoute(route.route_id, details);
+    if (order) {
+      await OperatorService.reorderOperatorRouteStops(route.route_id, order);
+      setGeometryStatus({ route_id: route.route_id, geometry_regeneration_pending: true });
+      setRedrawPending(true); // the server draws the route line again for the new order; watch it like a redraw
+    }
+    setEditOpen(false);
+    await onRefresh();
+  };
+
   const openAssign = () => {
     const nextOrder = String(Math.max(0, ...sortedRouteStops(route).map((item) => Number(item.stop_order) || 0)) + 1);
     routesTab.clearManageMsg();
@@ -317,7 +332,12 @@ export default function RouteDetailPage({
       <OpPageHeader
         title={route.route_name}
         subtitle={`${route.origin || '-'} to ${route.destination || '-'}`}
-        action={<button type="button" onClick={onBack} className={SECONDARY}><ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" /> All routes</button>}
+        action={(
+          <span className="flex flex-wrap gap-2">
+            {canManage && <button type="button" onClick={() => setEditOpen(true)} className={SECONDARY} data-testid="edit-route">Edit route</button>}
+            <button type="button" onClick={onBack} className={SECONDARY}><ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" /> All routes</button>
+          </span>
+        )}
       />
 
       {routesTab.manageMsg && !assignOpen && (
@@ -336,6 +356,8 @@ export default function RouteDetailPage({
         )}
         {tab === 'travel' && <TravelTimeTab route={route} />}
       </div>
+
+      {editOpen && <EditRouteModal open={editOpen} route={route} onClose={() => setEditOpen(false)} onSave={saveRoute} />}
 
       <AssignStopModal
         open={assignOpen}

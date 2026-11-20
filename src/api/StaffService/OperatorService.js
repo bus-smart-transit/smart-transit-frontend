@@ -75,6 +75,16 @@ class OperatorService extends StaffBaseService {
     return await this.request(`/operator/routes/${routeId}`, 'DELETE');
   }
 
+  // 2026-11-20 (user): the Company Admin renames a route or changes its origin and destination.
+  async updateOperatorRoute(routeId, details) {
+    return await this.request(`/operator/routes/${routeId}`, 'PATCH', details);
+  }
+
+  // 2026-11-20 (user): the route's stops in a new order (every route stop id once).
+  async reorderOperatorRouteStops(routeId, routeStopIds) {
+    return await this.request(`/operator/routes/${routeId}/stops/order`, 'PUT', { route_stop_ids: routeStopIds });
+  }
+
   async addOperatorStopToRoute(routeId, stopData) {
     return await this.request(`/operator/routes/${routeId}/stops`, 'POST', stopData);
   }

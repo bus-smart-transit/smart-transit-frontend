@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  buildRouteRows, filterRouteRows, municipalityOptions, formatDuration, routeActivity, upcomingTripsFor, assignmentsOnRoute, sortedRouteStops, routeNameFrom,
+  buildRouteRows, filterRouteRows, municipalityOptions, formatDuration, routeActivity, upcomingTripsFor, assignmentsOnRoute, sortedRouteStops, routeNameFrom, moveItem,
 } from '../operatorRouteView';
 
 const TODAY = '2026-10-06';
@@ -153,5 +153,20 @@ describe('routeNameFrom', () => {
   it('is empty until both places are typed', () => {
     expect(routeNameFrom('Ecoland Terminal', '')).toBe('');
     expect(routeNameFrom(undefined, 'Tagum')).toBe('');
+  });
+});
+
+describe('moveItem', () => {
+  it('moves an item up or down by one place and leaves the input alone', () => {
+    const list = ['a', 'b', 'c'];
+    expect(moveItem(list, 2, -1)).toEqual(['a', 'c', 'b']);
+    expect(moveItem(list, 0, 1)).toEqual(['b', 'a', 'c']);
+    expect(list).toEqual(['a', 'b', 'c']);
+  });
+
+  it('keeps the order when the move would leave the list', () => {
+    expect(moveItem(['a', 'b'], 0, -1)).toEqual(['a', 'b']);
+    expect(moveItem(['a', 'b'], 1, 1)).toEqual(['a', 'b']);
+    expect(moveItem(null, 0, 1)).toEqual([]);
   });
 });

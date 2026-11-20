@@ -165,3 +165,13 @@ export function routeNameFrom(origin, destination) {
   const to = tidy(destination);
   return from && to ? `${from} to ${to}`.slice(0, 255) : '';
 }
+
+/** 2026-11-20 (user): a copy of the list with the item at `index` moved by `delta` places (Edit route's Move up / down). */
+export function moveItem(list, index, delta) {
+  const items = Array.isArray(list) ? [...list] : [];
+  const target = index + delta;
+  if (index < 0 || index >= items.length || target < 0 || target >= items.length) return items;
+  const [item] = items.splice(index, 1);
+  items.splice(target, 0, item);
+  return items;
+}
