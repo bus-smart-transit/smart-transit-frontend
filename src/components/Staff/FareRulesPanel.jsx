@@ -289,7 +289,8 @@ export default function FareRulesPanel({ service, fleets = [], routes = [], canC
             </select>
           )}
           <input aria-label="Base fare" type="number" min="0" step="0.01" value={form.base_fare} onChange={set('base_fare')} required placeholder="Base fare" className={t.field} />
-          <input aria-label="Base distance in km" type="number" min="0" step="0.1" value={form.base_distance_km} onChange={set('base_distance_km')} placeholder="Base distance (km), optional" className={t.field} />
+          {/* 2026-11-20: a general fare must say how many km the base fare covers (0 if the fare counts at once). */}
+          <input aria-label="Base distance in km" type="number" min="0" step="0.1" value={form.base_distance_km} onChange={set('base_distance_km')} required={form.scope === 'general'} placeholder={form.scope === 'general' ? 'Base distance (km) the base fare covers' : 'Base distance (km), optional'} className={t.field} />
           <input aria-label="Fare per km" type="number" min="0" step="0.01" value={form.fare_per_km} onChange={set('fare_per_km')} required placeholder="Fare / km" className={t.field} />
           <select aria-label="Rounding" value={form.rounding_mode} onChange={set('rounding_mode')} className={t.field}>
             <option value="">Rounding: server default</option>
