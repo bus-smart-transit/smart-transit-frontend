@@ -39,7 +39,8 @@ const money = (value) => (value === null || value === undefined || value === '' 
 /**
  * The fare screen for Admin and Operator: the rules in force with filters (class, service type, seat type, scope,
  * route, status) and a form that writes one rule. A general rule (a class and service type, for every bus of that
- * class) is an Admin's; an Operator writes overrides for their own fleets and sees the general rules read only.
+ * class in the company) is written by the Company Admin (2026-11-20; `canCreateGeneral`), as are a bus's own rules;
+ * other Operators see them read only.
  * No fare value lives here: the list and every option come from the server, which re-validates what is saved.
  * `service` supplies getFareRules(filters) and createFareRule(payload, stepUpToken).
  */
@@ -184,8 +185,8 @@ export default function FareRulesPanel({ service, fleets = [], routes = [], canC
         <div className="min-w-0">
         <h3 className={`text-sm font-semibold uppercase tracking-[0.14em] ${t.title}`}>Fare Rules</h3>
         <p className={`mt-1 text-xs ${t.muted}`}>
-          A fare is found for the trip&apos;s bus: the fleet&apos;s own rule first, then the general rule for its class and service type. With no rule the fare is unavailable and nothing is sold.
-          {!canCreateGeneral && ' General rules are set by the Admin; you can add rules for your own fleets.'}
+          A fare is found for the trip&apos;s bus: the bus&apos;s own rule first, then your company&apos;s general rule for its class and service type. One general rule prices seated and standing unless you add a standing rule. With no rule the fare is unavailable and nothing is sold.
+          {!canCreateGeneral && !readOnly && ' General rules are set by your company admin; you can add rules for your own buses.'}
         </p>
         </div>
         {!readOnly && (

@@ -404,7 +404,7 @@ export default function FleetsPage({ fleets, routes, trips, onRefresh, companyNa
 
       {!showFleets && (
         <OpCard>
-          <FareRulesPanel service={OperatorService} fleets={fleets} routes={routes} canCreateGeneral={false} tone="light" readOnly={!canManage} />
+          <FareRulesPanel service={OperatorService} fleets={fleets} routes={routes} canCreateGeneral={canManage} tone="light" readOnly={!canManage} />
         </OpCard>
       )}
 
