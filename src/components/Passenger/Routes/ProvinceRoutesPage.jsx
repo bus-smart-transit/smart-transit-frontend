@@ -34,7 +34,7 @@ export default function ProvinceRoutesPage() {
           {(!regionLoaded || (province && loading)) && <div className="mt-6"><SkeletonList rows={3} /></div>}
           {error && <p role="alert" className="mt-6 rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">{error}</p>}
           {province && !loading && !error && routes.length === 0 && (
-            <p className="mt-6 rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600" data-testid="province-no-routes">No bus runs through {province} yet.</p>
+            <p className="mt-6 rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600" data-testid="province-no-routes">No route goes through {province} yet.</p>
           )}
 
           {routes.length > 0 && (

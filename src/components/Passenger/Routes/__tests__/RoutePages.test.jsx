@@ -20,14 +20,14 @@ const at = (path, element, pattern) => render(
 describe('ProvinceRoutesPage', () => {
   it('lists the province routes, each opening its route page', () => {
     useProvinceRoutes.mockReturnValue({ loading: false, error: '', data: { province: 'Sample Oriental', routes: [
-      { route_id: 8, route_name: 'Sample City to East Town', origin: 'Sample City Terminal', destination: 'East Town Terminal', stop_count: 9, towns_in_province: ['East Town'], bus_companies: ['Sample Lines'] },
+      { route_id: 8, route_name: 'Sample City to East Town', origin: 'Sample City Terminal', destination: 'East Town Terminal', company_name: 'Sample Lines' },
     ] } });
     at('/provinces/sample-oriental', <ProvinceRoutesPage />, '/provinces/:slug');
 
     expect(useProvinceRoutes).toHaveBeenLastCalledWith('Sample Oriental');
     expect(screen.getByRole('heading', { name: 'Sample Oriental' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Sample City to East Town/ })).toHaveAttribute('href', '/routes/8');
-    expect(screen.getByText('Stops in East Town')).toBeInTheDocument();
+    expect(screen.getByTestId('route-card-company')).toHaveTextContent('Sample Lines');
   });
 
   it('says plainly when the place is not served', () => {
@@ -42,7 +42,7 @@ describe('RoutePage', () => {
   it('shows the route, its stops with Trips from here, and today\'s trips with Book', () => {
     useRoutePage.mockReturnValue({
       loading: false, error: '',
-      route: { route_id: 8, route_name: 'Sample City to East Town', origin: 'Sample City Terminal', destination: 'East Town Terminal', provinces: ['Sample Oriental'], bus_companies: [] },
+      route: { route_id: 8, route_name: 'Sample City to East Town', origin: 'Sample City Terminal', destination: 'East Town Terminal', provinces: ['Sample Oriental'], company_name: null },
       stops: [
         { stop_id: 1, stop_code: 'city-terminal', stop_name: 'City Terminal', municipality: 'Sample City', stop_order: 1, stop_type: 'terminal' },
         { stop_id: 2, stop_code: 'east-terminal', stop_name: 'East Terminal', municipality: 'East Town', stop_order: 2, stop_type: 'terminal' },
@@ -70,23 +70,23 @@ describe('RoutePage', () => {
 
 // 2026-11-21 (user): "View all routes" on the homepage.
 describe('AllRoutesPage', () => {
-  it('lists every route under each province it runs through, each opening its route page', () => {
-    const route = { route_id: 8, route_name: 'Sample City to East Town', origin: 'Sample City Terminal', destination: 'East Town Terminal', stop_count: 9, bus_companies: ['Sample Lines'] };
-    useAllRoutes.mockReturnValue({ loading: false, error: '', data: { provinces: [
-      { province: 'Sample Oriental', routes: [{ ...route, towns_in_province: ['East Town'] }] },
-      { province: 'Sample City', routes: [{ ...route, towns_in_province: ['Sample City'] }] },
+  // 2026-11-21 (user): every route once, with only its name and the company that runs it.
+  it('lists every route once with its company, each opening its route page', () => {
+    useAllRoutes.mockReturnValue({ loading: false, error: '', data: { routes: [
+      { route_id: 8, route_name: 'Sample City to East Town', company_name: 'Sample Lines' },
+      { route_id: 9, route_name: 'Sample City to North Town', company_name: null },
     ] } });
     at('/routes', <AllRoutesPage />, '/routes');
 
-    expect(screen.getAllByTestId('all-routes-province')).toHaveLength(2);
-    expect(screen.getByRole('heading', { name: 'Sample Oriental' })).toBeInTheDocument();
-    expect(screen.getAllByRole('link', { name: /Sample City to East Town/ })[0]).toHaveAttribute('href', '/routes/8');
-    expect(screen.getByRole('link', { name: '1 route in Sample Oriental' })).toHaveAttribute('href', '/provinces/sample-oriental');
+    const links = screen.getAllByRole('link', { name: /Sample City to/ });
+    expect(links).toHaveLength(2);
+    expect(links[0]).toHaveAttribute('href', '/routes/8');
+    expect(screen.getAllByTestId('route-card-company').map((el) => el.textContent)).toEqual(['Sample Lines', 'Not provided']);
   });
 
-  it('says plainly when no bus runs a route yet', () => {
-    useAllRoutes.mockReturnValue({ loading: false, error: '', data: { provinces: [] } });
+  it('says plainly when there is no route yet', () => {
+    useAllRoutes.mockReturnValue({ loading: false, error: '', data: { routes: [] } });
     at('/routes', <AllRoutesPage />, '/routes');
-    expect(screen.getByTestId('all-routes-none')).toHaveTextContent('No bus runs a route yet.');
+    expect(screen.getByTestId('all-routes-none')).toHaveTextContent('No routes yet.');
   });
 });

@@ -44,9 +44,9 @@ export default function RoutePage() {
                 <div className="min-w-0">
                   <h1 className="font-display text-2xl font-bold text-navy-950 sm:text-3xl">{route.route_name}</h1>
                   <p className="mt-1 text-sm text-slate-600">{route.origin} → {route.destination}</p>
-                  {(route.provinces?.length > 0 || route.bus_companies?.length > 0) && (
-                    <p className="mt-1 text-xs text-slate-500">
-                      {[route.provinces?.join(', '), route.bus_companies?.join(', ')].filter(Boolean).join(' · ')}
+                  {(route.provinces?.length > 0 || route.company_name) && (
+                    <p className="mt-1 text-xs text-slate-500" data-testid="route-company">
+                      {[route.provinces?.join(', '), route.company_name].filter(Boolean).join(' · ')}
                     </p>
                   )}
                 </div>
