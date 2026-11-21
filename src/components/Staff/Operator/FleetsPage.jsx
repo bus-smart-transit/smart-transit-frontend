@@ -10,6 +10,7 @@ import FareRulesPanel from '../FareRulesPanel';
 import { useCanManageCompany } from './companyAdmin';
 import FleetTrackingMap from './FleetTrackingMap';
 import RerouteAdviceItem from './RerouteAdviceItem';
+import { operatingHoursText } from '../../../utils/busPicker';
 import OperatorService from '../../../api/StaffService/OperatorService';
 import useFareOptions from '../../../api/hooks/Staff/useFareOptions';
 import { useFleetsTab } from '../../../api/hooks/Staff/useOperatorDashboard';
@@ -42,7 +43,7 @@ function FormMessage({ message }) {
   return <p role={failed ? 'alert' : 'status'} className={`mt-3 rounded-lg border px-3 py-2 text-sm ${failed ? 'border-rose-200 bg-rose-50 text-rose-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}>{message}</p>;
 }
 
-function AddFleetModal({ open, onClose, form, setForm, routes, fareOptions, saving, message, onSubmit, companyName = null }) {
+function AddFleetModal({ open, onClose, form, setForm, fareOptions, saving, message, onSubmit, companyName = null }) {
   const set = (key) => (event) => setForm((prev) => ({ ...prev, [key]: event.target.value }));
   return (
     <Modal open={open} onClose={onClose} title="Add fleet" fullScreenOnMobile>
@@ -70,18 +71,10 @@ function AddFleetModal({ open, onClose, form, setForm, routes, fareOptions, savi
           </Label>
           <Label text="Seated capacity"><input type="number" min="0" value={form.seated_capacity} onChange={set('seated_capacity')} required className={INPUT} /></Label>
           <Label text="Standing capacity"><input type="number" min="0" value={form.standing_capacity} onChange={set('standing_capacity')} required className={INPUT} /></Label>
-          <Label text="Route (optional)" className="sm:col-span-2">
-            <select value={form.route_id} onChange={set('route_id')} className={INPUT}>
-              <option value="">No route yet</option>
-              {routes.map((route) => <option key={route.route_id} value={route.route_id}>{route.route_name}</option>)}
-            </select>
-          </Label>
-          {form.route_id && (
-            <>
-              <Label text="Operating start"><input type="time" value={form.start_time} onChange={set('start_time')} required className={INPUT} /></Label>
-              <Label text="Operating end"><input type="time" value={form.end_time} onChange={set('end_time')} required className={INPUT} /></Label>
-            </>
-          )}
+          {/* 2026-11-21 (user, Dynamic Route Scheduling): the bus has its hours; its route is chosen for each trip. */}
+          <Label text="Operating start" hint="Trips can leave from this time"><input type="time" value={form.operating_start_time} onChange={set('operating_start_time')} required className={INPUT} /></Label>
+          <Label text="Operating end" hint="Until this time (it may be after midnight)"><input type="time" value={form.operating_end_time} onChange={set('operating_end_time')} required className={INPUT} /></Label>
+          <p className="text-xs text-slate-500 sm:col-span-2">You choose the route each time you schedule a trip for this bus.</p>
         </div>
         <FormMessage message={message} />
         <div className="mt-6 flex justify-end gap-2">
@@ -105,6 +98,8 @@ function EditFleetModal({ fleet, fareOptions, companyName, onClose, onSave }) {
     vehicle_class: fleet.vehicle_class ?? '',
     seated_capacity: fleet.seated_capacity ?? 0,
     standing_capacity: fleet.standing_capacity ?? 0,
+    operating_start_time: String(fleet.operating_start_time ?? '').slice(0, 5),
+    operating_end_time: String(fleet.operating_end_time ?? '').slice(0, 5),
   }));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -121,6 +116,9 @@ function EditFleetModal({ fleet, fareOptions, companyName, onClose, onSave }) {
       vehicle_class: form.vehicle_class || null,
       seated_capacity: Number(form.seated_capacity),
       standing_capacity: Number(form.standing_capacity),
+      // 2026-11-21 (user): the bus's operating hours (both, or neither).
+      operating_start_time: form.operating_start_time || null,
+      operating_end_time: form.operating_end_time || null,
     });
     setSaving(false);
     if (result.ok) onClose();
@@ -151,42 +149,13 @@ function EditFleetModal({ fleet, fareOptions, companyName, onClose, onSave }) {
           </Label>
           <Label text="Seated capacity"><input type="number" min="0" value={form.seated_capacity} onChange={set('seated_capacity')} required className={INPUT} /></Label>
           <Label text="Standing capacity"><input type="number" min="0" value={form.standing_capacity} onChange={set('standing_capacity')} required className={INPUT} /></Label>
+          <Label text="Operating start" hint="Trips can leave from this time"><input type="time" value={form.operating_start_time} onChange={set('operating_start_time')} required={Boolean(form.operating_end_time)} className={INPUT} /></Label>
+          <Label text="Operating end" hint="Until this time (it may be after midnight)"><input type="time" value={form.operating_end_time} onChange={set('operating_end_time')} required={Boolean(form.operating_start_time)} className={INPUT} /></Label>
         </div>
         {error && <p role="alert" className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>}
         <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <button type="button" onClick={onClose} className={SECONDARY}>Cancel</button>
           <button type="submit" disabled={saving} className={PRIMARY}>{saving ? 'Saving...' : 'Save changes'}</button>
-        </div>
-      </form>
-    </Modal>
-  );
-}
-
-function AssignRouteModal({ open, onClose, form, setForm, fleets, routes, saving, message, onSubmit }) {
-  const set = (key) => (event) => setForm((prev) => ({ ...prev, [key]: event.target.value }));
-  return (
-    <Modal open={open} onClose={onClose} title="Assign route to fleet" fullScreenOnMobile>
-      <form onSubmit={onSubmit}>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Label text="Fleet">
-            <select value={form.fleet_id} onChange={set('fleet_id')} required className={INPUT}>
-              <option value="">Select fleet</option>
-              {fleets.map((fleet) => <option key={fleet.fleet_id} value={fleet.fleet_id}>{fleet.plate_number}</option>)}
-            </select>
-          </Label>
-          <Label text="Route">
-            <select value={form.route_id} onChange={set('route_id')} required className={INPUT}>
-              <option value="">Select route</option>
-              {routes.map((route) => <option key={route.route_id} value={route.route_id}>{route.route_name}</option>)}
-            </select>
-          </Label>
-          <Label text="Operating start"><input type="time" value={form.start_time} onChange={set('start_time')} required className={INPUT} /></Label>
-          <Label text="Operating end"><input type="time" value={form.end_time} onChange={set('end_time')} required className={INPUT} /></Label>
-        </div>
-        <FormMessage message={message} />
-        <div className="mt-6 flex justify-end gap-2">
-          <button type="button" onClick={onClose} className={SECONDARY}>Cancel</button>
-          <button type="submit" disabled={saving} className={PRIMARY}>{saving ? 'Assigning...' : 'Assign route'}</button>
         </div>
       </form>
     </Modal>
@@ -257,8 +226,8 @@ export default function FleetsPage({ fleets, routes, trips, onRefresh, companyNa
   const nowMs = useNow();
   const fareOptions = useFareOptions();
   const {
-    manageMsg, clearManageMsg, manageSaving, fleetForm, setFleetForm, assignForm, setAssignForm,
-    fleetLocations, refreshFleetLocations, handleCreateFleet, handleAssignRoute, openFleetMap, handleUpdateFleet,
+    manageMsg, clearManageMsg, manageSaving, fleetForm, setFleetForm,
+    fleetLocations, refreshFleetLocations, handleCreateFleet, openFleetMap, handleUpdateFleet,
   } = useFleetsTab({ onRefresh });
   const { savingTripId, error, decide } = useDispatchAdvice({ onSaved: onRefresh });
 
@@ -266,7 +235,7 @@ export default function FleetsPage({ fleets, routes, trips, onRefresh, companyNa
   // Batch 53 item 7 (user's design): search by plate or body number; a card per bus, details on demand.
   const [query, setQuery] = useState('');
   const [openDetails, setOpenDetails] = useState(null);
-  const [modal, setModal] = useState(null); // 'add' | 'assign' | null
+  const [modal, setModal] = useState(null); // 'add' | null
   const [trackedFleetId, setTrackedFleetId] = useState(null);
   // Batch 60: the trip an alert asked about (null: the bus's running or late trip).
   const [trackedTripId, setTrackedTripId] = useState(null);
@@ -306,7 +275,6 @@ export default function FleetsPage({ fleets, routes, trips, onRefresh, companyNa
 
   const closeModal = () => setModal(null);
   const submitFleet = async (event) => { if (await handleCreateFleet(event)) { setModal(null); setNotice('Fleet created successfully.'); } };
-  const submitAssign = async (event) => { if (await handleAssignRoute(event)) { setModal(null); setNotice('Route assigned to fleet successfully.'); } };
   const open = (which) => { setNotice(''); clearManageMsg(); setModal(which); };
 
 
@@ -334,7 +302,6 @@ export default function FleetsPage({ fleets, routes, trips, onRefresh, companyNa
         subtitle="Status is worked out from today's trips and the bus's last GPS report."
         badge={(
           <div className={OP_SPACE.inline}>
-            {canManage && <button type="button" onClick={() => open('assign')} className={SECONDARY}>Assign route</button>}
             <button type="button" onClick={() => { onRefresh(); void refreshFleetLocations(); }} className={SECONDARY}><RefreshCw className="h-3.5 w-3.5" aria-hidden="true" /> Refresh</button>
           </div>
         )}
@@ -365,11 +332,12 @@ export default function FleetsPage({ fleets, routes, trips, onRefresh, companyNa
                   </div>
                   <dl className="mt-3 grid grid-cols-2 gap-3">
                     <div><dt className="text-xs text-slate-500">Capacity</dt><dd className="font-semibold text-slate-900">{row.fleet.capacity ?? '-'} passengers</dd></div>
-                    <div><dt className="text-xs text-slate-500">Current route</dt><dd className="font-semibold text-slate-900">{row.routes.length ? row.routes.join(', ') : 'No route'}</dd></div>
+                    <div><dt className="text-xs text-slate-500">Operating hours</dt><dd className="font-semibold text-slate-900" data-testid="fleet-hours">{operatingHoursText(row.fleet)}</dd></div>
                   </dl>
                   {expanded && (
                     <dl className="mt-3 grid grid-cols-2 gap-3 rounded-lg bg-slate-50 p-3 text-sm" data-testid="fleet-details">
                       <div><dt className="text-xs text-slate-500">Type</dt><dd className="text-slate-900">{row.fleet.fleet_type || 'public'} · {classLabel(row.fleet.vehicle_class) || 'Bus type not set'}</dd></div>
+                      <div><dt className="text-xs text-slate-500">Routes it has run</dt><dd className="text-slate-900">{row.routes.length ? row.routes.join(', ') : 'None yet'}</dd></div>
                       <div><dt className="text-xs text-slate-500">Seats</dt><dd className="text-slate-900">{row.fleet.seated_capacity ?? 0} seated, {row.fleet.standing_capacity ?? 0} standing</dd></div>
                       <div><dt className="text-xs text-slate-500">Current or next trip</dt><dd className="text-slate-900">{row.nextTripLabel ?? 'No trip left today'}</dd></div>
                       <div><dt className="text-xs text-slate-500">GPS</dt><dd className="text-slate-900">{row.liveTrip ? (row.gps.state === 'live' ? 'Live' : row.gps.state === 'none' ? 'No GPS' : row.gps.state === 'stale' ? 'Out of date' : row.gps.state === 'weak' ? 'Weak signal' : 'Off route') : (row.lastSeen ? `Last seen ${row.lastSeen}` : '-')}{row.liveTrip && row.lastSeen ? ` · ${row.lastSeen}` : ''}</dd></div>
@@ -408,7 +376,7 @@ export default function FleetsPage({ fleets, routes, trips, onRefresh, companyNa
         </OpCard>
       )}
 
-      <AddFleetModal companyName={companyName} open={modal === 'add'} onClose={closeModal} form={fleetForm} setForm={setFleetForm} routes={routes} fareOptions={fareOptions} saving={manageSaving} message={manageMsg} onSubmit={submitFleet} />
+      <AddFleetModal companyName={companyName} open={modal === 'add'} onClose={closeModal} form={fleetForm} setForm={setFleetForm} fareOptions={fareOptions} saving={manageSaving} message={manageMsg} onSubmit={submitFleet} />
       {editingFleet && (
         <EditFleetModal
           fleet={editingFleet}
@@ -422,7 +390,6 @@ export default function FleetsPage({ fleets, routes, trips, onRefresh, companyNa
           }}
         />
       )}
-      <AssignRouteModal open={modal === 'assign'} onClose={closeModal} form={assignForm} setForm={setAssignForm} fleets={fleets} routes={routes} saving={manageSaving} message={manageMsg} onSubmit={submitAssign} />
       <TrackFleetModal
         row={tracked}
         trip={trackedTrip}

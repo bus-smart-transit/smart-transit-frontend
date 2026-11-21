@@ -2,7 +2,7 @@ import { describe, expect, test } from 'vitest';
 import { formatRangeDay, isRangeSchedule, rangeDayCount, rangeKey, rangePayload, scheduleButtonLabel } from '../scheduleRange';
 
 const form = {
-  trip_type: 'round_trip', fleet_route_id: '4', driver_id: '7', conductor_id: '9', block_type: 'morning',
+  trip_type: 'round_trip', fleet_id: '3', route_id: '4', driver_id: '7', conductor_id: '9', block_type: 'morning',
   trip_date: '2026-10-07', to_date: '2026-10-11', service_type: 'regular', leg_departure_times: ['08:00', '11:00'],
 };
 
@@ -32,7 +32,7 @@ describe('isRangeSchedule', () => {
 describe('rangePayload and rangeKey', () => {
   test('sends From as from_date and the ids as numbers', () => {
     expect(rangePayload(form)).toEqual({
-      fleet_route_id: 4, driver_id: 7, conductor_id: 9, block_type: 'morning', from_date: '2026-10-07', to_date: '2026-10-11',
+      fleet_id: 3, route_id: 4, driver_id: 7, conductor_id: 9, block_type: 'morning', from_date: '2026-10-07', to_date: '2026-10-11',
       service_type: 'regular', leg_departure_times: ['08:00', '11:00'],
     });
   });

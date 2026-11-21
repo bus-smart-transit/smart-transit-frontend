@@ -44,6 +44,8 @@ import {
 } from 'lucide-react'
 import { SkeletonList, SkeletonPage } from '../ui/Skeleton'
 import { clock12 } from '../../utils/clock';
+import useBusAvailability from '../../api/hooks/Staff/useBusAvailability'
+import { availabilityTime, busOptionLabel, sortBusesForPicker } from '../../utils/busPicker'
 const fmt = (v) => {
   if (v == null) return '-'
   const n = Number(v)
@@ -206,7 +208,7 @@ function TripRequestsPanel({ onDecided, showEmpty = false }) {
 // Batch 30: the create form behind the one "+ Schedule" button of the Schedule page (it was inside the Trips view). It
 // is the same form and the same handler (useTripsTab); only its place changed, so it opens from any Schedule view.
 function ScheduleServiceModal({ state, drivers, conductors }) {
-  const { showModal, form, setForm, saving, msg, fleetRoutes, handleSchedule, rangePreview, rangeResult, confirmRange, closeScheduleModal } = state
+  const { showModal, form, setForm, saving, msg, scheduleRoutes, handleSchedule, rangePreview, rangeResult, confirmRange, closeScheduleModal } = state
   const multiLeg = form.trip_type === 'round_trip'
   const rangeMode = isRangeSchedule(form)
   const rangeDays = rangeDayCount(form.trip_date, form.to_date)
@@ -218,6 +220,19 @@ function ScheduleServiceModal({ state, drivers, conductors }) {
     getBookingWindow().then((w) => { if (!cancelled) setBookingWindow(w) }).catch(() => { if (!cancelled) setBookingWindow(null) })
     return () => { cancelled = true }
   }, [showModal])
+
+  // 2026-11-21 (user, Dynamic Route Scheduling): the bus is chosen with the route, from the buses free at that time.
+  const busCheck = useBusAvailability({
+    routeId: showModal ? form.route_id : '',
+    date: form.trip_date,
+    time: availabilityTime(form),
+    serviceType: form.service_type,
+  })
+  useEffect(() => {
+    if (form.fleet_id && busCheck.ready && !busCheck.loading && !busCheck.buses.some((bus) => String(bus.fleet_id) === String(form.fleet_id) && bus.available)) {
+      setForm((previous) => ({ ...previous, fleet_id: '' }))
+    }
+  }, [busCheck, form.fleet_id, setForm])
 
   useEffect(() => {
     if (form.driver_id && !dateDrivers.some((driver) => String(getStaffCompanyUserId(driver)) === String(form.driver_id) && !driver.busy_reason)) {
@@ -252,11 +267,11 @@ function ScheduleServiceModal({ state, drivers, conductors }) {
       {/* Batch 60 item 4 (user, 2026-11-11): two columns on a PC: the service on the left, the crew on the right. */}
       <form className="grid gap-x-6 gap-y-4 lg:grid-cols-2" onSubmit={handleSchedule}>
         <div className="min-w-0 space-y-4">
-        <Field label="Fleet Route" required>
-          <select value={form.fleet_route_id} onChange={e => setForm(p => ({...p, fleet_route_id: e.target.value}))} required className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500">
-            <option value="">Select a fleet route...</option>
-            {fleetRoutes.map(fr => (
-              <option key={fr.fleet_route_id} value={fr.fleet_route_id}>{fr.fleet?.plate_number} - {fr.route?.route_name}</option>
+        <Field label="Route" required>
+          <select aria-label="Route" value={form.route_id} onChange={e => setForm(p => ({ ...p, route_id: e.target.value }))} required className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500" data-testid="schedule-route">
+            <option value="">Select a route...</option>
+            {(scheduleRoutes || []).map(route => (
+              <option key={route.route_id} value={route.route_id}>{route.route_name}</option>
             ))}
           </select>
         </Field>
@@ -343,7 +358,7 @@ function ScheduleServiceModal({ state, drivers, conductors }) {
               </button>
             </div>
             <LegTimeSuggestion
-              fleetRouteId={form.fleet_route_id}
+              routeId={form.route_id}
               date={form.trip_date}
               firstTime={(Array.isArray(form.leg_departure_times) ? form.leg_departure_times : defaultLegTimesByBlock[form.block_type] || defaultLegTimesByBlock.morning)[0]}
               serviceType={form.service_type || 'regular'}
@@ -351,6 +366,18 @@ function ScheduleServiceModal({ state, drivers, conductors }) {
             />
           </>
         )}
+        <Field label="Bus" required>
+          <select aria-label="Bus" value={form.fleet_id} onChange={e => setForm(p => ({ ...p, fleet_id: e.target.value }))} required disabled={!busCheck.ready || busCheck.loading} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500 disabled:opacity-60" data-testid="schedule-bus">
+            <option value="">{busCheck.ready ? (busCheck.loading ? 'Checking which buses are free...' : 'Select a bus...') : 'Choose the route, date and time first'}</option>
+            {sortBusesForPicker(busCheck.buses).map(bus => (
+              <option key={bus.fleet_id} value={bus.fleet_id} disabled={!bus.available}>{busOptionLabel(bus)}</option>
+            ))}
+          </select>
+        </Field>
+        {busCheck.ready && !busCheck.loading && !busCheck.error && busCheck.buses.length > 0 && !busCheck.buses.some((bus) => bus.available) && (
+          <p role="alert" className="text-xs text-rose-700" data-testid="schedule-no-bus">No bus is free for this route at that time. Try another time.</p>
+        )}
+        {busCheck.error && <p role="alert" className="text-xs text-rose-700">{busCheck.error}</p>}
         </div>
         <div className="min-w-0 space-y-4">
         {/* Batch 46: a single trip may be scheduled before its crew is chosen; a shift block still needs both. Not

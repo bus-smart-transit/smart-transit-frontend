@@ -13,18 +13,18 @@ import { clock12 } from '../../utils/clock';
  * where each travel time came from (a peak-hour time you set, measured trips, or the route estimate), and flags
  * overtime, the driving limit, a missing rest break and night work. "Use these times" sets that many legs.
  */
-export default function LegTimeSuggestion({ fleetRouteId, date, firstTime, serviceType, onApply }) {
+export default function LegTimeSuggestion({ routeId, date, firstTime, serviceType, onApply }) {
   const [plan, setPlan] = useState(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
-  const ready = Boolean(fleetRouteId && date && firstTime);
+  const ready = Boolean(routeId && date && firstTime);
 
   const suggest = async () => {
     setBusy(true);
     setError('');
     try {
-      const res = await OperatorService.planShiftBlockLegs({ fleet_route_id: fleetRouteId, scheduled_date: date, first_departure_time: firstTime, service_type: serviceType || 'regular' });
+      const res = await OperatorService.planShiftBlockLegs({ route_id: routeId, scheduled_date: date, first_departure_time: firstTime, service_type: serviceType || 'regular' });
       setPlan(res?.data ?? null);
     } catch (err) {
       setPlan(null);

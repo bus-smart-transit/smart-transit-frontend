@@ -3,7 +3,7 @@ import { act, renderHook } from '@testing-library/react';
 
 vi.mock('../../../StaffService/OperatorService', () => ({
   default: {
-    getOperatorFleetRoutes: vi.fn(),
+    getOperatorRoutes: vi.fn(),
     getOperatorTrips: vi.fn(),
     createShiftBlock: vi.fn(),
     previewShiftBlockRange: vi.fn(),
@@ -22,7 +22,7 @@ const preview = {
 };
 
 const fillRange = (result, overrides = {}) => act(() => result.current.setForm((p) => ({
-  ...p, trip_type: 'round_trip', fleet_route_id: '4', driver_id: '7', conductor_id: '9', block_type: 'morning',
+  ...p, trip_type: 'round_trip', fleet_id: '3', route_id: '4', driver_id: '7', conductor_id: '9', block_type: 'morning',
   trip_date: '2026-10-07', to_date: '2026-10-09', leg_departure_times: ['08:00', '11:00'], ...overrides,
 })));
 
@@ -30,7 +30,7 @@ const submit = (result) => act(async () => { await result.current.handleSchedule
 
 beforeEach(() => {
   vi.clearAllMocks();
-  OperatorService.getOperatorFleetRoutes.mockResolvedValue({ data: [] });
+  OperatorService.getOperatorRoutes.mockResolvedValue({ data: [] });
   OperatorService.getOperatorTrips.mockResolvedValue({ data: [], meta: { current_page: 1, last_page: 1, total: 0 } });
   OperatorService.previewShiftBlockRange.mockResolvedValue({ data: preview });
   OperatorService.createShiftBlockRange.mockResolvedValue({ data: { ...preview, days: preview.days }, message: '2 days scheduled, 1 skipped' });
@@ -44,7 +44,7 @@ describe('useTripsTab date range', () => {
 
     await submit(result);
     expect(OperatorService.previewShiftBlockRange).toHaveBeenCalledWith({
-      fleet_route_id: 4, driver_id: 7, conductor_id: 9, block_type: 'morning', from_date: '2026-10-07', to_date: '2026-10-09',
+      fleet_id: 3, route_id: 4, driver_id: 7, conductor_id: 9, block_type: 'morning', from_date: '2026-10-07', to_date: '2026-10-09',
       service_type: 'regular', leg_departure_times: ['08:00', '11:00'],
     });
     expect(OperatorService.createShiftBlockRange).not.toHaveBeenCalled();

@@ -8,6 +8,7 @@ import Modal from '../../ui/Modal';
 import RouteMap from '../../Map/RouteMap';
 import RedrawProgress from './RedrawProgress';
 import RouteFareTable from './RouteFareTable';
+import { operatingHoursText } from '../../../utils/busPicker';
 import EditRouteModal from './EditRouteModal';
 import OperatorService from '../../../api/StaffService/OperatorService';
 import { routeActivity, upcomingTripsFor, assignmentsOnRoute, sortedRouteStops, formatDuration } from '../../../utils/operatorRouteView';
@@ -23,7 +24,7 @@ const ROUTE_TABS = [
   { key: 'overview', label: 'Overview' },
   { key: 'stops', label: 'Stops' },
   { key: 'schedule', label: 'Schedule' },
-  { key: 'fleets', label: 'Assigned fleets' },
+  { key: 'fleets', label: 'Buses' }, // 2026-11-21 (user): buses are chosen per trip, not assigned
   { key: 'fare', label: 'Fare' },
   { key: 'travel', label: 'Travel time' },
 ];
@@ -152,24 +153,11 @@ function StopsTab({ route, routesTab, onOpenAssign }) {
   );
 }
 
-function ScheduleTab({ row, fleets, trips, onOpenSchedule }) {
-  const windows = assignmentsOnRoute(row.routeId, fleets);
+function ScheduleTab({ row, trips, onOpenSchedule }) {
   const upcoming = upcomingTripsFor(row.routeId, trips);
+  // 2026-11-21 (user, Dynamic Route Scheduling): no fixed bus windows per route; each bus has its own hours.
   return (
     <div className={OP_SPACE.stack}>
-      <OpCard title="Service windows" subtitle="The hours each fleet is assigned to run this route.">
-        <OpTable
-          caption="Service windows"
-          rows={windows}
-          rowKey={(item) => item.key}
-          empty="No fleet is assigned to this route."
-          columns={[
-            { key: 'plate', header: 'Fleet', render: (item) => item.fleet.plate_number },
-            { key: 'window', header: 'Runs', render: (item) => (item.start && item.end ? `${item.start} - ${item.end}` : '-') },
-            { key: 'status', header: 'Assignment', render: (item) => <OpChip tone={item.active ? 'success' : 'neutral'}>{item.active ? 'Active' : 'Inactive'}</OpChip> },
-          ]}
-        />
-      </OpCard>
       <OpCard
         title="Trips still to run"
         subtitle="Today and later, from the trips already scheduled."
@@ -196,20 +184,20 @@ function FleetsTab({ row, fleets, onOpenFleets }) {
   const assignments = assignmentsOnRoute(row.routeId, fleets);
   return (
     <OpCard
-      title="Assigned fleets"
-      subtitle="Buses that are set up to run this route."
+      title="Buses that have run this route"
+      subtitle="Any free bus can be chosen when you schedule a trip on this route."
       badge={<button type="button" onClick={onOpenFleets} className={SECONDARY}>Open Fleets</button>}
     >
       <OpTable
-        caption="Fleets assigned to this route"
+        caption="Buses that have run this route"
         rows={assignments}
         rowKey={(item) => item.key}
-        empty="No fleet is assigned yet. Assign this route to a fleet from the Fleets page."
+        empty="No bus has run this route yet. Schedule a trip on it and choose any free bus."
         columns={[
           { key: 'plate', header: 'Fleet', render: (item) => <strong className="text-slate-900">{item.fleet.plate_number}</strong> },
           { key: 'type', header: 'Type', render: (item) => item.fleet.fleet_type || 'public' },
           { key: 'capacity', header: 'Capacity', render: (item) => item.fleet.capacity ?? '-' },
-          { key: 'window', header: 'Runs', render: (item) => (item.start && item.end ? `${item.start} - ${item.end}` : '-') },
+          { key: 'window', header: 'Bus hours', render: (item) => operatingHoursText(item.fleet) },
           { key: 'status', header: 'Status', render: (item) => <OpChip tone={item.active ? 'success' : 'neutral'}>{item.active ? 'Active' : 'Inactive'}</OpChip> },
         ]}
       />

@@ -103,6 +103,11 @@ class OperatorService extends StaffBaseService {
     return await this.request(`/operator/routes/${routeId}/fares`, 'GET', params);
   }
 
+  // 2026-11-21 (user, Dynamic Route Scheduling): which buses can take a trip on this route at this date and time.
+  async getBusAvailability(params) {
+    return await this.request('/operator/fleets/availability', 'GET', params);
+  }
+
   async getOperatorFleetRoutes() {
     return await this.request('/operator/fleet-routes', 'GET');
   }

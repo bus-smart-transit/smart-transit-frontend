@@ -289,8 +289,7 @@ export function useFleetsTab({ onRefresh }) {
   const [fleetLocations, setFleetLocations] = useState([]);
   const [manageMsg, setManageMsg] = useState('');
   const [manageSaving, setManageSaving] = useState(false);
-  const [fleetForm, setFleetForm] = useState({ plate_number: '', bus_company_name: '', body_no: '', seated_capacity: '', standing_capacity: '', fleet_type: 'public', vehicle_class: '', route_id: '', start_time: '06:00', end_time: '22:00' });
-  const [assignForm, setAssignForm] = useState({ fleet_id: '', route_id: '', start_time: '06:00', end_time: '22:00' });
+  const [fleetForm, setFleetForm] = useState({ plate_number: '', bus_company_name: '', body_no: '', seated_capacity: '', standing_capacity: '', fleet_type: 'public', vehicle_class: '', operating_start_time: '06:00', operating_end_time: '22:00' });
 
   const refreshFleetLocations = useCallback(async () => {
     try {
@@ -379,38 +378,17 @@ export function useFleetsTab({ onRefresh }) {
         standing_capacity: Number(fleetForm.standing_capacity),
         fleet_type: fleetForm.fleet_type,
         vehicle_class: fleetForm.vehicle_class || null,
-        ...(fleetForm.route_id
-          ? { routes: [{ route_id: Number(fleetForm.route_id), start_time: String(fleetForm.start_time || '').trim(), end_time: String(fleetForm.end_time || '').trim() }] }
+        // 2026-11-21 (user, Dynamic Route Scheduling): the bus's hours; its route is chosen for each trip.
+        ...(fleetForm.operating_start_time && fleetForm.operating_end_time
+          ? { operating_start_time: String(fleetForm.operating_start_time).trim(), operating_end_time: String(fleetForm.operating_end_time).trim() }
           : {}),
       });
-      setFleetForm({ plate_number: '', bus_company_name: '', body_no: '', seated_capacity: '', standing_capacity: '', fleet_type: 'public', vehicle_class: '', route_id: '', start_time: '06:00', end_time: '22:00' });
+      setFleetForm({ plate_number: '', bus_company_name: '', body_no: '', seated_capacity: '', standing_capacity: '', fleet_type: 'public', vehicle_class: '', operating_start_time: '06:00', operating_end_time: '22:00' });
       setManageMsg('Fleet created successfully.');
       onRefresh();
       return true;
     } catch (err) {
       setManageMsg(err?.message || 'Failed to create fleet.');
-      return false;
-    } finally {
-      setManageSaving(false);
-    }
-  };
-
-  const handleAssignRoute = async (event) => {
-    event.preventDefault();
-    setManageMsg('');
-    setManageSaving(true);
-    try {
-      await OperatorService.assignRouteToFleet(Number(assignForm.fleet_id), {
-        route_id: Number(assignForm.route_id),
-        start_time: String(assignForm.start_time || '').trim(),
-        end_time: String(assignForm.end_time || '').trim(),
-      });
-      setAssignForm({ fleet_id: '', route_id: '', start_time: '06:00', end_time: '22:00' });
-      setManageMsg('Route assigned to fleet successfully.');
-      onRefresh();
-      return true;
-    } catch (err) {
-      setManageMsg(err?.message || 'Failed to assign route to fleet.');
       return false;
     } finally {
       setManageSaving(false);
@@ -444,14 +422,12 @@ export function useFleetsTab({ onRefresh }) {
     clearManageMsg: () => setManageMsg(''),
     manageSaving,
     fleetForm, setFleetForm,
-    assignForm, setAssignForm,
     refreshFleetLocations,
     statusToProgress,
     statusLabel,
     getLocationForTrip,
     getLocationByFleet,
     handleCreateFleet,
-    handleAssignRoute,
     openFleetMap,
   };
 }
@@ -700,7 +676,8 @@ export function useTripsTab({ trips, onRefresh }) {
   const [statusOverrideSaving, setStatusOverrideSaving] = useState(false);
   const [statusOverrideMsg, setStatusOverrideMsg] = useState('');
   const [form, setForm] = useState({
-    fleet_route_id: '',
+    route_id: '', // 2026-11-21 (user, Dynamic Route Scheduling): the route and the bus are chosen here
+    fleet_id: '',
     trip_date: '',
     to_date: '',
     departure_time: '',
@@ -717,13 +694,14 @@ export function useTripsTab({ trips, onRefresh }) {
   const [saving, setSaving] = useState(false);
   const [actionInFlight, setActionInFlight] = useState(null); // tripId currently being actioned
   const [msg, setMsg] = useState('');
-  const [fleetRoutes, setFleetRoutes] = useState([]);
+  const [scheduleRoutes, setScheduleRoutes] = useState([]);
   const [visibleTrips, setVisibleTrips] = useState(trips);
   const [visibleTripsMeta, setVisibleTripsMeta] = useState({ current_page: 1, last_page: 1, total: 0 });
   const [loadingMoreTrips, setLoadingMoreTrips] = useState(false);
 
+  // 2026-11-21 (user, Dynamic Route Scheduling): every route of the company can be scheduled on any free bus.
   useEffect(() => {
-    OperatorService.getOperatorFleetRoutes().then(r => setFleetRoutes(r?.data ?? [])).catch(() => {});
+    OperatorService.getOperatorRoutes().then((r) => setScheduleRoutes(Array.isArray(r?.data) ? r.data : [])).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -774,7 +752,8 @@ export function useTripsTab({ trips, onRefresh }) {
   const currentRangePreview = rangePreview && rangePreview.key === rangeKey(form) ? rangePreview.data : null;
 
   const blankScheduleForm = () => ({
-    fleet_route_id: '',
+    route_id: '', // 2026-11-21 (user, Dynamic Route Scheduling): the route and the bus are chosen here
+    fleet_id: '',
     trip_date: '',
     to_date: '',
     departure_time: '',
@@ -833,7 +812,8 @@ export function useTripsTab({ trips, onRefresh }) {
     try {
       if (form.trip_type === 'round_trip') {
         const created = await OperatorService.createShiftBlock({
-          fleet_route_id: Number(form.fleet_route_id),
+          fleet_id: Number(form.fleet_id),
+          route_id: Number(form.route_id),
           driver_id: Number(form.driver_id),
           conductor_id: Number(form.conductor_id),
           block_type: form.block_type,
@@ -847,7 +827,8 @@ export function useTripsTab({ trips, onRefresh }) {
         setMsg(planningMessage('Shift block scheduled.', created?.data?.planning?.flags));
       } else {
         await OperatorService.scheduleTrip({
-          fleet_route_id: Number(form.fleet_route_id),
+          fleet_id: Number(form.fleet_id),
+          route_id: Number(form.route_id),
           trip_date: form.trip_date,
           departure_time: form.departure_time,
           trip_type: 'one_way',
@@ -973,7 +954,7 @@ export function useTripsTab({ trips, onRefresh }) {
     saving,
     actionInFlight,
     msg, setMsg,
-    fleetRoutes,
+    scheduleRoutes,
     visibleTrips,
     visibleTripsMeta,
     loadingMoreTrips,
@@ -1066,7 +1047,6 @@ export function useShiftBlocksTab(reloadToken = 0) {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState('');
-  const [fleetRoutes, setFleetRoutes] = useState([]);
 
   const loadBlocks = useCallback(async () => {
     setLoading(true);
@@ -1093,10 +1073,6 @@ export function useShiftBlocksTab(reloadToken = 0) {
     }, 0);
     return () => clearTimeout(timer);
   }, [loadBlocks, reloadToken]);
-
-  useEffect(() => {
-    OperatorService.getOperatorFleetRoutes().then((r) => setFleetRoutes(r?.data ?? [])).catch(() => {});
-  }, []);
 
   const handleCreate = async (payload) => {
     setSaving(true);
@@ -1164,7 +1140,6 @@ export function useShiftBlocksTab(reloadToken = 0) {
     showCreateModal, setShowCreateModal,
     saving,
     msg, setMsg,
-    fleetRoutes,
     loadBlocks,
     handleCreate,
     handleCancel,

@@ -37,7 +37,7 @@ const stops = [
   { stop_id: 3, stop_name: 'Stop 3', municipality: 'Tagum City', latitude: 7.4, longitude: 125.8 },
   { stop_id: 9, stop_name: 'Spare stop', municipality: 'Panabo City', latitude: 7.3, longitude: 125.7 },
 ];
-const fleets = [{ fleet_id: 1, plate_number: 'PLT-1', status: 'active', fleet_type: 'public', capacity: 40, fleet_routes: [{ fleet_route_id: 1, route_id: 4, status: 'active', start_time: '05:00:00', end_time: '21:00:00' }] }];
+const fleets = [{ fleet_id: 1, plate_number: 'PLT-1', status: 'active', fleet_type: 'public', capacity: 40, operating_start_time: '05:30:00', operating_end_time: '21:30:00', fleet_routes: [{ fleet_route_id: 1, route_id: 4, status: 'active', start_time: '05:00:00', end_time: '21:00:00' }] }];
 const trips = [
   { trip_id: 1, trip_date: today, departure_time: '09:00:00', status: 'scheduled', total_occupancy: 5, fleet_route: { route: { route_id: 4 }, fleet: { plate_number: 'PLT-1' } } },
   { trip_id: 2, trip_date: '2026-01-01', departure_time: '09:00:00', status: 'completed', total_occupancy: 20, fleet_route: { route: { route_id: 4 }, fleet: { plate_number: 'PLT-1' } } },
@@ -67,7 +67,7 @@ describe('RoutesPage list', () => {
     expect(within(row).getByText('PLT-1')).toBeInTheDocument();
     expect(within(row).getByText('Active')).toBeInTheDocument();
     const empty = screen.getByText('Davao-Mati').closest('tr');
-    expect(within(empty).getByText('No active fleet')).toBeInTheDocument();
+    expect(within(empty).getByText('No trips yet')).toBeInTheDocument();
   });
 
   it('never claims route adherence or a route health score', () => {
@@ -207,7 +207,7 @@ describe('Route detail', () => {
   it('opens a route, shows the seven sections, and goes back to the list', async () => {
     renderPage();
     await openTagum();
-    expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['Overview', 'Stops', 'Schedule', 'Assigned fleets', 'Fare', 'Travel time']);
+    expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['Overview', 'Stops', 'Schedule', 'Buses', 'Fare', 'Travel time']);
     expect(screen.getByRole('heading', { name: 'Davao - Tagum' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /All routes/ }));
     expect(screen.getByRole('heading', { name: 'Routes' })).toBeInTheDocument();
@@ -288,12 +288,13 @@ describe('Route detail', () => {
     expect(await screen.findByText(/Stop assigned to route successfully\. On Davao - Tagum, this stop adds about 12 km/)).toBeInTheDocument();
   });
 
-  it('schedule tab shows service windows and the trips still to run, and opens Schedule', async () => {
+  // 2026-11-21 (user, Dynamic Route Scheduling): no bus windows per route any more; each bus has its own hours.
+  it('schedule tab shows the trips still to run, and opens Schedule', async () => {
     const onOpenSchedule = vi.fn();
     renderPage({ onOpenSchedule });
     await openTagum();
     goToTab('Schedule');
-    expect(screen.getByText('5:00 AM - 9:00 PM')).toBeInTheDocument();
+    expect(screen.queryByText('Service windows')).not.toBeInTheDocument();
     const upcoming = screen.getByRole('table', { name: 'Upcoming trips on this route' });
     expect(within(upcoming).getAllByRole('row')).toHaveLength(2);
     expect(within(upcoming).getByText('9:00 AM')).toBeInTheDocument();
@@ -301,12 +302,14 @@ describe('Route detail', () => {
     expect(onOpenSchedule).toHaveBeenCalled();
   });
 
-  it('assigned fleets tab lists the fleets and opens Fleets', async () => {
+  it('buses tab lists the buses that have run the route, with their own hours, and opens Fleets', async () => {
     const onOpenFleets = vi.fn();
     renderPage({ onOpenFleets });
     await openTagum();
-    goToTab('Assigned fleets');
-    expect(within(screen.getByRole('table', { name: 'Fleets assigned to this route' })).getByText('PLT-1')).toBeInTheDocument();
+    goToTab('Buses');
+    const table = screen.getByRole('table', { name: 'Buses that have run this route' });
+    expect(within(table).getByText('PLT-1')).toBeInTheDocument();
+    expect(within(table).getByText('5:30 AM to 9:30 PM')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Open Fleets' }));
     expect(onOpenFleets).toHaveBeenCalled();
   });
@@ -325,7 +328,8 @@ describe('Route detail', () => {
     expect(within(rows).getByText('Stop 1 → Stop 2')).toBeInTheDocument();
     expect(within(rows).getByText('PHP 24.00')).toBeInTheDocument();
     expect(within(rows).getByText('Fare unavailable')).toBeInTheDocument();
-    expect(mocks.getRouteFareTable).toHaveBeenCalledWith(4, expect.objectContaining({ fleet_route_id: '1', direction: 'outbound', service_type: 'regular' }));
+    // 2026-11-21 (user): any active bus of the company, named by its id.
+    expect(mocks.getRouteFareTable).toHaveBeenCalledWith(4, expect.objectContaining({ fleet_id: '1', direction: 'outbound', service_type: 'regular' }));
     // Production 2026-11-15: every bus read "Not provided"; the list names a bus by body number and plate.
     expect(within(screen.getByTestId('fare-table-bus')).getByRole('option', { name: 'PLT-1' })).toBeInTheDocument();
   });

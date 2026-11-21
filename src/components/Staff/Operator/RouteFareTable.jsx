@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { OpCard } from './OperatorUI';
 import useRouteFareTable from '../../../api/hooks/Staff/useRouteFareTable';
-import { assignmentsOnRoute } from '../../../utils/operatorRouteView';
 
 const SELECT = 'mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800';
 const peso = (amount) => `PHP ${Number(amount).toFixed(2)}`;
@@ -13,17 +12,18 @@ const busName = (fleet) => [fleet?.body_no, fleet?.plate_number].filter(Boolean)
  * ("{from stop} → {to stop}  PHP {fare}"). Read-only; fare rules are edited in Fleets, Fare rules.
  */
 export default function RouteFareTable({ service, routeId, fleets }) {
-  const buses = assignmentsOnRoute(routeId, fleets).filter((item) => item.fleetRouteId);
-  const [picked, setPicked] = useState({ fleetRouteId: '', direction: 'outbound', serviceType: 'regular', originStopId: '' });
-  const fleetRouteId = picked.fleetRouteId || (buses[0]?.fleetRouteId ? String(buses[0].fleetRouteId) : '');
-  const { loading, error, table } = useRouteFareTable({ service, routeId, filters: { ...picked, fleetRouteId } });
+  // 2026-11-21 (user, Dynamic Route Scheduling): any active bus of the company can run any route, so each one is listed.
+  const buses = (Array.isArray(fleets) ? fleets : []).filter((fleet) => String(fleet?.status || 'active') === 'active');
+  const [picked, setPicked] = useState({ fleetId: '', direction: 'outbound', serviceType: 'regular', originStopId: '' });
+  const fleetId = picked.fleetId || (buses[0]?.fleet_id ? String(buses[0].fleet_id) : '');
+  const { loading, error, table } = useRouteFareTable({ service, routeId, filters: { ...picked, fleetId } });
   // Changing the bus, direction or service starts again from the first stop.
   const change = (key) => (event) => setPicked((prev) => ({ ...prev, [key]: event.target.value, ...(key === 'originStopId' ? {} : { originStopId: '' }) }));
 
   if (buses.length === 0) {
     return (
       <OpCard title="Fares">
-        <p className="text-sm text-slate-600">No bus runs this route yet. Assign it to a bus from the Fleets page to see its fares.</p>
+        <p className="text-sm text-slate-600">Your company has no active bus yet. Add one on the Fleets page to see its fares.</p>
       </OpCard>
     );
   }
@@ -32,9 +32,9 @@ export default function RouteFareTable({ service, routeId, fleets }) {
     <OpCard title="Fares" subtitle="What passengers pay between stops, worked out the same way as on the passenger site. To change a fare, edit the fare rules in Fleets, Fare rules.">
       <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <label className="text-xs font-semibold text-slate-600">Bus
-          <select className={SELECT} value={fleetRouteId} onChange={change('fleetRouteId')} data-testid="fare-table-bus">
-            {buses.map((item) => (
-              <option key={item.key} value={item.fleetRouteId}>{busName(item.fleet)}</option>
+          <select className={SELECT} value={fleetId} onChange={change('fleetId')} data-testid="fare-table-bus">
+            {buses.map((fleet) => (
+              <option key={fleet.fleet_id} value={fleet.fleet_id}>{busName(fleet)}</option>
             ))}
           </select>
         </label>

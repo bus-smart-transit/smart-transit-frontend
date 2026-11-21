@@ -10,7 +10,7 @@ const plan = (legs) => ({ data: { buffer_minutes: 10, note: 'A suggestion only.'
 const leg = (i, dep, over = {}) => ({ leg_index: i, direction: i % 2 ? 'outbound' : 'reverse', suggested_departure: dep, spills_into_next_day: false, factor: 1, factor_label: null, expected_duration_minutes: 60, expected_end: '00:00', ...over })
 
 describe('LegTimeSuggestion', () => {
-  const props = { fleetRouteId: '5', date: '2026-10-06', firstTime: '06:00', serviceType: 'regular' }
+  const props = { routeId: '5', date: '2026-10-06', firstTime: '06:00', serviceType: 'regular' }
 
   test('suggests from the server and applies the times only when asked', async () => {
     OperatorService.planShiftBlockLegs.mockResolvedValue(plan([leg(1, '06:00'), leg(2, '07:10', { factor: 1.5, factor_label: 'configured' })]))
@@ -21,11 +21,11 @@ describe('LegTimeSuggestion', () => {
     expect(onApply).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: 'Use these times' }))
     expect(onApply).toHaveBeenCalledWith(['06:00', '07:10'])
-    expect(OperatorService.planShiftBlockLegs).toHaveBeenCalledWith({ fleet_route_id: '5', scheduled_date: '2026-10-06', first_departure_time: '06:00', service_type: 'regular' })
+    expect(OperatorService.planShiftBlockLegs).toHaveBeenCalledWith({ route_id: '5', scheduled_date: '2026-10-06', first_departure_time: '06:00', service_type: 'regular' })
   })
 
   test('cannot be pressed until the route, date and first time are chosen', () => {
-    render(<LegTimeSuggestion {...props} fleetRouteId="" onApply={() => {}} />)
+    render(<LegTimeSuggestion {...props} routeId="" onApply={() => {}} />)
     expect(screen.getByRole('button', { name: 'Suggest times' })).toBeDisabled()
   })
 

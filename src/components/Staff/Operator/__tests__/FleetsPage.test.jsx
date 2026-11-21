@@ -203,17 +203,20 @@ describe('FleetsPage', () => {
     expect(onRefresh).toHaveBeenCalled();
   });
 
-  it('adds the route with its operating times when one is chosen', async () => {
+  // 2026-11-21 (user, Dynamic Route Scheduling): a bus is added with its operating hours; no route is chosen here.
+  it('adds the bus with its operating hours and no route', async () => {
     renderPage();
     fireEvent.click(screen.getByRole('button', { name: /Add fleet/ }));
     const dialog = await screen.findByRole('dialog');
     fireEvent.change(within(dialog).getByLabelText('Plate number'), { target: { value: 'NEW-1' } });
     fireEvent.change(within(dialog).getByLabelText('Seated capacity'), { target: { value: '30' } });
     fireEvent.change(within(dialog).getByLabelText('Standing capacity'), { target: { value: '0' } });
-    fireEvent.change(within(dialog).getByLabelText('Route (optional)'), { target: { value: '10' } });
-    expect(within(dialog).getByLabelText('Operating start')).toHaveValue('06:00');
+    expect(within(dialog).getByLabelText(/^Operating start/)).toHaveValue('06:00');
+    fireEvent.change(within(dialog).getByLabelText(/^Operating end/), { target: { value: '21:30' } });
+    expect(within(dialog).queryByLabelText('Route (optional)')).not.toBeInTheDocument();
     fireEvent.click(within(dialog).getByRole('button', { name: 'Create fleet' }));
-    await waitFor(() => expect(mocks.createFleet).toHaveBeenCalledWith(expect.objectContaining({ routes: [{ route_id: 10, start_time: '06:00', end_time: '22:00' }] })));
+    await waitFor(() => expect(mocks.createFleet).toHaveBeenCalledWith(expect.objectContaining({ operating_start_time: '06:00', operating_end_time: '21:30' })));
+    expect(mocks.createFleet.mock.calls[0][0]).not.toHaveProperty('routes');
   });
 
   it('keeps the modal open and shows the error when creating a fleet fails', async () => {
@@ -229,15 +232,13 @@ describe('FleetsPage', () => {
     expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
 
-  it('assigns a route to a fleet from a modal', async () => {
+  // 2026-11-21 (user, Dynamic Route Scheduling): the route is chosen when a trip is scheduled, so there is no Assign
+  // route step; each bus shows its own operating hours instead.
+  it("has no Assign route step and shows each bus's operating hours", () => {
     renderPage();
-    fireEvent.click(screen.getByRole('button', { name: 'Assign route' }));
-    const dialog = await screen.findByRole('dialog');
-    fireEvent.change(within(dialog).getByLabelText('Fleet'), { target: { value: '3' } });
-    fireEvent.change(within(dialog).getByLabelText('Route'), { target: { value: '10' } });
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Assign route' }));
-    await waitFor(() => expect(mocks.assignRouteToFleet).toHaveBeenCalledWith(3, { route_id: 10, start_time: '06:00', end_time: '22:00' }));
-    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: 'Assign route' })).not.toBeInTheDocument();
+    expect(screen.getAllByTestId('fleet-hours').length).toBeGreaterThan(0);
+    expect(mocks.assignRouteToFleet).not.toHaveBeenCalled();
   });
 
   it('has exactly one header action', async () => {

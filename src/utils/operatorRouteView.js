@@ -11,7 +11,7 @@ import { clock12 } from './clock';
  *   - distance is the last stop's distance_from_origin_km, duration the largest scheduled_offset_min; both are blank
  *     until stops carry them
  *   - status is "Active" when at least one active fleet is assigned to the route (an active fleets_routes row on an
- *     active fleet), otherwise "No active fleet"
+ *     active fleet), otherwise "No trips yet" (2026-11-21: a bus is chosen for each trip, so a route has none until then)
  */
 
 export const sortedRouteStops = (route) => [...(route?.route_stops || route?.routeStops || [])]
@@ -54,7 +54,7 @@ export function buildRouteRows({ routes = [], fleets = [] } = {}) {
       distanceKm: numberOrNull(last?.distance_from_origin_km),
       durationMin: offsets.length ? Math.max(...offsets) : null,
       activeFleets: fleetsOnRoute,
-      status: fleetsOnRoute.length > 0 ? { key: 'active', label: 'Active', tone: 'success' } : { key: 'no_fleet', label: 'No active fleet', tone: 'neutral' },
+      status: fleetsOnRoute.length > 0 ? { key: 'active', label: 'Active', tone: 'success' } : { key: 'no_fleet', label: 'No trips yet', tone: 'neutral' },
       geometryIssue: Boolean(route.geometry_stale || route.geometry_error),
     };
   });

@@ -21,7 +21,8 @@ export function isRangeSchedule(form) {
 /** The request body for both range calls (From is the form's trip_date). */
 export function rangePayload(form) {
   return {
-    fleet_route_id: Number(form.fleet_route_id),
+    fleet_id: Number(form.fleet_id), // 2026-11-21 (user): the bus and route chosen for this schedule
+    route_id: Number(form.route_id),
     driver_id: Number(form.driver_id),
     conductor_id: Number(form.conductor_id),
     block_type: form.block_type,
