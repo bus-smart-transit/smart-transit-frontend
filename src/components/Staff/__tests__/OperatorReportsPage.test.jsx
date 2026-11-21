@@ -35,12 +35,31 @@ describe('OperatorReportsPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Run report' }));
 
     expect(await screen.findByRole('table', { name: 'Trip stop coverage' })).toBeInTheDocument();
-    const gpsMetric = screen.getByText('GPS-verified trips').parentElement;
+    const gpsMetric = screen.getByText('Measured trips').parentElement;
     const proxyMetric = screen.getByText('Completion proxies').parentElement;
     expect(within(gpsMetric).getByText('1')).toBeInTheDocument();
     expect(within(proxyMetric).getByText('1')).toBeInTheDocument();
     expect(screen.getByText('Not measured')).toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Historical Forecast' })).not.toBeInTheDocument();
+  });
+
+  // 2026-11-21 (user): stops marked as reached count; stops marked from the GPS simulator are labelled Simulated.
+  it('counts trips measured from stops marked as reached and labels simulated ones', async () => {
+    mocks.getRouteAdherence.mockResolvedValue({ data: {
+      trips: [
+        { trip_id: 21, trip_date: '2026-11-21', status: 'departed', stops_scheduled: 4, stops_visited: 3, stops_acknowledged: 3, stop_coverage_pct: 75, gps_points: 0, data_source: 'acknowledged', simulated: true, simulated_acknowledgements: 3 },
+      ],
+    } });
+
+    render(<OperatorReportsPage fleets={fleets} />);
+    fireEvent.change(screen.getByLabelText('Fleet'), { target: { value: '3' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Run report' }));
+
+    const table = await screen.findByRole('table', { name: 'Trip stop coverage' });
+    expect(within(table).getByText('Stops marked', { selector: 'span' })).toBeInTheDocument();
+    expect(within(table).getByText('Simulated')).toBeInTheDocument();
+    expect(within(table).getByText('3 / 4')).toBeInTheDocument();
+    expect(within(screen.getByText('Measured trips').parentElement).getByText('1 simulated')).toBeInTheDocument();
   });
 
   it('shows occupancy by scheduled departure hour', async () => {

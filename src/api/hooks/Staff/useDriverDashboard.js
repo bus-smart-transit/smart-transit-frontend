@@ -198,6 +198,8 @@ export function useDriverDashboardData({ onLogout, pairing }) {
   const [assignedTripsForView, setAssignedTripsForView] = useState([]);
   const [stops, setStops] = useState([]);
   const [requestedStops, setRequestedStops] = useState([]);
+  // 2026-11-21 (user, demo): the Super Admin's GPS simulator controls this bus's location and may mark stops reached.
+  const [simulatedControl, setSimulatedControl] = useState(false);
   const [pin, setPin] = useState(null);
   const [showTripPin, setShowTripPin] = useState(false);
   const [pinInput, setPinInput] = useState('');
@@ -359,6 +361,7 @@ export function useDriverDashboardData({ onLogout, pairing }) {
     if (!isPaired || !hasActiveTrip) {
       setStops([]);
       setRequestedStops([]);
+      setSimulatedControl(false);
       stopsLoadedRef.current = false;
       return;
     }
@@ -368,8 +371,10 @@ export function useDriverDashboardData({ onLogout, pairing }) {
       if (Array.isArray(payload)) {
         setStops(payload);
         setRequestedStops([]);
+        setSimulatedControl(false);
       } else {
         setStops(payload?.stops ?? []);
+        setSimulatedControl(payload?.simulated_control === true);
         // D5: custom drop-offs passengers asked for; display only, placed after the stop they follow.
         setRequestedStops(payload?.requested_stops ?? []);
       }
@@ -537,6 +542,14 @@ export function useDriverDashboardData({ onLogout, pairing }) {
     }
     return undefined;
   }, [activeTab, hasActiveTrip, isPaired, loadStops]);
+
+  // 2026-11-21 (user, demo): while the simulator has control, stops it marks show within 20 seconds even without a
+  // live update (and the notice goes away when control is given back).
+  useEffect(() => {
+    if (!simulatedControl || !hasActiveTrip || !isPaired) return undefined;
+    const timer = setInterval(() => { void loadStops(); }, 20000);
+    return () => clearInterval(timer);
+  }, [simulatedControl, hasActiveTrip, isPaired, loadStops]);
 
   // ── Alighting proximity check (Feature 4) ─────────────────────────────────
   // Runs every 15 seconds while a trip is active. When the driver is within
@@ -930,6 +943,7 @@ export function useDriverDashboardData({ onLogout, pairing }) {
     assignedTrips,
     stops,
     requestedStops,
+    simulatedControl,
     pin,
     showTripPin, setShowTripPin,
     pinInput, setPinInput,

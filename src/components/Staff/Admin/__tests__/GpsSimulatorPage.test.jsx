@@ -1,6 +1,7 @@
 import { describe, expect, test, vi } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import GpsSimulatorPage from '../GpsSimulatorPage';
+import { nextStopToReach } from '../../../../utils/simulatorStops';
 
 vi.mock('../../../Map/RouteMap', () => ({ default: ({ vehicle }) => <div data-testid="map">{vehicle ? `${vehicle.latitude},${vehicle.longitude}` : 'no bus'}</div> }));
 
@@ -71,5 +72,36 @@ describe('GpsSimulatorPage', () => {
     expect(screen.getByText('Off route')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Back on route' }));
     expect(t.control).toHaveBeenCalledWith(3, { action: 'rejoin' });
+  });
+});
+
+// 2026-11-21 (user, demo): mark the next stop as reached for the Driver.
+describe('Mark the next stop as reached', () => {
+  const stops = [{ stop_id: 11, name: 'Stop One' }, { stop_id: 12, name: 'Stop Two' }];
+
+  test('picks the stop after the last one reached', () => {
+    expect(nextStopToReach(stops, null)).toEqual(stops[0]);
+    expect(nextStopToReach(stops, 11)).toEqual(stops[1]);
+    expect(nextStopToReach(stops, 12)).toBeNull();
+    expect(nextStopToReach(null, null)).toBeNull();
+  });
+
+  test('marks the next stop and says which stop was reached last', () => {
+    const t = tab();
+    t.data = { ...t.data, simulations: [{ ...sim, stops, last_acknowledged_stop_id: 11 }] };
+    render(<GpsSimulatorPage simulatorTab={t} />);
+
+    const row = screen.getByTestId('sim-acknowledge-row');
+    expect(row).toHaveTextContent('Last stop reached: Stop One');
+    fireEvent.click(within(row).getByRole('button', { name: 'Mark Stop Two as reached' }));
+    expect(t.control).toHaveBeenCalledWith(3, { action: 'acknowledge', stop_id: 12 });
+  });
+
+  test('has nothing left to mark at the end of the route', () => {
+    const t = tab();
+    t.data = { ...t.data, simulations: [{ ...sim, stops, last_acknowledged_stop_id: 12 }] };
+    render(<GpsSimulatorPage simulatorTab={t} />);
+    expect(screen.getByTestId('sim-acknowledge')).toBeDisabled();
+    expect(screen.getByTestId('sim-acknowledge')).toHaveTextContent('Every stop is reached');
   });
 });

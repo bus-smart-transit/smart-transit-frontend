@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { CornerUpRight, Pause, Play, RefreshCw, Route as RouteIcon, Square } from 'lucide-react';
+import { nextStopToReach } from '../../../utils/simulatorStops';
+import { CornerUpRight, MapPinCheck, Pause, Play, RefreshCw, Route as RouteIcon, Square } from 'lucide-react';
 import { OpPageHeader, OpCard, OpChip, OpEmpty } from '../Operator/OperatorUI';
 import { OP_SPACE } from '../Operator/operatorUiTokens';
 import Modal from '../../ui/Modal';
@@ -20,6 +21,9 @@ const FIELD = 'min-h-11 rounded-lg border border-slate-300 bg-white px-3 text-sm
 function SimulationCard({ sim, speeds, busy, onControl }) {
   const [stopId, setStopId] = useState('');
   const status = STATUS[sim.status] ?? STATUS.stopped;
+  // 2026-11-21 (user, demo): mark the next stop as reached for the Driver (the same rule as the Driver's tap).
+  const reached = nextStopToReach(sim.stops, sim.last_acknowledged_stop_id);
+  const lastReached = sim.stops.find((stop) => Number(stop.stop_id) === Number(sim.last_acknowledged_stop_id));
   return (
     <OpCard
       title={sim.route_name || `Trip ${sim.trip_id}`}
@@ -60,6 +64,13 @@ function SimulationCard({ sim, speeds, busy, onControl }) {
             ? <button type="button" disabled={busy} onClick={() => onControl(sim.id, { action: 'rejoin' })} className={BUTTON} data-testid="sim-rejoin"><RouteIcon className="h-4 w-4" aria-hidden="true" /> Back on route</button>
             : <button type="button" disabled={busy} onClick={() => onControl(sim.id, { action: 'deviate' })} className={`${BUTTON} border-amber-200 text-amber-800 hover:bg-amber-50`} data-testid="sim-deviate"><CornerUpRight className="h-4 w-4" aria-hidden="true" /> Go off route</button>}
         </div>
+        <div className="flex flex-wrap items-center gap-2" data-testid="sim-acknowledge-row">
+          <button type="button" disabled={busy || !reached} onClick={() => onControl(sim.id, { action: 'acknowledge', stop_id: Number(reached.stop_id) })} className={BUTTON} data-testid="sim-acknowledge">
+            <MapPinCheck className="h-4 w-4" aria-hidden="true" /> {reached ? `Mark ${reached.name || 'the next stop'} as reached` : 'Every stop is reached'}
+          </button>
+          <span className="text-sm text-slate-600">Last stop reached: {lastReached?.name || 'None yet'}</span>
+        </div>
+        <p className="text-xs text-slate-500">This marks the stop for the Driver, as if they tapped it. Passengers who did not board at the stops behind the bus are marked as missed, and the route adherence report shows the stop as Simulated.</p>
         {sim.off_route && <p className="text-xs text-amber-800">The bus is reported about 300 m to the side of its route, so the Operator sees it as off route. It keeps moving with the trip until you put it back.</p>}
         {sim.route_id && (
           <div className="h-72 overflow-hidden rounded-xl ring-1 ring-slate-200" aria-label="Live map preview">

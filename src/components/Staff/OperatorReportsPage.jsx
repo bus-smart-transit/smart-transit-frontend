@@ -37,8 +37,14 @@ function EmptyReport({ children }) {
   return <p className="rounded-md border border-dashed border-slate-300 px-4 py-8 text-center text-sm text-slate-500">{children}</p>;
 }
 
+// 2026-11-21 (user): a trip is measured from GPS, or from the stops marked as reached (by the Driver, or for the demo by
+// the GPS simulator: labelled Simulated). A trip with neither is a completion proxy.
+const MEASURED = ['gps', 'acknowledged'];
+const isMeasured = (trip) => MEASURED.includes(trip?.data_source);
+const basisText = (trip) => (trip?.data_source === 'gps' ? 'GPS' : trip?.data_source === 'acknowledged' ? 'Stops marked' : 'Completion proxy');
+
 function adherenceRows(report) {
-  return (Array.isArray(report?.trips) ? report.trips : []).filter((trip) => trip.data_source === 'gps');
+  return (Array.isArray(report?.trips) ? report.trips : []).filter(isMeasured);
 }
 
 function exportRowsFor(reportType, report) {
@@ -47,11 +53,13 @@ function exportRowsFor(reportType, report) {
       trip_id: trip.trip_id,
       trip_date: String(trip.trip_date || '').slice(0, 10),
       status: trip.status,
-      data_source: trip.data_source === 'gps' ? 'GPS measured' : 'Completion proxy',
+      data_source: basisText(trip),
+      simulated: trip.simulated ? 'Yes' : 'No',
       gps_points: trip.gps_points ?? 0,
-      stops_scheduled: trip.data_source === 'gps' ? trip.stops_scheduled : null,
-      stops_visited: trip.data_source === 'gps' ? trip.stops_visited : null,
-      stop_coverage_pct: trip.data_source === 'gps' ? trip.stop_coverage_pct : null,
+      stops_scheduled: isMeasured(trip) ? trip.stops_scheduled : null,
+      stops_visited: isMeasured(trip) ? trip.stops_visited : null,
+      stops_marked: isMeasured(trip) ? (trip.stops_acknowledged ?? 0) : null,
+      stop_coverage_pct: isMeasured(trip) ? trip.stop_coverage_pct : null,
     }));
   }
 
@@ -91,26 +99,27 @@ function RouteAdherenceReport({ report }) {
     : null;
   const deviated = measured.filter((trip) => Number(trip.stop_coverage_pct) < 80).length;
   const adherenceRate = measured.length ? ((measured.length - deviated) / measured.length) * 100 : null;
+  const simulatedCount = measured.filter((trip) => trip.simulated).length;
 
   return (
     <div className="space-y-4">
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Metric label="GPS-verified trips" value={numberText(measured.length)} />
-        <Metric label="GPS stop coverage" value={percentText(averageCoverage)} detail="Average across measured trips" />
-        <Metric label="Trips below 80%" value={numberText(deviated)} detail={`GPS-only adherence ${percentText(adherenceRate)}`} />
-        <Metric label="Completion proxies" value={numberText(proxyTrips.length)} detail="Shown separately; excluded from GPS rate" />
+        <Metric label="Measured trips" value={numberText(measured.length)} detail={simulatedCount ? `${numberText(simulatedCount)} simulated` : undefined} />
+        <Metric label="Stop coverage" value={percentText(averageCoverage)} detail="Average across measured trips" />
+        <Metric label="Trips below 80%" value={numberText(deviated)} detail={`Adherence ${percentText(adherenceRate)}`} />
+        <Metric label="Completion proxies" value={numberText(proxyTrips.length)} detail="Shown separately; excluded from the rate" />
       </div>
-      <p className="text-xs text-slate-500">A scheduled stop is counted as visited when recorded GPS is within 300 m. This measures stop coverage, not ordered route-path adherence.</p>
+      <p className="text-xs text-slate-500">A scheduled stop is counted as visited when recorded GPS is within 300 m, or when the Driver marked it as reached. Stops marked from the GPS simulator are labelled Simulated. This measures stop coverage, not ordered route-path adherence.</p>
       {trips.length === 0 ? <EmptyReport>No trips in this fleet and period.</EmptyReport> : (
         <div className="overflow-x-auto rounded-md border border-slate-200 bg-white">
           <table className="w-full text-sm" data-testid="adherence-table">
             <caption className="sr-only">Trip stop coverage</caption>
             <thead className="bg-slate-50 text-left text-xs font-semibold uppercase text-slate-500">
-              <tr>{['Trip', 'Date', 'Status', 'Stop coverage', 'Stops visited', 'GPS points', 'Data basis'].map((label) => <th key={label} className="px-3 py-2">{label}</th>)}</tr>
+              <tr>{['Trip', 'Date', 'Status', 'Stop coverage', 'Stops visited', 'Stops marked', 'GPS points', 'Data basis'].map((label) => <th key={label} className="px-3 py-2">{label}</th>)}</tr>
             </thead>
             <tbody>
               {trips.map((trip) => {
-                const isGps = trip.data_source === 'gps';
+                const isGps = isMeasured(trip);
                 const coverage = isGps ? Number(trip.stop_coverage_pct) : null;
                 return (
                   <tr key={trip.trip_id} className="border-t border-slate-100">
@@ -128,8 +137,14 @@ function RouteAdherenceReport({ report }) {
                       ) : <span className="text-slate-400">Not measured</span>}
                     </td>
                     <td className="px-3 py-2 text-slate-600">{isGps ? `${trip.stops_visited ?? 0} / ${trip.stops_scheduled ?? 0}` : '-'}</td>
+                    <td className="px-3 py-2 text-slate-600">{isGps ? numberText(trip.stops_acknowledged ?? 0) : '-'}</td>
                     <td className="px-3 py-2 text-slate-600">{numberText(trip.gps_points ?? 0)}</td>
-                    <td className="px-3 py-2"><span className={`rounded-sm px-2 py-1 text-xs font-semibold ${isGps ? 'bg-teal-50 text-teal-800' : 'bg-slate-100 text-slate-600'}`}>{isGps ? 'GPS' : 'Completion proxy'}</span></td>
+                    <td className="px-3 py-2">
+                      <span className="flex flex-wrap gap-1">
+                        <span className={`rounded-sm px-2 py-1 text-xs font-semibold ${isGps ? 'bg-teal-50 text-teal-800' : 'bg-slate-100 text-slate-600'}`}>{basisText(trip)}</span>
+                        {trip.simulated && <span className="rounded-sm bg-sky-50 px-2 py-1 text-xs font-semibold text-sky-800" title={`${trip.simulated_acknowledgements ?? 0} stop(s) marked from the GPS simulator`}>Simulated</span>}
+                      </span>
+                    </td>
                   </tr>
                 );
               })}

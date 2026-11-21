@@ -155,6 +155,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     trip,
     stops,
     requestedStops,
+    simulatedControl,
     shiftState,
     tripDetailsModal, setTripDetailsModal,
     loading,
@@ -340,6 +341,14 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
             >
               Dismiss
             </button>
+          </div>
+        )}
+
+        {/* 2026-11-21 (user, demo): the Super Admin's GPS simulator has taken control of this bus's location. */}
+        {simulatedControl && !showNoCurrentTripState && (
+          <div role="status" className="mb-4 flex items-start gap-2 rounded-xl border border-sky-300 bg-sky-50 px-4 py-3 text-sm text-sky-900" data-testid="driver-simulated-control">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-sky-700" aria-hidden="true" />
+            <span><strong>The location of this bus is being controlled from the GPS simulator.</strong> Your phone&apos;s location is not used for now, and stops may be marked as reached for you.</span>
           </div>
         )}
 
