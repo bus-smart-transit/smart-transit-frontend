@@ -48,3 +48,26 @@ describe('Track Bus route colours', () => {
     expect(routeColorMap([3]).get(3).color).toBe(routeColor(3));
   });
 });
+
+// 2026-11-21 (user): the route's saved colour wins; the id colour is only a fallback.
+describe('saved route colours', () => {
+  it('uses the saved colour when it is a real colour', () => {
+    expect(routeColor(9, '#123abc')).toBe('#123abc');
+    expect(routeColor(9, 'red')).toBe(ROUTE_PALETTE[0]);
+    expect(routeColor(9, null)).toBe(ROUTE_PALETTE[0]);
+  });
+
+  it('takes saved colours from a Map or an object', () => {
+    expect(routeColorMap([1, 9], new Map([[9, '#123abc']])).get(9).color).toBe('#123abc');
+    expect(routeColorMap([1, 9], { 9: '#123abc' }).get(9).color).toBe('#123abc');
+    expect(routeColorMap([1, 9], { 9: '#123abc' }).get(1).color).toBe(ROUTE_PALETTE[0]);
+  });
+
+  it('colours the tracking route lines and dashboard rows with the saved colour', () => {
+    const line = { type: 'LineString', coordinates: [[125, 7], [125.1, 7.1]] };
+    const features = routeLineFeatures([{ route_id: 9, route_color: '#123abc', leg_direction: 'outbound' }], { '9:outbound': line });
+    expect(features[0].properties.color).toBe('#123abc');
+    const rows = todayByRoute([{ trip_id: 1, status: 'scheduled', fleet_route: { route_id: 9, route: { route_id: 9, route_name: 'R', color: '#123abc' } } }]);
+    expect(rows[0].color).toBe('#123abc');
+  });
+});

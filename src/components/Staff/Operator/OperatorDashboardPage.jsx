@@ -177,7 +177,11 @@ export default function OperatorDashboardPage({
   const view = useMemo(() => buildDashboardView({ trips, fleets, locations, nowMs }), [trips, fleets, locations, nowMs]);
   const { kpis } = view;
   const onTime = useOnTimeTrips(trips);
-  const colors = useMemo(() => routeColorMap([...view.tripsByRoute.map((row) => row.routeId), ...view.mapBuses.map((bus) => bus.routeId)]), [view.tripsByRoute, view.mapBuses]);
+  const colors = useMemo(() => {
+    // 2026-11-21 (user): each route's saved colour (from the trips' routes).
+    const saved = new Map([...view.mapBuses.map((bus) => [bus.routeId, bus.routeColor]), ...view.tripsByRoute.map((row) => [row.routeId, row.color])].filter(([, color]) => color));
+    return routeColorMap([...view.tripsByRoute.map((row) => row.routeId), ...view.mapBuses.map((bus) => bus.routeId)], saved);
+  }, [view.tripsByRoute, view.mapBuses]);
   const firstName = String(operatorName || '').trim().split(/\s+/)[0];
   const inServicePct = kpis.totalFleets > 0 ? Math.round((kpis.activeBuses / kpis.totalFleets) * 100) : null;
   const onTimeToday = onTime?.today ?? null;

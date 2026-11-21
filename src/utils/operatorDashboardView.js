@@ -300,7 +300,7 @@ export function todayByRoute(trips = []) {
     const routeId = routeIdOf(trip);
     if (!routeId) continue;
     const route = trip?.fleet_route?.route || {};
-    const row = rows.get(routeId) ?? { routeId, name: routeNameOf(trip), origin: route.origin || null, destination: route.destination || null, trips: 0, delayed: 0, live: 0 };
+    const row = rows.get(routeId) ?? { routeId, name: routeNameOf(trip), origin: route.origin || null, destination: route.destination || null, color: route.color || null, trips: 0, delayed: 0, live: 0 };
     row.trips += 1;
     if (statusOf(trip) === 'delayed') row.delayed += 1;
     if (LIVE_STATUSES.includes(statusOf(trip))) row.live += 1;
@@ -324,7 +324,7 @@ export function busesForMap(trips = [], locations = [], nowMs = Date.now()) {
       const gps = gpsStatus(location, nowMs);
       const state = gps.state === 'off_route' ? 'off_route' : statusOf(trip) === 'delayed' ? 'delayed' : 'in_service';
       return {
-        tripId: Number(trip.trip_id), fleetId: fleetIdOf(trip), routeId: routeIdOf(trip), direction: trip?.leg_direction === 'reverse' ? 'reverse' : 'outbound',
+        tripId: Number(trip.trip_id), fleetId: fleetIdOf(trip), routeId: routeIdOf(trip), routeColor: trip?.fleet_route?.route?.color || null, direction: trip?.leg_direction === 'reverse' ? 'reverse' : 'outbound',
         latitude: lat, longitude: lng, heading: Number.isFinite(Number(location.heading)) ? Number(location.heading) : null,
         state, label: `${routeNameOf(trip)} - ${plateOf(trip)} - ${departureLabel(trip)}`,
       };

@@ -451,7 +451,7 @@ for (const { who, email, url, home } of [
 
 // ---------------------------------------------------------------- Batch 54: All available trips
 
-test('TC-14 trips page: asks for location, lists stops near you, bus type chips filter, route stops pick a drop-off', async ({ browser }) => {
+test('TC-14 trips page: asks for location, lists stops near you, bus type chips filter, trip cards link to the route page', async ({ browser }) => {
   test.skip(!ctx.originStop, 'The first stop of the new trip is not known.');
   const context = await browser.newContext({ geolocation: { latitude: Number(ctx.originStop.latitude), longitude: Number(ctx.originStop.longitude) }, permissions: [] });
   // A first-time visitor's browser says "prompt" (headless Edge says "denied" until a test grants it).
@@ -492,23 +492,12 @@ test('TC-14 trips page: asks for location, lists stops near you, bus type chips 
   await expect(page).toHaveURL(new RegExp(`from=${ctx.listed.origin.stop_code}`));
   await expect(page.getByTestId('nearby-stops')).toHaveCount(0);
 
-  // route stops: asked only when opened; Get off here opens booking with that drop-off
-  const card = page.locator('div').filter({ has: page.getByRole('button', { name: 'View route stops' }) }).last();
-  const before = sent(entry, 'GET', '/timeline').length;
-  await page.getByRole('button', { name: 'View route stops' }).first().click();
-  await expect(page.getByTestId('route-stop').first()).toBeVisible();
-  expect(sent(entry, 'GET', '/timeline').length).toBe(before + 1);
-  await expect(page.getByText('You board here').first()).toBeVisible();
-  await shot(page, 'TC-14-route-stops');
-  const getOff = page.getByRole('button', { name: /^Get off at / }).first();
-  if (await getOff.count()) {
-    const name = (await getOff.getAttribute('aria-label')).replace('Get off at ', '');
-    await getOff.click();
-    await expect(page).toHaveURL(/\/passenger\/book\?/);
-    expect(new URL(page.url()).searchParams.get('to')).toBeTruthy();
-    test.info().annotations.push({ type: 'drop-off', description: name });
-  }
-  void card;
+  // 2026-11-20 (user): the route's stops moved to the route's own page; each trip card links to it.
+  await page.getByTestId('trip-view-route').first().click();
+  await expect(page).toHaveURL(/\/routes\/\d+/);
+  await expect(page.getByTestId('route-stops')).toBeVisible();
+  await expect(page.getByTestId('route-stops').locator('li').first()).toBeVisible();
+  await shot(page, 'TC-14-route-page');
   expectClean(entry, 'TC-14');
   await context.close();
 });

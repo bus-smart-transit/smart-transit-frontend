@@ -33,7 +33,7 @@ export const routeKeyOf = (row) => `${Number(row?.route_id)}:${row?.leg_directio
  * Batch 81 (user, 2026-11-19): each route in its own colour (utils/routeColors, the same as the Operator dashboard).
  */
 export function routeLineFeatures(rows = [], geometryByKey = {}) {
-  const colors = routeColorMap(rows.map((row) => row?.route_id));
+  const colors = routeColorMap(rows.map((row) => row?.route_id), Object.fromEntries(rows.filter((row) => row?.route_color).map((row) => [Number(row.route_id), row.route_color])));
   const seen = new Set();
   const features = [];
   rows.forEach((row) => {

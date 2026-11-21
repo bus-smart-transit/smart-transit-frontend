@@ -9,6 +9,7 @@ import PlaceSearch from './PlaceSearch';
 import StopPinPicker from './StopPinPicker';
 import { isPinned, roundCoord } from '../../../utils/stopPin';
 import { useCanManageCompany } from './companyAdmin';
+import { routeColor } from '../../../utils/routeColors';
 import { useRoutesTab } from '../../../api/hooks/Staff/useOperatorDashboard';
 import {
   buildRouteRows, filterRouteRows, municipalityOptions, formatDuration, filterStops, pageOf, routeNameFrom,
@@ -159,6 +160,8 @@ export default function RoutesPage({ routes, stops, trips, fleets, onRefresh, on
   const columns = [
     { key: 'route', header: 'Route', render: (row) => (
       <span className="whitespace-nowrap">
+        {/* 2026-11-21 (user): the route's own colour, as on the maps */}
+        <span className="mr-2 inline-block h-2.5 w-2.5 rounded-full align-middle" style={{ backgroundColor: routeColor(row.route.route_id, row.route.color) }} aria-hidden="true" />
         <strong className="text-slate-900">{row.route.route_name}</strong>
         <span className="block text-xs text-slate-500">{row.route.origin || '-'} to {row.route.destination || '-'}</span>
       </span>

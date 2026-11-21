@@ -22,7 +22,7 @@ export default function RoutePage() {
   const { routeId } = useParams();
   const { loading, route, stops, departures, error } = useRoutePage(routeId);
   const ordered = stopsForDirection(stops, 'outbound');
-  const color = routeColor(routeId);
+  const color = routeColor(routeId, route?.color);
 
   return (
     <div className="flex min-h-screen flex-col bg-slate-50">

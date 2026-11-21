@@ -45,7 +45,7 @@ export default function ProvinceRoutesPage() {
                   <Link
                     to={routeHref(route.route_id)}
                     className="group flex h-full flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-card transition hover:border-teal-300 hover:shadow-card-hover"
-                    style={{ borderLeft: `6px solid ${routeColor(route.route_id)}` }}
+                    style={{ borderLeft: `6px solid ${routeColor(route.route_id, route.color)}` }}
                   >
                     <span className="font-display text-lg font-bold text-navy-950">{route.route_name}</span>
                     <span className="mt-1 text-sm text-slate-600">{route.origin} → {route.destination}</span>
