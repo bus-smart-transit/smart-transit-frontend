@@ -43,7 +43,7 @@ describe('FareRulesPanel', () => {
     expect(rows).toHaveLength(2)
     // Batch 53 item 8: a card per rule (was a table row).
     expect(rows[0]).toHaveTextContent('Aircon')
-    expect(rows[0]).toHaveTextContent('Express')
+    expect(rows[0]).toHaveTextContent('Non-stop') // 2026-11-21 (user): express is shown as Non-stop
     expect(rows[0]).toHaveTextContent('2026-10-01')
     expect(rows[0]).toHaveTextContent('SAMPLE')
     expect(rows[1]).toHaveTextContent('DVO-1234')

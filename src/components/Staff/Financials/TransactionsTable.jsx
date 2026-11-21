@@ -17,7 +17,7 @@ const COLUMNS = [
   { key: 'status', label: 'Status', sort: 'status' },
 ];
 
-const SERVICE_LABEL = { regular: 'Regular', express: 'Express' };
+const SERVICE_LABEL = { regular: 'Regular', express: 'Non-stop' }; // 2026-11-21 (user): express is shown as Non-stop
 
 /** The paginated, sortable transaction log. Every value is read from the server's row. */
 export default function TransactionsTable({ log, loading, error, table, onSort, onPage, onRetry }) {

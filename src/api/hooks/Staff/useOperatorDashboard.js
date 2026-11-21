@@ -537,20 +537,6 @@ export function useRoutesTab({ onRefresh }) {
     }
   };
 
-  const handleToggleStopExpress = async (routeId, routeStopId, served) => {
-    setManageSaving(true);
-    setManageMsg('');
-    try {
-      await OperatorService.setOperatorRouteStopExpress(Number(routeId), Number(routeStopId), served);
-      setManageMsg(served ? 'Express trips will stop here.' : 'Express trips will no longer stop here.');
-      onRefresh();
-    } catch (err) {
-      setManageMsg(err?.message || 'Failed to update express stop setting.');
-    } finally {
-      setManageSaving(false);
-    }
-  };
-
   const handleCreateRoute = async (event) => {
     event.preventDefault();
     setManageSaving(true);
@@ -650,7 +636,6 @@ export function useRoutesTab({ onRefresh }) {
     handleDeleteStop,
     handleDeleteRoute,
     handleRemoveStopFromRoute,
-    handleToggleStopExpress,
     handleCreateRoute,
     handleAddStopToRoute,
   };
@@ -681,7 +666,7 @@ export function useTripsTab({ trips, onRefresh }) {
     trip_date: '',
     to_date: '',
     departure_time: '',
-    trip_type: 'one_way',
+    trip_type: 'round_trip', // 2026-11-21 (user): every schedule is a multi-leg block (out and back)
     return_departure_time: '',
     driver_id: '',
     conductor_id: '',
@@ -757,7 +742,7 @@ export function useTripsTab({ trips, onRefresh }) {
     trip_date: '',
     to_date: '',
     departure_time: '',
-    trip_type: 'one_way',
+    trip_type: 'round_trip', // 2026-11-21 (user): every schedule is a multi-leg block (out and back)
     return_departure_time: '',
     driver_id: '',
     conductor_id: '',
@@ -810,37 +795,21 @@ export function useTripsTab({ trips, onRefresh }) {
     }
     setSaving(true); setMsg('');
     try {
-      if (form.trip_type === 'round_trip') {
-        const created = await OperatorService.createShiftBlock({
-          fleet_id: Number(form.fleet_id),
-          route_id: Number(form.route_id),
-          driver_id: Number(form.driver_id),
-          conductor_id: Number(form.conductor_id),
-          block_type: form.block_type,
-          scheduled_date: form.trip_date,
-          service_type: form.service_type || 'regular',
-          leg_departure_times: Array.isArray(form.leg_departure_times)
-            ? form.leg_departure_times
-            : ['06:00', '08:30', '11:00', '13:30'],
-        });
-        // 2026-10-27 (§4.2): the server's planning flags (overtime, driving limit, rest) for the saved times.
-        setMsg(planningMessage('Shift block scheduled.', created?.data?.planning?.flags));
-      } else {
-        await OperatorService.scheduleTrip({
-          fleet_id: Number(form.fleet_id),
-          route_id: Number(form.route_id),
-          trip_date: form.trip_date,
-          departure_time: form.departure_time,
-          trip_type: 'one_way',
-          service_type: form.service_type || 'regular',
-          return_departure_time: null,
-          // Batch 46: a single trip may wait for its crew ("Choose later"); it cannot board until both are assigned.
-          driver_id: form.driver_id ? Number(form.driver_id) : null,
-          conductor_id: form.conductor_id ? Number(form.conductor_id) : null,
-          notes: form.notes,
-        });
-        setMsg(form.driver_id && form.conductor_id ? 'Ad hoc trip scheduled.' : 'Trip scheduled. Assign its crew before it can start boarding.');
-      }
+      // 2026-11-21 (user, Dynamic Route Scheduling): every schedule is a multi-leg block that goes out and comes back.
+      const created = await OperatorService.createShiftBlock({
+        fleet_id: Number(form.fleet_id),
+        route_id: Number(form.route_id),
+        driver_id: Number(form.driver_id),
+        conductor_id: Number(form.conductor_id),
+        block_type: form.block_type,
+        scheduled_date: form.trip_date,
+        service_type: form.service_type || 'regular',
+        leg_departure_times: Array.isArray(form.leg_departure_times)
+          ? form.leg_departure_times
+          : ['06:00', '08:30', '11:00', '13:30'],
+      });
+      // 2026-10-27 (§4.2): the server's planning flags (overtime, driving limit, rest) for the saved times.
+      setMsg(planningMessage('Shift block scheduled.', created?.data?.planning?.flags));
 
       setForm(blankScheduleForm());
       setShowModal(false);

@@ -33,7 +33,15 @@ describe('formatDuration', () => {
 });
 
 describe('buildRouteRows', () => {
-  const rows = buildRouteRows({ routes: [tagum, empty, stale], fleets: [fleet(1), fleet(2, { status: 'inactive' }), fleet(3, { fleet_routes: [{ route_id: 4, status: 'inactive' }] })] });
+  // 2026-11-21 (user, Dynamic Route Scheduling): a route's active buses are those with a trip on it today or later.
+  const onRoute = (id, routeId, status, date, plate) => ({ trip_id: id, status, trip_date: date, departure_time: '08:00:00', fleet_route: { route_id: routeId, fleet_id: id, fleet: { fleet_id: id, plate_number: plate } } });
+  const trips = [
+    onRoute(1, 4, 'scheduled', TODAY, 'PLT-1'),
+    onRoute(1, 4, 'scheduled', '2026-10-07', 'PLT-1'), // the same bus again: listed once
+    onRoute(2, 5, 'cancelled', TODAY, 'PLT-2'), // cancelled: does not count
+    onRoute(3, 5, 'scheduled', '2026-10-01', 'PLT-3'), // in the past: does not count
+  ];
+  const rows = buildRouteRows({ routes: [tagum, empty, stale], trips, today: TODAY });
   const byId = (id) => rows.find((row) => row.routeId === id);
 
   it('takes municipalities, distance and duration from the stops on the route', () => {
@@ -49,7 +57,7 @@ describe('buildRouteRows', () => {
     expect(byId(5).municipalities).toEqual([]);
   });
 
-  it('is active only with an active fleet on an active assignment', () => {
+  it('is active only with a bus scheduled on it today or later', () => {
     expect(byId(4).status.key).toBe('active');
     expect(byId(4).activeFleets.map((item) => item.plate)).toEqual(['PLT-1']);
     expect(byId(5).status.key).toBe('no_fleet');
@@ -62,7 +70,7 @@ describe('buildRouteRows', () => {
 });
 
 describe('filters', () => {
-  const rows = buildRouteRows({ routes: [tagum, empty], fleets: [] });
+  const rows = buildRouteRows({ routes: [tagum, empty], trips: [] });
   it('lists the municipalities once, sorted', () => {
     expect(municipalityOptions(rows)).toEqual(['Carmen', 'Davao City', 'Tagum City']);
   });

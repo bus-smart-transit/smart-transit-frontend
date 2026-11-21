@@ -67,7 +67,7 @@ describe('RoutesPage list', () => {
     expect(within(row).getByText('PLT-1')).toBeInTheDocument();
     expect(within(row).getByText('Active')).toBeInTheDocument();
     const empty = screen.getByText('Davao-Mati').closest('tr');
-    expect(within(empty).getByText('No trips yet')).toBeInTheDocument();
+    expect(within(empty).getByText('No trips scheduled')).toBeInTheDocument();
   });
 
   it('never claims route adherence or a route health score', () => {
@@ -261,13 +261,14 @@ describe('Route detail', () => {
     expect(screen.queryByText(/drag|move up|move down|reorder/i)).not.toBeInTheDocument();
   });
 
-  it('toggles express and removes a stop (after confirming)', async () => {
+  // 2026-11-21 (user): a non-stop trip serves only the route's two ends, so the Stops tab has no Express switch.
+  it('has no express switch and removes a stop (after confirming)', async () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true);
     renderPage();
     await openTagum();
     goToTab('Stops');
-    fireEvent.click(screen.getByRole('checkbox', { name: 'Express trips stop at Stop 2' }));
-    await waitFor(() => expect(mocks.setOperatorRouteStopExpress).toHaveBeenCalledWith(4, 20, true));
+    expect(screen.queryByRole('checkbox', { name: 'Express trips stop at Stop 2' })).not.toBeInTheDocument();
+    expect(mocks.setOperatorRouteStopExpress).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Remove Stop 3 from route' }));
     await waitFor(() => expect(mocks.removeOperatorStopFromRoute).toHaveBeenCalledWith(4, 30));
   });

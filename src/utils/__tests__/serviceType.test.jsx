@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
-import { FARE_UNAVAILABLE, isExpress, isServedOnService, servedStopsOnService, serviceTypeLabel } from '../serviceType'
+import { FARE_UNAVAILABLE, isExpress, servedStopsOnService, serviceTypeLabel } from '../serviceType'
 import { destinationsAhead, orderedStopsForLeg } from '../cashTicket'
 import { TripCard } from '../../components/Passenger/Trips/TripResults'
 import ServiceTypeChip from '../../components/ui/ServiceTypeChip'
@@ -14,21 +14,22 @@ describe('service type helpers', () => {
     expect(isExpress('EXPRESS')).toBe(true)
     expect(isExpress('regular')).toBe(false)
     expect(isExpress(undefined)).toBe(false)
-    expect(serviceTypeLabel('express')).toBe('Express')
+    expect(serviceTypeLabel('express')).toBe('Non-stop') // 2026-11-21 (user): express is shown as Non-stop
     expect(serviceTypeLabel(null)).toBe('Regular')
   })
 
-  it('serves every stopping stop on a regular trip and only express stops on an express trip', () => {
-    expect(stops.filter((s) => isServedOnService(s, 'regular')).map((s) => s.stop_id)).toEqual([1, 2, 4, 5])
-    expect(stops.filter((s) => isServedOnService(s, 'express')).map((s) => s.stop_id)).toEqual([1, 4, 5])
+  // 2026-11-21 (user): a non-stop (express) trip serves only the route's two ends, even where stops are marked.
+  it('serves every stopping stop on a regular trip and only the two ends on a non-stop trip', () => {
+    expect(servedStopsOnService(stops, 'regular').map((s) => s.stop_id)).toEqual([1, 2, 4, 5])
+    expect(servedStopsOnService(stops, 'express').map((s) => s.stop_id)).toEqual([1, 5])
   })
 })
 
 describe('cash ticket pickers on an express trip', () => {
-  it('leave out stops the express trip skips, in both directions, and from the destinations', () => {
-    expect(orderedStopsForLeg(stops, 'outbound', 'express').map((s) => s.stop_id)).toEqual([1, 4, 5])
-    expect(orderedStopsForLeg(stops, 'reverse', 'express').map((s) => s.stop_id)).toEqual([5, 4, 1])
-    expect(destinationsAhead(orderedStopsForLeg(stops, 'outbound', 'express'), 1).map((s) => s.stop_id)).toEqual([4, 5])
+  it('leave out every stop between the ends on a non-stop trip, in both directions, and from the destinations', () => {
+    expect(orderedStopsForLeg(stops, 'outbound', 'express').map((s) => s.stop_id)).toEqual([1, 5])
+    expect(orderedStopsForLeg(stops, 'reverse', 'express').map((s) => s.stop_id)).toEqual([5, 1])
+    expect(destinationsAhead(orderedStopsForLeg(stops, 'outbound', 'express'), 1).map((s) => s.stop_id)).toEqual([5])
   })
 
   it('keep a regular trip unchanged', () => {
@@ -40,11 +41,11 @@ describe('cash ticket pickers on an express trip', () => {
 describe('passenger trip card', () => {
   const trip = { trip_id: 7, trip_date: '2026-10-04', boarding_time: '08:00', arrival_time: null, bus_label: 'Davao Bus - B-014', seats_left: 5, fare: null, service_type: 'express', bookable: false, origin: { name: 'A' }, destination: { name: 'D' } }
 
-  it('shows the Express chip and a disabled "Fare unavailable" button, and does not book', () => {
+  it('shows the Non-stop chip and a disabled "Fare unavailable" button, and does not book', () => {
     const onBook = vi.fn()
     render(<TripCard trip={trip} onBook={onBook} />)
 
-    expect(screen.getByTestId('service-type-chip')).toHaveTextContent('Express')
+    expect(screen.getByTestId('service-type-chip')).toHaveTextContent('Non-stop')
     const button = screen.getByRole('button', { name: FARE_UNAVAILABLE })
     expect(button).toBeDisabled()
     fireEvent.click(button)
@@ -82,7 +83,8 @@ describe('servedStopsOnService', () => {
     expect(names(servedStopsOnService(route(), 'express'))).toEqual(['A', 'E']);
   });
 
-  it('keeps the marked stops when the route marks any', () => {
-    expect(names(servedStopsOnService(route(['A', 'D']), 'express'))).toEqual(['A', 'D']);
+  // 2026-11-21 (user): marked stops no longer change a non-stop trip.
+  it('keeps the two ends even when the route marks other stops', () => {
+    expect(names(servedStopsOnService(route(['A', 'D']), 'express'))).toEqual(['A', 'E']);
   });
 });

@@ -33,3 +33,27 @@ export function removeLastLeg(times) {
   const list = Array.isArray(times) ? times : [];
   return list.length <= 1 ? list : list.slice(0, -1);
 }
+
+// 2026-11-21 (user, Dynamic Route Scheduling): every schedule goes out and comes back, so legs come in pairs
+// (outbound, inbound): at least 2, always an even number (the server checks again).
+
+/** One more out-and-back pair of empty legs, up to the most a block may have. */
+export function addRoundTrip(times) {
+  const list = Array.isArray(times) ? times : [];
+  return list.length + 2 > MAX_LEGS ? list : [...list, '', ''];
+}
+
+/** The last out-and-back pair removed, keeping at least one pair. */
+export function removeRoundTrip(times) {
+  const list = Array.isArray(times) ? times : [];
+  return list.length <= 2 ? list : list.slice(0, -2);
+}
+
+/** A suggested list cut to an even number of legs (an odd last leg is dropped), keeping at least two. */
+export function evenLegs(times) {
+  const list = Array.isArray(times) ? times : [];
+  return list.length > 2 && list.length % 2 === 1 ? list.slice(0, -1) : list;
+}
+
+/** "Outbound" for legs 1, 3, 5... and "Inbound" for 2, 4, 6... (index from 0). */
+export const legDirectionLabel = (index) => (index % 2 === 0 ? 'Outbound' : 'Inbound');

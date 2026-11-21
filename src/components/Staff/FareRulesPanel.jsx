@@ -6,6 +6,7 @@ import { getBusinessToday } from '../../utils/dates'
 import { FareRuleCopyModal, FareRuleEditModal } from './FareRuleActions'
 import Modal from '../ui/Modal'
 import Pagination from '../ui/Pagination'
+import { serviceTypeLabel } from '../../utils/serviceType'
 
 // Batch 53 item 8 (user's design): rules as cards, five a page; the Add form opens in a pop-up; no filters.
 const RULES_PER_PAGE = 5
@@ -208,7 +209,7 @@ export default function FareRulesPanel({ service, fleets = [], routes = [], canC
               <li key={rule.fare_rule_id} className="py-4" data-testid="fare-rule-row">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className={`text-base font-bold ${t.title}`}>{rule.fleet_id ? (rule.fleet?.plate_number ?? `Fleet #${rule.fleet_id}`) : `General · ${cls}`} · {cap(rule.service_type)}</p>
+                    <p className={`text-base font-bold ${t.title}`}>{rule.fleet_id ? (rule.fleet?.plate_number ?? `Fleet #${rule.fleet_id}`) : `General · ${cls}`} · {serviceTypeLabel(rule.service_type)}</p>
                     <p className={`text-xs ${t.muted}`}>{cap(rule.seat_type)} · {rule.route_id ? (routeName.get(Number(rule.route_id)) ?? `Route #${rule.route_id}`) : 'All routes'} · {cls}</p>
                   </div>
                   <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold ${active ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-700'}`}>{active ? 'Active' : 'Stopped'}</span>
@@ -277,7 +278,7 @@ export default function FareRulesPanel({ service, fleets = [], routes = [], canC
             </select>
           )}
           <select aria-label="Service type" value={form.service_type} onChange={set('service_type')} className={t.field}>
-            {options.service_types.map((type) => <option key={type} value={type}>{cap(type)}</option>)}
+            {options.service_types.map((type) => <option key={type} value={type}>{serviceTypeLabel(type)}</option>)}
           </select>
           <select aria-label="Seat type" value={form.seat_type} onChange={set('seat_type')} className={t.field}>
             {options.seat_types.map((type) => <option key={type} value={type}>{cap(type)}</option>)}

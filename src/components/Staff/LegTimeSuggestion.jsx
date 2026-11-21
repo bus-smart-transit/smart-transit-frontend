@@ -46,7 +46,7 @@ export default function LegTimeSuggestion({ routeId, date, firstTime, serviceTyp
           {busy ? 'Working...' : 'Suggest times'}
         </button>
       </div>
-      {!ready && <p className="mt-1 text-slate-500">Choose the fleet route, the date and the first departure first.</p>}
+      {!ready && <p className="mt-1 text-slate-500">Choose the route, the date and the first departure first.</p>}
       {error && <p role="alert" className="mt-1 text-red-600">{error}</p>}
       {plan && (
         <>

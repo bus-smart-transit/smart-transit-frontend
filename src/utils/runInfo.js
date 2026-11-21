@@ -7,10 +7,10 @@ export function runPatternLabel(runPattern) {
   return typeof runPattern?.label === 'string' ? runPattern.label : ''
 }
 
-/** "Regular", "Express" or "Express - Non-stop" as the server worded it; falls back to the plain service type. */
+/** "Regular" or "Non-stop" as the server worded it (2026-11-21: express is shown as Non-stop); falls back to the plain service type. */
 export function serviceLabel(service, serviceType) {
   if (typeof service?.label === 'string' && service.label) return service.label
-  return String(serviceType ?? '').toLowerCase() === 'express' ? 'Express' : serviceType ? 'Regular' : ''
+  return String(serviceType ?? '').toLowerCase() === 'express' ? 'Non-stop' : serviceType ? 'Regular' : ''
 }
 
 /** "Stops at: A, B, D" for an express trip's served stops; '' for a regular trip or when none are recorded. */

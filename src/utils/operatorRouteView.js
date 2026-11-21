@@ -10,8 +10,8 @@ import { clock12 } from './clock';
  *   - municipalities come from the stops on the route (stops.municipality)
  *   - distance is the last stop's distance_from_origin_km, duration the largest scheduled_offset_min; both are blank
  *     until stops carry them
- *   - status is "Active" when at least one active fleet is assigned to the route (an active fleets_routes row on an
- *     active fleet), otherwise "No trips yet" (2026-11-21: a bus is chosen for each trip, so a route has none until then)
+ *   - 2026-11-21 (user, Dynamic Route Scheduling): a route's active buses are the buses with a trip on it today or
+ *     later that is still to run; status is "Active" when there is one, otherwise "No trips scheduled"
  */
 
 export const sortedRouteStops = (route) => [...(route?.route_stops || route?.routeStops || [])]
@@ -32,20 +32,26 @@ export function formatDuration(minutes) {
   return rest ? `${h} h ${rest} min` : `${h} h`;
 }
 
-export function activeFleetsOnRoute(routeId, fleets = []) {
-  return fleets
-    .filter((fleet) => String(fleet?.status || 'active').toLowerCase() === 'active')
-    .filter((fleet) => (fleet.fleet_routes || []).some((link) => Number(link?.route_id) === Number(routeId) && String(link?.status || 'active').toLowerCase() === 'active'))
-    .map((fleet) => ({ fleetId: Number(fleet.fleet_id), plate: fleet.plate_number }));
+/** The buses scheduled on this route: those with a trip on it today or later that is still to run (one row each). */
+export function activeFleetsOnRoute(routeId, trips = [], today = getBusinessToday()) {
+  const seen = new Map();
+  upcomingTripsFor(routeId, trips, today).forEach((trip) => {
+    const fleetId = Number(trip?.fleet_route?.fleet_id ?? trip?.fleet_route?.fleet?.fleet_id);
+    const plate = trip?.fleet_route?.fleet?.plate_number || null;
+    const key = Number.isFinite(fleetId) && fleetId > 0 ? `id:${fleetId}` : plate ? `plate:${plate}` : null;
+    if (!key || seen.has(key)) return;
+    seen.set(key, { fleetId: Number.isFinite(fleetId) && fleetId > 0 ? fleetId : null, plate: plate || `Bus #${fleetId}` });
+  });
+  return [...seen.values()];
 }
 
-export function buildRouteRows({ routes = [], fleets = [] } = {}) {
+export function buildRouteRows({ routes = [], trips = [], today = getBusinessToday() } = {}) {
   return routes.map((route) => {
     const stops = sortedRouteStops(route);
     const last = stops[stops.length - 1];
     const municipalities = [...new Set(stops.map((row) => row?.stop?.municipality).filter(Boolean))];
     const offsets = stops.map((row) => numberOrNull(row?.scheduled_offset_min)).filter((n) => n !== null);
-    const fleetsOnRoute = activeFleetsOnRoute(route.route_id, fleets);
+    const fleetsOnRoute = activeFleetsOnRoute(route.route_id, trips, today);
     return {
       route,
       routeId: Number(route.route_id),
@@ -54,7 +60,7 @@ export function buildRouteRows({ routes = [], fleets = [] } = {}) {
       distanceKm: numberOrNull(last?.distance_from_origin_km),
       durationMin: offsets.length ? Math.max(...offsets) : null,
       activeFleets: fleetsOnRoute,
-      status: fleetsOnRoute.length > 0 ? { key: 'active', label: 'Active', tone: 'success' } : { key: 'no_fleet', label: 'No trips yet', tone: 'neutral' },
+      status: fleetsOnRoute.length > 0 ? { key: 'active', label: 'Active', tone: 'success' } : { key: 'no_fleet', label: 'No trips scheduled', tone: 'neutral' },
       geometryIssue: Boolean(route.geometry_stale || route.geometry_error),
     };
   });

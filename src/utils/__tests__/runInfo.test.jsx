@@ -13,7 +13,7 @@ describe('run info wording (from the server, never invented)', () => {
     expect(runPatternLabel({ key: 'round_trip', label: 'Round-trip run' })).toBe('Round-trip run')
     expect(runPatternLabel(null)).toBe('')
     expect(serviceLabel(nonStop, 'express')).toBe('Express - Non-stop')
-    expect(serviceLabel(null, 'express')).toBe('Express')
+    expect(serviceLabel(null, 'express')).toBe('Non-stop') // 2026-11-21 (user): express is shown as Non-stop
     expect(serviceLabel(null, 'regular')).toBe('Regular')
     expect(serviceLabel(null, undefined)).toBe('')
   })

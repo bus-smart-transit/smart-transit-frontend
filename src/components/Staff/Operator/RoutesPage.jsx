@@ -112,7 +112,8 @@ export default function RoutesPage({ routes, stops, trips, fleets, onRefresh, on
   const [modal, setModal] = useState(null); // 'route' | 'stop' | null
   const [selectedRouteId, setSelectedRouteId] = useState(null);
 
-  const rows = useMemo(() => buildRouteRows({ routes, fleets }), [routes, fleets]);
+  // 2026-11-21 (user, Dynamic Route Scheduling): a route's active buses come from the trips scheduled on it.
+  const rows = useMemo(() => buildRouteRows({ routes, trips }), [routes, trips]);
   const shown = filterRouteRows(rows, { query, municipality });
   const municipalities = municipalityOptions(rows);
   const matchingStops = useMemo(() => filterStops(stops, stopQuery), [stops, stopQuery]);
@@ -170,7 +171,7 @@ export default function RoutesPage({ routes, stops, trips, fleets, onRefresh, on
     { key: 'stops', header: 'Stops', render: (row) => row.stopCount },
     { key: 'distance', header: 'Distance', className: 'whitespace-nowrap', render: (row) => (row.distanceKm === null ? '-' : `${row.distanceKm} km`) },
     { key: 'duration', header: 'Travel time', className: 'whitespace-nowrap', render: (row) => formatDuration(row.durationMin) ?? '-' },
-    { key: 'fleets', header: 'Active fleets', render: (row) => (row.activeFleets.length ? <span className="text-xs">{row.activeFleets.length}<span className="block text-slate-500">{row.activeFleets.map((item) => item.plate).join(', ')}</span></span> : <span className="text-slate-400">0</span>) },
+    { key: 'fleets', header: 'Scheduled buses', render: (row) => (row.activeFleets.length ? <span className="text-xs">{row.activeFleets.length}<span className="block text-slate-500">{row.activeFleets.map((item) => item.plate).join(', ')}</span></span> : <span className="text-slate-400">0</span>) },
     { key: 'status', header: 'Status', render: (row) => <span className="inline-flex flex-wrap gap-1"><OpChip tone={row.status.tone}>{row.status.label}</OpChip>{row.geometryIssue && <OpChip tone="warning">Line needs to be redrawn</OpChip>}</span> },
     { key: 'open', header: '', render: (row) => (
       <span className="inline-flex gap-2">
@@ -217,8 +218,8 @@ export default function RoutesPage({ routes, stops, trips, fleets, onRefresh, on
       {showRoutes && (<>
       <section aria-label="Route summary" className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <OpStat icon={RouteIcon} accent="blue" label="Routes" value={rows.length} />
-        <OpStat icon={Bus} accent="green" label="With an active fleet" value={withFleet} tone="success" />
-        <OpStat icon={Ban} accent="orange" label="No trips yet" value={rows.length - withFleet} tone={rows.length - withFleet ? 'warning' : 'neutral'} />
+        <OpStat icon={Bus} accent="green" label="With trips scheduled" value={withFleet} tone="success" />
+        <OpStat icon={Ban} accent="orange" label="No trips scheduled" value={rows.length - withFleet} tone={rows.length - withFleet ? 'warning' : 'neutral'} />
         <OpStat icon={MapPin} accent="violet" label="Stops" value={stops.length} hint="in your directory" />
       </section>
 

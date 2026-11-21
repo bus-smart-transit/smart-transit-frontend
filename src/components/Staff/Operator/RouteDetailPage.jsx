@@ -126,18 +126,6 @@ function StopsTab({ route, routesTab, onOpenAssign }) {
     { key: 'municipality', header: 'Municipality', render: (row) => row.stop?.municipality || '-' },
     { key: 'distance', header: 'From origin', className: 'whitespace-nowrap', render: (row) => (row.distance_from_origin_km === null || row.distance_from_origin_km === undefined ? '-' : `${Number(row.distance_from_origin_km)} km`) },
     { key: 'type', header: 'Type', render: (row) => (row.stop_type === 'pass_through' ? 'Pass-through' : 'Stop') },
-    { key: 'express', header: 'Express', render: (row) => (row.stop_type !== 'pass_through' && row.id ? (
-      <label className="inline-flex items-center gap-2 text-xs text-slate-700" title="Express trips stop here">
-        <input
-          type="checkbox"
-          checked={Boolean(row.served_by_express)}
-          disabled={routesTab.manageSaving || !canManage}
-          onChange={(event) => { void routesTab.handleToggleStopExpress(route.route_id, row.id, event.target.checked); }}
-          aria-label={`Express trips stop at ${row.stop?.stop_name || row.stop_id}`}
-        />
-        {row.served_by_express ? 'Yes' : 'No'}
-      </label>
-    ) : <span className="text-slate-400">-</span>) },
     { key: 'remove', header: '', render: (row) => (row.id && canManage ? (
       <button type="button" disabled={routesTab.manageSaving} aria-label={`Remove ${row.stop?.stop_name || `stop ${row.stop_id}`} from route`} onClick={() => { void routesTab.handleRemoveStopFromRoute(route.route_id, row.id); }} className="rounded-lg border border-rose-200 bg-rose-50 px-2 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-50">Remove</button>
     ) : null) },

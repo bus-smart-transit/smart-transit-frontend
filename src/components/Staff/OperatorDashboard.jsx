@@ -20,7 +20,7 @@ import OperatorAlerts from './Operator/OperatorAlerts'
 import RunInfoChips from '../ui/RunInfoChips'
 import { CancelTripModal } from './TripCancellationsPanel'
 import LegTimeSuggestion from './LegTimeSuggestion'
-import { addLeg, removeLastLeg } from '../../utils/legPlanning'
+import { addRoundTrip, evenLegs, legDirectionLabel, removeRoundTrip } from '../../utils/legPlanning'
 import ScheduleRangePreview from './Schedule/ScheduleRangePreview'
 import CrewShiftTimes from './Operator/CrewShiftTimes'
 import { isRangeSchedule, rangeDayCount } from '../../utils/scheduleRange'
@@ -209,7 +209,6 @@ function TripRequestsPanel({ onDecided, showEmpty = false }) {
 // is the same form and the same handler (useTripsTab); only its place changed, so it opens from any Schedule view.
 function ScheduleServiceModal({ state, drivers, conductors }) {
   const { showModal, form, setForm, saving, msg, scheduleRoutes, handleSchedule, rangePreview, rangeResult, confirmRange, closeScheduleModal } = state
-  const multiLeg = form.trip_type === 'round_trip'
   const rangeMode = isRangeSchedule(form)
   const rangeDays = rangeDayCount(form.trip_date, form.to_date)
   const [bookingWindow, setBookingWindow] = useState(null)
@@ -263,57 +262,70 @@ function ScheduleServiceModal({ state, drivers, conductors }) {
     )
   }
 
-  return (    <Modal title="Schedule Service" onClose={closeScheduleModal} wide>
-      {/* Batch 60 item 4 (user, 2026-11-11): two columns on a PC: the service on the left, the crew on the right. */}
-      <form className="grid gap-x-6 gap-y-4 lg:grid-cols-2" onSubmit={handleSchedule}>
-        <div className="min-w-0 space-y-4">
-        <Field label="Route" required>
-          <select aria-label="Route" value={form.route_id} onChange={e => setForm(p => ({ ...p, route_id: e.target.value }))} required className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500" data-testid="schedule-route">
-            <option value="">Select a route...</option>
-            {(scheduleRoutes || []).map(route => (
-              <option key={route.route_id} value={route.route_id}>{route.route_name}</option>
-            ))}
-          </select>
-        </Field>
-        {multiLeg ? (
-          <div className="grid grid-cols-2 gap-2">
-            {/* Phase B (§4.13): the same block on every day From..To; a To date equal to From (or empty) is one day. */}
-            <Field label="From" type="date" value={form.trip_date} onChange={e => setForm(p => ({...p, trip_date: e.target.value}))} required hint={bookingWindowWarning(form.trip_date, bookingWindow)} />
-            <Field label="To (optional)">
-              <input
-                type="date"
-                aria-label="To"
-                value={form.to_date || ''}
-                min={form.trip_date || undefined}
-                onChange={e => setForm(p => ({ ...p, to_date: e.target.value }))}
-                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500"
-              />
-              {rangeDays > 1 && <p className="mt-1 text-xs text-slate-500">{rangeDays} days. You will see each day before anything is saved.</p>}
-            </Field>
-          </div>
-        ) : (
-          <Field label="Trip Date" type="date" value={form.trip_date} onChange={e => setForm(p => ({...p, trip_date: e.target.value}))} required hint={bookingWindowWarning(form.trip_date, bookingWindow)} />
-        )}
-        <Field label="Schedule" required>
-          <select value={form.trip_type} onChange={e => setForm(p => ({ ...p, trip_type: e.target.value }))} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500">
-            <option value="one_way">Single Departure</option>
-            <option value="round_trip">Multi-Leg Schedule</option>
-          </select>
-        </Field>
-        <Field label="Service Type" required>
-          <select value={form.service_type || 'regular'} onChange={e => setForm(p => ({ ...p, service_type: e.target.value }))} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500" data-testid="service-type-select">
-            <option value="regular">Regular (stops at every stop)</option>
-            <option value="express">Express (limited stops, no fare yet)</option>
-          </select>
-        </Field>
+  // 2026-11-21 (user, Dynamic Route Scheduling): every schedule is a multi-leg block that goes out and comes back.
+  const legTimes = Array.isArray(form.leg_departure_times) ? form.leg_departure_times : defaultLegTimesByBlock[form.block_type] || defaultLegTimesByBlock.morning
+  const chosenRoute = (scheduleRoutes || []).find((route) => String(route.route_id) === String(form.route_id)) || null
+  const ends = chosenRoute ? [chosenRoute.origin || 'First stop', chosenRoute.destination || 'Last stop'] : null
+  const nonStop = form.service_type === 'express'
+  const fieldClass = 'w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500'
 
-        {form.trip_type === 'one_way' ? (
-          <>
-            <Field label="Departure Time" type="time" value={form.departure_time} onChange={e => setForm(p => ({...p, departure_time: e.target.value}))} required />
-            <Field label="Notes (optional)" value={form.notes} onChange={e => setForm(p => ({...p, notes: e.target.value}))} placeholder="Any notes..." />
-          </>
-        ) : (
-          <>
+  return (    <Modal title="Schedule Service" onClose={closeScheduleModal} wide>
+      <form className="space-y-5" onSubmit={handleSchedule}>
+        <fieldset>
+          <legend className="text-xs font-semibold text-slate-600">Service type</legend>
+          <div className="mt-2 flex flex-wrap gap-3" data-testid="service-type">
+            {[['regular', 'Regular', 'Stops at every stop'], ['express', 'Non-stop', 'First and last stop only']].map(([value, label, hint]) => (
+              <label key={value} className={`flex min-w-48 flex-1 cursor-pointer items-start gap-2 rounded-xl border px-3 py-2.5 text-sm ${form.service_type === value ? 'border-teal-500 bg-teal-50' : 'border-slate-200 bg-white hover:bg-slate-50'}`}>
+                <input type="radio" name="service_type" value={value} checked={(form.service_type || 'regular') === value} onChange={() => setForm(p => ({ ...p, service_type: value }))} className="mt-0.5 accent-teal-600" />
+                <span><span className="block font-semibold text-slate-900">{label}</span><span className="block text-xs text-slate-500">{hint}</span></span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
+
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <Field label="Route" required>
+            <select aria-label="Route" value={form.route_id} onChange={e => setForm(p => ({ ...p, route_id: e.target.value }))} required className={fieldClass} data-testid="schedule-route">
+              <option value="">Select a route...</option>
+              {(scheduleRoutes || []).map(route => (
+                <option key={route.route_id} value={route.route_id}>{route.route_name}</option>
+              ))}
+            </select>
+            {ends && (
+              <p className="mt-1 text-xs text-slate-600" data-testid="schedule-route-ends">
+                <span className="font-semibold text-slate-800">{ends[0]} &rarr; {ends[1]}</span>{nonStop ? ' · No stops in between' : ''}
+              </p>
+            )}
+          </Field>
+          {/* Phase B (§4.13): the same block on every day From..To; a To date equal to From (or empty) is one day. */}
+          <Field label="From" type="date" value={form.trip_date} onChange={e => setForm(p => ({...p, trip_date: e.target.value}))} required hint={bookingWindowWarning(form.trip_date, bookingWindow)} />
+          <Field label="To (optional)">
+            <input
+              type="date"
+              aria-label="To"
+              value={form.to_date || ''}
+              min={form.trip_date || undefined}
+              onChange={e => setForm(p => ({ ...p, to_date: e.target.value }))}
+              className={fieldClass}
+            />
+            {rangeDays > 1 && <p className="mt-1 text-xs text-slate-500">{rangeDays} days. You will see each day before anything is saved.</p>}
+          </Field>
+          <Field label="Bus" required>
+            <select aria-label="Bus" value={form.fleet_id} onChange={e => setForm(p => ({ ...p, fleet_id: e.target.value }))} required disabled={!busCheck.ready || busCheck.loading} className={`${fieldClass} disabled:opacity-60`} data-testid="schedule-bus">
+              <option value="">{busCheck.ready ? (busCheck.loading ? 'Checking which buses are free...' : 'Select a bus...') : 'Choose the route and date first'}</option>
+              {sortBusesForPicker(busCheck.buses).map(bus => (
+                <option key={bus.fleet_id} value={bus.fleet_id} disabled={!bus.available}>{busOptionLabel(bus)}</option>
+              ))}
+            </select>
+            {busCheck.ready && !busCheck.loading && !busCheck.error && busCheck.buses.length > 0 && !busCheck.buses.some((bus) => bus.available) && (
+              <p role="alert" className="mt-1 text-xs text-rose-700" data-testid="schedule-no-bus">No bus is free for this route at the first leg&apos;s time. Try another time.</p>
+            )}
+            {busCheck.error && <p role="alert" className="mt-1 text-xs text-rose-700">{busCheck.error}</p>}
+          </Field>
+        </div>
+
+        <div className="grid gap-x-6 gap-y-4 lg:grid-cols-2">
+          <div className="min-w-0 space-y-4">
             <Field label="Shift" required>
               <select
                 value={form.block_type}
@@ -322,93 +334,80 @@ function ScheduleServiceModal({ state, drivers, conductors }) {
                   block_type: e.target.value,
                   leg_departure_times: defaultLegTimesByBlock[e.target.value] || defaultLegTimesByBlock.morning,
                 }))}
-                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500"
+                className={fieldClass}
               >
                 <option value="morning">Morning shift</option>
                 <option value="afternoon">Afternoon shift</option>
               </select>
             </Field>
-            <div className="grid grid-cols-2 gap-2">
-              {(Array.isArray(form.leg_departure_times) ? form.leg_departure_times : defaultLegTimesByBlock[form.block_type] || defaultLegTimesByBlock.morning).map((time, index) => (
+            <div className="grid grid-cols-2 gap-2" data-testid="schedule-legs">
+              {legTimes.map((time, index) => (
                 <Field
                   key={`leg-time-${index}`}
-                  label={`Leg ${index + 1} Departure`}
+                  label={`Leg ${index + 1} · ${legDirectionLabel(index)}`}
                   type="time"
                   value={time}
                   onChange={(e) => updateLegTime(index, e.target.value)}
                   required
+                  hint={ends ? (index % 2 === 0 ? `${ends[0]} → ${ends[1]}` : `${ends[1]} → ${ends[0]}`) : undefined}
                 />
               ))}
             </div>
-            {/* 2026-10-27 (§4.2): no fixed number of legs; Suggest times works out how many fit. */}
+            {/* 2026-11-21 (user): legs come in pairs, out and back, so the bus ends where it started. */}
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
-                onClick={() => setForm((prev) => ({ ...prev, leg_departure_times: addLeg(Array.isArray(prev.leg_departure_times) ? prev.leg_departure_times : defaultLegTimesByBlock[prev.block_type] || defaultLegTimesByBlock.morning) }))}
+                onClick={() => setForm((prev) => ({ ...prev, leg_departure_times: addRoundTrip(Array.isArray(prev.leg_departure_times) ? prev.leg_departure_times : defaultLegTimesByBlock[prev.block_type] || defaultLegTimesByBlock.morning) }))}
                 className="rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 ring-1 ring-inset ring-slate-300 hover:bg-slate-100"
               >
-                Add a leg
+                Add a round trip
               </button>
               <button
                 type="button"
-                onClick={() => setForm((prev) => ({ ...prev, leg_departure_times: removeLastLeg(Array.isArray(prev.leg_departure_times) ? prev.leg_departure_times : defaultLegTimesByBlock[prev.block_type] || defaultLegTimesByBlock.morning) }))}
-                className="rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 ring-1 ring-inset ring-slate-300 hover:bg-slate-100"
+                disabled={legTimes.length <= 2}
+                onClick={() => setForm((prev) => ({ ...prev, leg_departure_times: removeRoundTrip(Array.isArray(prev.leg_departure_times) ? prev.leg_departure_times : defaultLegTimesByBlock[prev.block_type] || defaultLegTimesByBlock.morning) }))}
+                className="rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 ring-1 ring-inset ring-slate-300 hover:bg-slate-100 disabled:opacity-50"
               >
-                Remove the last leg
+                Remove the last round trip
               </button>
             </div>
             <LegTimeSuggestion
               routeId={form.route_id}
               date={form.trip_date}
-              firstTime={(Array.isArray(form.leg_departure_times) ? form.leg_departure_times : defaultLegTimesByBlock[form.block_type] || defaultLegTimesByBlock.morning)[0]}
+              firstTime={legTimes[0]}
               serviceType={form.service_type || 'regular'}
-              onApply={(times) => setForm((prev) => ({ ...prev, leg_departure_times: times }))}
+              onApply={(times) => setForm((prev) => ({ ...prev, leg_departure_times: evenLegs(times) }))}
             />
-          </>
-        )}
-        <Field label="Bus" required>
-          <select aria-label="Bus" value={form.fleet_id} onChange={e => setForm(p => ({ ...p, fleet_id: e.target.value }))} required disabled={!busCheck.ready || busCheck.loading} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500 disabled:opacity-60" data-testid="schedule-bus">
-            <option value="">{busCheck.ready ? (busCheck.loading ? 'Checking which buses are free...' : 'Select a bus...') : 'Choose the route, date and time first'}</option>
-            {sortBusesForPicker(busCheck.buses).map(bus => (
-              <option key={bus.fleet_id} value={bus.fleet_id} disabled={!bus.available}>{busOptionLabel(bus)}</option>
-            ))}
-          </select>
-        </Field>
-        {busCheck.ready && !busCheck.loading && !busCheck.error && busCheck.buses.length > 0 && !busCheck.buses.some((bus) => bus.available) && (
-          <p role="alert" className="text-xs text-rose-700" data-testid="schedule-no-bus">No bus is free for this route at that time. Try another time.</p>
-        )}
-        {busCheck.error && <p role="alert" className="text-xs text-rose-700">{busCheck.error}</p>}
+          </div>
+          <div className="min-w-0 space-y-4">
+            {/* 2026-11-21 (user): the crew is chosen when scheduling (every schedule is a block). Not available crew are
+                listed but cannot be picked. */}
+            <Field label="Driver" required>
+              <select aria-label="Driver" value={form.driver_id} onChange={e => setForm(p => ({ ...p, driver_id: e.target.value }))} required disabled={loadingDateDrivers || Boolean(dateDriversError)} className={`${fieldClass} disabled:opacity-60`}>
+                <option value="">Select a driver...</option>
+                {sortForPicker(dateDrivers).map(d => (
+                  <option key={getStaffCompanyUserId(d)} value={getStaffCompanyUserId(d)} disabled={!isPickable(d)}>
+                    {crewOptionLabel(d)}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            {loadingDateDrivers && <p role="status" className="text-xs text-slate-500">Checking driver availability...</p>}
+            {dateDriversError && <p role="alert" className="text-xs text-rose-700">{dateDriversError}</p>}
+            <Field label="Chauffeur" required>
+              <select aria-label="Chauffeur" value={form.conductor_id} onChange={e => setForm(p => ({ ...p, conductor_id: e.target.value }))} required className={fieldClass}>
+                <option value="">Select a chauffeur...</option>
+                {sortForPicker(conductors).map(c => (
+                  <option key={getStaffCompanyUserId(c)} value={getStaffCompanyUserId(c)} disabled={!isPickable(c)}>
+                    {crewOptionLabel(c)}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          </div>
         </div>
-        <div className="min-w-0 space-y-4">
-        {/* Batch 46: a single trip may be scheduled before its crew is chosen; a shift block still needs both. Not
-            Available crew are listed but cannot be picked. */}
-        <Field label={multiLeg ? 'Driver' : 'Driver (or choose later)'} required={multiLeg}>
-          <select aria-label="Driver" value={form.driver_id} onChange={e => setForm(p => ({ ...p, driver_id: e.target.value }))} required={multiLeg} disabled={loadingDateDrivers || Boolean(dateDriversError)} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500 disabled:opacity-60">
-            <option value="">{multiLeg ? 'Select a driver...' : 'Choose later'}</option>
-            {sortForPicker(dateDrivers).map(d => (
-              <option key={getStaffCompanyUserId(d)} value={getStaffCompanyUserId(d)} disabled={!isPickable(d)}>
-                {crewOptionLabel(d)}
-              </option>
-            ))}
-          </select>
-        </Field>
-        {loadingDateDrivers && <p role="status" className="text-xs text-slate-500">Checking driver availability...</p>}
-        {dateDriversError && <p role="alert" className="text-xs text-rose-700">{dateDriversError}</p>}
-        <Field label={multiLeg ? 'Chauffeur' : 'Chauffeur (or choose later)'} required={multiLeg}>
-          <select aria-label="Chauffeur" value={form.conductor_id} onChange={e => setForm(p => ({ ...p, conductor_id: e.target.value }))} required={multiLeg} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500">
-            <option value="">{multiLeg ? 'Select a chauffeur...' : 'Choose later'}</option>
-            {sortForPicker(conductors).map(c => (
-              <option key={getStaffCompanyUserId(c)} value={getStaffCompanyUserId(c)} disabled={!isPickable(c)}>
-                {crewOptionLabel(c)}
-              </option>
-            ))}
-          </select>
-        </Field>
-        {!multiLeg && (!form.driver_id || !form.conductor_id) && (
-          <p role="status" className="text-xs text-amber-700">Without both a Driver and a Chauffeur the trip shows "Crew needed" and cannot start boarding.</p>
-        )}
-        </div>
-        <div className="space-y-4 lg:col-span-2">
+
+        <div className="space-y-4">
         {msg && <p className="text-sm text-red-600">{msg}</p>}
         {rangeMode && <ScheduleRangePreview preview={rangePreview} saving={saving} onConfirm={confirmRange} />}
         <div className="flex justify-end gap-2 pt-2">

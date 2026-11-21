@@ -47,7 +47,7 @@ export default function RouteFareTable({ service, routeId, fleets }) {
         <label className="text-xs font-semibold text-slate-600">Service
           <select className={SELECT} value={picked.serviceType} onChange={change('serviceType')} data-testid="fare-table-service">
             <option value="regular">Regular</option>
-            <option value="express">Express</option>
+            <option value="express">Non-stop</option>
           </select>
         </label>
         <label className="text-xs font-semibold text-slate-600">From
@@ -59,7 +59,7 @@ export default function RouteFareTable({ service, routeId, fleets }) {
 
       {table?.vehicle_class && (
         <p className="mb-2 text-xs text-slate-500">
-          {table.bus_label || 'This bus'} · {table.vehicle_class} · {table.service_type === 'express' ? 'Express' : 'Regular'} · fare rules in force today
+          {table.bus_label || 'This bus'} · {table.vehicle_class} · {table.service_type === 'express' ? 'Non-stop' : 'Regular'} · fare rules in force today
         </p>
       )}
       {error && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
