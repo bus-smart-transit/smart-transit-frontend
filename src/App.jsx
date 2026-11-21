@@ -21,6 +21,7 @@ const ContactPage = lazy(() => import('./components/Passenger/Contact/ContactPag
 const LegalPage = lazy(() => import('./components/Passenger/Legal/LegalPage'));
 const ProvinceRoutesPage = lazy(() => import('./components/Passenger/Routes/ProvinceRoutesPage'));
 const RoutePage = lazy(() => import('./components/Passenger/Routes/RoutePage'));
+const AllRoutesPage = lazy(() => import('./components/Passenger/Routes/AllRoutesPage'));
 
 // 2026-11-06: sample Privacy Policy and Terms for the test period (same navbar and footer as About).
 function LegalWithAuth({ kind }) {
@@ -62,6 +63,15 @@ function TrackBusPublicWithAuth() {
   return (
     <AuthProvider role="passenger">
       <TrackBusPublicPage />
+    </AuthProvider>
+  );
+}
+
+// 2026-11-21 (user): "View all routes" on the homepage: every route, by province.
+function AllRoutesWithAuth() {
+  return (
+    <AuthProvider role="passenger">
+      <AllRoutesPage />
     </AuthProvider>
   );
 }
@@ -112,6 +122,7 @@ export default function App() {
             <Route path="/contact" element={<ContactWithAuth />} />
             <Route path="/track-bus" element={<TrackBusPublicWithAuth />} />
             <Route path="/provinces/:slug" element={<ProvinceRoutesWithAuth />} />
+            <Route path="/routes" element={<AllRoutesWithAuth />} />
             <Route path="/routes/:routeId" element={<RouteWithAuth />} />
             {/* Public: the link itself is the credential, so no account or auth provider is involved. */}
             <Route path="/track" element={<TrackLookupPage />} />

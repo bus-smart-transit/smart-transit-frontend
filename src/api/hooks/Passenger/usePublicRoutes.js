@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getProvinceRoutes, getPublicRoute, getPublicRouteStops, getRouteDepartures } from '../../../services/publicRouteService';
+import { getAllRoutes, getProvinceRoutes, getPublicRoute, getPublicRouteStops, getRouteDepartures } from '../../../services/publicRouteService';
 import { readApiError } from '../../../services/bookingService';
 
 const DEPARTURES_REFRESH_MS = 60000;
@@ -19,6 +19,21 @@ export function useProvinceRoutes(province) {
 
   if (!province) return { loading: false, data: null, error: '' };
   return state.key === province ? { loading: false, data: state.data, error: state.error } : { loading: true, data: null, error: '' };
+}
+
+/** 2026-11-21 (user): every route, by province ("View all routes"). */
+export function useAllRoutes() {
+  const [state, setState] = useState({ loaded: false, data: null, error: '' });
+
+  useEffect(() => {
+    let cancelled = false;
+    getAllRoutes()
+      .then((data) => { if (!cancelled) setState({ loaded: true, data, error: '' }); })
+      .catch((error) => { if (!cancelled) setState({ loaded: true, data: null, error: readApiError(error, 'Routes could not be loaded.').message }); });
+    return () => { cancelled = true; };
+  }, []);
+
+  return { loading: !state.loaded, data: state.data, error: state.error };
 }
 
 /** 2026-11-20 (user): one route's page: the route, its stops, and today's departures (asked again every minute). */

@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { MapPin } from 'lucide-react';
+import { ArrowRight, MapPin } from 'lucide-react';
 import { useRegion } from '../../../api/hooks/useRegion';
 import { provinceCards } from '../../../utils/provinceCards';
-import { provinceHref } from '../../../utils/routePages';
+import { allRoutesHref, provinceHref } from '../../../utils/routePages';
 
 function ProvinceCard({ card, tall }) {
   const [broken, setBroken] = useState(false);
@@ -56,6 +56,10 @@ export default function ProvincesSection() {
           <p className="mt-3 text-base leading-relaxed text-slate-500">
             SmartTransit covers the provinces of {region.name}. Tap one to see its routes and stops.
           </p>
+          {/* 2026-11-21 (user): every route in one place; a picture still opens its province's routes. */}
+          <Link to={allRoutesHref} className="mt-4 inline-flex min-h-11 items-center gap-1.5 text-sm font-semibold text-teal-700 hover:text-teal-800" data-testid="view-all-routes">
+            View all routes <ArrowRight size={16} aria-hidden="true" />
+          </Link>
         </div>
 
         {first && (

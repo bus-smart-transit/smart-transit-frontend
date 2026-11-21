@@ -7,7 +7,7 @@ import { computeVehicleState } from '../../utils/vehicleState'
 import { haversineM, lerp } from '../../utils/geo'
 import { getRegion, regionMapBounds } from '../../services/regionService'
 import { MAP_CONFIG } from '../../config/mapConfig'
-import { fitToPoints, renderRouteLayers } from './routeLayers'
+import { STOP_CLICK_KEY, fitToPoints, renderRouteLayers } from './routeLayers'
 import { createBusMarkerElement } from './mapMarkers'
 import { watchMapHealth } from './mapHealth'
 import { congestionTransformRequest } from './congestionLayer'
@@ -65,6 +65,7 @@ function RouteMapInner({
   onRetry,
   showStopOffsets = false,
   servedStopIds = null,
+  onStopClick = null,
   className = 'relative h-full min-h-64 w-full',
 }) {
   const containerRef = useRef(null)
@@ -197,6 +198,14 @@ function RouteMapInner({
       setMapReady(false)
     }
   }, [])
+
+  // 2026-11-21 (user): a stop click goes to onStopClick (when given) instead of the name popup.
+  useEffect(() => {
+    const map = mapRef.current
+    if (!mapReady || !map) return undefined
+    map[STOP_CLICK_KEY] = onStopClick
+    return () => { map[STOP_CLICK_KEY] = null }
+  }, [mapReady, onStopClick])
 
   // 2. Canonical geometry + stops for this route and leg direction.
   useEffect(() => {

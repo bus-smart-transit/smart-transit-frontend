@@ -3,14 +3,15 @@ import { render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import ProvinceRoutesPage from '../ProvinceRoutesPage';
 import RoutePage from '../RoutePage';
-import { useProvinceRoutes, useRoutePage } from '../../../../api/hooks/Passenger/usePublicRoutes';
+import AllRoutesPage from '../AllRoutesPage';
+import { useAllRoutes, useProvinceRoutes, useRoutePage } from '../../../../api/hooks/Passenger/usePublicRoutes';
 
 // 2026-11-20 (user): a province picture opens its routes; a route has its own page. SAMPLE places and times.
 vi.mock('../../../Layout/Navbar', () => ({ default: () => null }));
 vi.mock('../../../Layout/Footer', () => ({ default: () => null }));
 vi.mock('../../../Map/RouteMap', () => ({ default: () => <div data-testid="route-map" /> }));
 vi.mock('../../../../api/hooks/useRegion', () => ({ useRegion: () => ({ provinces: { 'Sample Oriental': ['East Town'] } }) }));
-vi.mock('../../../../api/hooks/Passenger/usePublicRoutes', () => ({ useProvinceRoutes: vi.fn(), useRoutePage: vi.fn() }));
+vi.mock('../../../../api/hooks/Passenger/usePublicRoutes', () => ({ useProvinceRoutes: vi.fn(), useRoutePage: vi.fn(), useAllRoutes: vi.fn() }));
 
 const at = (path, element, pattern) => render(
   <MemoryRouter initialEntries={[path]}><Routes><Route path={pattern} element={element} /></Routes></MemoryRouter>,
@@ -64,5 +65,28 @@ describe('RoutePage', () => {
     at('/routes/999', <RoutePage />, '/routes/:routeId');
 
     expect(screen.getByTestId('route-missing')).toHaveTextContent('This route could not be found.');
+  });
+});
+
+// 2026-11-21 (user): "View all routes" on the homepage.
+describe('AllRoutesPage', () => {
+  it('lists every route under each province it runs through, each opening its route page', () => {
+    const route = { route_id: 8, route_name: 'Sample City to East Town', origin: 'Sample City Terminal', destination: 'East Town Terminal', stop_count: 9, bus_companies: ['Sample Lines'] };
+    useAllRoutes.mockReturnValue({ loading: false, error: '', data: { provinces: [
+      { province: 'Sample Oriental', routes: [{ ...route, towns_in_province: ['East Town'] }] },
+      { province: 'Sample City', routes: [{ ...route, towns_in_province: ['Sample City'] }] },
+    ] } });
+    at('/routes', <AllRoutesPage />, '/routes');
+
+    expect(screen.getAllByTestId('all-routes-province')).toHaveLength(2);
+    expect(screen.getByRole('heading', { name: 'Sample Oriental' })).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: /Sample City to East Town/ })[0]).toHaveAttribute('href', '/routes/8');
+    expect(screen.getByRole('link', { name: '1 route in Sample Oriental' })).toHaveAttribute('href', '/provinces/sample-oriental');
+  });
+
+  it('says plainly when no bus runs a route yet', () => {
+    useAllRoutes.mockReturnValue({ loading: false, error: '', data: { provinces: [] } });
+    at('/routes', <AllRoutesPage />, '/routes');
+    expect(screen.getByTestId('all-routes-none')).toHaveTextContent('No bus runs a route yet.');
   });
 });

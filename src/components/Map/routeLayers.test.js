@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { LYR_STOPS, SRC_STOPS, renderRouteLayers } from './routeLayers';
+import { LYR_STOPS, SRC_STOPS, STOP_CLICK_KEY, renderRouteLayers } from './routeLayers';
 
 function mapHarness() {
   const sources = new Map();
@@ -50,5 +50,28 @@ describe('renderRouteLayers stop offsets', () => {
     const feature = { properties: { name: 'Stop A' }, geometry: { coordinates: [125.601, 7.001] } };
     handlers.get(`click:${LYR_STOPS}`)({ features: [feature] });
     expect(popup.content.textContent).toBe('Stop A');
+  });
+});
+// 2026-11-21 (user): on Track Bus a stop of the chosen bus's route opens its Next arrivals card.
+describe('renderRouteLayers stop clicks', () => {
+  const coded = { ...routeData, stops: [{ ...routeData.stops[0], code: 'STP-A' }] };
+
+  it('hands the stop to the map\'s stop click handler instead of the name popup', () => {
+    const { map, handlers, maplibregl } = mapHarness();
+    const onStopClick = vi.fn();
+    map[STOP_CLICK_KEY] = onStopClick;
+    renderRouteLayers(map, maplibregl, coded);
+
+    handlers.get(`click:${LYR_STOPS}`)({ features: [{ properties: { name: 'Stop A', code: 'STP-A' }, geometry: { coordinates: [125.601, 7.001] } }] });
+
+    expect(onStopClick).toHaveBeenCalledWith({ code: 'STP-A', name: 'Stop A' });
+    expect(maplibregl.Popup).not.toHaveBeenCalled();
+  });
+
+  it('keeps the name popup when no handler is set', () => {
+    const { map, handlers, maplibregl } = mapHarness();
+    renderRouteLayers(map, maplibregl, coded);
+    handlers.get(`click:${LYR_STOPS}`)({ features: [{ properties: { name: 'Stop A', code: 'STP-A' }, geometry: { coordinates: [125.601, 7.001] } }] });
+    expect(maplibregl.Popup).toHaveBeenCalled();
   });
 });

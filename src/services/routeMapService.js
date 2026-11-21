@@ -36,6 +36,8 @@ export async function fetchRouteMapData(routeId, direction = 'outbound') {
       return {
         stopId: Number(stop.stop_id),
         name: stop.stop_name || '',
+        // 2026-11-21 (user): the passenger stop code, so a stop on the map can open its Next arrivals card.
+        code: stop.stop_code || null,
         sequence: Number(stop.stop_order),
         type: stop.stop_type || 'stop',
         distanceKm: Number(stop.distance_from_origin_km),

@@ -10,6 +10,9 @@ export const provinceHref = (name) => `/provinces/${slugOf(name)}`;
 
 export const routeHref = (routeId) => `/routes/${encodeURIComponent(routeId)}`;
 
+/** 2026-11-21 (user): every route, by province ("View all routes" on the homepage). */
+export const allRoutesHref = '/routes';
+
 /** The province name (as the server's region settings spell it) for a page slug, or null when there is none. */
 export function provinceFromSlug(slug, provinces) {
   const wanted = String(slug ?? '').toLowerCase();

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Bus, Clock3, LocateFixed, MapPin, Maximize2, Minimize2, Navigation } from 'lucide-react';
+import { Bus, Clock3, LayoutGrid, LocateFixed, MapPin, Maximize2, Minimize2, Navigation } from 'lucide-react';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import RouteMap from '../../Map/RouteMap';
 import { fetchFleetLocationsForMap } from '../../../api/hooks/Passenger/useMapView';
@@ -27,6 +27,8 @@ import { useRegion } from '../../../api/hooks/useRegion';
 import { busArrival, busesNear, busTrip, formatKm, passengersText } from '../../../utils/nearbyBuses';
 import TrackMyBusModal from '../Track/TrackMyBusModal';
 import StopArrivalsCard from './StopArrivalsCard';
+import BusInfoCard from './BusInfoCard';
+import { busCardView } from '../../../utils/busCard';
 import { markerOffsets } from '../../../utils/markerOffsets';
 import { setGeoJson } from '../../Map/routeLayers';
 import drawWhenReady from '../../Map/drawWhenReady';
@@ -40,24 +42,6 @@ import { clock12 } from '../../../utils/clock';
 
 const POLL_MS = 12000;
 
-// Popup content is built with DOM nodes (never HTML strings) so plate numbers
-// and other operator-entered text cannot inject markup.
-const buildFleetPopup = (title, status, fleetType) => {
-  const root = document.createElement('div');
-  root.style.cssText = 'font-family:sans-serif;color:#0f172a;min-width:145px;padding:6px;';
-  const rows = [
-    [title, 'margin:0;font-weight:700;font-size:12px;'],
-    [status, 'margin:2px 0 0;font-size:11px;color:#475569;text-transform:capitalize;'],
-    ['Type: ' + fleetType, 'margin:2px 0 0;font-size:11px;color:#0f766e;'],
-  ];
-  rows.forEach(([text, css]) => {
-    const p = document.createElement('p');
-    p.style.cssText = css;
-    p.textContent = text;
-    root.appendChild(p);
-  });
-  return root;
-};
 
 export default function PublicTrackingSection({ showHeader = true, compact = false, activeTicket = null }) {
   const mapRef = useRef(null);
@@ -90,6 +74,8 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
   const [showAllBuses, setShowAllBuses] = useState(false);
   // 2026-11-20 (user): the map can fill the screen; Esc or "Close full map" brings it back.
   const [mapExpanded, setMapExpanded] = useState(false);
+  // 2026-11-21 (user): the card of the chosen bus (closed with its X; the bus stays chosen until "Show all buses").
+  const [busCardOpen, setBusCardOpen] = useState(false);
 
   // Batch 50 (user, 2026-11-08): no bus is chosen at first; every bus shows on the map. Choosing one focuses on it
   // alone (its route, ETA, location and next stop) until "Show all buses".
@@ -205,16 +191,13 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
           el.addEventListener('click', () => {
             setSelectedStop(null);
             setSelectedFleetId(fleetId);
+            setBusCardOpen(true);
             flyToFleet(row);
           });
 
+          // 2026-11-21 (user): a click opens the bus card (BusInfoCard) instead of the small map popup.
           const marker = new maplibregl.Marker({ element: el, offset })
             .setLngLat([lng, lat])
-            .setPopup(
-              new maplibregl.Popup({ offset: 18 }).setDOMContent(
-                buildFleetPopup(title, row?.waiting ? busStatusText(row) : (row?.trip_status || 'active'), row?.fleet_type || 'unknown'),
-              ),
-            )
             .addTo(map);
 
           markersRef.current.set(fleetId, marker);
@@ -334,7 +317,9 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
       try { map.fitBounds(bounds, { padding: 60, maxZoom: 11, duration: 600 }); } catch { /* map not ready */ }
     }
   }, [selectedFleetId, fleets]);
-  const showAll = useCallback(() => setSelectedFleetId(null), []);
+  const showAll = useCallback(() => { setSelectedFleetId(null); setBusCardOpen(false); }, []);
+  // 2026-11-21 (user): a stop on the chosen bus's route opens the same "Next arrivals" card as a stop pin.
+  const handleRouteStopClick = useCallback((stop) => { setBusCardOpen(false); setSelectedStop(stop); }, []);
 
   // 2026-11-08 (user): with no bus chosen, the route line of every listed bus, so no icon floats. The chosen bus's
   // route (with its stops) is drawn by RouteMap instead.
@@ -524,6 +509,8 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
       return a._distanceM - b._distanceM;
     });
 
+  const busCard = selectedFleet ? busCardView(selectedFleet, { eta, place: placeLabel(selectedFleet), nowMs }) : null;
+
   const nextStopOrDestinationLabel = routeProgress?.nextStopName || selectedFleet?.destination || 'Route sync pending';
 
   // Batch 45 Feature C: with the passenger's pinned location, the panel lists only buses within radiusKm (measured on
@@ -552,7 +539,7 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
                   <h3 className="text-lg font-semibold text-slate-900">{selectedFleet ? busLabelText(selectedFleet.bus_label) : 'No active bus detected'}{selectedFleet?.is_simulated && <span data-testid="simulated-chip" className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 align-middle text-xs font-semibold text-amber-800">Simulated</span>}{selectedTrip.full && <span className="ml-2 rounded-full bg-red-100 px-2 py-0.5 align-middle text-xs font-semibold text-red-800">Full</span>}</h3>
                 )}
                 {selectedFleet && (
-                  <button type="button" onClick={showAll} data-testid="show-all-buses" className="mt-1 inline-flex min-h-9 items-center text-xs font-semibold text-teal-700 underline">Show all buses</button>
+                  <button type="button" onClick={showAll} data-testid="show-all-buses" className="mt-2 inline-flex min-h-9 items-center gap-1.5 rounded-full border border-teal-200 bg-white px-3 text-xs font-semibold text-teal-700 hover:bg-teal-50"><LayoutGrid className="h-3.5 w-3.5" aria-hidden="true" /> Show all buses</button>
                 )}
               </div>
               <button
@@ -570,16 +557,32 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
               data-testid="track-map-frame"
               className={mapExpanded ? 'fixed inset-0 z-40 overflow-hidden bg-white' : 'relative overflow-hidden rounded-2xl border border-slate-200 bg-white'}
             >
-              <button
-                type="button"
-                onClick={() => setMapExpanded((value) => !value)}
-                aria-pressed={mapExpanded}
-                data-testid="expand-map"
-                className="absolute left-3 top-3 z-20 inline-flex min-h-9 items-center gap-1.5 rounded-full border border-slate-200 bg-white/95 px-3 text-xs font-semibold text-navy-900 shadow-sm hover:bg-white"
-              >
-                {mapExpanded ? <Minimize2 className="h-3.5 w-3.5" aria-hidden="true" /> : <Maximize2 className="h-3.5 w-3.5" aria-hidden="true" />}
-                {mapExpanded ? 'Close full map' : 'Expand map'}
-              </button>
+              <div className="absolute left-3 top-3 z-20 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setMapExpanded((value) => !value)}
+                  aria-pressed={mapExpanded}
+                  data-testid="expand-map"
+                  className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-slate-200 bg-white/95 px-3 text-xs font-semibold text-navy-900 shadow-sm hover:bg-white"
+                >
+                  {mapExpanded ? <Minimize2 className="h-3.5 w-3.5" aria-hidden="true" /> : <Maximize2 className="h-3.5 w-3.5" aria-hidden="true" />}
+                  {mapExpanded ? 'Close full map' : 'Expand map'}
+                </button>
+                {/* 2026-11-21 (user): on the map itself, so it is there in the full-screen map too. */}
+                {selectedFleet && (
+                  <button
+                    type="button"
+                    onClick={showAll}
+                    data-testid="map-show-all-buses"
+                    className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-teal-200 bg-white/95 px-3 text-xs font-semibold text-teal-700 shadow-sm hover:bg-white"
+                  >
+                    <LayoutGrid className="h-3.5 w-3.5" aria-hidden="true" /> Show all buses
+                  </button>
+                )}
+              </div>
+              {busCardOpen && selectedFleet && !selectedStop && (
+                <BusInfoCard view={busCard} onClose={() => setBusCardOpen(false)} />
+              )}
               <StopArrivalsCard
                 key={selectedStop?.code || 'none'}
                 stop={selectedStop}
@@ -595,6 +598,7 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
                 onMapReady={handleMapReady}
                 onRouteData={handleRouteData}
                 servedStopIds={selectedServedStopIds}
+                onStopClick={handleRouteStopClick}
                 className={mapExpanded ? 'relative h-full w-full' : 'relative h-90 w-full'}
               />
             </div>
@@ -742,7 +746,9 @@ export default function PublicTrackingSection({ showHeader = true, compact = fal
                     data-testid="bus-choice"
                     aria-pressed={isSelected}
                     onClick={() => {
+                      setSelectedStop(null);
                       setSelectedFleetId(Number(row.fleet_id));
+                      setBusCardOpen(true);
                       flyToFleet(row);
                     }}
                     className={`w-full rounded-xl border px-3 py-3 text-left transition ${isSelected ? 'border-teal-400 bg-teal-50' : 'border-slate-200 bg-white hover:border-teal-200'}`}

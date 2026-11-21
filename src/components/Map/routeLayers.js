@@ -12,6 +12,9 @@ export const LYR_SEGMENT = 'rm-segment-line'
 export const LYR_STOPS = 'rm-stops-circle'
 export const LYR_STOP_NUMBERS = 'rm-stops-number'
 
+/** 2026-11-21 (user): where RouteMap keeps its onStopClick on the map, so the click handler added once sees the latest. */
+export const STOP_CLICK_KEY = '__routeMapStopClick'
+
 export const emptyCollection = { type: 'FeatureCollection', features: [] }
 
 export function setGeoJson(map, id, data) {
@@ -56,6 +59,7 @@ export function renderRouteLayers(map, maplibregl, routeData, { highlight = null
         type: 'Feature',
         properties: {
           name: stop.name,
+          code: stop.code || '',
           type: stop.type,
           state,
           seqLabel: stop.type === 'pass_through' ? '' : String(stop.sequence),
@@ -117,6 +121,12 @@ export function renderRouteLayers(map, maplibregl, routeData, { highlight = null
     map.on('click', LYR_STOPS, (event) => {
       const feature = event?.features?.[0]
       if (!feature) return
+      // 2026-11-21 (user): a map that handles stop clicks (Track Bus: the Next arrivals card) gets the stop instead.
+      const onStopClick = map[STOP_CLICK_KEY]
+      if (typeof onStopClick === 'function' && feature.properties?.code) {
+        onStopClick({ code: String(feature.properties.code), name: String(feature.properties?.name || '') })
+        return
+      }
       const node = document.createElement('p')
       node.style.cssText = 'margin:0;font-size:12px;font-weight:700;color:#0f172a;'
       const name = String(feature.properties?.name || 'Stop')
