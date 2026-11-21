@@ -161,12 +161,15 @@ test('Phase B: the Operator previews five days From..To, confirms, and a second 
   const dialog = page.getByRole('dialog');
   await expect(dialog).toBeVisible();
 
-  const selects = dialog.locator('select');
-  await selects.nth(0).selectOption({ index: 1 }); // the first fleet route
-  await selects.nth(1).selectOption('round_trip'); // Multi-Leg Schedule
+  // 2026-11-21 (user, Dynamic Route Scheduling): every schedule is a multi-leg block; the route and the bus are chosen
+  // here (a free bus at the first leg's time).
+  await dialog.getByTestId('schedule-route').selectOption({ index: 1 });
   await dialog.locator('input[type="date"]').first().fill(from);
   await dialog.getByLabel('To').fill(to);
   await expect(dialog.getByText('5 days. You will see each day before anything is saved.')).toBeVisible();
+  const bus = dialog.getByTestId('schedule-bus');
+  await expect.poll(async () => bus.locator('option:not([disabled])').count(), { timeout: 30000 }).toBeGreaterThan(1);
+  await bus.selectOption(await bus.locator('option:not([disabled])').nth(1).getAttribute('value'));
 
   const pick = async (placeholder, email) => {
     const select = dialog.locator('select', { has: page.locator('option', { hasText: placeholder }) });
