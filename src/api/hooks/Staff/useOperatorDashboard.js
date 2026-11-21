@@ -484,6 +484,13 @@ export function useRoutesTab({ onRefresh }) {
     }
   };
 
+  // 2026-11-20 (user): Edit route saves its name and stop order here (the page only renders). A server refusal (for
+  // example tickets already sold) is thrown back so the Edit route window can show it.
+  const handleSaveRoute = async (routeId, { details = {}, order = null } = {}) => {
+    if (Object.keys(details).length > 0) await OperatorService.updateOperatorRoute(Number(routeId), details);
+    if (order) await OperatorService.reorderOperatorRouteStops(Number(routeId), order);
+  };
+
   // Batch 59 (user): delete a route that was never used; the server says why when it is still in use.
   const handleDeleteRoute = async (route) => {
     if (!window.confirm(`Delete the route "${route?.route_name ?? ''}"? This cannot be undone.`)) return false;
@@ -635,6 +642,7 @@ export function useRoutesTab({ onRefresh }) {
     handleCreateStop,
     handleDeleteStop,
     handleDeleteRoute,
+    handleSaveRoute,
     handleRemoveStopFromRoute,
     handleCreateRoute,
     handleAddStopToRoute,

@@ -286,9 +286,8 @@ export default function RouteDetailPage({
   };
 
   const saveRoute = async ({ details, order }) => {
-    if (Object.keys(details).length > 0) await OperatorService.updateOperatorRoute(route.route_id, details);
+    await routesTab.handleSaveRoute(route.route_id, { details, order });
     if (order) {
-      await OperatorService.reorderOperatorRouteStops(route.route_id, order);
       setGeometryStatus({ route_id: route.route_id, geometry_regeneration_pending: true });
       setRedrawPending(true); // the server draws the route line again for the new order; watch it like a redraw
     }

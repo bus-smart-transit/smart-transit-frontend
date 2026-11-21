@@ -16,6 +16,8 @@ const mocks = vi.hoisted(() => ({
   setOperatorRouteStopExpress: vi.fn(),
   searchPlaces: vi.fn(),
   getRouteFareTable: vi.fn(),
+  updateOperatorRoute: vi.fn(),
+  reorderOperatorRouteStops: vi.fn(),
 }));
 
 vi.mock('../../../../api/StaffService/OperatorService', () => ({ default: mocks }));
@@ -301,6 +303,19 @@ describe('Route detail', () => {
     expect(within(upcoming).getByText('9:00 AM')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Open Schedule' }));
     expect(onOpenSchedule).toHaveBeenCalled();
+  });
+
+  // 2026-11-21 (audit): Edit route saves through the routes hook (useRoutesTab.handleSaveRoute), not from the page.
+  it('saves a new route name from Edit route through the routes hook', async () => {
+    mocks.updateOperatorRoute.mockResolvedValue({ data: {} });
+    renderPage();
+    await openTagum();
+    fireEvent.click(screen.getByTestId('edit-route'));
+    const dialog = await screen.findByRole('dialog', { name: 'Edit route' });
+    fireEvent.change(within(dialog).getByLabelText('Route name'), { target: { value: 'Davao - Tagum Express Lane' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save changes' }));
+    await waitFor(() => expect(mocks.updateOperatorRoute).toHaveBeenCalledWith(4, { route_name: 'Davao - Tagum Express Lane' }));
+    expect(mocks.reorderOperatorRouteStops).not.toHaveBeenCalled();
   });
 
   it('buses tab lists the buses that have run the route, with their own hours, and opens Fleets', async () => {
