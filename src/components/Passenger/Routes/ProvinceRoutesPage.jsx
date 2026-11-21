@@ -16,7 +16,8 @@ export default function ProvinceRoutesPage() {
   const region = useRegion();
   const province = provinceFromSlug(slug, region?.provinces);
   const { loading, data, error } = useProvinceRoutes(province);
-  const routes = data?.routes ?? [];
+  // 2026-11-21 (user): one card per pair of ends, listing the companies that run it.
+  const routes = data?.groups ?? [];
   const regionLoaded = Boolean(region?.provinces);
 
   return (
@@ -39,8 +40,8 @@ export default function ProvinceRoutesPage() {
 
           {routes.length > 0 && (
             <ul className="mt-6 grid gap-4 sm:grid-cols-2" data-testid="province-routes">
-              {routes.map((route) => (
-                <li key={route.route_id}><RouteCard route={route} /></li>
+              {routes.map((group) => (
+                <li key={group.key}><RouteCard group={group} /></li>
               ))}
             </ul>
           )}

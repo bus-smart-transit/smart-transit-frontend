@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import ProvinceRoutesPage from '../ProvinceRoutesPage';
 import RoutePage from '../RoutePage';
@@ -21,12 +21,15 @@ describe('ProvinceRoutesPage', () => {
   it('lists the province routes, each opening its route page', () => {
     useProvinceRoutes.mockReturnValue({ loading: false, error: '', data: { province: 'Sample Oriental', routes: [
       { route_id: 8, route_name: 'Sample City to East Town', origin: 'Sample City Terminal', destination: 'East Town Terminal', company_name: 'Sample Lines' },
+    ], groups: [
+      { key: 'sample city|east town', title: 'Sample City Terminal → East Town Terminal', routes: [{ route_id: 8, route_name: 'Sample City to East Town', company_name: 'Sample Lines' }] },
     ] } });
     at('/provinces/sample-oriental', <ProvinceRoutesPage />, '/provinces/:slug');
 
     expect(useProvinceRoutes).toHaveBeenLastCalledWith('Sample Oriental');
     expect(screen.getByRole('heading', { name: 'Sample Oriental' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Sample City to East Town/ })).toHaveAttribute('href', '/routes/8');
+    expect(screen.getByRole('heading', { name: 'Sample City Terminal → East Town Terminal' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Sample Lines/ })).toHaveAttribute('href', '/routes/8');
     expect(screen.getByTestId('route-card-company')).toHaveTextContent('Sample Lines');
   });
 
@@ -70,22 +73,29 @@ describe('RoutePage', () => {
 
 // 2026-11-21 (user): "View all routes" on the homepage.
 describe('AllRoutesPage', () => {
-  // 2026-11-21 (user): every route once, with only its name and the company that runs it.
-  it('lists every route once with its company, each opening its route page', () => {
-    useAllRoutes.mockReturnValue({ loading: false, error: '', data: { routes: [
-      { route_id: 8, route_name: 'Sample City to East Town', company_name: 'Sample Lines' },
-      { route_id: 9, route_name: 'Sample City to North Town', company_name: null },
+  // 2026-11-21 (user): one card per pair of ends, listing the companies that run it; each company opens its own route.
+  it('shows one card per pair of ends with each company opening its own route', () => {
+    useAllRoutes.mockReturnValue({ loading: false, error: '', data: { groups: [
+      { key: 'a|b', title: 'Sample Terminal → East Terminal', routes: [
+        { route_id: 9, route_name: 'Sample to East (Alpha)', company_name: 'Alpha Bus' },
+        { route_id: 8, route_name: 'Sample to East', company_name: 'Sample Lines' },
+      ] },
+      { key: 'a|c', title: 'Sample Terminal → North Terminal', routes: [{ route_id: 10, route_name: 'Sample to North', company_name: null }] },
     ] } });
     at('/routes', <AllRoutesPage />, '/routes');
 
-    const links = screen.getAllByRole('link', { name: /Sample City to/ });
-    expect(links).toHaveLength(2);
-    expect(links[0]).toHaveAttribute('href', '/routes/8');
-    expect(screen.getAllByTestId('route-card-company').map((el) => el.textContent)).toEqual(['Sample Lines', 'Not provided']);
+    const cards = screen.getAllByTestId('route-card');
+    expect(cards).toHaveLength(2);
+    expect(within(cards[0]).getByRole('heading', { name: 'Sample Terminal → East Terminal' })).toBeInTheDocument();
+    expect(within(cards[0]).getByText('Companies')).toBeInTheDocument();
+    expect(within(cards[0]).getAllByTestId('route-card-company').map((el) => [el.textContent, el.getAttribute('href')]))
+      .toEqual([['Alpha Bus', '/routes/9'], ['Sample Lines', '/routes/8']]);
+    expect(within(cards[1]).getByTestId('route-card-company')).toHaveTextContent('Not provided');
+    expect(within(cards[1]).getByText('Company')).toBeInTheDocument();
   });
 
   it('says plainly when there is no route yet', () => {
-    useAllRoutes.mockReturnValue({ loading: false, error: '', data: { routes: [] } });
+    useAllRoutes.mockReturnValue({ loading: false, error: '', data: { routes: [], groups: [] } });
     at('/routes', <AllRoutesPage />, '/routes');
     expect(screen.getByTestId('all-routes-none')).toHaveTextContent('No routes yet.');
   });
