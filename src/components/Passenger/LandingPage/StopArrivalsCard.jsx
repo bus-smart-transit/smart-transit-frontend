@@ -47,8 +47,8 @@ function DestinationGroups({ arrivals, testId }) {
 export default function StopArrivalsCard({ stop, onClose, onViewTrips }) {
   const { loading, data, error } = useStopArrivals(stop?.code);
   if (!stop) return null;
+  // 2026-11-23 (advisor): only the buses arriving soon; the "Later today" list was confusing, so it is not shown.
   const arrivals = data?.arrivals || [];
-  const later = data?.later || [];
   const anyLive = arrivals.some((arrival) => arrival.live);
 
   return (
@@ -68,7 +68,7 @@ export default function StopArrivalsCard({ stop, onClose, onViewTrips }) {
       </div>
 
       <div className="mt-3 flex items-center justify-between">
-        <p className="text-sm font-semibold text-navy-950">Next arrivals{arrivals.length > 0 ? ` (${arrivals.length})` : ''}</p>
+        <p className="text-sm font-semibold text-navy-950">Arriving{arrivals.length > 0 ? ` (${arrivals.length})` : ''}</p>
         {arrivals.length > 0 && (
           <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600" data-testid="arrivals-source">
             <span className={`h-2 w-2 rounded-full ${anyLive ? 'bg-emerald-500' : 'bg-slate-400'}`} aria-hidden="true" />
@@ -84,13 +84,6 @@ export default function StopArrivalsCard({ stop, onClose, onViewTrips }) {
       )}
 
       {arrivals.length > 0 && <DestinationGroups arrivals={arrivals} testId="arrivals-list" />}
-
-      {later.length > 0 && (
-        <div className="mt-4" data-testid="arrivals-later">
-          <p className="text-sm font-semibold text-navy-950">Later today ({later.length})</p>
-          <DestinationGroups arrivals={later} testId="arrivals-later-list" />
-        </div>
-      )}
 
       {data?.updated_at && <p className="mt-2 text-xs text-slate-500">{updatedText(data.updated_at)}</p>}
 

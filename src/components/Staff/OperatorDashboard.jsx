@@ -26,6 +26,7 @@ import CrewShiftTimes from './Operator/CrewShiftTimes'
 import { isRangeSchedule, rangeDayCount } from '../../utils/scheduleRange'
 import { crewOptionLabel, isPickable, needsCrew, sortForPicker } from '../../utils/crewPicker'
 import AssignCrewModal from './Operator/AssignCrewModal'
+import InfoTip from '../ui/InfoTip'
 import { CompanyAdminContext } from './Operator/companyAdmin'
 import TripFocusNotice from './TripFocusNotice'
 import { roleLabel } from '../../utils/staffForm'
@@ -150,13 +151,16 @@ function NotificationBell() {
 
 // 2026-10-28: the label is linked to its input (htmlFor/id), so screen readers announce it and it can be found by name.
 // A single custom child (a select) gets the same id unless it already has one.
-function Field({ label, type = 'text', value, onChange, required, placeholder, hint, children }) {
+function Field({ label, type = 'text', value, onChange, required, placeholder, hint, info = '', children }) {
   const autoId = useId()
   const single = isValidElement(children) ? children : null
   const fieldId = single?.props?.id ?? autoId
   return (
     <div>
-      <label htmlFor={children && !single ? undefined : fieldId} className="mb-1 block text-sm font-medium text-slate-700">{label}{required && <span className="text-red-500 ml-1">*</span>}</label>
+      <div className="mb-1 flex items-center gap-1">
+        <label htmlFor={children && !single ? undefined : fieldId} className="block text-sm font-medium text-slate-700">{label}{required && <span className="text-red-500 ml-1">*</span>}</label>
+        {info && <InfoTip label={`About ${String(label).toLowerCase()}`} text={info} />}
+      </div>
       {single ? cloneElement(single, { id: fieldId }) : children ?? (
         <input id={fieldId} type={type} value={value} onChange={onChange} required={required} placeholder={placeholder}
           className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500" />
@@ -284,7 +288,7 @@ function ScheduleServiceModal({ state, drivers, conductors }) {
         </fieldset>
 
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <Field label="Route" required>
+          <Field label="Route" required info="Every schedule runs out and back on this route, so it starts and ends at the first stop.">
             <select aria-label="Route" value={form.route_id} onChange={e => setForm(p => ({ ...p, route_id: e.target.value }))} required className={fieldClass} data-testid="schedule-route">
               <option value="">Select a route...</option>
               {(scheduleRoutes || []).map(route => (
@@ -310,7 +314,7 @@ function ScheduleServiceModal({ state, drivers, conductors }) {
             />
             {rangeDays > 1 && <p className="mt-1 text-xs text-slate-500">{rangeDays} days. You will see each day before anything is saved.</p>}
           </Field>
-          <Field label="Bus" required>
+          <Field label="Bus" required info="Only a bus that is inside its operating hours, free at the first trip's time and has a fare for this service can be chosen. The others are listed with the reason.">
             <select aria-label="Bus" value={form.fleet_id} onChange={e => setForm(p => ({ ...p, fleet_id: e.target.value }))} required disabled={!busCheck.ready || busCheck.loading} className={`${fieldClass} disabled:opacity-60`} data-testid="schedule-bus">
               <option value="">{busCheck.ready ? (busCheck.loading ? 'Checking which buses are free...' : 'Select a bus...') : 'Choose the route and date first'}</option>
               {sortBusesForPicker(busCheck.buses).map(bus => (
@@ -380,11 +384,11 @@ function ScheduleServiceModal({ state, drivers, conductors }) {
             />
           </div>
           <div className="min-w-0 space-y-4">
-            {/* 2026-11-21 (user): the crew is chosen when scheduling (every schedule is a block). Not available crew are
-                listed but cannot be picked. */}
-            <Field label="Driver" required>
-              <select aria-label="Driver" value={form.driver_id} onChange={e => setForm(p => ({ ...p, driver_id: e.target.value }))} required disabled={loadingDateDrivers || Boolean(dateDriversError)} className={`${fieldClass} disabled:opacity-60`}>
-                <option value="">Select a driver...</option>
+            {/* 2026-11-23 (advisor): the crew may be chosen now or assigned later (schedules are made a month ahead,
+                crews by the day). Not available crew are listed but cannot be picked. */}
+            <Field label="Driver" info="Choose the crew now, or leave it for later and use Assign crew on the schedule. A trip cannot start boarding until it has both.">
+              <select aria-label="Driver" value={form.driver_id} onChange={e => setForm(p => ({ ...p, driver_id: e.target.value }))} disabled={loadingDateDrivers || Boolean(dateDriversError)} className={`${fieldClass} disabled:opacity-60`}>
+                <option value="">Assign later</option>
                 {sortForPicker(dateDrivers).map(d => (
                   <option key={getStaffCompanyUserId(d)} value={getStaffCompanyUserId(d)} disabled={!isPickable(d)}>
                     {crewOptionLabel(d)}
@@ -394,9 +398,9 @@ function ScheduleServiceModal({ state, drivers, conductors }) {
             </Field>
             {loadingDateDrivers && <p role="status" className="text-xs text-slate-500">Checking driver availability...</p>}
             {dateDriversError && <p role="alert" className="text-xs text-rose-700">{dateDriversError}</p>}
-            <Field label="Chauffeur" required>
-              <select aria-label="Chauffeur" value={form.conductor_id} onChange={e => setForm(p => ({ ...p, conductor_id: e.target.value }))} required className={fieldClass}>
-                <option value="">Select a chauffeur...</option>
+            <Field label="Chauffeur">
+              <select aria-label="Chauffeur" value={form.conductor_id} onChange={e => setForm(p => ({ ...p, conductor_id: e.target.value }))} className={fieldClass}>
+                <option value="">Assign later</option>
                 {sortForPicker(conductors).map(c => (
                   <option key={getStaffCompanyUserId(c)} value={getStaffCompanyUserId(c)} disabled={!isPickable(c)}>
                     {crewOptionLabel(c)}
@@ -815,7 +819,7 @@ function ScheduleTab({ trips, drivers, conductors, onRefresh, view, onViewChange
           <>
             {tripsState.msg && <p className="rounded-lg border border-teal-200 bg-teal-50 px-4 py-2 text-sm text-teal-800">{tripsState.msg}</p>}
             {active === 'calendar' && <StaffCalendar key={calendarFocus || 'today'} service={OperatorService} initialDate={calendarFocus} refreshKey={reloadToken} onOpenTrip={openTripFromCalendar} />}
-            {active === 'blocks' && <ShiftBlocksView reloadToken={reloadToken} />}
+            {active === 'blocks' && <ShiftBlocksView reloadToken={reloadToken} conductors={conductors} drivers={drivers} onChanged={refreshAll} />}
             {active === 'trips' && <TripsTab drivers={drivers} conductors={conductors} onRefresh={refreshAll} tripsState={tripsState} focusTripId={focusTripId} onDismissFocus={() => setFocusTripId(null)} />}
             {active === 'requests' && <TripRequestsPanel onDecided={refreshAll} showEmpty />}
             {/* 2026-11-14 (user): the cancelled-trip tickets needing a person moved to Finance > Refunds. */}

@@ -27,10 +27,11 @@ const SECONDARY = 'inline-flex items-center gap-2 rounded-lg border border-slate
 const GPS_TONE = { live: 'success', stale: 'warning', weak: 'warning', off_route: 'warning', none: 'neutral' };
 const personName = (person) => person?.user?.name || person?.name || person?.user?.username || person?.username || null;
 
-function Label({ text, hint, children, className = '' }) {
+function Label({ text, hint, children, className = '', required = false }) {
   return (
     <label className={`block text-xs font-medium text-slate-600 ${className}`}>
       {text}
+      {required && <span className="ml-0.5 text-rose-600" aria-hidden="true">*</span>}
       <span className="mt-1 block">{children}</span>
       {hint && <span className="mt-1 block font-normal text-slate-500">{hint}</span>}
     </label>
@@ -49,7 +50,7 @@ function AddFleetModal({ open, onClose, form, setForm, fareOptions, saving, mess
     <Modal open={open} onClose={onClose} title="Add fleet" fullScreenOnMobile>
       <form onSubmit={onSubmit}>
         <div className="grid gap-4 sm:grid-cols-2">
-          <Label text="Plate number"><input value={form.plate_number} onChange={set('plate_number')} required className={INPUT} /></Label>
+          <Label text="Plate number" required><input value={form.plate_number} onChange={set('plate_number')} required className={INPUT} /></Label>
           <Label text="Fleet type">
             <select value={form.fleet_type} onChange={set('fleet_type')} className={INPUT}>
               <option value="public">Public</option>
@@ -62,18 +63,17 @@ function AddFleetModal({ open, onClose, form, setForm, fareOptions, saving, mess
             <p className="mt-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-normal text-slate-900" data-testid="fleet-company-name">{companyName || 'Not provided'}</p>
             <span className="mt-1 block font-normal text-slate-500">Your company. Shown to passengers.</span>
           </div>
-          <Label text="Body number" hint="Shown to passengers"><input value={form.body_no} onChange={set('body_no')} maxLength={30} className={INPUT} /></Label>
-          <Label text="Vehicle class" className="sm:col-span-2">
-            <select aria-label="Vehicle class" value={form.vehicle_class} onChange={set('vehicle_class')} className={INPUT}>
-              <option value="">Vehicle class: not specified</option>
+          <Label text="Body number" required hint="Shown to passengers"><input value={form.body_no} onChange={set('body_no')} maxLength={30} required className={INPUT} /></Label>
+          <Label text="Vehicle class" required className="sm:col-span-2">
+            <select aria-label="Vehicle class" value={form.vehicle_class} onChange={set('vehicle_class')} required className={INPUT}>
+              <option value="">Choose a vehicle class</option>
               {fareOptions.vehicle_classes.map((entry) => <option key={entry.key} value={entry.key}>{entry.label}</option>)}
             </select>
           </Label>
-          <Label text="Seated capacity"><input type="number" min="0" value={form.seated_capacity} onChange={set('seated_capacity')} required className={INPUT} /></Label>
-          <Label text="Standing capacity"><input type="number" min="0" value={form.standing_capacity} onChange={set('standing_capacity')} required className={INPUT} /></Label>
+          <Label text="Seats" required hint="At least 20. Standing passengers are not allowed."><input type="number" min="20" max="100" value={form.seated_capacity} onChange={set('seated_capacity')} required className={INPUT} /></Label>
           {/* 2026-11-21 (user, Dynamic Route Scheduling): the bus has its hours; its route is chosen for each trip. */}
-          <Label text="Operating start" hint="Trips can leave from this time"><input type="time" value={form.operating_start_time} onChange={set('operating_start_time')} required className={INPUT} /></Label>
-          <Label text="Operating end" hint="Until this time (it may be after midnight)"><input type="time" value={form.operating_end_time} onChange={set('operating_end_time')} required className={INPUT} /></Label>
+          <Label text="Operating start" required hint="Trips can leave from this time"><input type="time" value={form.operating_start_time} onChange={set('operating_start_time')} required className={INPUT} /></Label>
+          <Label text="Operating end" required hint="Until this time (it may be after midnight)"><input type="time" value={form.operating_end_time} onChange={set('operating_end_time')} required className={INPUT} /></Label>
           <p className="text-xs text-slate-500 sm:col-span-2">You choose the route each time you schedule a trip for this bus.</p>
         </div>
         <FormMessage message={message} />
@@ -97,7 +97,6 @@ function EditFleetModal({ fleet, fareOptions, companyName, onClose, onSave }) {
     fleet_type: fleet.fleet_type || 'public',
     vehicle_class: fleet.vehicle_class ?? '',
     seated_capacity: fleet.seated_capacity ?? 0,
-    standing_capacity: fleet.standing_capacity ?? 0,
     operating_start_time: String(fleet.operating_start_time ?? '').slice(0, 5),
     operating_end_time: String(fleet.operating_end_time ?? '').slice(0, 5),
   }));
@@ -115,10 +114,9 @@ function EditFleetModal({ fleet, fareOptions, companyName, onClose, onSave }) {
       fleet_type: form.fleet_type,
       vehicle_class: form.vehicle_class || null,
       seated_capacity: Number(form.seated_capacity),
-      standing_capacity: Number(form.standing_capacity),
-      // 2026-11-21 (user): the bus's operating hours (both, or neither).
-      operating_start_time: form.operating_start_time || null,
-      operating_end_time: form.operating_end_time || null,
+      // 2026-11-23 (advisor): operating hours are required; standing passengers are not allowed.
+      operating_start_time: form.operating_start_time,
+      operating_end_time: form.operating_end_time,
     });
     setSaving(false);
     if (result.ok) onClose();
@@ -129,8 +127,8 @@ function EditFleetModal({ fleet, fareOptions, companyName, onClose, onSave }) {
     <Modal open onClose={onClose} title={`Edit fleet ${fleet.plate_number}`} fullScreenOnMobile>
       <form onSubmit={submit} aria-label="Edit fleet">
         <div className="grid gap-4 sm:grid-cols-2">
-          <Label text="Plate number"><input value={form.plate_number} onChange={set('plate_number')} required className={INPUT} /></Label>
-          <Label text="Body number" hint="Shown to passengers"><input value={form.body_no} onChange={set('body_no')} maxLength={30} className={INPUT} /></Label>
+          <Label text="Plate number" required><input value={form.plate_number} onChange={set('plate_number')} required className={INPUT} /></Label>
+          <Label text="Body number" required hint="Shown to passengers"><input value={form.body_no} onChange={set('body_no')} maxLength={30} required className={INPUT} /></Label>
           <div className="text-xs font-semibold text-slate-700">
             Bus company name
             <p className="mt-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-normal text-slate-900">{fleet.bus_company_name || companyName || 'Not provided'}</p>
@@ -141,16 +139,15 @@ function EditFleetModal({ fleet, fareOptions, companyName, onClose, onSave }) {
               <option value="private">Private</option>
             </select>
           </Label>
-          <Label text="Vehicle class">
-            <select aria-label="Vehicle class" value={form.vehicle_class} onChange={set('vehicle_class')} className={INPUT}>
-              <option value="">Not specified</option>
+          <Label text="Vehicle class" required>
+            <select aria-label="Vehicle class" value={form.vehicle_class} onChange={set('vehicle_class')} required className={INPUT}>
+              <option value="">Choose a vehicle class</option>
               {fareOptions.vehicle_classes.map((entry) => <option key={entry.key} value={entry.key}>{entry.label}</option>)}
             </select>
           </Label>
-          <Label text="Seated capacity"><input type="number" min="0" value={form.seated_capacity} onChange={set('seated_capacity')} required className={INPUT} /></Label>
-          <Label text="Standing capacity"><input type="number" min="0" value={form.standing_capacity} onChange={set('standing_capacity')} required className={INPUT} /></Label>
-          <Label text="Operating start" hint="Trips can leave from this time"><input type="time" value={form.operating_start_time} onChange={set('operating_start_time')} required={Boolean(form.operating_end_time)} className={INPUT} /></Label>
-          <Label text="Operating end" hint="Until this time (it may be after midnight)"><input type="time" value={form.operating_end_time} onChange={set('operating_end_time')} required={Boolean(form.operating_start_time)} className={INPUT} /></Label>
+          <Label text="Seats" required hint="At least 20. Standing passengers are not allowed."><input type="number" min="20" max="100" value={form.seated_capacity} onChange={set('seated_capacity')} required className={INPUT} /></Label>
+          <Label text="Operating start" required hint="Trips can leave from this time"><input type="time" value={form.operating_start_time} onChange={set('operating_start_time')} required className={INPUT} /></Label>
+          <Label text="Operating end" required hint="Until this time (it may be after midnight)"><input type="time" value={form.operating_end_time} onChange={set('operating_end_time')} required className={INPUT} /></Label>
         </div>
         {error && <p role="alert" className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>}
         <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
@@ -338,7 +335,7 @@ export default function FleetsPage({ fleets, routes, trips, onRefresh, companyNa
                     <dl className="mt-3 grid grid-cols-2 gap-3 rounded-lg bg-slate-50 p-3 text-sm" data-testid="fleet-details">
                       <div><dt className="text-xs text-slate-500">Type</dt><dd className="text-slate-900">{row.fleet.fleet_type || 'public'} · {classLabel(row.fleet.vehicle_class) || 'Bus type not set'}</dd></div>
                       <div><dt className="text-xs text-slate-500">Routes it has run</dt><dd className="text-slate-900">{row.routes.length ? row.routes.join(', ') : 'None yet'}</dd></div>
-                      <div><dt className="text-xs text-slate-500">Seats</dt><dd className="text-slate-900">{row.fleet.seated_capacity ?? 0} seated, {row.fleet.standing_capacity ?? 0} standing</dd></div>
+                      <div><dt className="text-xs text-slate-500">Seats</dt><dd className="text-slate-900">{row.fleet.seated_capacity ?? 0} seats</dd></div>
                       <div><dt className="text-xs text-slate-500">Current or next trip</dt><dd className="text-slate-900">{row.nextTripLabel ?? 'No trip left today'}</dd></div>
                       <div><dt className="text-xs text-slate-500">GPS</dt><dd className="text-slate-900">{row.liveTrip ? (row.gps.state === 'live' ? 'Live' : row.gps.state === 'none' ? 'No GPS' : row.gps.state === 'stale' ? 'Out of date' : row.gps.state === 'weak' ? 'Weak signal' : 'Off route') : (row.lastSeen ? `Last seen ${row.lastSeen}` : '-')}{row.liveTrip && row.lastSeen ? ` · ${row.lastSeen}` : ''}</dd></div>
                     </dl>

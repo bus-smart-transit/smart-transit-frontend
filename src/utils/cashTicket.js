@@ -99,6 +99,20 @@ export function placesLeft(fleet, trip, seatType) {
  * Standing is sold only on the bus and only once every seat is sold; it is offered while standing places remain. The
  * server enforces the same rule (TripCapacity::standingOpen), so this only decides whether the option is shown.
  */
+/** 2026-11-23 (advisor): most tickets in one cash sale (the same as one online purchase). */
+export const MAX_CASH_TICKETS = 20;
+
+/**
+ * How many tickets this cash sale makes: 1 to MAX_CASH_TICKETS. A checked-in passenger, a discount (one ID is checked)
+ * and a priority seat are one person, so those sales are always one ticket.
+ */
+export function onsiteQuantity(form, extras = {}) {
+  if (form?.boarding_mode === 'checkin' || extras.discount || extras.priority) return 1;
+  const n = Math.floor(Number(form?.quantity));
+  if (!Number.isFinite(n) || n < 1) return 1;
+  return Math.min(n, MAX_CASH_TICKETS);
+}
+
 export function isStandingOpen(summary) {
   if (!summary?.capacity || !summary?.remaining) return false;
   return Number(summary.remaining.seated) <= 0 && Number(summary.remaining.standing) > 0;

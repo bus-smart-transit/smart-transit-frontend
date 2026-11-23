@@ -7,11 +7,11 @@ import { checkoutIdempotencyKey, clearCheckoutIdempotencyKey } from '../../../ut
 import usePassengersByTrip from './usePassengersByTrip';
 import useOnsiteReceiptPrinter from './useOnsiteReceiptPrinter';
 import { isSameBusinessDay, getBusinessToday, getBusinessNowMs, toBusinessScheduleMs, debugLogBusinessTime, formatManilaDateTime } from '../../../utils/dates';
-import { boardingPointView, buildOnsiteItem, capacityFromServer, isMidTripBoardingAvailable, isOnsiteFormComplete, isStandingOpen } from '../../../utils/cashTicket';
+import { boardingPointView, buildOnsiteItem, capacityFromServer, isMidTripBoardingAvailable, isOnsiteFormComplete, isStandingOpen, onsiteQuantity } from '../../../utils/cashTicket';
 import { readDeepLink } from '../../../utils/notificationTarget';
 import useAssignmentCards from './useAssignmentCards';
 import { BOARDING_OPEN_STATUSES } from '../../../utils/actionReasons';
-import { useLiveChannels, useLiveRefresh } from '../useLive';
+import { useLiveChannels, useLiveEvent, useLiveRefresh } from '../useLive';
 
 // Architecture audit follow-up (CONF-03): ConductorDashboard.jsx previously
 // called ConductorService directly from ~22 sites spread across the
@@ -133,7 +133,7 @@ export function useConductorPairing() {
  * All state, effects, and handlers for the conductor dashboard's main
  * content. `onLogout`/`pairing` come from useConductorPairing() above.
  */
-export function useConductorDashboardData({ onLogout, pairing }) {
+export function useConductorDashboardData({ onLogout, pairing, refreshPairingStatus }) {
   // Batch 15, Item 7: default landing screen is the ticket scanner
   // ("Ticketing" tab, key 'occupancy') rather than the Start Shift screen —
   // assignment accept/reject remains reachable from there via the
@@ -180,6 +180,8 @@ export function useConductorDashboardData({ onLogout, pairing }) {
     origin_stop_id: '',
     destination_stop_id: '',
     seat_type: 'seated',
+    // 2026-11-23 (advisor): several tickets to the same stop in one cash sale (one payment, one receipt).
+    quantity: 1,
   });
   // Task 6: the server's answer to "where is the bus on this route?" (never computed here).
   const [boardingPoint, setBoardingPoint] = useState({ loading: false, response: null, error: '' });
@@ -197,6 +199,8 @@ export function useConductorDashboardData({ onLogout, pairing }) {
   // quote after a refused sale (the fare may have changed).
   const [checkIns, setCheckIns] = useState([]);
   const [checkInBusy, setCheckInBusy] = useState(false);
+  // 2026-11-23 (advisor): the result of Passenger In is shown under its button ({ tone: 'ok' | 'error', text }).
+  const [checkInNotice, setCheckInNotice] = useState(null);
   const [quoteNonce, setQuoteNonce] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -536,10 +540,10 @@ export function useConductorDashboardData({ onLogout, pairing }) {
     try {
       const res = await ConductorService.checkInPassenger();
       const checkIn = res?.data;
-      setActionMsg(checkIn ? `Passenger checked in at ${checkIn.checked_in_at}, fare counted from ${checkIn.stop_name}.` : 'Passenger checked in.');
+      setCheckInNotice({ tone: 'ok', text: checkIn ? `Passenger checked in at ${checkIn.checked_in_at}. Fare counts from ${checkIn.stop_name}.` : 'Passenger checked in.' });
       await loadCheckIns();
     } catch (err) {
-      setActionMsg(err.message || 'Passenger In is not available right now.');
+      setCheckInNotice({ tone: 'error', text: err.message || 'Passenger In is not available right now.' });
     } finally {
       setCheckInBusy(false);
     }
@@ -1131,7 +1135,8 @@ export function useConductorDashboardData({ onLogout, pairing }) {
       // Batch 76: a priority seat and baggage in the compartment (the server adds the baggage fee).
       if (discount?.priority_type) onsiteItem.priority_type = discount.priority_type;
       if (discount?.baggage) onsiteItem.baggage = true;
-      const onsitePayload = { items: [onsiteItem] };
+      const count = onsiteQuantity(cashForm, { discount: Boolean(discount?.discount_type_key), priority: Boolean(discount?.priority_type) });
+      const onsitePayload = { items: Array.from({ length: count }, () => ({ ...onsiteItem })) };
       const idempotencyKey = checkoutIdempotencyKey('conductor-cash', onsitePayload);
       const res = await ConductorService.checkoutOnsite(onsitePayload, idempotencyKey);
       clearCheckoutIdempotencyKey('conductor-cash');
@@ -1144,13 +1149,14 @@ export function useConductorDashboardData({ onLogout, pairing }) {
         issuedBy: checkoutData?.issued_by?.name || null,
       });
 
-      setActionMsg('Onsite checkout recorded successfully.');
+      setActionMsg(count > 1 ? `${count} cash tickets recorded.` : 'Cash ticket recorded.');
       setOnsiteForm((prev) => ({
         ...prev,
         pending_boarding_id: '',
         origin_stop_id: '',
         destination_stop_id: '',
         seat_type: 'seated',
+        quantity: 1,
       }));
       void loadCheckIns();
       void loadPassengers();
@@ -1224,6 +1230,14 @@ export function useConductorDashboardData({ onLogout, pairing }) {
   // 2026-11-20 (live updates): the trip's status (the Driver starts boarding, departs; the Operator cancels) and its
   // tickets (a new online booking, a missed ticket) show at once instead of on the next check.
   const liveChannels = useLiveChannels();
+
+  // 2026-11-23 (advisor): the moment the crew are paired (the server's live "paired" message on this person's own
+  // channel), close the pairing pop-up and go to ticketing. The 90-second check stays as the fallback.
+  useLiveEvent(liveChannels?.user, 'paired', () => {
+    void refreshPairingStatus?.();
+    setPairingOpen(false);
+    setActiveTab('occupancy');
+  }, { isPrivate: true });
   useLiveRefresh(liveChannels?.trip_status, 'trip.status', () => { void loadData({ silent: true }); }, {
     match: (update) => Number(update?.trip_id) === Number(trip?.trip_id),
     minGapMs: 1000,
@@ -1267,6 +1281,7 @@ export function useConductorDashboardData({ onLogout, pairing }) {
     refreshBoardingPoint,
     checkIns,
     checkInBusy,
+    checkInNotice,
     handlePassengerIn,
     quoteNonce,
     loading,

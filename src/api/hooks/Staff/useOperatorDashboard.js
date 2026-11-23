@@ -289,7 +289,7 @@ export function useFleetsTab({ onRefresh }) {
   const [fleetLocations, setFleetLocations] = useState([]);
   const [manageMsg, setManageMsg] = useState('');
   const [manageSaving, setManageSaving] = useState(false);
-  const [fleetForm, setFleetForm] = useState({ plate_number: '', bus_company_name: '', body_no: '', seated_capacity: '', standing_capacity: '', fleet_type: 'public', vehicle_class: '', operating_start_time: '06:00', operating_end_time: '22:00' });
+  const [fleetForm, setFleetForm] = useState({ plate_number: '', bus_company_name: '', body_no: '', seated_capacity: '', fleet_type: 'public', vehicle_class: '', operating_start_time: '06:00', operating_end_time: '22:00' });
 
   const refreshFleetLocations = useCallback(async () => {
     try {
@@ -375,7 +375,6 @@ export function useFleetsTab({ onRefresh }) {
         bus_company_name: fleetForm.bus_company_name || '',
         body_no: fleetForm.body_no || '',
         seated_capacity: Number(fleetForm.seated_capacity),
-        standing_capacity: Number(fleetForm.standing_capacity),
         fleet_type: fleetForm.fleet_type,
         vehicle_class: fleetForm.vehicle_class || null,
         // 2026-11-21 (user, Dynamic Route Scheduling): the bus's hours; its route is chosen for each trip.
@@ -383,7 +382,7 @@ export function useFleetsTab({ onRefresh }) {
           ? { operating_start_time: String(fleetForm.operating_start_time).trim(), operating_end_time: String(fleetForm.operating_end_time).trim() }
           : {}),
       });
-      setFleetForm({ plate_number: '', bus_company_name: '', body_no: '', seated_capacity: '', standing_capacity: '', fleet_type: 'public', vehicle_class: '', operating_start_time: '06:00', operating_end_time: '22:00' });
+      setFleetForm({ plate_number: '', bus_company_name: '', body_no: '', seated_capacity: '', fleet_type: 'public', vehicle_class: '', operating_start_time: '06:00', operating_end_time: '22:00' });
       setManageMsg('Fleet created successfully.');
       onRefresh();
       return true;
@@ -807,8 +806,9 @@ export function useTripsTab({ trips, onRefresh }) {
       const created = await OperatorService.createShiftBlock({
         fleet_id: Number(form.fleet_id),
         route_id: Number(form.route_id),
-        driver_id: Number(form.driver_id),
-        conductor_id: Number(form.conductor_id),
+        // 2026-11-23 (advisor): the crew may be assigned later.
+        driver_id: form.driver_id ? Number(form.driver_id) : null,
+        conductor_id: form.conductor_id ? Number(form.conductor_id) : null,
         block_type: form.block_type,
         scheduled_date: form.trip_date,
         service_type: form.service_type || 'regular',
@@ -831,8 +831,16 @@ export function useTripsTab({ trips, onRefresh }) {
   const assignCrew = async (trip, { driverId, conductorId }) => {
     setSaving(true); setMsg('');
     try {
-      if (driverId && !trip.driver_id) await OperatorService.assignDriver(trip.trip_id, Number(driverId));
-      if (conductorId && !trip.conductor_id) await OperatorService.assignConductor(trip.trip_id, Number(conductorId));
+      // 2026-11-23: a trip of a schedule (shift block) gets its crew through the block, so every trip of it does.
+      if (trip.shift_block_id) {
+        await OperatorService.updateShiftBlockAssignment(trip.shift_block_id, {
+          ...(driverId && !trip.driver_id ? { driver_id: Number(driverId) } : {}),
+          ...(conductorId && !trip.conductor_id ? { conductor_id: Number(conductorId) } : {}),
+        });
+      } else {
+        if (driverId && !trip.driver_id) await OperatorService.assignDriver(trip.trip_id, Number(driverId));
+        if (conductorId && !trip.conductor_id) await OperatorService.assignConductor(trip.trip_id, Number(conductorId));
+      }
       setMsg('Crew assigned.');
       setAssignModal(null);
       onRefresh();
@@ -1110,6 +1118,29 @@ export function useShiftBlocksTab(reloadToken = 0) {
     }
   };
 
+  // 2026-11-23 (advisor): the crew of a schedule made without one; it goes on every trip of the block, and the server
+  // runs the same checks as when scheduling (role, company, one block a day, rest) and notifies each person.
+  const [crewSaving, setCrewSaving] = useState(false);
+  const [crewMsg, setCrewMsg] = useState('');
+  const handleAssignCrew = async (block, { driverId, conductorId }) => {
+    setCrewSaving(true);
+    setCrewMsg('');
+    try {
+      await OperatorService.updateShiftBlockAssignment(block.shift_block_id, {
+        ...(driverId && !block.driver_id ? { driver_id: Number(driverId) } : {}),
+        ...(conductorId && !block.conductor_id ? { conductor_id: Number(conductorId) } : {}),
+      });
+      setMsg('Crew assigned. They were notified.');
+      void loadBlocks();
+      return true;
+    } catch (err) {
+      setCrewMsg(err?.message || 'Could not assign the crew.');
+      return false;
+    } finally {
+      setCrewSaving(false);
+    }
+  };
+
   return {
     blocks,
     blockCards,
@@ -1123,5 +1154,8 @@ export function useShiftBlocksTab(reloadToken = 0) {
     handleOverrideHandoff,
     handleMarkReviewed,
     handleRescheduleLeg,
+    handleAssignCrew,
+    crewSaving,
+    crewMsg,
   };
 }

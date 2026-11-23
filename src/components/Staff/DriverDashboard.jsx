@@ -10,6 +10,7 @@ import {
   User,
 } from 'lucide-react';
 import PairingScreen from './PairingScreen';
+import InfoTip from '../ui/InfoTip';
 import StaffPortalLayout from './StaffPortalLayout';
 import ProfilePage from '../Account/ProfilePage';
 import FirstPasswordPrompt from '../Account/FirstPasswordPrompt';
@@ -196,7 +197,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     handleToggleTwoFactor,
     availabilitySaving,
     handleToggleAvailability,
-  } = useDriverDashboardData({ onLogout, pairing });
+  } = useDriverDashboardData({ onLogout, pairing, refreshPairingStatus });
   const requestedGroups = groupRequestedStops(requestedStops);
 
   const derivedTripStatus = deriveTripStatus(trip || todayAssignedTrip);
@@ -469,10 +470,10 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
         {!loading && activeTab === 'activeTrip' && showNoCurrentTripState && upcomingTrip && (
           <section className="staff-grid lg:grid-cols-2">
             <article className="staff-card lg:col-span-2">
-              <h4 className="mb-2 text-base font-semibold text-slate-900">Upcoming Route Preview</h4>
-              <p className="mb-3 text-xs text-slate-500">
-                This is your next assigned route map so you can prepare before your shift starts.
-              </p>
+              <h4 className="mb-3 flex items-center gap-1 text-base font-semibold text-slate-900">
+                Upcoming Route Preview
+                <InfoTip label="About the route preview" text="The map of your next assigned route, so you can prepare before your shift starts." />
+              </h4>
               <DriverNavigationMap trip={upcomingTrip} stops={[]} lastGpsRef={lastGpsRef} />
             </article>
           </section>
@@ -534,7 +535,11 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                 paired={isPaired}
                 pairingReason={pairingReason}
                 pairingOpensAt={pairing?.opensAt}
-                onPaired={() => void refreshPairingStatus()}
+                onPaired={() => {
+                  void refreshPairingStatus();
+                  setPairingOpen(false);
+                  setActiveTab('dashboard');
+                }}
               />
             )}
             {/* Batch 53 item 9 (user): the Daily PIN check is gone from the Driver; pairing (QR or pairing ID) is enough. */}

@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import OperatorService from '../../StaffService/OperatorService'
 import { useLiveChannels, useLiveConnected, useLiveEvent } from '../useLive'
 import { pollEvery } from '../../../utils/liveUpdates'
+import { alertSoundEnabled, newlyOpenedAlertIds, playAlertSound, setAlertSoundEnabled } from '../../../utils/alertSound'
 
 const POLL_MS = 30000
 
@@ -16,11 +17,18 @@ export default function useOperatorAlerts(service = OperatorService) {
   const [message, setMessage] = useState('')
   const channels = useLiveChannels()
   const liveConnected = useLiveConnected()
+  // 2026-11-23 (advisor): an alarm sound when a new alert opens (not for the ones already open when the page loads).
+  const [soundOn, setSoundOn] = useState(alertSoundEnabled)
+  const soundOnRef = useRef(soundOn)
+  const seenOpenIds = useRef(null)
 
   const load = useCallback(async () => {
     try {
       const res = await service.getAlerts()
-      setAlerts(Array.isArray(res?.data) ? res.data : [])
+      const list = Array.isArray(res?.data) ? res.data : []
+      if (newlyOpenedAlertIds(seenOpenIds.current, list).length > 0 && soundOnRef.current) playAlertSound()
+      seenOpenIds.current = new Set(list.filter((alert) => alert.status === 'open').map((alert) => alert.alert_id))
+      setAlerts(list)
     } catch {
       // keep the last list; the next poll tries again
     }
@@ -64,5 +72,13 @@ export default function useOperatorAlerts(service = OperatorService) {
     handle: (alertId, note) => act(alertId, () => service.handleAlert(alertId, note)),
     tellPassengers: (alertId) => act(alertId, () => service.tellPassengersAboutAlert(alertId)),
     reload: load,
+    soundOn,
+    toggleSound: () => {
+      const next = !soundOnRef.current
+      soundOnRef.current = next
+      setSoundOn(next)
+      setAlertSoundEnabled(next)
+      if (next) playAlertSound() // the click also lets the browser play sound from now on
+    },
   }
 }

@@ -9,7 +9,7 @@ import { MAP_CONFIG } from '../../../config/mapConfig';
 import { approxMeters, shouldSendPing } from '../../../utils/gpsPing';
 import { readDeepLink } from '../../../utils/notificationTarget';
 import useAssignmentCards from './useAssignmentCards';
-import { useLiveChannels, useLiveRefresh } from '../useLive';
+import { useLiveChannels, useLiveEvent, useLiveRefresh } from '../useLive';
 
 // Architecture audit follow-up (CONF-03): DriverDashboard.jsx previously
 // called DriverService directly from ~24 sites spread across the
@@ -182,7 +182,7 @@ export function useDriverPairing() {
  * `refreshPairingStatus` come from useDriverPairing() above, passed down
  * unchanged — this hook only derives `handleLogout` from `onLogout`.
  */
-export function useDriverDashboardData({ onLogout, pairing }) {
+export function useDriverDashboardData({ onLogout, pairing, refreshPairingStatus }) {
   // Batch 27, Task 1: a push tap or link may open straight onto a trip
   // (?tab=dashboard&trip=ID). Read once, as initial state.
   const [initialLink] = useState(() => readDeepLink(typeof window !== 'undefined' ? window.location.search : '', 'driver'));
@@ -932,6 +932,14 @@ export function useDriverDashboardData({ onLogout, pairing }) {
     match: (update) => Number(update?.trip_id) === Number(trip?.trip_id),
     minGapMs: 1000,
   });
+
+  // 2026-11-23 (advisor): the moment the crew are paired (the server's live "paired" message on this person's own
+  // channel), close the pairing pop-up and go to the dashboard. The 90-second check stays as the fallback.
+  useLiveEvent(liveChannels?.user, 'paired', () => {
+    void refreshPairingStatus?.();
+    setPairingOpen(false);
+    setActiveTab('dashboard');
+  }, { isPrivate: true });
 
   return {
     activeTab, setActiveTab, pairingOpen, setPairingOpen,

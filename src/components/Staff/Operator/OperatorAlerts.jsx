@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { AlertTriangle, ChevronDown, MapPin, Phone } from 'lucide-react'
+import { AlertTriangle, ChevronDown, MapPin, Phone, Volume2, VolumeX } from 'lucide-react'
 import { formatManilaDateTime } from '../../../utils/dates'
 import { NOT_PROVIDED, alertBusText, alertMapLink, alertPlaceSource, crewRoleLabel, telHref } from '../../../utils/crewAlerts'
 
@@ -115,6 +115,12 @@ export default function OperatorAlerts({ alerts, onTrackBus = null }) {
         </ul>
       )}
       {alerts.message && <p role="status" className="text-xs text-slate-600">{alerts.message}</p>}
+      {typeof alerts.toggleSound === 'function' && (
+        <button type="button" onClick={alerts.toggleSound} aria-pressed={alerts.soundOn} data-testid="alert-sound-toggle" className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 hover:bg-slate-50">
+          {alerts.soundOn ? <Volume2 size={14} aria-hidden="true" /> : <VolumeX size={14} aria-hidden="true" />}
+          {alerts.soundOn ? 'Alert sound on' : 'Alert sound off'}
+        </button>
+      )}
       {alerts.recent.length > 0 && (
         <div className="rounded-xl border border-slate-200 bg-white">
           <button type="button" onClick={() => setShowRecent((value) => !value)} aria-expanded={showRecent} className="flex w-full items-center justify-between px-4 py-2 text-left text-xs font-semibold text-slate-600">

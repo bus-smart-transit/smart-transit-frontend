@@ -17,7 +17,7 @@ vi.mock('../../FareRulesPanel', () => ({ default: () => <div>fare-rules-panel</d
 vi.mock('../FleetTrackingMap', () => ({ default: ({ trip }) => <div>map-for-trip-{trip.trip_id}</div> }));
 
 const today = getBusinessToday();
-const fleet = (id, extra = {}) => ({ fleet_id: id, plate_number: `PLT-${id}`, body_no: `B${id}`, capacity: 40, seated_capacity: 30, standing_capacity: 10, status: 'active', fleet_type: 'public', vehicle_class: 'aircon', fleet_routes: [{ route: { route_name: 'Davao - Tagum' } }], ...extra });
+const fleet = (id, extra = {}) => ({ fleet_id: id, plate_number: `PLT-${id}`, body_no: `B${id}`, capacity: 40, seated_capacity: 30, standing_capacity: 10, status: 'active', fleet_type: 'public', vehicle_class: 'aircon', operating_start_time: '05:00:00', operating_end_time: '22:00:00', fleet_routes: [{ route: { route_name: 'Davao - Tagum' } }], ...extra });
 const trip = (id, fleetId, status, extra = {}) => ({
   trip_id: id, trip_date: today, departure_time: '08:00:00', status, total_occupancy: 10,
   driver: { user: { name: 'Dina Driver' } }, conductor: { user: { name: 'Carl Conductor' } },
@@ -192,12 +192,13 @@ describe('FleetsPage', () => {
     renderPage({ onRefresh });
     fireEvent.click(screen.getByRole('button', { name: /Add fleet/ }));
     const dialog = await screen.findByRole('dialog');
-    fireEvent.change(within(dialog).getByLabelText('Plate number'), { target: { value: 'NEW-999' } });
-    fireEvent.change(within(dialog).getByLabelText('Seated capacity'), { target: { value: '30' } });
-    fireEvent.change(within(dialog).getByLabelText('Standing capacity'), { target: { value: '10' } });
+    fireEvent.change(within(dialog).getByLabelText(/^Plate number/), { target: { value: 'NEW-999' } });
+    fireEvent.change(within(dialog).getByLabelText(/^Seats/), { target: { value: '30' } });
+    fireEvent.change(within(dialog).getByLabelText(/^Body number/), { target: { value: 'B-9' } }); // 2026-11-23: required; no standing field
     fireEvent.change(within(dialog).getByLabelText('Vehicle class'), { target: { value: 'aircon' } });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Create fleet' }));
-    await waitFor(() => expect(mocks.createFleet).toHaveBeenCalledWith(expect.objectContaining({ plate_number: 'NEW-999', seated_capacity: 30, standing_capacity: 10, vehicle_class: 'aircon', fleet_type: 'public' })));
+    await waitFor(() => expect(mocks.createFleet).toHaveBeenCalledWith(expect.objectContaining({ plate_number: 'NEW-999', seated_capacity: 30, body_no: 'B-9', vehicle_class: 'aircon', fleet_type: 'public' })));
+    expect(mocks.createFleet.mock.calls[0][0]).not.toHaveProperty('standing_capacity');
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     expect(screen.getByText('Fleet created successfully.')).toBeInTheDocument();
     expect(onRefresh).toHaveBeenCalled();
@@ -208,9 +209,10 @@ describe('FleetsPage', () => {
     renderPage();
     fireEvent.click(screen.getByRole('button', { name: /Add fleet/ }));
     const dialog = await screen.findByRole('dialog');
-    fireEvent.change(within(dialog).getByLabelText('Plate number'), { target: { value: 'NEW-1' } });
-    fireEvent.change(within(dialog).getByLabelText('Seated capacity'), { target: { value: '30' } });
-    fireEvent.change(within(dialog).getByLabelText('Standing capacity'), { target: { value: '0' } });
+    fireEvent.change(within(dialog).getByLabelText(/^Plate number/), { target: { value: 'NEW-1' } });
+    fireEvent.change(within(dialog).getByLabelText(/^Seats/), { target: { value: '30' } });
+    fireEvent.change(within(dialog).getByLabelText(/^Body number/), { target: { value: 'B-1' } }); // 2026-11-23: required; no standing field
+    fireEvent.change(within(dialog).getByLabelText('Vehicle class'), { target: { value: 'aircon' } });
     expect(within(dialog).getByLabelText(/^Operating start/)).toHaveValue('06:00');
     fireEvent.change(within(dialog).getByLabelText(/^Operating end/), { target: { value: '21:30' } });
     expect(within(dialog).queryByLabelText('Route (optional)')).not.toBeInTheDocument();
@@ -224,9 +226,10 @@ describe('FleetsPage', () => {
     renderPage();
     fireEvent.click(screen.getByRole('button', { name: /Add fleet/ }));
     const dialog = await screen.findByRole('dialog');
-    fireEvent.change(within(dialog).getByLabelText('Plate number'), { target: { value: 'DUP-1' } });
-    fireEvent.change(within(dialog).getByLabelText('Seated capacity'), { target: { value: '30' } });
-    fireEvent.change(within(dialog).getByLabelText('Standing capacity'), { target: { value: '0' } });
+    fireEvent.change(within(dialog).getByLabelText(/^Plate number/), { target: { value: 'DUP-1' } });
+    fireEvent.change(within(dialog).getByLabelText(/^Seats/), { target: { value: '30' } });
+    fireEvent.change(within(dialog).getByLabelText(/^Body number/), { target: { value: 'B-1' } }); // 2026-11-23: required; no standing field
+    fireEvent.change(within(dialog).getByLabelText('Vehicle class'), { target: { value: 'aircon' } });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Create fleet' }));
     expect(await within(dialog).findByRole('alert')).toHaveTextContent('plate already used');
     expect(screen.getByRole('dialog')).toBeInTheDocument();
@@ -262,15 +265,16 @@ describe('FleetsPage', () => {
     renderPage({ onRefresh });
     fireEvent.click(screen.getByRole('button', { name: 'Edit fleet PLT-1' }));
     const dialog = screen.getByRole('dialog');
-    expect(within(dialog).getByLabelText('Plate number')).toHaveValue('PLT-1');
+    expect(within(dialog).getByLabelText(/^Plate number/)).toHaveValue('PLT-1');
 
-    fireEvent.change(within(dialog).getByLabelText('Seated capacity'), { target: { value: '20' } });
+    fireEvent.change(within(dialog).getByLabelText(/^Seats/), { target: { value: '20' } });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save changes' }));
     expect(await within(dialog).findByRole('alert')).toHaveTextContent('Choose at least 32.');
 
-    fireEvent.change(within(dialog).getByLabelText('Seated capacity'), { target: { value: '35' } });
+    fireEvent.change(within(dialog).getByLabelText(/^Seats/), { target: { value: '35' } });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save changes' }));
-    await waitFor(() => expect(mocks.updateFleet).toHaveBeenLastCalledWith(1, expect.objectContaining({ plate_number: 'PLT-1', seated_capacity: 35, standing_capacity: 10 })));
+    await waitFor(() => expect(mocks.updateFleet).toHaveBeenLastCalledWith(1, expect.objectContaining({ plate_number: 'PLT-1', seated_capacity: 35 })));
+    expect(mocks.updateFleet.mock.calls.at(-1)[1]).not.toHaveProperty('standing_capacity');
     expect(await screen.findByText('Fleet PLT-1 updated.')).toBeInTheDocument();
     expect(onRefresh).toHaveBeenCalled();
   });

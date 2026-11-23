@@ -10,7 +10,7 @@ const idOf = (person) => person?.company_user_id ?? person?.user_id ?? person?.i
  * Batch 46: "Assign crew" for a trip still waiting for its Driver and / or Chauffeur. Only the missing roles are
  * asked. The same pickers as scheduling: own staff only, Not Available people shown but not choosable.
  */
-export default function AssignCrewModal({ trip, drivers, conductors, loadingDrivers, driversError, saving, msg, onClose, onAssign }) {
+export default function AssignCrewModal({ trip, drivers, conductors, loadingDrivers, driversError, saving, msg, onClose, onAssign, title = '', description = '' }) {
   const [driverId, setDriverId] = useState('');
   const [conductorId, setConductorId] = useState('');
   const needDriver = !trip.driver_id;
@@ -25,11 +25,15 @@ export default function AssignCrewModal({ trip, drivers, conductors, loadingDriv
   const selectClass = 'h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500 disabled:opacity-60';
 
   return (
-    <Modal open onClose={onClose} title={`Assign crew to Trip #${trip.trip_id}`}>
+    <Modal open onClose={onClose} title={title || `Assign crew to Trip #${trip.trip_id}`}>
       <form className="space-y-4" onSubmit={submit}>
         <p className="text-sm text-slate-600">
-          {trip.fleet_route?.route?.route_name || 'Route not provided'}, {String(trip.trip_date || '').slice(0, 10)} at {clock12(trip.departure_time) || 'Not provided'}.
-          The trip can start boarding once it has both.
+          {description || (
+            <>
+              {trip.fleet_route?.route?.route_name || 'Route not provided'}, {String(trip.trip_date || '').slice(0, 10)} at {clock12(trip.departure_time) || 'Not provided'}.
+              {trip.shift_block_id ? ' The crew goes on every trip of this schedule.' : ''} The trip can start boarding once it has both.
+            </>
+          )}
         </p>
         {needDriver && (
           <div>

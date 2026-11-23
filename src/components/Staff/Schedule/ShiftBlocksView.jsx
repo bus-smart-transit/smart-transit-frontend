@@ -9,6 +9,8 @@ import {
 import ShiftBlockCard from './ShiftBlockCard';
 import ShiftBlockFilterBar from './ShiftBlockFilterBar';
 import LegTimeEditor from './LegTimeEditor';
+import AssignCrewModal from '../Operator/AssignCrewModal';
+import useDateDrivers from '../../../api/hooks/Staff/useDateDrivers';
 
 const ACTION = 'rounded-lg px-3 py-1 text-xs font-semibold';
 
@@ -18,8 +20,12 @@ const ACTION = 'rounded-lg px-3 py-1 text-xs font-semibold';
  * Upcoming, and overdue blocks are announced above it so they are never out of sight. The one "+ Schedule" button
  * lives on the Schedule page, not here.
  */
-export default function ShiftBlocksView({ reloadToken = 0 }) {
-  const { blocks, blockCards, loading, msg, handleCancel, handleOverrideHandoff, handleMarkReviewed, handleRescheduleLeg } = useShiftBlocksTab(reloadToken);
+export default function ShiftBlocksView({ reloadToken = 0, drivers = [], conductors = [], onChanged = () => {} }) {
+  const { blocks, blockCards, loading, msg, handleCancel, handleOverrideHandoff, handleMarkReviewed, handleRescheduleLeg, handleAssignCrew, crewSaving, crewMsg } = useShiftBlocksTab(reloadToken);
+  // 2026-11-23 (advisor): a schedule made without its crew gets it here, for every trip of the block at once.
+  const [crewBlock, setCrewBlock] = useState(null);
+  const crewDate = crewBlock ? String(crewBlock.scheduled_date || '').slice(0, 10) : '';
+  const { drivers: dateDrivers, loading: loadingDrivers, error: driversError } = useDateDrivers(crewDate, drivers);
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [view, setView] = useState('current');
   const today = getBusinessToday();
@@ -45,8 +51,12 @@ export default function ShiftBlocksView({ reloadToken = 0 }) {
     const block = blockById.get(Number(card.shift_block_id));
     if (!block) return null;
     const lifecycle = block.lifecycle_status ?? block.status;
+    const missingCrew = !block.driver_id || !block.conductor_id;
     return (
       <>
+        {missingCrew && ['scheduled', 'in_progress'].includes(block.status) && (
+          <button type="button" onClick={() => setCrewBlock(block)} className={`${ACTION} bg-teal-600 text-white hover:bg-teal-700`} data-testid="assign-block-crew">Assign crew</button>
+        )}
         {block.status === 'scheduled' && ['scheduled', 'delayed', 'boarding'].includes(lifecycle) && (
           <button type="button" onClick={() => handleCancel(block.shift_block_id)} className={`${ACTION} bg-red-100 text-red-700 hover:bg-red-200`}>Cancel</button>
         )}
@@ -63,6 +73,24 @@ export default function ShiftBlocksView({ reloadToken = 0 }) {
   return (
     <div className="space-y-4">
       {msg && <p role="status" className="rounded-lg border border-teal-200 bg-teal-50 px-4 py-2 text-sm text-teal-800">{msg}</p>}
+      {crewBlock && (
+        <AssignCrewModal
+          trip={{ driver_id: crewBlock.driver_id, conductor_id: crewBlock.conductor_id }}
+          title={`Assign crew to the schedule on ${crewDate}`}
+          description={`${crewBlock.route_name || crewBlock.legs?.[0]?.fleet_route?.route?.route_name || 'Route not provided'}, ${Array.isArray(crewBlock.legs) ? crewBlock.legs.length : 0} trips. The crew goes on every trip of this schedule, and each person is notified.`}
+          drivers={dateDrivers}
+          conductors={conductors}
+          loadingDrivers={loadingDrivers}
+          driversError={driversError}
+          saving={crewSaving}
+          msg={crewMsg}
+          onClose={() => setCrewBlock(null)}
+          onAssign={async (ids) => {
+            const ok = await handleAssignCrew(crewBlock, ids);
+            if (ok) { setCrewBlock(null); onChanged(); }
+          }}
+        />
+      )}
 
       <ShiftBlockFilterBar filters={filters} onChange={changeFilters} options={options} />
 

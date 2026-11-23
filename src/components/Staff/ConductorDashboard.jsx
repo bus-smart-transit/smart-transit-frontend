@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import DropOffGroups from './DropOffGroups';
 import PairingScreen from './PairingScreen';
+import InfoTip from '../ui/InfoTip';
 import StaffPortalLayout from './StaffPortalLayout';
 import ProfilePage from '../Account/ProfilePage';
 import FirstPasswordPrompt from '../Account/FirstPasswordPrompt';
@@ -41,7 +42,7 @@ import { BOARDING_NOT_STARTED, BOARDING_OPEN_STATUSES, ticketingReason } from '.
 import { claimReviewState } from '../../utils/discountClaim';
 import { passengerCountRows } from '../../utils/passengerCount';
 import DiscountReviewDialog from './Crew/DiscountReviewDialog';
-import { boardingStopsForLeg, checkInLabel, destinationsAhead, destinationsNotPassed, isOnsiteFormComplete, orderedStopsForLeg, placesLeft, stopLabel } from '../../utils/cashTicket';
+import { MAX_CASH_TICKETS, boardingStopsForLeg, checkInLabel, destinationsAhead, destinationsNotPassed, isOnsiteFormComplete, onsiteQuantity, orderedStopsForLeg, placesLeft, stopLabel } from '../../utils/cashTicket';
 import { isExpress } from '../../utils/serviceType';
 import ServiceTypeChip from '../ui/ServiceTypeChip';
 import { deriveTripStatus } from '../../utils/tripStatus';
@@ -200,6 +201,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     refreshBoardingPoint,
     checkIns,
     checkInBusy,
+    checkInNotice,
     handlePassengerIn,
     quoteNonce,
     loading,
@@ -227,9 +229,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     shiftBlocks,
     printOnsiteReceipt,
     occSeated,
-    occStanding,
     occSeatedCap,
-    occStandingCap,
     occTotalCap,
     occupiedTotal,
     cashCapacity,
@@ -254,7 +254,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     handleOnsiteCheckout,
     handleConfirmedOnsiteCheckout,
     handleLogout,
-  } = useConductorDashboardData({ onLogout, pairing });
+  } = useConductorDashboardData({ onLogout, pairing, refreshPairingStatus });
   useEffect(() => {
     let active = true;
     ConductorService.getOnsiteDiscountTypes()
@@ -300,6 +300,9 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   const byBusPosition = cashForm.boarding_mode === 'gps';
   // Passenger In (2026-10-26): a checked-in passenger's fare counts from the stop kept at check-in.
   const byCheckIn = cashForm.boarding_mode === 'checkin';
+  // 2026-11-23 (advisor): Quantity. One person's sale (check-in, discount, priority seat) is always one ticket.
+  const singleTicketOnly = byCheckIn || Boolean(onsiteDiscountTypeKey) || Boolean(onsitePriority);
+  const saleQuantity = onsiteQuantity(cashForm, { discount: Boolean(onsiteDiscountTypeKey), priority: Boolean(onsitePriority) });
   const selectedCheckIn = byCheckIn ? checkIns.find((c) => String(c.id) === String(cashForm.pending_boarding_id)) ?? null : null;
   const destinationOptions = byBusPosition
     ? boardingView.destinations.map((d) => ({ stop_id: d.stop_id, stop_name: `${d.stop_name} (${d.distance_km} km)` }))
@@ -686,8 +689,9 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                 <article className="staff-card">
                   <h3 className="mb-4 flex items-center gap-2 text-2xl font-bold text-slate-900">Manual Cash Ticket <ServiceTypeChip serviceType={trip?.service_type} /></h3>
                   {tripIsExpress && (
-                    <p role="status" data-testid="express-fare-note" className="mb-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
-                      Express trip: only the stops it serves are listed. A ticket is issued only where an express fare exists for this bus class; if not, the system says &quot;Fare unavailable&quot; and nothing is sold.
+                    <p role="status" data-testid="express-fare-note" className="mb-3 flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
+                      Express trip: only the stops it serves are listed.
+                      <InfoTip label="About express fares" text="A ticket is issued only where an express fare exists for this bus class. If there is none, the system says &quot;Fare unavailable&quot; and nothing is sold." />
                     </p>
                   )}
 
@@ -702,14 +706,25 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                         >
                           {checkInBusy ? 'Checking in...' : 'Passenger In'}
                         </button>
-                        <p className="mt-1 text-xs text-teal-900">Tap as someone boards between stops. Their fare counts from the last stop passed, however late you collect it.</p>
-                        <p className="mt-1 text-xs font-semibold text-teal-900">{checkIns.length === 1 ? '1 passenger waiting to pay' : `${checkIns.length} passengers waiting to pay`}</p>
+                        {!boardingOpen && <p className="mt-1 text-xs font-semibold text-teal-900">Opens when the Driver starts boarding.</p>}
+                        {checkInNotice && (
+                          <p role={checkInNotice.tone === 'error' ? 'alert' : 'status'} data-testid="passenger-in-notice" className={`mt-2 rounded-md px-2 py-1.5 text-xs font-semibold ${checkInNotice.tone === 'error' ? 'bg-rose-50 text-rose-700' : 'bg-white text-teal-800'}`}>
+                            {checkInNotice.text}
+                          </p>
+                        )}
+                        <p className="mt-1 flex items-center gap-1 text-xs font-semibold text-teal-900">
+                          {checkIns.length === 1 ? '1 passenger waiting to pay' : `${checkIns.length} passengers waiting to pay`}
+                          <InfoTip label="About Passenger In" text="Tap Passenger In as someone boards between stops. Their fare counts from the last stop the bus passed, however late you collect it. It works once the bus has left and passed its first stop." />
+                        </p>
                       </div>
                     )}
 
                     {midTripAvailable && (
                       <div>
-                        <p className="mb-1 text-sm font-semibold text-slate-700">Where does the passenger board?</p>
+                        <p className="mb-1 flex items-center gap-1 text-sm font-semibold text-slate-700">
+                          Where does the passenger board?
+                          <InfoTip label="About the boarding point" text="Checked in: a passenger you tapped in with Passenger In. At a stop: pick the stop they boarded at. Bus position now: the fare counts from the last stop the bus has passed." />
+                        </p>
                         <div role="group" aria-label="Boarding point" data-testid="boarding-mode" className="grid grid-cols-3 gap-2">
                           {[['checkin', 'Checked in'], ['stop', 'At a stop'], ['gps', 'Bus position now']].map(([mode, label]) => (
                             <button
@@ -811,19 +826,26 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                     </div>
 
                     <div>
-                      <label className="mb-1 block text-sm font-semibold text-slate-700">Passenger Type</label>
-                      <select
-                        value={cashForm.seat_type}
-                        onChange={(e) => setOnsiteForm((prev) => ({ ...prev, seat_type: e.target.value }))}
-                        className="h-11 w-full rounded-lg border border-slate-300 bg-slate-800 px-3 text-sm text-white outline-none focus:border-teal-500"
-                      >
-                        <option value="seated">Regular</option>
-                        {cashCapacity.standingOpen && <option value="standing">Standing</option>}
-                      </select>
-                      {!cashCapacity.standingOpen && (
-                        <p className="mt-1 text-xs text-slate-500">Standing is offered once every seat is sold.</p>
+                      <label htmlFor="onsite-quantity" className="mb-1 flex items-center gap-1 text-sm font-semibold text-slate-700">
+                        Quantity
+                        <InfoTip label="About quantity" text={`Tickets to the same stop, paid together, 1 to ${MAX_CASH_TICKETS}. One payment and one receipt with every Ticket ID.`} />
+                      </label>
+                      <input
+                        id="onsite-quantity"
+                        type="number"
+                        min="1"
+                        max={MAX_CASH_TICKETS}
+                        inputMode="numeric"
+                        value={singleTicketOnly ? 1 : onsiteForm.quantity}
+                        disabled={singleTicketOnly}
+                        onChange={(e) => setOnsiteForm((prev) => ({ ...prev, quantity: e.target.value }))}
+                        className="h-11 w-full rounded-lg border border-slate-300 bg-slate-800 px-3 text-sm text-white outline-none focus:border-teal-500 disabled:opacity-60"
+                      />
+                      {singleTicketOnly && (
+                        <p className="mt-1 text-xs text-slate-500">A checked-in passenger, a discount or a priority seat is one ticket at a time.</p>
                       )}
                     </div>
+
 
 
                     <div>
@@ -954,7 +976,6 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                       )}
                       <p>Total capacity: {occTotalCap} seats</p>
                       <p>Seated: {occSeated} / {occSeatedCap}</p>
-                      <p>Standing: {occStanding} / {occStandingCap}</p>
                       {onsiteReceipt?.payment?.transaction_reference && (
                         <p className="mt-1 text-slate-700">Last receipt: {onsiteReceipt.payment.transaction_reference}</p>
                       )}
@@ -1182,6 +1203,9 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
               onPaired={() => {
                 void refreshPairingStatus();
                 void loadData();
+                // 2026-11-23 (advisor): straight to ticketing once paired.
+                setPairingOpen(false);
+                setActiveTab('occupancy');
               }}
             />
 
@@ -1296,12 +1320,12 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
             <h3 className="mb-2 text-base font-bold text-slate-100">Save this cash payment?</h3>
             <p className="mb-4 text-sm text-slate-400">This will create a payment record. <strong className="text-amber-300">This cannot be undone.</strong></p>
             <dl className="mb-4 grid grid-cols-2 gap-2 rounded-lg bg-slate-800 p-3 text-sm">
-              <div><dt className="text-xs text-slate-500">Passenger Type</dt><dd className="font-semibold text-slate-100 capitalize">{cashForm.seat_type}</dd></div>
+              <div><dt className="text-xs text-slate-500">Tickets</dt><dd className="font-semibold text-slate-100" data-testid="confirm-quantity">{saleQuantity}</dd></div>
               <div><dt className="text-xs text-slate-500">Trip ID</dt><dd className="font-semibold text-slate-100">#{trip?.trip_id}</dd></div>
               {onsiteQuote.status === 'ready' && (
                 <div className="col-span-2">
-                  <dt className="text-xs text-slate-500">{onsiteQuote.baggageFee > 0 ? 'Fare and baggage to collect' : 'Fare to collect'}</dt>
-                  <dd className="font-data text-2xl font-bold text-emerald-300">&#8369;{(onsiteQuote.amount + (onsiteQuote.baggageFee || 0)).toFixed(2)}</dd>
+                  <dt className="text-xs text-slate-500">{onsiteQuote.baggageFee > 0 ? 'Fare and baggage to collect' : 'Fare to collect'}{saleQuantity > 1 ? ` (${saleQuantity} × \u20B1${(onsiteQuote.amount + (onsiteQuote.baggageFee || 0)).toFixed(2)})` : ''}</dt>
+                  <dd className="font-data text-2xl font-bold text-emerald-300">&#8369;{((onsiteQuote.amount + (onsiteQuote.baggageFee || 0)) * saleQuantity).toFixed(2)}</dd>
                 </div>
               )}
             </dl>
@@ -1340,7 +1364,6 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                   ['Fleet type', fleet.fleet_type || '—'],
                   ['Total capacity', fleet.capacity ?? '—'],
                   ['Seats left', placesLeft(fleet, td, 'seated')],
-                  ['Standing places left', placesLeft(fleet, td, 'standing')],
                 ].map(([k, v]) => (
                   <div key={k} className="flex items-center justify-between gap-4 border-b border-slate-800 pb-2">
                     <span className="text-slate-500 capitalize">{k}</span>
