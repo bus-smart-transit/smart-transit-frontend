@@ -1362,7 +1362,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                   ['Status', td.status],
                   ['Fleet', fleet.plate_number || '—'],
                   ['Fleet type', fleet.fleet_type || '—'],
-                  ['Total capacity', fleet.capacity ?? '—'],
+                  ['Seats', fleet.seated_capacity ?? '—'],
                   ['Seats left', placesLeft(fleet, td, 'seated')],
                 ].map(([k, v]) => (
                   <div key={k} className="flex items-center justify-between gap-4 border-b border-slate-800 pb-2">

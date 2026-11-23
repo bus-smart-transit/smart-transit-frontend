@@ -184,7 +184,7 @@ function FleetsTab({ row, fleets, onOpenFleets }) {
         columns={[
           { key: 'plate', header: 'Fleet', render: (item) => <strong className="text-slate-900">{item.fleet.plate_number}</strong> },
           { key: 'type', header: 'Type', render: (item) => item.fleet.fleet_type || 'public' },
-          { key: 'capacity', header: 'Capacity', render: (item) => item.fleet.capacity ?? '-' },
+          { key: 'capacity', header: 'Seats', render: (item) => item.fleet.seated_capacity ?? '-' },
           { key: 'window', header: 'Bus hours', render: (item) => operatingHoursText(item.fleet) },
           { key: 'status', header: 'Status', render: (item) => <OpChip tone={item.active ? 'success' : 'neutral'}>{item.active ? 'Active' : 'Inactive'}</OpChip> },
         ]}

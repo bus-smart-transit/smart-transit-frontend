@@ -21,11 +21,11 @@ const trip = (id, extra = {}) => ({
 const fresh = (extra = {}) => ({ fleet_id: 1, trip_id: 1, latitude: 7.1, longitude: 125.6, accuracy_m: 5, recorded_at: new Date(NOW - 30_000).toISOString(), ...extra });
 
 describe('trip figures', () => {
-  it('tickets sold is the trip counter, capacity is the fleet capacity', () => {
+  it('tickets sold is the trip counter, capacity is the seats (standing is not sold)', () => {
     expect(ticketsSold(trip(1, { total_occupancy: 12 }))).toBe(12);
     expect(ticketsSold({ current_seated_capacity: 3, current_standing_capacity: 2 })).toBe(5);
-    expect(capacityOf(trip(1))).toBe(40);
-    expect(loadPct(trip(1, { total_occupancy: 20 }))).toBe(50);
+    expect(capacityOf(trip(1))).toBe(30);
+    expect(loadPct(trip(1, { total_occupancy: 15 }))).toBe(50);
   });
 
   it('load is null when the fleet has no capacity', () => {
@@ -84,8 +84,8 @@ describe('buildDashboardView', () => {
   });
 
   it('computes load factor per route from tickets sold and capacity', () => {
-    const view = buildDashboardView({ trips: [trip(1, { total_occupancy: 20 }), trip(2, { total_occupancy: 20 })], fleets: [fleet(1)], today: TODAY, nowMs: NOW });
-    expect(view.loadByRoute).toEqual([expect.objectContaining({ route: 'Davao - Tagum', sold: 40, capacity: 80, pct: 50 })]);
+    const view = buildDashboardView({ trips: [trip(1, { total_occupancy: 15 }), trip(2, { total_occupancy: 15 })], fleets: [fleet(1)], today: TODAY, nowMs: NOW });
+    expect(view.loadByRoute).toEqual([expect.objectContaining({ route: 'Davao - Tagum', sold: 30, capacity: 60, pct: 50 })]);
   });
 
   it('groups tickets sold by departure hour', () => {

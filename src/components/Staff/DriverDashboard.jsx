@@ -614,9 +614,8 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                   ['Status', td.status],
                   ['Fleet', fleet.plate_number || '—'],
                   ['Fleet type', fleet.fleet_type || '—'],
-                  ['Total capacity', fleet.capacity ?? '—'],
+                  ['Seats', fleet.seated_capacity ?? '—'],
                   ['Seats left', placesLeft(fleet, td, 'seated')],
-                  ['Standing places left', placesLeft(fleet, td, 'standing')],
                 ].map(([k, v]) => (
                   <div key={k} className="flex items-center justify-between gap-4 border-b border-slate-800 pb-2">
                     <span className="text-slate-500 capitalize">{k}</span>

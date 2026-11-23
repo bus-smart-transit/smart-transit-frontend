@@ -328,7 +328,7 @@ export default function FleetsPage({ fleets, routes, trips, onRefresh, companyNa
                     </span>
                   </div>
                   <dl className="mt-3 grid grid-cols-2 gap-3">
-                    <div><dt className="text-xs text-slate-500">Capacity</dt><dd className="font-semibold text-slate-900">{row.fleet.capacity ?? '-'} passengers</dd></div>
+                    <div><dt className="text-xs text-slate-500">Seats</dt><dd className="font-semibold text-slate-900">{row.fleet.seated_capacity ?? '-'} seats</dd></div>
                     <div><dt className="text-xs text-slate-500">Operating hours</dt><dd className="font-semibold text-slate-900" data-testid="fleet-hours">{operatingHoursText(row.fleet)}</dd></div>
                   </dl>
                   {expanded && (

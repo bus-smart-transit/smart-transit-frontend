@@ -36,12 +36,13 @@ export function ticketsSold(trip) {
   return Number(trip?.current_seated_capacity ?? 0) + Number(trip?.current_standing_capacity ?? 0);
 }
 
+/** 2026-11-23: standing is no longer sold (LTFRB), so a bus holds its seats; the old total is only a fallback. */
 export function capacityOf(trip) {
   const fleet = trip?.fleet_route?.fleet;
+  const seats = Number(fleet?.seated_capacity);
+  if (Number.isFinite(seats) && seats > 0) return seats;
   const total = Number(fleet?.capacity);
-  if (Number.isFinite(total) && total > 0) return total;
-  const sum = Number(fleet?.seated_capacity ?? 0) + Number(fleet?.standing_capacity ?? 0);
-  return sum > 0 ? sum : 0;
+  return Number.isFinite(total) && total > 0 ? total : 0;
 }
 
 export function loadPct(trip) {
