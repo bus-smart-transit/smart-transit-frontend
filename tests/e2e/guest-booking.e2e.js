@@ -163,7 +163,9 @@ for (const width of [1280, 390]) {
     const fee = page.locator('dt', { hasText: /^Transaction fee/ }).locator('xpath=following-sibling::dd[1]');
     await expect(fee).toHaveText(`PHP ${expectedFee.toFixed(2)}`);
     await expect(page.getByTestId('total-to-pay')).toHaveText(`PHP ${(fare + expectedFee).toFixed(2)}`);
-    await expect(page.getByText(/Tickets bought with cash on the bus have no fee\./)).toBeVisible();
+    // 2026-11-24 (user): the fee explanation sits behind the (i) next to Total to pay.
+    await page.getByRole('button', { name: 'About the transaction fee' }).click();
+    await expect(page.getByRole('tooltip')).toContainText('Tickets bought with cash on the bus have no fee.');
     await page.getByTestId('total-to-pay').scrollIntoViewIfNeeded();
     await page.screenshot({ path: path.join(SHOTS, `4-fee-summary-${width}.png`) });
   });

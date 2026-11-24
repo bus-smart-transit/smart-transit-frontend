@@ -664,7 +664,10 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
               {/* Batch 76 (user): the leg's passenger count, for an inspector to compare with the people on the bus. */}
               {expectedBoarding?.passenger_count && (
                 <article data-testid="passenger-count" className="mb-4 rounded-xl border border-slate-200 bg-white px-4 py-3">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Passenger count for this trip</p>
+                  <p className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-slate-600">
+                    Passenger count for this trip
+                    <InfoTip label="About the passenger count" text="On board now should match the people on the bus. Tickets never scanned are not counted as passengers." />
+                  </p>
                   <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-sm sm:grid-cols-4">
                     {passengerCountRows(expectedBoarding.passenger_count).map((row) => (
                       <div key={row.key} className={row.key === 'on_board' ? 'col-span-2 sm:col-span-1' : ''}>
@@ -673,7 +676,6 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                       </div>
                     ))}
                   </dl>
-                  <p className="mt-2 text-xs text-slate-500">On board now should match the people on the bus. Tickets never scanned are not counted as passengers.</p>
                 </article>
               )}
               <div className="staff-grid lg:grid-cols-[1.1fr_1fr]">
@@ -1209,8 +1211,10 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
 
             {isPaired && !showNoCurrentTripState && (
               <article className="max-w-xl staff-card staff-card-roomy">
-                <h3 className="text-lg font-bold text-slate-900">Verify Daily PIN</h3>
-                <p className="mt-1 text-xs text-slate-500">Manual PIN verification uses the same assignment checks and trip context.</p>
+                <h3 className="flex items-center gap-1 text-lg font-bold text-slate-900">
+                  Verify Daily PIN
+                  <InfoTip label="About the daily PIN" text="Manual PIN verification uses the same assignment checks and trip context." />
+                </h3>
                 <div className="mt-4 flex gap-2">
                   <input
                     type="text"

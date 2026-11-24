@@ -1,4 +1,5 @@
 import { Camera, CheckCircle2, QrCode } from 'lucide-react';
+import InfoTip from '../ui/InfoTip';
 
 const PHASE_CHIP = {
   idle: { label: 'Ready', css: 'border-emerald-200 bg-emerald-50 text-emerald-700' },
@@ -37,8 +38,10 @@ export default function ChauffeurScannerCard({
     <article className="staff-card" data-testid="scanner-card">
       <div className="mb-3 flex items-start justify-between gap-3">
         <div>
-          <h3 className="text-lg font-bold text-slate-900">Digital Fare / QR Scanner</h3>
-          <p className="text-xs text-slate-500">Align the QR code within the frame. Scans are logged automatically.</p>
+          <h3 className="flex items-center gap-1 text-lg font-bold text-slate-900">
+            Digital Fare / QR Scanner
+            <InfoTip label="About the scanner" text="Align the QR code within the frame. Scans are logged automatically." />
+          </h3>
         </div>
         <span className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold ${chip.css}`} data-testid="scanner-chip">
           <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" /> {chip.label}

@@ -25,7 +25,10 @@ describe('ChauffeurScannerCard', () => {
     render(<ChauffeurScannerCard {...props} />);
 
     expect(screen.getByText('Digital Fare / QR Scanner')).toBeInTheDocument();
-    expect(screen.getByText('Align the QR code within the frame. Scans are logged automatically.')).toBeInTheDocument();
+    // 2026-11-24 (user): the explanation sits behind the (i) icon.
+    fireEvent.click(screen.getByRole('button', { name: 'About the scanner' }));
+    expect(screen.getByRole('tooltip')).toHaveTextContent('Align the QR code within the frame. Scans are logged automatically.');
+    fireEvent.click(screen.getByRole('button', { name: 'About the scanner' }));
     expect(screen.getByTestId('scanner-chip')).toHaveTextContent('Ready');
     expect(screen.getByText('Place the QR code inside the frame')).toBeInTheDocument();
 

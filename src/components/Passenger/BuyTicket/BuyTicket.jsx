@@ -15,6 +15,7 @@ import Card from '../../ui/Card';
 import Button from '../../ui/Button';
 import Toggle from '../../ui/Toggle';
 import Modal from '../../ui/Modal';
+import InfoTip from '../../ui/InfoTip';
 import RouteMap from '../../Map/RouteMap';
 import { formatManilaDate } from '../../../utils/dates';
 import { formatDuration } from '../../../utils/tripTimeline';
@@ -553,14 +554,24 @@ export default function BuyTicket({ onTicketPurchased, returnTo = '/', accountEm
                   {(discountTypes.length > 0 || priorityTypes.length > 0 || baggagePercent > 0) && (
                     <fieldset className="mt-6 border-t border-slate-100 pt-5" data-testid="ticket-options">
                       <legend className="sr-only">Ticket options</legend>
-                      <p aria-hidden="true" className={LABEL}>Ticket options</p>
-                      <ul className="mt-1 space-y-1 text-xs text-slate-500">
-                        {discountTypes.length > 0 && (
-                          <li>Valid for discount: you pay the full fare now and show your valid ID to the Chauffeur. Once approved, the {ratePercent(discountTypes[0].rate)} discount goes back to your {form.payment_channel === 'maya' ? 'Maya' : 'GCash'}.</li>
+                      <p aria-hidden="true" className={`flex items-center gap-1 ${LABEL}`}>
+                        Ticket options
+                        {/* 2026-11-24 (user): explanations behind (i); what the passenger pays now stays on screen. */}
+                        {(priorityTypes.length > 0 || baggagePercent > 0) && (
+                          <InfoTip
+                            label="About ticket options"
+                            text={[
+                              priorityTypes.length > 0 ? 'Priority seats are for senior citizens, persons with disability and pregnant passengers. The Chauffeur checks on the bus.' : '',
+                              baggagePercent > 0 ? `Baggage in the compartment costs ${baggagePercent}% of the fare.` : '',
+                            ].filter(Boolean).join(' ')}
+                          />
                         )}
-                        {priorityTypes.length > 0 && <li>Priority seats are for senior citizens, persons with disability and pregnant passengers. The Chauffeur checks on the bus.</li>}
-                        {baggagePercent > 0 && <li>Baggage in the compartment costs {baggagePercent}% of the fare.</li>}
-                      </ul>
+                      </p>
+                      {discountTypes.length > 0 && (
+                        <p className="mt-1 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                          Valid for discount: you pay the full fare now and show your valid ID to the Chauffeur. Once approved, the {ratePercent(discountTypes[0].rate)} discount goes back to your {form.payment_channel === 'maya' ? 'Maya' : 'GCash'}.
+                        </p>
+                      )}
                       <div className="mt-2 divide-y divide-slate-100">
                         {Array.from({ length: ticketCount }, (_, index) => {
                           const extra = form.ticket_extras?.[index] || {};
@@ -621,8 +632,10 @@ export default function BuyTicket({ onTicketPurchased, returnTo = '/', accountEm
 
                   <fieldset className="mt-6 border-t border-slate-100 pt-5">
                     <legend className="sr-only">Payment method</legend>
-                    <p aria-hidden="true" className={`flex items-center gap-2 ${LABEL}`}><CreditCard size={16} aria-hidden="true" /> Payment method</p>
-                    <p className="mt-1 text-sm text-slate-500">Online booking is paid online. You finish paying on the provider&apos;s secure page.</p>
+                    <p aria-hidden="true" className={`flex items-center gap-2 ${LABEL}`}>
+                      <CreditCard size={16} aria-hidden="true" /> Payment method
+                      <InfoTip label="About payment" text="Online booking is paid online. You finish paying on the provider's secure page." />
+                    </p>
 
                     <div role="radiogroup" aria-label="Payment method" className="mt-3 grid gap-3 sm:grid-cols-2">
                       {PAYMENT_CHANNELS.map((channel) => {
@@ -796,16 +809,20 @@ export default function BuyTicket({ onTicketPurchased, returnTo = '/', accountEm
               <SummaryRow label={bookingFeeRate ? `Transaction fee (${bookingFeeRate})` : 'Transaction fee'}>{bookingFee === null ? 'Not provided' : `PHP ${Number(bookingFee).toFixed(2)}`}</SummaryRow>
             </dl>
             <div className="mt-3 flex items-center justify-between gap-3 rounded-xl bg-teal-50 px-4 py-3 ring-1 ring-inset ring-teal-100">
-              <span className="text-sm font-semibold text-teal-900">Total to pay</span>
+              <span className="flex items-center gap-1 text-sm font-semibold text-teal-900">
+                Total to pay
+                {bookingFee > 0 && (
+                  <InfoTip
+                    label="About the transaction fee"
+                    align="left"
+                    text={`Online payments have a transaction fee of ${bookingFeeRate} of the amount for ${form.payment_channel === 'maya' ? 'Maya' : 'GCash'} (PHP ${Number(bookingFee).toFixed(2)} here), once for each payment however many tickets you buy. Tickets bought with cash on the bus have no fee.`}
+                  />
+                )}
+              </span>
               <span className="font-display text-xl font-bold tabular-nums text-navy-950" data-testid="total-to-pay">
                 {totalDue === null ? 'Not provided' : `PHP ${Number(totalDue).toFixed(2)}`}
               </span>
             </div>
-            {bookingFee > 0 && (
-              <p className="mt-2 text-xs text-slate-500">
-                Online payments have a transaction fee of {bookingFeeRate} of the amount for {form.payment_channel === 'maya' ? 'Maya' : 'GCash'} (PHP {Number(bookingFee).toFixed(2)} here), once for each payment however many tickets you buy. Tickets bought with cash on the bus have no fee.
-              </p>
-            )}
             {timeline?.fare?.error && <p className="mt-2 text-xs text-red-600">{timeline.fare.error}</p>}
             <button
               type="submit"
