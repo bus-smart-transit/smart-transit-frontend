@@ -1193,7 +1193,8 @@ export function useConductorDashboardData({ onLogout, pairing, refreshPairingSta
   // Task 5: capacity is the server's own count (`capacity_summary`, tickets sold) - the same number that
   // refuses a sale. The local count is only a fallback for a payload that does not carry it.
   const cashCapacity = capacityFromServer(occupancy?.capacity_summary, {
-    capacity: occTotalCap || Number(trip?.fleet_route?.fleet?.capacity ?? 0),
+    // 2026-11-24: seats, not fleets.capacity (which still counts the old standing places).
+    capacity: occTotalCap || Number(trip?.fleet_route?.fleet?.seated_capacity ?? 0),
     sold: trip?.total_occupancy,
     onboard: occupiedTotal,
   });

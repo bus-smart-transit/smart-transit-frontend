@@ -741,7 +741,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                               <li key={`checkin-group-${group.stop_id ?? 'none'}`} className="flex items-center justify-between gap-2 rounded-md bg-white px-2.5 py-1.5">
                                 <span className="min-w-0 text-sm text-slate-800">
                                   <span className="font-semibold">After {group.stop_name}</span>
-                                  <span className="text-slate-500"> · {group.count} waiting</span>
+                                  <span className="whitespace-nowrap text-slate-500"> · {group.count} waiting</span>
                                 </span>
                                 <button
                                   type="button"
