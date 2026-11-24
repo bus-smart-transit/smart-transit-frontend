@@ -7,7 +7,8 @@ import { formatCount, formatPaidAt, formatPeso } from '../../../utils/financials
 import { SkeletonTable } from '../../ui/Skeleton';
 const FIELD = 'w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500';
 
-const FILTERS = [['pending', 'Pending'], ['flagged', 'Flagged'], ['confirmed', 'Confirmed'], ['resolved', 'Resolved'], ['all', 'All']];
+// 2026-11-24 (user): Pending, Confirmed and All only. A flagged or resolved batch is still listed under All, with its chip.
+const FILTERS = [['pending', 'Pending'], ['confirmed', 'Confirmed'], ['all', 'All']];
 
 const STATUS_CHIP = {
   pending: ['Pending', 'bg-amber-100 text-amber-800'],

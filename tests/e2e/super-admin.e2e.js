@@ -91,9 +91,9 @@ for (const width of [1280, 390]) {
     await page.getByPlaceholder('Search by name, username or email').fill(username);
     const row = page.getByRole('table', { name: 'Accounts' }).getByRole('row').filter({ hasText: username });
     await expect(row.getByText('Company Admin', { exact: true })).toBeVisible({ timeout: 30000 });
-    await row.getByRole('button', { name: /Turn off/ }).click();
-    await expect(row.getByText('Turned off')).toBeVisible({ timeout: 30000 });
-    await row.getByRole('button', { name: /Turn on/ }).click();
+    await row.getByRole('button', { name: /Disable/ }).click();
+    await expect(row.getByText('Disabled')).toBeVisible({ timeout: 30000 });
+    await row.getByRole('button', { name: /Enable/ }).click();
     await expect(row.getByText('Active')).toBeVisible({ timeout: 30000 });
     await page.screenshot({ path: path.join(SHOTS, `users_${width}.png`), fullPage: true });
   });

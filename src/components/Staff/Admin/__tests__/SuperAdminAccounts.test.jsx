@@ -50,9 +50,9 @@ describe('UsersPage', () => {
     const tab = usersTab([user({}), user({ user_id: 2, name: 'Me', username: 'me', role: 'admin', role_label: 'Super Admin', is_you: true })]);
     render(<UsersPage usersTab={tab} />);
     expect(within(screen.getByText('Me').closest('tr')).queryByRole('button')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Turn off Pia' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Disable Pia' }));
     await waitFor(() => expect(tab.deactivate).toHaveBeenCalledWith(1));
-    expect(await screen.findByText('Account turned off.')).toBeInTheDocument();
+    expect(await screen.findByText('Account disabled.')).toBeInTheDocument();
   });
 
   it('offers Company Admin only to an Operator of a company, and shows a refusal plainly', async () => {
@@ -66,7 +66,7 @@ describe('UsersPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Make Company Admin' }));
     await waitFor(() => expect(tab.setCompanyAdmin).toHaveBeenCalledWith(3, true));
     expect(within(screen.getByText('Other Admin').closest('tr')).queryByRole('button', { name: /Company Admin/ })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Turn off Other Admin' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Disable Other Admin' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('last Super Admin');
   });
 });

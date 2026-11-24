@@ -22,7 +22,7 @@ const joined = (value) => {
 };
 
 function AvailabilityChip({ member }) {
-  if (member.deactivated) return <OpChip tone="danger">Turned off</OpChip>;
+  if (member.deactivated) return <OpChip tone="danger">Disabled</OpChip>;
   // Availability is for crews; an Operator account is just on.
   if (member.role === 'operator') return <OpChip tone="success">Active</OpChip>;
   return member.is_available
@@ -30,7 +30,7 @@ function AvailabilityChip({ member }) {
     : <OpChip tone="neutral">Not Available</OpChip>;
 }
 
-/** Turn off / turn on, asked first in plain words. A refusal (trips still to work) lists the trips. */
+/** Disable / enable (2026-11-24, user: the words Disable and Enable), asked first in plain words. A refusal (trips still to work) lists the trips. */
 function ConfirmPowerDialog({ member, onCancel, onConfirm }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -50,14 +50,14 @@ function ConfirmPowerDialog({ member, onCancel, onConfirm }) {
   };
 
   return (
-    <Modal open onClose={onCancel} title={turningOff ? `Turn off ${member.name}'s account?` : `Turn on ${member.name}'s account?`}>
+    <Modal open onClose={onCancel} title={turningOff ? `Disable ${member.name}'s account?` : `Enable ${member.name}'s account?`}>
       <div className="space-y-3 text-sm text-slate-700">
         {turningOff ? (
           <ul className="list-disc space-y-1 pl-5">
             <li>They cannot sign in, and they are signed out now.</li>
             <li>You cannot pick them for trips or shift blocks.</li>
             <li>Their past trips and shift times stay.</li>
-            <li>You can turn the account on again later.</li>
+            <li>You can enable the account again later.</li>
           </ul>
         ) : (
           <p>They can sign in again with their username or email, and you can pick them for trips.</p>
@@ -81,7 +81,7 @@ function ConfirmPowerDialog({ member, onCancel, onConfirm }) {
             className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-lg px-4 font-semibold text-white disabled:opacity-60 ${turningOff ? 'bg-rose-600 hover:bg-rose-700' : 'bg-teal-600 hover:bg-teal-700'}`}
           >
             {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
-            {turningOff ? 'Turn off account' : 'Turn on account'}
+            {turningOff ? 'Disable account' : 'Enable account'}
           </button>
         </div>
       </div>
@@ -146,10 +146,10 @@ export default function StaffDirectory({ fleetCount, onChanged }) {
           <button
             type="button"
             onClick={() => setPower(row)}
-            aria-label={row.deactivated ? `Turn on ${row.name}'s account` : `Turn off ${row.name}'s account`}
+            aria-label={row.deactivated ? `Enable ${row.name}'s account` : `Disable ${row.name}'s account`}
             className={`inline-flex min-h-11 items-center gap-1.5 rounded-lg border px-3 text-xs font-semibold ${row.deactivated ? 'border-teal-200 text-teal-700 hover:bg-teal-50' : 'border-rose-200 text-rose-700 hover:bg-rose-50'}`}
           >
-            <Power className="h-3.5 w-3.5" aria-hidden="true" /> {row.deactivated ? 'Turn on' : 'Turn off'}
+            <Power className="h-3.5 w-3.5" aria-hidden="true" /> {row.deactivated ? 'Enable' : 'Disable'}
           </button>
         </span>
       ))),
@@ -245,10 +245,10 @@ export default function StaffDirectory({ fleetCount, onChanged }) {
           onConfirm={async () => {
             if (power.deactivated) {
               await directory.reactivateStaff(power.company_user_id);
-              done(`${power.name}'s account is on again.`);
+              done(`${power.name}'s account is enabled again.`);
             } else {
               await directory.deactivateStaff(power.company_user_id);
-              done(`${power.name}'s account is turned off.`);
+              done(`${power.name}'s account is disabled.`);
             }
             setPower(null);
           }}

@@ -97,11 +97,11 @@ describe('StaffDirectory', () => {
     });
     OperatorService.deactivateStaff.mockRejectedValueOnce(refusal);
     render(<StaffDirectory fleetCount={0} />);
-    fireEvent.click(await screen.findByRole('button', { name: "Turn off Juan Dela Cruz's account" }));
+    fireEvent.click(await screen.findByRole('button', { name: "Disable Juan Dela Cruz's account" }));
 
     const dialog = screen.getByRole('dialog');
     expect(within(dialog).getByText('They cannot sign in, and they are signed out now.')).toBeInTheDocument();
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Turn off account' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Disable account' }));
 
     expect(await within(dialog).findByText(/Replace this person on their trips first/)).toBeInTheDocument();
     expect(within(dialog).getByText('Nov 9 8:00 AM, Tagum - Panabo, bus DEMO-101')).toBeInTheDocument();
@@ -176,7 +176,7 @@ describe('StaffDirectory', () => {
     expect(screen.getByTestId('read-only-note')).toHaveTextContent('Only your company admin can change these.');
     expect(screen.queryByRole('button', { name: 'Add Staff' })).toBeNull();
     expect(screen.queryByRole('button', { name: /Edit Juan/ })).toBeNull();
-    expect(screen.queryByRole('button', { name: /Turn off/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Disable/ })).toBeNull();
   });
 
   test('lists the company Operators; a Company Admin manages plain Operators but not themselves or another Company Admin', async () => {
@@ -187,7 +187,7 @@ describe('StaffDirectory', () => {
     render(<StaffDirectory fleetCount={0} />);
 
     const row = async (name) => (await screen.findByText(name)).closest('tr');
-    expect(within(await row('Dina Dispatcher')).getByRole('button', { name: "Turn off Dina Dispatcher's account" })).toBeInTheDocument();
+    expect(within(await row('Dina Dispatcher')).getByRole('button', { name: "Disable Dina Dispatcher's account" })).toBeInTheDocument();
     expect(within(await row('Dina Dispatcher')).getByText('Active')).toBeInTheDocument();
     expect(within(await row('Boss')).getByText('You')).toBeInTheDocument();
     expect(within(await row('Boss')).queryByRole('button')).toBeNull();

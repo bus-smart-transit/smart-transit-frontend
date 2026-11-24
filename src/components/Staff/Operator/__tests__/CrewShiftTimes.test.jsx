@@ -27,7 +27,7 @@ beforeEach(() => {
 });
 
 describe('CrewShiftTimes', () => {
-  test('lists shift, time in, time out and hours, marks a running shift and a shift past midnight, and totals per person', async () => {
+  test('lists shift, time in, time out and hours, marks a running shift and a shift past midnight, with no totals card', async () => {
     render(<CrewShiftTimes staff={[{ company_user_id: 3, name: 'Dina Driver' }]} />);
 
     expect(await screen.findAllByText('Dina Driver')).not.toHaveLength(0);
@@ -36,7 +36,8 @@ describe('CrewShiftTimes', () => {
     expect(screen.getByText('Morning')).toBeInTheDocument();
     expect(screen.getByText('Single trip')).toBeInTheDocument();
     expect(screen.getByText(/Oct 9/)).toBeInTheDocument();
-    expect(screen.getByText('11 h 15 min in 2 shifts')).toBeInTheDocument();
+    expect(screen.queryByText('11 h 15 min in 2 shifts')).not.toBeInTheDocument(); // 2026-11-24 (user): the totals card is gone
+    expect(screen.queryByText('Total for these days')).not.toBeInTheDocument();
     expect(screen.getByText('Showing 1 to 3 of 3')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /edit|delete|save/i })).toBeNull(); // read only
   });

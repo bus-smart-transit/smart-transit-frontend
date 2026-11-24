@@ -8,7 +8,7 @@ import FileTypeSelect from '../../ui/FileTypeSelect';
 import { DEFAULT_FILE_TYPE } from '../../../utils/tableExport';
 import useFinancials from '../../../api/hooks/Staff/useFinancials';
 import {
-  PRESETS, dailySeries, formatCount, formatPaidAt, formatPeso, paymentFilterPatch, paymentFilterValue, previousLabel, topRoutes,
+  PRESETS, dailySeries, formatCount, formatPaidAt, formatPeso, previousLabel, topRoutes,
 } from '../../../utils/financials';
 import { ChannelRing, TrendChart } from './FinancialCharts';
 import TransactionsTable from './TransactionsTable';
@@ -82,11 +82,9 @@ export default function FinancialsPage({ service, view = 'all', embedded = false
   const f = useFinancials(service ? { service } : undefined);
   const [fileType, setFileType] = useState(DEFAULT_FILE_TYPE);
   const { filters, summary, summaryError, summaryLoading, previousKpis, previousDays } = f;
-  const options = summary?.options ?? { routes: [], fleets: [], trips: [], channels: [] };
   const kpis = summary?.kpis;
   const showOverview = view !== 'transactions';
   const showTransactions = view !== 'overview';
-  const onlineChannels = options.channels.filter((c) => c.method === 'online');
   const vs = previousLabel(previousDays);
   const singleDay = filters.from === filters.to;
   const trend = singleDay
@@ -150,38 +148,13 @@ export default function FinancialsPage({ service, view = 'all', embedded = false
             </button>
           ))}
         </div>
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+        {/* 2026-11-24 (user): the transactions are filtered by date only (From and To); route, bus, payment and trip are gone. */}
+        <div className="grid max-w-md grid-cols-2 gap-3">
           <label className="text-xs font-medium text-slate-600">From
             <input type="date" value={filters.from} max={filters.to || undefined} onChange={(e) => e.target.value && f.updateFilters({ from: e.target.value })} className={`${FIELD} mt-1`} />
           </label>
           <label className="text-xs font-medium text-slate-600">To
             <input type="date" value={filters.to} min={filters.from || undefined} onChange={(e) => e.target.value && f.updateFilters({ to: e.target.value })} className={`${FIELD} mt-1`} />
-          </label>
-          <label className="text-xs font-medium text-slate-600">Route
-            <select value={filters.route_id} onChange={(e) => f.updateFilters({ route_id: e.target.value })} className={`${FIELD} mt-1`}>
-              <option value="">All routes</option>
-              {options.routes.map((r) => <option key={r.route_id} value={r.route_id}>{r.route_name}</option>)}
-            </select>
-          </label>
-          <label className="text-xs font-medium text-slate-600">Bus
-            <select value={filters.fleet_id} onChange={(e) => f.updateFilters({ fleet_id: e.target.value })} className={`${FIELD} mt-1`}>
-              <option value="">All buses</option>
-              {options.fleets.map((b) => <option key={b.fleet_id} value={b.fleet_id}>{b.plate_number}{b.bus_label ? ` (${b.bus_label})` : ''}</option>)}
-            </select>
-          </label>
-          <label className="text-xs font-medium text-slate-600">Payment
-            <select value={paymentFilterValue(filters)} onChange={(e) => f.updateFilters(paymentFilterPatch(e.target.value))} className={`${FIELD} mt-1`}>
-              <option value="">All payments</option>
-              <option value="method:cash">Cash</option>
-              <option value="method:online">Online (all)</option>
-              {onlineChannels.map((c) => <option key={c.channel} value={`channel:${c.channel}`}>{c.label}</option>)}
-            </select>
-          </label>
-          <label className="text-xs font-medium text-slate-600">Trip
-            <select value={filters.trip_id} onChange={(e) => f.updateFilters({ trip_id: e.target.value })} className={`${FIELD} mt-1`}>
-              <option value="">All trips</option>
-              {options.trips.map((t) => <option key={t.trip_id} value={t.trip_id}>{t.label}</option>)}
-            </select>
           </label>
         </div>
         <button type="button" onClick={f.resetFilters} className="inline-flex items-center gap-1 text-xs font-semibold text-slate-600 hover:text-slate-900">

@@ -34,7 +34,7 @@ const COLUMNS = [
 
 function CrewShiftList({ from, to, staffId }) {
   const [page, setPage] = useState(1);
-  const { loading, error, shifts, totals, pagination } = useCrewShiftRange({ from, to, staffId, page });
+  const { loading, error, shifts, pagination } = useCrewShiftRange({ from, to, staffId, page });
   if (loading) return <SkeletonTable label="Loading crew times..." cols={6} rows={4} />;
   if (error) return <p role="alert" className="text-xs text-rose-700">{error}</p>;
   return (
@@ -49,21 +49,7 @@ function CrewShiftList({ from, to, staffId }) {
       {pagination.total > 0 && (
         <Pagination label="Crew time pages" page={pagination.page} perPage={pagination.per_page} total={pagination.total} lastPage={pagination.last_page} onPageChange={setPage} />
       )}
-      {totals.length > 0 && (
-        <section aria-label="Total per person" className="rounded-xl border border-slate-200 p-3">
-          <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Total for these days</h4>
-          <ul className="grid gap-2 sm:grid-cols-2">
-            {totals.map((person) => (
-              <li key={`${person.role}-${person.staff_id}`} className="flex items-baseline justify-between gap-3 text-sm">
-                <span className="text-slate-900">{person.name} <span className="text-xs text-slate-500">({person.role})</span></span>
-                <span className="font-data text-slate-700">
-                  {hoursWorked(person.minutes)} in {person.shifts} shift{person.shifts === 1 ? '' : 's'}{person.still_open ? ', one still in progress' : ''}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+      {/* 2026-11-24 (user): no "Total for these days" card; each shift's hours are in the table. */}
     </div>
   );
 }

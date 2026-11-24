@@ -169,7 +169,7 @@ function NotificationBell({ crewAlerts = null, onOpenAlert = () => {} }) {
 
 // 2026-10-28: the label is linked to its input (htmlFor/id), so screen readers announce it and it can be found by name.
 // A single custom child (a select) gets the same id unless it already has one.
-function Field({ label, type = 'text', value, onChange, required, placeholder, hint, info = '', children }) {
+function Field({ label, type = 'text', value, onChange, required, placeholder, hint, info = '', min, children }) {
   const autoId = useId()
   const single = isValidElement(children) ? children : null
   const fieldId = single?.props?.id ?? autoId
@@ -180,7 +180,7 @@ function Field({ label, type = 'text', value, onChange, required, placeholder, h
         {info && <InfoTip label={`About ${String(label).toLowerCase()}`} text={info} />}
       </div>
       {single ? cloneElement(single, { id: fieldId }) : children ?? (
-        <input id={fieldId} type={type} value={value} onChange={onChange} required={required} placeholder={placeholder}
+        <input id={fieldId} type={type} value={value} onChange={onChange} required={required} placeholder={placeholder} min={min}
           className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500" />
       )}
       {hint && <p role="status" className="mt-1 text-xs text-amber-700">{hint}</p>}
@@ -233,6 +233,7 @@ function ScheduleServiceModal({ state, drivers, conductors }) {
   const { showModal, form, setForm, saving, msg, scheduleRoutes, handleSchedule, rangePreview, rangeResult, confirmRange, closeScheduleModal } = state
   const rangeMode = isRangeSchedule(form)
   const rangeDays = rangeDayCount(form.trip_date, form.to_date)
+  const today = getBusinessToday()
   const [bookingWindow, setBookingWindow] = useState(null)
   const { drivers: dateDrivers, conductors: dateConductors, loading: loadingDateDrivers, error: dateDriversError } = useDateDrivers(showModal && form.trip_date ? form.trip_date : '', drivers, conductors)
   useEffect(() => {
@@ -325,13 +326,14 @@ function ScheduleServiceModal({ state, drivers, conductors }) {
             )}
           </Field>
           {/* Phase B (§4.13): the same block on every day From..To; a To date equal to From (or empty) is one day. */}
-          <Field label="From" type="date" value={form.trip_date} onChange={e => setForm(p => ({...p, trip_date: e.target.value}))} required hint={bookingWindowWarning(form.trip_date, bookingWindow)} />
+          {/* 2026-11-24 (user): past days cannot be picked (the server refuses them too). */}
+          <Field label="From" type="date" value={form.trip_date} min={today} onChange={e => setForm(p => ({...p, trip_date: e.target.value}))} required hint={form.trip_date && form.trip_date < today ? 'The date cannot be in the past.' : bookingWindowWarning(form.trip_date, bookingWindow)} />
           <Field label="To (optional)">
             <input
               type="date"
               aria-label="To"
               value={form.to_date || ''}
-              min={form.trip_date || undefined}
+              min={form.trip_date && form.trip_date > today ? form.trip_date : today}
               onChange={e => setForm(p => ({ ...p, to_date: e.target.value }))}
               className={fieldClass}
             />

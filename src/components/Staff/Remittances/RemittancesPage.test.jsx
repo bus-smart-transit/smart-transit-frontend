@@ -164,15 +164,18 @@ describe('RemittancesPage tolerance and resolution', () => {
     expect(lines[1]).not.toHaveTextContent('tolerance');
   });
 
-  it('offers the Flagged and Resolved filters', async () => {
+  // 2026-11-24 (user): the filters are Pending, Confirmed and All only.
+  it('offers the Pending, Confirmed and All filters', async () => {
     const service = makeService();
     render(<RemittancesPage service={service} />);
     await screen.findByTestId('remittance-card');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Flagged' }));
-    await waitFor(() => expect(service.getRemittances).toHaveBeenLastCalledWith({ status: 'flagged', page: 1 }));
-    fireEvent.click(screen.getByRole('button', { name: 'Resolved' }));
-    await waitFor(() => expect(service.getRemittances).toHaveBeenLastCalledWith({ status: 'resolved', page: 1 }));
+    const group = screen.getByRole('group', { name: 'Status' });
+    expect(within(group).getAllByRole('button').map((b) => b.textContent)).toEqual(['Pending', 'Confirmed', 'All']);
+    fireEvent.click(within(group).getByRole('button', { name: 'Confirmed' }));
+    await waitFor(() => expect(service.getRemittances).toHaveBeenLastCalledWith({ status: 'confirmed', page: 1 }));
+    fireEvent.click(within(group).getByRole('button', { name: 'All' }));
+    await waitFor(() => expect(service.getRemittances).toHaveBeenLastCalledWith({ status: 'all', page: 1 }));
   });
 });
 

@@ -126,21 +126,15 @@ describe('FinancialsPage', () => {
     expect(getFinancials.mock.calls.filter(([params]) => params.from === chosen)).toHaveLength(2);
   });
 
-  it('sends the chosen filters to the server and goes back to page 1', async () => {
+  // 2026-11-24 (user): the transactions are filtered by From and To only (no route, bus, payment or trip).
+  it('filters by From and To only and sends the dates to the server', async () => {
     const service = makeService();
     render(<FinancialsPage service={service} />);
     await screen.findByTestId('kpi-gross');
 
-    fireEvent.change(screen.getByLabelText('Route'), { target: { value: '1' } });
-    await waitFor(() => expect(service.getFinancials).toHaveBeenLastCalledWith(expect.objectContaining({ route_id: '1' })));
-
-    fireEvent.change(screen.getByLabelText('Payment'), { target: { value: 'method:cash' } });
-    await waitFor(() => expect(service.getFinancials).toHaveBeenLastCalledWith(expect.objectContaining({ route_id: '1', payment_method: 'cash' })));
-    expect(service.getFinancials.mock.lastCall[0]).not.toHaveProperty('channel');
-
-    fireEvent.change(screen.getByLabelText('Payment'), { target: { value: 'channel:gcash' } });
-    await waitFor(() => expect(service.getFinancials).toHaveBeenLastCalledWith(expect.objectContaining({ channel: 'gcash' })));
-    expect(service.getFinancials.mock.lastCall[0]).not.toHaveProperty('payment_method');
+    for (const label of ['Route', 'Bus', 'Payment', 'Trip']) expect(screen.queryByLabelText(label)).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('From'), { target: { value: '2026-10-01' } });
+    await waitFor(() => expect(service.getFinancials).toHaveBeenCalledWith(expect.objectContaining({ from: '2026-10-01' })));
 
     fireEvent.click(screen.getByRole('button', { name: 'Yesterday' }));
     await waitFor(() => {

@@ -11,7 +11,7 @@ const BUTTON = 'inline-flex min-h-11 items-center gap-1.5 rounded-lg border px-3
 
 function StatusChip({ user }) {
   if (user.deletion === 'erased') return <OpChip tone="neutral">Erased</OpChip>;
-  if (user.deactivated) return <OpChip tone="danger">Turned off</OpChip>;
+  if (user.deactivated) return <OpChip tone="danger">Disabled</OpChip>;
   if (user.deletion === 'requested') return <OpChip tone="warning">Deletion requested</OpChip>;
   return <OpChip tone="success">Active</OpChip>;
 }
@@ -56,13 +56,13 @@ export default function UsersPage({ usersTab }) {
         <span className="inline-flex flex-wrap gap-2">
           <button
             type="button"
-            aria-label={row.deactivated ? `Turn on ${row.name || row.username}` : `Turn off ${row.name || row.username}`}
+            aria-label={row.deactivated ? `Enable ${row.name || row.username}` : `Disable ${row.name || row.username}`}
             onClick={() => (row.deactivated
-              ? act(`Turn on ${row.name || row.username}? They can sign in again.`, () => users.reactivate(row.user_id), 'Account turned on again.')
-              : act(`Turn off ${row.name || row.username}? They can no longer sign in. You can turn it on again later.`, () => users.deactivate(row.user_id), 'Account turned off.'))}
+              ? act(`Enable ${row.name || row.username}? They can sign in again.`, () => users.reactivate(row.user_id), 'Account enabled again.')
+              : act(`Disable ${row.name || row.username}? They can no longer sign in. You can enable it again later.`, () => users.deactivate(row.user_id), 'Account disabled.'))}
             className={`${BUTTON} ${row.deactivated ? 'border-teal-200 text-teal-700 hover:bg-teal-50' : 'border-rose-200 text-rose-700 hover:bg-rose-50'}`}
           >
-            <Power className="h-3.5 w-3.5" aria-hidden="true" /> {row.deactivated ? 'Turn on' : 'Turn off'}
+            <Power className="h-3.5 w-3.5" aria-hidden="true" /> {row.deactivated ? 'Enable' : 'Disable'}
           </button>
           {row.role === 'operator' && row.company_name && (
             <button
@@ -82,7 +82,7 @@ export default function UsersPage({ usersTab }) {
 
   return (
     <div className={OP_SPACE.stack}>
-      <OpPageHeader title="Users" subtitle="Every account on SmartTransit. Turning one off blocks sign-in; nothing is deleted." />
+      <OpPageHeader title="Users" subtitle="Every account on SmartTransit. Disabling one blocks sign-in; nothing is deleted." />
       <OpCard title="Accounts">
         <div className="space-y-4">
           <div className="flex flex-col gap-2 sm:flex-row">

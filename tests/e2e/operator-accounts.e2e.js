@@ -49,11 +49,11 @@ for (const width of [1280, 390]) {
     await expect(table.getByRole('row').filter({ hasText: 'You' }).getByRole('button')).toHaveCount(0);
     await page.screenshot({ path: path.join(SHOTS, `operators_${width}.png`), fullPage: true });
 
-    await row.getByRole('button', { name: /Turn off/ }).click();
-    await page.getByRole('dialog').getByRole('button', { name: /Turn off/ }).click();
-    await expect(row.getByText('Turned off')).toBeVisible({ timeout: 30000 });
-    await row.getByRole('button', { name: /Turn on/ }).click();
-    await page.getByRole('dialog').getByRole('button', { name: /Turn on/ }).click();
+    await row.getByRole('button', { name: /Disable/ }).click();
+    await page.getByRole('dialog').getByRole('button', { name: /Disable/ }).click();
+    await expect(row.getByText('Disabled')).toBeVisible({ timeout: 30000 });
+    await row.getByRole('button', { name: /Enable/ }).click();
+    await page.getByRole('dialog').getByRole('button', { name: /Enable/ }).click();
     await expect(row.getByText('Active')).toBeVisible({ timeout: 30000 });
   });
 }
