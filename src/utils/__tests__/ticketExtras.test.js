@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { baggageFeeFor, baggageSummary, extrasFor, itemsWithExtras, priorityFromClaim } from '../ticketExtras';
+import { baggageFeeFor, baggageSummary, extrasFor, itemsWithExtras, priorityAfterClaim, priorityFromClaim } from '../ticketExtras';
 
 // SAMPLE values. Priority types as the server sends them (booking/window).
 const TYPES = [{ key: 'senior', label: 'Senior citizen' }, { key: 'pwd', label: 'Person with disability' }, { key: 'pregnant', label: 'Pregnant' }];
@@ -38,5 +38,25 @@ describe('ticketExtras (Batch 76)', () => {
       { trip_id: 1, discount_claim_key: 'senior', priority_type: 'senior', baggage: true },
       { trip_id: 1 },
     ]);
+  });
+});
+
+describe('priorityAfterClaim', () => {
+  const PRIORITY = [{ key: 'senior' }, { key: 'pwd' }, { key: 'pregnant' }];
+  const DISCOUNTS = [{ key: 'senior' }, { key: 'pwd' }, { key: 'student' }];
+
+  it('a senior or PWD discount sets its priority seat, replacing the other one', () => {
+    expect(priorityAfterClaim('', 'senior', PRIORITY, DISCOUNTS)).toBe('senior');
+    expect(priorityAfterClaim('senior', 'pwd', PRIORITY, DISCOUNTS)).toBe('pwd');
+  });
+
+  it('a student discount or none clears a senior or PWD priority seat', () => {
+    expect(priorityAfterClaim('senior', 'student', PRIORITY, DISCOUNTS)).toBe('');
+    expect(priorityAfterClaim('pwd', '', PRIORITY, DISCOUNTS)).toBe('');
+  });
+
+  it('keeps a pregnant priority seat, which has no discount', () => {
+    expect(priorityAfterClaim('pregnant', 'student', PRIORITY, DISCOUNTS)).toBe('pregnant');
+    expect(priorityAfterClaim('pregnant', '', PRIORITY, DISCOUNTS)).toBe('pregnant');
   });
 });

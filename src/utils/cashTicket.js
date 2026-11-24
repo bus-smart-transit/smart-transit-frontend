@@ -178,3 +178,20 @@ export function checkInLabel(checkIn) {
   if (!checkIn) return '';
   return `${checkIn.checked_in_at || '--:--'} · after ${checkIn.stop_name || 'Not provided'}`;
 }
+
+/**
+ * 2026-11-24 (user): the check-ins waiting for their fare, grouped by the stop they boarded after, in the order the
+ * first one boarded. `next` is the one who has waited longest (the server lists check-ins oldest first), so
+ * "Issue ticket" on a group sells to that person.
+ */
+export function checkInsByStop(checkIns) {
+  const groups = new Map();
+  (Array.isArray(checkIns) ? checkIns : []).forEach((checkIn) => {
+    const key = String(checkIn?.stop_id ?? 'none');
+    if (!groups.has(key)) {
+      groups.set(key, { stop_id: checkIn?.stop_id ?? null, stop_name: checkIn?.stop_name || 'Not provided', count: 0, next: checkIn });
+    }
+    groups.get(key).count += 1;
+  });
+  return [...groups.values()];
+}

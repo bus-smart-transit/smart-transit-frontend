@@ -15,6 +15,18 @@ export function priorityFromClaim(claimKey, priorityTypes = []) {
   return claimKey && (priorityTypes || []).some((type) => type.key === claimKey) ? claimKey : '';
 }
 
+/**
+ * 2026-11-24 (user): the priority seat after the discount claim changes. A senior or PWD claim sets its own priority
+ * (also replacing the other one); any other claim, or none, clears a priority that came from a discount (senior, PWD)
+ * but keeps one that has no discount (pregnant).
+ */
+export function priorityAfterClaim(currentPriority, claimKey, priorityTypes = [], discountTypes = []) {
+  const implied = priorityFromClaim(claimKey, priorityTypes);
+  if (implied) return implied;
+  const fromDiscount = new Set((discountTypes || []).map((type) => type.key));
+  return currentPriority && !fromDiscount.has(currentPriority) ? currentPriority : '';
+}
+
 /** Each ticket's choices for the first `quantity` tickets: { priority_type, baggage }. */
 export function extrasFor(quantity, extras = {}, priorityTypes = []) {
   const allowed = new Set((priorityTypes || []).map((type) => type.key));

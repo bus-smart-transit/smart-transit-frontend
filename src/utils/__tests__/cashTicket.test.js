@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { boardingPointView, boardingStopsForLeg, cashTicketPhone, buildOnsiteItem, capacityFromServer, checkInLabel, capacitySummary, destinationsAhead, destinationsNotPassed, isMidTripBoardingAvailable, isOnsiteFormComplete, isStandingOpen, orderedStopsForLeg, placesLeft, stopLabel } from '../cashTicket';
+import { boardingPointView, boardingStopsForLeg, cashTicketPhone, buildOnsiteItem, capacityFromServer, checkInLabel, capacitySummary, checkInsByStop, destinationsAhead, destinationsNotPassed, isMidTripBoardingAvailable, isOnsiteFormComplete, isStandingOpen, orderedStopsForLeg, placesLeft, stopLabel } from '../cashTicket';
 import { formatManilaDateTime } from '../dates';
 
 const rs = (id, order, type = 'stop', name = `Stop ${id}`) => ({ stop_id: id, stop_order: order, stop_type: type, stop: { stop_id: id, stop_name: name } });
@@ -228,5 +228,24 @@ describe('cashTicketPhone', () => {
     expect(cashTicketPhone('')).toBeNull();
     expect(cashTicketPhone('02 8123 4567')).toBeNull();
     expect(cashTicketPhone('juan@example.com')).toBeNull();
+  });
+});
+
+describe('checkInsByStop', () => {
+  test('groups the waiting passengers by boarding stop, the longest waiting first', () => {
+    const groups = checkInsByStop([
+      { id: 1, stop_id: 5, stop_name: 'Lupon', checked_in_at: '10:01' },
+      { id: 2, stop_id: 7, stop_name: 'Banaybanay', checked_in_at: '10:20' },
+      { id: 3, stop_id: 5, stop_name: 'Lupon', checked_in_at: '10:02' },
+    ]);
+    expect(groups).toEqual([
+      expect.objectContaining({ stop_id: 5, stop_name: 'Lupon', count: 2, next: expect.objectContaining({ id: 1 }) }),
+      expect.objectContaining({ stop_id: 7, stop_name: 'Banaybanay', count: 1, next: expect.objectContaining({ id: 2 }) }),
+    ]);
+  });
+
+  test('is empty when nobody is waiting', () => {
+    expect(checkInsByStop([])).toEqual([]);
+    expect(checkInsByStop(null)).toEqual([]);
   });
 });

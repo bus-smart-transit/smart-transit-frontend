@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { priorityAfterClaim } from '../../utils/ticketExtras';
 import {
   AlertCircle,
   Bus,
@@ -42,7 +43,7 @@ import { BOARDING_NOT_STARTED, BOARDING_OPEN_STATUSES, ticketingReason } from '.
 import { claimReviewState } from '../../utils/discountClaim';
 import { passengerCountRows } from '../../utils/passengerCount';
 import DiscountReviewDialog from './Crew/DiscountReviewDialog';
-import { MAX_CASH_TICKETS, boardingStopsForLeg, checkInLabel, destinationsAhead, destinationsNotPassed, isOnsiteFormComplete, onsiteQuantity, orderedStopsForLeg, placesLeft, stopLabel } from '../../utils/cashTicket';
+import { MAX_CASH_TICKETS, boardingStopsForLeg, checkInLabel, checkInsByStop, destinationsAhead, destinationsNotPassed, isOnsiteFormComplete, onsiteQuantity, orderedStopsForLeg, placesLeft, stopLabel } from '../../utils/cashTicket';
 import { isExpress } from '../../utils/serviceType';
 import ServiceTypeChip from '../ui/ServiceTypeChip';
 import { deriveTripStatus } from '../../utils/tripStatus';
@@ -58,6 +59,13 @@ import { clock12 } from '../../utils/clock';
 // planning — so it groups here, not with Schedule); Calendar becomes
 // Schedule. Start/End Shift move to the persistent header, matching the
 // Driver portal's existing pattern (see header buttons below).
+// Batch 76: the priority seat types offered on a cash sale (the server's booking.priority.types).
+const ONSITE_PRIORITY_TYPES = [
+  { key: 'senior', label: 'Senior citizen' },
+  { key: 'pwd', label: 'Person with disability' },
+  { key: 'pregnant', label: 'Pregnant' },
+];
+
 const NAV_ITEMS = [
   // Batch 61 (advisor): short labels for the phone's bottom bar.
   { key: 'dashboard', label: 'Home', icon: Gauge },
@@ -304,6 +312,17 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   const singleTicketOnly = byCheckIn || Boolean(onsiteDiscountTypeKey) || Boolean(onsitePriority);
   const saleQuantity = onsiteQuantity(cashForm, { discount: Boolean(onsiteDiscountTypeKey), priority: Boolean(onsitePriority) });
   const selectedCheckIn = byCheckIn ? checkIns.find((c) => String(c.id) === String(cashForm.pending_boarding_id)) ?? null : null;
+  // 2026-11-24 (user): the waiting passengers grouped by boarding stop. "Issue ticket" fills in the longest-waiting
+  // passenger of that stop, so the Chauffeur only picks where they get off.
+  const checkInGroups = checkInsByStop(checkIns);
+  const destinationRef = useRef(null);
+  const issueCheckInTicket = (group) => {
+    setOnsiteForm((prev) => ({ ...prev, boarding_mode: 'checkin', pending_boarding_id: String(group.next.id), destination_stop_id: '', quantity: 1 }));
+    setTimeout(() => {
+      destinationRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+      destinationRef.current?.focus?.();
+    }, 0);
+  };
   const destinationOptions = byBusPosition
     ? boardingView.destinations.map((d) => ({ stop_id: d.stop_id, stop_name: `${d.stop_name} (${d.distance_km} km)` }))
     : destinationsNotPassed(
@@ -716,6 +735,27 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                           {checkIns.length === 1 ? '1 passenger waiting to pay' : `${checkIns.length} passengers waiting to pay`}
                           <InfoTip label="About Passenger In" text="Tap Passenger In as someone boards between stops. Their fare counts from the last stop the bus passed, however late you collect it. It works once the bus has left and passed its first stop." />
                         </p>
+                        {checkInGroups.length > 0 && (
+                          <ul className="mt-2 space-y-1.5" data-testid="checkin-groups">
+                            {checkInGroups.map((group) => (
+                              <li key={`checkin-group-${group.stop_id ?? 'none'}`} className="flex items-center justify-between gap-2 rounded-md bg-white px-2.5 py-1.5">
+                                <span className="min-w-0 text-sm text-slate-800">
+                                  <span className="font-semibold">After {group.stop_name}</span>
+                                  <span className="text-slate-500"> · {group.count} waiting</span>
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => issueCheckInTicket(group)}
+                                  disabled={!isPaired || !hasOpenShift || !boardingOpen}
+                                  className="shrink-0 rounded-md border border-teal-600 px-2.5 py-1 text-xs font-bold text-teal-700 transition hover:bg-teal-50 disabled:cursor-not-allowed disabled:opacity-60"
+                                  data-testid={`issue-checkin-${group.stop_id ?? 'none'}`}
+                                >
+                                  Issue ticket
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
                       </div>
                     )}
 
@@ -811,6 +851,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                       <label htmlFor="onsite-destination" className="mb-1 block text-sm font-semibold text-slate-700">Select Destination</label>
                       <select
                         id="onsite-destination"
+                        ref={destinationRef}
                         value={onsiteForm.destination_stop_id}
                         onChange={(e) => setOnsiteForm((prev) => ({ ...prev, destination_stop_id: e.target.value }))}
                         disabled={!boardingReady}
@@ -853,7 +894,12 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                       <select
                         id="onsite-discount-type"
                         value={onsiteDiscountTypeKey}
-                        onChange={(event) => { setOnsiteDiscountTypeKey(event.target.value); setOnsiteDiscountIdChecked(false); }}
+                        onChange={(event) => {
+                          setOnsiteDiscountTypeKey(event.target.value);
+                          setOnsiteDiscountIdChecked(false);
+                          // 2026-11-24 (user): a senior or PWD discount sets the matching priority seat; another clears it (pregnant stays).
+                          setOnsitePriority((current) => priorityAfterClaim(current, event.target.value, ONSITE_PRIORITY_TYPES, onsiteDiscountTypes));
+                        }}
                         className="h-11 w-full rounded-lg border border-slate-300 bg-slate-800 px-3 text-sm text-white outline-none focus:border-teal-500"
                       >
                         <option value="">No discount</option>
@@ -884,9 +930,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                           className="h-11 w-full rounded-lg border border-slate-300 bg-slate-800 px-3 text-sm text-white outline-none focus:border-teal-500"
                         >
                           <option value="">No</option>
-                          <option value="senior">Senior citizen</option>
-                          <option value="pwd">Person with disability</option>
-                          <option value="pregnant">Pregnant</option>
+                          {ONSITE_PRIORITY_TYPES.map((type) => <option key={type.key} value={type.key}>{type.label}</option>)}
                         </select>
                       </div>
                       <label className="flex items-center gap-2 self-end pb-2 text-sm font-semibold text-slate-700">

@@ -4,7 +4,7 @@ import PassengerService from '../../PassengerService/PassengerService';
 import { checkoutIdempotencyKey, clearCheckoutIdempotencyKey, shouldDropCheckoutKey } from '../../../utils/checkoutIdempotency';
 import { getBookingWindow, getTripDiscountTypes, readApiError } from '../../../services/bookingService';
 import { itemsWithClaims } from '../../../utils/discountClaim';
-import { baggageSummary, itemsWithExtras, priorityFromClaim } from '../../../utils/ticketExtras';
+import { baggageSummary, itemsWithExtras, priorityAfterClaim } from '../../../utils/ticketExtras';
 import { useBookingStops, useDepartures, useTripResolution } from './useBookingSearch';
 import useBookingLink from './useBookingLink';
 import useTripTimeline from './useTripTimeline';
@@ -257,15 +257,16 @@ export default function useBuyTicket({ onTicketPurchased }) {
   }, [discountTripId]);
   const setDiscountClaim = useCallback((index, key) => {
     setForm((prev) => {
-      // Batch 76: a senior or PWD claim asks for a priority seat too (the passenger can still turn it off).
-      const implied = priorityFromClaim(key, priorityTypes);
+      // Batch 76 / 2026-11-24 (user): a senior or PWD claim sets the matching priority seat; another claim, or none,
+      // clears it (a pregnant priority seat stays). The passenger can still change the priority seat afterwards.
       const current = prev.ticket_extras?.[index] || {};
-      const extras = implied && !current.priority_type
-        ? { ...prev.ticket_extras, [index]: { ...current, priority_type: implied } }
-        : prev.ticket_extras;
+      const priority = priorityAfterClaim(current.priority_type || '', key, priorityTypes, discountTypes);
+      const extras = priority === (current.priority_type || '')
+        ? prev.ticket_extras
+        : { ...prev.ticket_extras, [index]: { ...current, priority_type: priority } };
       return { ...prev, discount_claims: { ...prev.discount_claims, [index]: key || null }, ticket_extras: extras };
     });
-  }, [priorityTypes]);
+  }, [priorityTypes, discountTypes]);
   // Batch 76: one ticket's priority seat ('' for none) or baggage (true / false).
   const setTicketExtra = useCallback((index, field, value) => {
     setForm((prev) => ({
