@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import OperatorAlerts from '../OperatorAlerts'
+import OperatorAlerts, { CrewAlertList, CrewAlertModal } from '../OperatorAlerts'
 
 // Batch 58 (user, 2026-11-10): crew alerts across the top of the Operator portal. SAMPLE names and numbers.
 const openAlert = {
@@ -71,5 +71,34 @@ describe('OperatorAlerts', () => {
     expect(screen.queryByTestId('operator-alert-recent')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: /Crew alerts in the last 24 hours \(1\)/ }))
     expect(screen.getByTestId('operator-alert-recent')).toHaveTextContent('Handled by Oscar Operator at 2026/11/10 - 10:40 AM · Spare bus sent')
+  })
+})
+
+// 2026-11-24 (user): the alerts live in the notification panel; a click (there or on the red toast) opens a pop-up with
+// the emergency type and the actions.
+describe('crew alerts in the notification panel and pop-up', () => {
+  test('the panel lists the open alert; choosing it asks to open its pop-up', () => {
+    const onOpen = vi.fn()
+    render(<CrewAlertList alerts={state()} onOpen={onOpen} />)
+    fireEvent.click(screen.getByTestId('operator-alert-row'))
+    expect(onOpen).toHaveBeenCalledWith(11)
+  })
+
+  test('the pop-up shows the emergency type and lets the Operator act', async () => {
+    const alerts = { ...state(), all: [openAlert, handled] }
+    render(<CrewAlertModal alertId={11} alerts={alerts} onClose={vi.fn()} />)
+    expect(screen.getByRole('dialog')).toHaveTextContent('Emergency: Breakdown')
+    const card = screen.getByTestId('operator-alert')
+    expect(card).toHaveTextContent('Sent by Dan Driver (Driver) · Note: Flat tyre')
+    fireEvent.click(within(card).getByRole('button', { name: 'Mark handled' }))
+    fireEvent.click(within(card).getByRole('button', { name: /^Mark handled$|Confirm|Save/ }))
+    await waitFor(() => expect(alerts.handle).toHaveBeenCalledWith(11, ''))
+  })
+
+  test('a handled alert opens with what happened and no actions', () => {
+    render(<CrewAlertModal alertId={12} alerts={{ ...state(), all: [openAlert, handled] }} onClose={vi.fn()} />)
+    expect(screen.getByRole('dialog')).toHaveTextContent('Crew alert: Breakdown')
+    expect(screen.getByTestId('crew-alert-modal')).toHaveTextContent('Handled by Oscar Operator')
+    expect(screen.queryByRole('button', { name: 'Mark handled' })).not.toBeInTheDocument()
   })
 })

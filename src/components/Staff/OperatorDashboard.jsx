@@ -16,7 +16,9 @@ import { bookingWindowWarning } from '../../utils/bookingQuery'
 import { parseAppDate, getBusinessToday, debugLogBusinessTime } from '../../utils/dates'
 import { useOperatorDashboardData, useNotificationBell, useTripRequests, useTripsTab } from '../../api/hooks/Staff/useOperatorDashboard'
 import useOperatorAlerts from '../../api/hooks/Staff/useOperatorAlerts'
-import OperatorAlerts from './Operator/OperatorAlerts'
+import { AlertSoundToggle, CrewAlertList, CrewAlertModal } from './Operator/OperatorAlerts'
+import { showToast } from '../../utils/toastStore'
+import { alertBusText } from '../../utils/crewAlerts'
 import RunInfoChips from '../ui/RunInfoChips'
 import { CancelTripModal } from './TripCancellationsPanel'
 import LegTimeSuggestion from './LegTimeSuggestion'
@@ -95,7 +97,9 @@ function Modal({ title, onClose, children, wide = false }) {
 const OPERATOR_NOTIFICATION_FIELDS = { id: (n) => n.id, text: (n) => n.message }
 
 // 2026-10-27: in the sidebar beside the profile (dark background), so its button is styled for it.
-function NotificationBell() {
+// 2026-11-24 (user): the crew alerts live here too (an open one counts on the bell and opens in its pop-up), and a
+// notification that arrives while the page is open shows as a toast.
+function NotificationBell({ crewAlerts = null, onOpenAlert = () => {} }) {
   const {
     open, setOpen,
     notifications,
@@ -104,7 +108,13 @@ function NotificationBell() {
     handleMarkRead,
     handleMarkGroupRead,
     handleMarkAllRead,
-  } = useNotificationBell()
+  } = useNotificationBell({
+    onNew: (arrived) => arrived.slice(-3).forEach((n) => {
+      showToast({ key: `op-notification-${n.id}`, title: 'New notification', body: n.message || '', actionLabel: 'Open', onAction: () => setOpen(true) })
+    }),
+  })
+  const openAlerts = crewAlerts?.open?.length ?? 0
+  const badge = unreadCount + openAlerts
 
   return (
     <>
@@ -112,18 +122,25 @@ function NotificationBell() {
         type="button"
         onClick={() => setOpen(true)}
         className="relative flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-white/10 text-slate-200 transition hover:bg-white/20 hover:text-white"
-        aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : 'Notifications'}
+        aria-label={openAlerts > 0 ? `Notifications, ${openAlerts} open crew alert${openAlerts === 1 ? '' : 's'}` : unreadCount > 0 ? `Notifications, ${unreadCount} unread` : 'Notifications'}
+        data-testid="operator-bell"
       >
         <Bell className="h-4.5 w-4.5" />
-        {unreadCount > 0 && (
-          <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-xs font-bold text-white">
-            {unreadCount > 9 ? '9+' : unreadCount}
+        {badge > 0 && (
+          <span className={`absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-xs font-bold text-white ${openAlerts > 0 ? 'animate-pulse bg-rose-600' : 'bg-red-500'}`}>
+            {badge > 9 ? '9+' : badge}
           </span>
         )}
       </button>
 
       {open && (
         <Modal title="Notifications" onClose={() => setOpen(false)}>
+          {crewAlerts && (
+            <div className="mb-4 space-y-2 border-b border-slate-100 pb-4">
+              <CrewAlertList alerts={crewAlerts} onOpen={(alertId) => { setOpen(false); onOpenAlert(alertId) }} />
+              <AlertSoundToggle alerts={crewAlerts} />
+            </div>
+          )}
           <div className="mb-3 flex items-center justify-between">
             <span className="text-xs text-slate-500">{unreadCount} unread</span>
             <button type="button" onClick={handleMarkAllRead} className="text-xs font-semibold text-teal-600 hover:underline" disabled={unreadCount === 0}>
@@ -866,7 +883,22 @@ export default function OperatorDashboard() {
     loadFull,
     handleLogout,
   } = useOperatorDashboardData()
-  const crewAlerts = useOperatorAlerts()
+  // 2026-11-24 (user): a new crew alert is a red toast that stays until dismissed; Open (on the toast or in the
+  // notification panel) shows the alert's pop-up with its actions. The alarm sound is unchanged.
+  const [openAlertId, setOpenAlertId] = useState(null)
+  const crewAlerts = useOperatorAlerts(undefined, {
+    onNewOpen: (opened) => opened.forEach((alert) => {
+      showToast({
+        key: `crew-alert-${alert.alert_id}`,
+        tone: 'danger',
+        sticky: true,
+        title: `Emergency: ${alert.type_label}`,
+        body: `${alertBusText(alert)} · Trip #${alert.trip_id}`,
+        actionLabel: 'Open',
+        onAction: () => setOpenAlertId(alert.alert_id),
+      })
+    }),
+  })
   const textMessages = useTextMessages(OperatorService, profile) // Batch 67
 
   if (loading) {
@@ -888,13 +920,13 @@ export default function OperatorDashboard() {
       profileRoleLabel="Operator"
       profileInitialFallback="O"
       onLogout={handleLogout}
-      profileAction={<NotificationBell />}
+      profileAction={<NotificationBell crewAlerts={crewAlerts} onOpenAlert={setOpenAlertId} />}
       mainClassName="bg-slate-50"
     >
         {/* w-0 min-w-full: a wide table inside a page must scroll in its card, not widen the whole portal column. */}
         <div className="w-0 min-w-full">
-        {/* Batch 58: crew alerts on every Operator page. */}
-        <OperatorAlerts alerts={crewAlerts} onTrackBus={(request) => { setTrackRequest(request); setActiveTab('fleets') }} />
+        {/* Batch 58 / 2026-11-24 (user): a crew alert opens in its pop-up (from its toast or the notification panel). */}
+        <CrewAlertModal alertId={openAlertId} alerts={crewAlerts} onClose={() => setOpenAlertId(null)} onTrackBus={(request) => { setTrackRequest(request); setActiveTab('fleets') }} />
         {activeTab === 'dashboard'  && (
           <OperatorDashboardPage
             trips={trips}

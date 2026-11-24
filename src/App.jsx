@@ -1,6 +1,7 @@
 import { Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './api/hooks/contexts/AuthProvider';
+import Toaster from './components/ui/Toaster';
 import ErrorBoundary from './components/Layout/ErrorBoundary';
 import DownloadNotice from './components/ui/DownloadNotice';
 
@@ -110,6 +111,8 @@ function RouteFallback() {
 export default function App() {
   return (
     <BrowserRouter>
+      {/* 2026-11-24 (user): one place for every toast (utils/toastStore). */}
+      <Toaster />
       <ErrorBoundary>
         <Suspense fallback={<RouteFallback />}>
           <Routes>

@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../useAuth';
 import PassengerService from '../../PassengerService/PassengerService';
 import { initFcmAndGetToken } from '../../../services/fcmService';
+import { showToast } from '../../../utils/toastStore';
 import { openPrintWindow } from '../../../utils/qr';
 import { ticketExtraRows, ticketPrintHtml } from '../../../utils/ticketPrint';
 import { leaveAccountDeletionNotice } from '../../../utils/accountDeletionNotice';
@@ -357,7 +358,10 @@ export default function usePassengerDashboard({ preloadMapView }) {
     if (!isAuthenticated) return undefined;
     let cancelled = false;
     void (async () => {
-      const token = await initFcmAndGetToken();
+      // 2026-11-24 (user): a push that arrives while this page is open shows as a toast (the phone shows it otherwise).
+      const token = await initFcmAndGetToken((payload) => {
+        showToast({ title: payload?.notification?.title || payload?.data?.title || 'SmartTransit', body: payload?.notification?.body || payload?.data?.body || '' });
+      });
       if (!cancelled && token) {
         try {
           await PassengerService.registerFcmToken(token);

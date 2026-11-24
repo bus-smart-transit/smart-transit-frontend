@@ -25,6 +25,7 @@ export default function InfoTip({ text, label = 'More information', tone = 'ligh
   const wrapRef = useRef(null);
   const iconRef = useRef(null);
   const bubbleRef = useRef(null);
+  const touchedAt = useRef(0);
   const id = useId();
   const shown = open || hover;
 
@@ -107,7 +108,9 @@ export default function InfoTip({ text, label = 'More information', tone = 'ligh
     <span
       ref={wrapRef}
       className={`relative inline-flex align-middle ${className}`}
-      onMouseEnter={() => setHover(true)}
+      // A phone fakes a mouse-over on tap and keeps it; after a touch only the tap opens and closes the bubble.
+      onTouchStart={() => { touchedAt.current = Date.now(); }}
+      onMouseEnter={() => { if (Date.now() - touchedAt.current > 800) setHover(true); }}
       onMouseLeave={() => setHover(false)}
     >
       <button

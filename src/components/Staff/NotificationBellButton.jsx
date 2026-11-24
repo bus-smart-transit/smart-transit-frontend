@@ -1,4 +1,6 @@
+import { useEffect, useRef } from 'react';
 import { Bell } from 'lucide-react';
+import { showToast } from '../../utils/toastStore';
 import Modal from '../ui/Modal/Modal';
 import { useNotificationBell } from '../../api/hooks/Staff/useNotificationBell';
 import { resolveNotificationTarget } from '../../utils/notificationTarget';
@@ -33,13 +35,36 @@ export default function NotificationBellButton({ service, role, onOpenNotificati
     handleMarkRead,
     handleMarkGroupRead,
     handleMarkAllRead,
-  } = useNotificationBell(service, role);
+  } = useNotificationBell(service, role, {
+    // 2026-11-24 (user): a notification that arrives while the page is open shows as a toast; Open goes where the
+    // notification leads, or opens this list.
+    onNew: (arrived) => arrived.slice(-3).forEach((n) => {
+      showToast({
+        key: `notification-${n.notification_id}`,
+        title: n.title || 'New notification',
+        body: n.body || '',
+        actionLabel: 'Open',
+        onAction: () => {
+          const target = onOpenNotification ? resolveNotificationTarget(n, role) : null;
+          if (target) openNotificationRef.current(n, target);
+          else setOpenRef.current(true);
+        },
+      });
+    }),
+  });
 
   const openNotification = (n, target) => {
     if (!n.read_at) handleMarkRead(n.notification_id);
     setOpen(false);
     onOpenNotification?.(target);
   };
+  // The toast's Open runs later, so it reads the latest functions through refs.
+  const openNotificationRef = useRef(openNotification);
+  const setOpenRef = useRef(setOpen);
+  useEffect(() => {
+    openNotificationRef.current = openNotification;
+    setOpenRef.current = setOpen;
+  });
 
   return (
     <>

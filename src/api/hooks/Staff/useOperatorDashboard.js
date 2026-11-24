@@ -6,6 +6,7 @@ import { OPERATOR_ROLE, buildLocationSearch, defaultView, resolveOperatorLocatio
 import { isRangeSchedule, rangeKey, rangePayload } from '../../../utils/scheduleRange';
 import { planningMessage } from '../../../utils/legPlanning';
 import { useLiveChannels, useLiveEvent, useLiveRefresh } from '../useLive';
+import { newItemsSince } from '../../../utils/toastStore';
 
 // Architecture audit follow-up (CONF-03): OperatorDashboard.jsx's main
 // orchestrator component and its NotificationBell sub-component both called
@@ -214,16 +215,26 @@ export function useTripRequests(onDecided) {
  * trip declines (Driver/Chauffeur declining an assignment). Previously the
  * `NotificationBell()` component's own state/effects.
  */
-export function useNotificationBell() {  const [open, setOpen] = useState(false);
+// 2026-11-24 (user): onNew gets the unread notifications that arrived since the last read (not on the first read, the
+// page loading); the bell shows them as toasts.
+export function useNotificationBell({ onNew } = {}) {
+  const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loadingNotifications, setLoadingNotifications] = useState(false);
+  const onNewRef = useRef(onNew);
+  useEffect(() => { onNewRef.current = onNew; }, [onNew]);
+  const seenIds = useRef(null);
 
   const loadNotifications = useCallback(async () => {
     setLoadingNotifications(true);
     try {
       const res = await OperatorService.getNotifications();
-      setNotifications(Array.isArray(res?.data?.notifications) ? res.data.notifications : []);
+      const list = Array.isArray(res?.data?.notifications) ? res.data.notifications : [];
+      const arrived = newItemsSince(seenIds.current, list.filter((n) => !n.read_at), (n) => n.id);
+      seenIds.current = new Set(list.map((n) => n.id));
+      if (arrived.length > 0) onNewRef.current?.(arrived);
+      setNotifications(list);
       setUnreadCount(Number(res?.data?.unread_count ?? 0));
     } catch {
       // Keep last-known state on transient poll errors.

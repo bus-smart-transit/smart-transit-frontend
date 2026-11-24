@@ -88,9 +88,12 @@ test('the Driver alerts the operator and the Operator sees it live; handling it 
   await expect(card.getByTestId('crew-alert-status')).toContainText('Alert sent. Your operator has been told.');
   await driver.screenshot({ path: path.join(SHOTS, '1-driver-sent.png'), fullPage: true });
 
-  // The Operator's banner shows it within 5 s.
+  // 2026-11-24 (user): the Operator gets a red toast within 5 s; Open shows the alert's pop-up with its actions.
+  const toast = operator.getByTestId('toast').filter({ hasText: 'Emergency: Breakdown' });
+  await expect(toast).toBeVisible({ timeout: 5000 });
+  await toast.getByRole('button', { name: 'Open' }).click();
   const banner = operator.getByTestId('operator-alert').filter({ hasText: 'Live check: flat tyre' });
-  await expect(banner).toBeVisible({ timeout: 5000 });
+  await expect(banner).toBeVisible();
   test.info().annotations.push({ type: 'operator saw it after', description: `${Date.now() - sentAt} ms` });
   await expect(banner).toContainText('Breakdown');
   await operator.screenshot({ path: path.join(SHOTS, '2-operator-banner.png'), fullPage: false });

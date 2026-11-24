@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useLiveChannels, useLiveEvent } from '../useLive';
+import { newItemsSince } from '../../../utils/toastStore';
 
 /**
  * S1 (Batch 17): shared in-app notification-bell hook for Driver/Conductor
@@ -15,8 +16,14 @@ import { useLiveChannels, useLiveEvent } from '../useLive';
  *   markAllNotificationsRead, all parameterized by role — see
  *   StaffBaseService.js).
  * @param {'driver'|'conductor'} role
+ * @param {{ onNew?: (notifications: object[]) => void }} options 2026-11-24 (user): called with the unread
+ *   notifications that arrived since the last read (not on the first read, which is the page loading); the bell shows
+ *   them as toasts.
  */
-export function useNotificationBell(service, role) {
+export function useNotificationBell(service, role, { onNew } = {}) {
+  const onNewRef = useRef(onNew);
+  useEffect(() => { onNewRef.current = onNew; }, [onNew]);
+  const seenIds = useRef(null);
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -26,7 +33,11 @@ export function useNotificationBell(service, role) {
     setLoadingNotifications(true);
     try {
       const res = await service.getNotifications(role);
-      setNotifications(Array.isArray(res?.data?.notifications) ? res.data.notifications : []);
+      const list = Array.isArray(res?.data?.notifications) ? res.data.notifications : [];
+      const arrived = newItemsSince(seenIds.current, list.filter((n) => !n.read_at), (n) => n.notification_id);
+      seenIds.current = new Set(list.map((n) => n.notification_id));
+      if (arrived.length > 0) onNewRef.current?.(arrived);
+      setNotifications(list);
       setUnreadCount(Number(res?.data?.unread_count ?? 0));
     } catch {
       // Keep last-known state on transient poll errors.

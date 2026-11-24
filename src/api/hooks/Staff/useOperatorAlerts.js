@@ -11,7 +11,10 @@ const POLL_MS = 30000
  * a minute while live updates arrive), and again the moment a live "alert" update comes in. Every Operator of the
  * company sees the same list (the server scopes it).
  */
-export default function useOperatorAlerts(service = OperatorService) {
+// 2026-11-24 (user): onNewOpen gets the alerts that opened since the last read (the page shows a red toast for each).
+export default function useOperatorAlerts(service = OperatorService, { onNewOpen } = {}) {
+  const onNewOpenRef = useRef(onNewOpen)
+  useEffect(() => { onNewOpenRef.current = onNewOpen }, [onNewOpen])
   const [alerts, setAlerts] = useState([])
   const [busyId, setBusyId] = useState(null)
   const [message, setMessage] = useState('')
@@ -26,7 +29,9 @@ export default function useOperatorAlerts(service = OperatorService) {
     try {
       const res = await service.getAlerts()
       const list = Array.isArray(res?.data) ? res.data : []
-      if (newlyOpenedAlertIds(seenOpenIds.current, list).length > 0 && soundOnRef.current) playAlertSound()
+      const newIds = newlyOpenedAlertIds(seenOpenIds.current, list)
+      if (newIds.length > 0 && soundOnRef.current) playAlertSound()
+      if (newIds.length > 0) onNewOpenRef.current?.(list.filter((alert) => newIds.includes(alert.alert_id)))
       seenOpenIds.current = new Set(list.filter((alert) => alert.status === 'open').map((alert) => alert.alert_id))
       setAlerts(list)
     } catch {
@@ -65,6 +70,7 @@ export default function useOperatorAlerts(service = OperatorService) {
   }
 
   return {
+    all: alerts,
     open: alerts.filter((alert) => alert.status === 'open'),
     recent: alerts.filter((alert) => alert.status !== 'open'),
     busyId,
