@@ -1,10 +1,5 @@
-import { useState } from 'react';
-import { Download, Eye, Loader2, Printer } from 'lucide-react';
+import { Eye, Loader2 } from 'lucide-react';
 import { useReportsTab } from '../../api/hooks/Staff/useOperatorDashboard';
-import { openPrintReport } from '../../utils/printReport';
-import { reportFileName, reportToCsv } from '../../utils/reportCsv';
-import { DEFAULT_FILE_TYPE, downloadReport } from '../../utils/tableExport';
-import FileTypeSelect from '../ui/FileTypeSelect';
 import { clock12 } from '../../utils/clock';
 
 const REPORTS = [
@@ -38,61 +33,19 @@ function EmptyReport({ children }) {
 }
 
 // 2026-11-21 (user): a trip is measured from GPS, or from the stops marked as reached (by the Driver, or for the demo by
-// the GPS simulator: labelled Simulated). A trip with neither is a completion proxy.
+// the GPS simulator: labelled Simulated). 2026-11-24 (user): a trip with neither reads "Not measured" (the technical
+// "completion proxy" wording and its count are gone).
 const MEASURED = ['gps', 'acknowledged'];
 const isMeasured = (trip) => MEASURED.includes(trip?.data_source);
-const basisText = (trip) => (trip?.data_source === 'gps' ? 'GPS' : trip?.data_source === 'acknowledged' ? 'Stops marked' : 'Completion proxy');
+const basisText = (trip) => (trip?.data_source === 'gps' ? 'GPS' : trip?.data_source === 'acknowledged' ? 'Stops marked' : 'Not measured');
 
 function adherenceRows(report) {
   return (Array.isArray(report?.trips) ? report.trips : []).filter(isMeasured);
 }
 
-function exportRowsFor(reportType, report) {
-  if (reportType === 'adherence') {
-    return (Array.isArray(report?.trips) ? report.trips : []).map((trip) => ({
-      trip_id: trip.trip_id,
-      trip_date: String(trip.trip_date || '').slice(0, 10),
-      status: trip.status,
-      data_source: basisText(trip),
-      simulated: trip.simulated ? 'Yes' : 'No',
-      gps_points: trip.gps_points ?? 0,
-      stops_scheduled: isMeasured(trip) ? trip.stops_scheduled : null,
-      stops_visited: isMeasured(trip) ? trip.stops_visited : null,
-      stops_marked: isMeasured(trip) ? (trip.stops_acknowledged ?? 0) : null,
-      stop_coverage_pct: isMeasured(trip) ? trip.stop_coverage_pct : null,
-    }));
-  }
-
-  if (reportType === 'occupancy') {
-    return Object.entries(report?.peak_hours || {})
-      .sort(([left], [right]) => Number(left) - Number(right))
-      .map(([hour, average]) => ({
-        departure_hour: clock12(`${String(hour).padStart(2, '0')}:00`),
-        average_occupancy: Number(average),
-        capacity: Number(report?.capacity || 0),
-        average_utilization_pct: Number(report?.capacity) > 0 ? (Number(average) / Number(report.capacity)) * 100 : null,
-      }));
-  }
-
-  if (reportType === 'daily' && report?.summary) {
-    return [{
-      date: report.date,
-      total_trips: report.summary.total_trips,
-      completed_trips: report.summary.completed_trips,
-      active_trips: report.summary.active_trips,
-      total_tickets: report.summary.total_tickets,
-      average_occupancy: report.summary.average_occupancy,
-      gross_paid_revenue_php: report.summary.total_revenue,
-    }];
-  }
-
-  return [];
-}
-
 function RouteAdherenceReport({ report }) {
   const trips = Array.isArray(report?.trips) ? report.trips : [];
   const gpsTrips = adherenceRows(report);
-  const proxyTrips = trips.filter((trip) => trip.data_source === 'proxy');
   const measured = gpsTrips.filter((trip) => Number.isFinite(Number(trip.stop_coverage_pct)));
   const averageCoverage = measured.length
     ? measured.reduce((total, trip) => total + Number(trip.stop_coverage_pct), 0) / measured.length
@@ -103,11 +56,10 @@ function RouteAdherenceReport({ report }) {
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-3">
         <Metric label="Measured trips" value={numberText(measured.length)} detail={simulatedCount ? `${numberText(simulatedCount)} simulated` : undefined} />
         <Metric label="Stop coverage" value={percentText(averageCoverage)} detail="Average across measured trips" />
         <Metric label="Trips below 80%" value={numberText(deviated)} detail={`Adherence ${percentText(adherenceRate)}`} />
-        <Metric label="Completion proxies" value={numberText(proxyTrips.length)} detail="Shown separately; excluded from the rate" />
       </div>
       <p className="text-xs text-slate-500">A scheduled stop is counted as visited when recorded GPS is within 300 m, or when the Driver marked it as reached. Stops marked from the GPS simulator are labelled Simulated. This measures stop coverage, not ordered route-path adherence.</p>
       {trips.length === 0 ? <EmptyReport>No trips in this fleet and period.</EmptyReport> : (
@@ -115,7 +67,7 @@ function RouteAdherenceReport({ report }) {
           <table className="w-full text-sm" data-testid="adherence-table">
             <caption className="sr-only">Trip stop coverage</caption>
             <thead className="bg-slate-50 text-left text-xs font-semibold uppercase text-slate-500">
-              <tr>{['Trip', 'Date', 'Status', 'Stop coverage', 'Stops visited', 'Stops marked', 'GPS points', 'Data basis'].map((label) => <th key={label} className="px-3 py-2">{label}</th>)}</tr>
+              <tr>{['Trip', 'Date', 'Status', 'Stop coverage', 'Stops visited', 'Stops marked', 'Data basis'].map((label) => <th key={label} className="px-3 py-2">{label}</th>)}</tr>
             </thead>
             <tbody>
               {trips.map((trip) => {
@@ -138,7 +90,6 @@ function RouteAdherenceReport({ report }) {
                     </td>
                     <td className="px-3 py-2 text-slate-600">{isGps ? `${trip.stops_visited ?? 0} / ${trip.stops_scheduled ?? 0}` : '-'}</td>
                     <td className="px-3 py-2 text-slate-600">{isGps ? numberText(trip.stops_acknowledged ?? 0) : '-'}</td>
-                    <td className="px-3 py-2 text-slate-600">{numberText(trip.gps_points ?? 0)}</td>
                     <td className="px-3 py-2">
                       <span className="flex flex-wrap gap-1">
                         <span className={`rounded-sm px-2 py-1 text-xs font-semibold ${isGps ? 'bg-teal-50 text-teal-800' : 'bg-slate-100 text-slate-600'}`}>{basisText(trip)}</span>
@@ -217,51 +168,14 @@ export default function OperatorReportsPage({ fleets = [] }) {
     ranRange,
     report,
     loading,
-    msg, setMsg,
+    msg,
     fetchReport,
   } = useReportsTab();
 
-  const reportRows = exportRowsFor(reportType, report);
-  const reportColumns = reportRows.length ? Object.keys(reportRows[0]) : [];
-  const fleetLabel = fleets.find((fleet) => String(fleet.fleet_id) === String(selectedFleet))?.plate_number || selectedFleet;
   const periodLabel = reportType === 'daily'
     ? (ranRange.from || 'Today')
     : (ranRange.from || ranRange.to ? `${ranRange.from || 'start of month'} to ${ranRange.to || 'today'}` : 'This month to date');
   const reportLabel = REPORTS.find((item) => item.key === reportType)?.label || 'Fleet report';
-
-  const formatExportValue = (value) => {
-    if (value == null || value === '') return '-';
-    return typeof value === 'number' ? numberText(value, 1) : String(value);
-  };
-
-  const handlePrint = () => {
-    if (!reportRows.length) return;
-    const opened = openPrintReport({
-      title: `${reportLabel} - ${fleetLabel}`,
-      meta: [['Fleet', fleetLabel], ['Report', reportLabel], ['Period', periodLabel]],
-      columns: reportColumns,
-      rows: reportRows,
-      format: formatExportValue,
-    });
-    if (!opened) setMsg('Unable to open print preview. Please allow pop-ups for this site.');
-  };
-
-  // 2026-11-08 (advisor, user): the report downloads as the chosen file type, PDF or CSV, with the same cells.
-  const [fileType, setFileType] = useState(DEFAULT_FILE_TYPE);
-  const handleDownload = async () => {
-    if (!reportRows.length) return;
-    try {
-      await downloadReport({
-        format: fileType,
-        csvText: reportToCsv(reportColumns, reportRows, formatExportValue),
-        fileName: reportFileName({ type: reportType, fleet: fleetLabel, from: ranRange.from, to: ranRange.to }),
-        title: `${reportLabel} - ${fleetLabel}`,
-        subtitle: `${reportType === 'daily' ? 'Date' : 'Period'}: ${periodLabel}`,
-      });
-    } catch {
-      setMsg('The file could not be made. Please try again.');
-    }
-  };
 
   return (
     <div className="space-y-5">
@@ -277,7 +191,8 @@ export default function OperatorReportsPage({ fleets = [] }) {
         ))}
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(12rem,1fr)_minmax(12rem,1fr)_auto_auto_auto] xl:items-end">
+      {/* 2026-11-24 (user): the report is read on screen; Print and Download are gone. */}
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(12rem,1fr)_minmax(10rem,1fr)_minmax(10rem,1fr)_auto] xl:items-end">
         <label className="block text-xs font-medium text-slate-600">Fleet
           <select value={selectedFleet} onChange={(event) => setSelectedFleet(event.target.value)} className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500">
             <option value="">Select fleet</option>
@@ -302,15 +217,6 @@ export default function OperatorReportsPage({ fleets = [] }) {
           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eye className="h-4 w-4" />}
           Run report
         </button>
-        <button type="button" onClick={handlePrint} disabled={!reportRows.length} className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
-          <Printer className="h-4 w-4" /> Print
-        </button>
-        <div className="flex items-center gap-2">
-          <FileTypeSelect id="report-file-type" value={fileType} onChange={setFileType} />
-          <button type="button" onClick={handleDownload} disabled={!reportRows.length} className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
-            <Download className="h-4 w-4" /> Download
-          </button>
-        </div>
       </div>
 
       {msg && <p role="alert" className="rounded-md border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">{msg}</p>}

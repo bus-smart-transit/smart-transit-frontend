@@ -6,10 +6,10 @@ import {
   CalendarDays,
   CheckCircle2,
   Gauge,
-  RefreshCw,
   User,
 } from 'lucide-react';
 import PairingScreen from './PairingScreen';
+import RefreshButton from '../ui/RefreshButton';
 import InfoTip from '../ui/InfoTip';
 import StaffPortalLayout from './StaffPortalLayout';
 import ProfilePage from '../Account/ProfilePage';
@@ -300,13 +300,7 @@ function DriverDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
             <span className={`crew-chip ${headerBadge.tone}`}>
               {headerBadge.label}
             </span>
-            <button
-              className="crew-chip-button"
-              onClick={loadData}
-            >
-              <RefreshCw className="h-3.5 w-3.5" />
-              Refresh
-            </button>
+            <RefreshButton variant="chip" onRefresh={loadData} />
             <NotificationBellButton service={DriverService} role="driver" onOpenNotification={openTripFromNotification} />
           </div>
           </div>

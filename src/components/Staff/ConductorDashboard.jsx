@@ -7,12 +7,12 @@ import {
   Download,
   Gauge,
   Play,
-  RefreshCw,
   Ticket,
   UserCheck,
 } from 'lucide-react';
 import DropOffGroups from './DropOffGroups';
 import PairingScreen from './PairingScreen';
+import RefreshButton from '../ui/RefreshButton';
 import InfoTip from '../ui/InfoTip';
 import StaffPortalLayout from './StaffPortalLayout';
 import ProfilePage from '../Account/ProfilePage';
@@ -204,9 +204,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     onsiteForm, setOnsiteForm,
     cashForm,
     midTripAvailable,
-    boardingPoint,
     boardingView,
-    refreshBoardingPoint,
     checkIns,
     checkInBusy,
     checkInNotice,
@@ -423,13 +421,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
             <span className={`crew-chip ${headerBadge.tone}`}>
               {headerBadge.label}
             </span>
-            <button
-              className="crew-chip-button"
-              onClick={loadData}
-            >
-              <RefreshCw className="h-3.5 w-3.5" />
-              Refresh
-            </button>
+            <RefreshButton variant="chip" onRefresh={loadData} />
             <NotificationBellButton service={ConductorService} role="conductor" onOpenNotification={openTripFromNotification} />
             {actionMsg && <span className="basis-full rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">{actionMsg}</span>}
           </div>
@@ -763,10 +755,11 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                       <div>
                         <p className="mb-1 flex items-center gap-1 text-sm font-semibold text-slate-700">
                           Where does the passenger board?
-                          <InfoTip label="About the boarding point" text="Checked in: a passenger you tapped in with Passenger In. At a stop: pick the stop they boarded at. Bus position now: the fare counts from the last stop the bus has passed." />
+                          <InfoTip label="About the boarding point" text="Checked in: a passenger you tapped in with Passenger In; the fare counts from the stop kept at check-in. At a stop: pick the stop they boarded at." />
                         </p>
-                        <div role="group" aria-label="Boarding point" data-testid="boarding-mode" className="grid grid-cols-3 gap-2">
-                          {[['checkin', 'Checked in'], ['stop', 'At a stop'], ['gps', 'Bus position now']].map(([mode, label]) => (
+                        {/* 2026-11-24 (user): "Bus position now" is gone; Passenger In keeps where someone boarded. */}
+                        <div role="group" aria-label="Boarding point" data-testid="boarding-mode" className="grid grid-cols-2 gap-2">
+                          {[['checkin', 'Checked in'], ['stop', 'At a stop']].map(([mode, label]) => (
                             <button
                               key={mode}
                               type="button"
@@ -778,36 +771,6 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                             </button>
                           ))}
                         </div>
-                      </div>
-                    )}
-
-                    {byBusPosition && (
-                      <div data-testid="boarding-point-status" role="status" className={`rounded-lg border px-3 py-2 text-sm ${boardingView.good ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-amber-200 bg-amber-50 text-amber-800'}`}>
-                        {boardingPoint.loading && !boardingPoint.response ? (
-                          <p>Reading the bus position...</p>
-                        ) : boardingView.good ? (
-                          <p>No check-in: the fare counts from the last stop the bus has passed now ({boardingView.distanceFromOriginKm} km along). Use Passenger In as people board so a late collection does not lower the fare.</p>
-                        ) : (
-                          <>
-                            <p className="font-semibold">The bus position can't be used right now.</p>
-                            <p className="mt-0.5 text-xs">{boardingPoint.error || boardingView.message} Pick the boarding stop instead; the fare is then counted from that stop.</p>
-                            <button
-                              type="button"
-                              className="mt-2 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100"
-                              onClick={() => setOnsiteForm((prev) => ({ ...prev, boarding_mode: 'stop', destination_stop_id: '' }))}
-                            >
-                              Pick the boarding stop
-                            </button>
-                          </>
-                        )}
-                        <button
-                          type="button"
-                          className="mt-2 block text-xs font-semibold underline"
-                          onClick={refreshBoardingPoint}
-                          disabled={boardingPoint.loading}
-                        >
-                          Refresh position
-                        </button>
                       </div>
                     )}
 
@@ -970,9 +933,6 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                       {onsiteQuote.status === 'ready' && onsiteDiscountTypeKey && !onsiteDiscountIdChecked && (
                         <p className="mt-1 text-xs text-amber-700">Tick the ID check to see the discounted fare.</p>
                       )}
-                      {byBusPosition && onsiteQuote.status === 'ready' && (
-                        <p className="mt-1 text-xs text-slate-500">Without a check-in the fare follows the bus. Use Refresh position just before you sell.</p>
-                      )}
                       {byCheckIn && onsiteQuote.status === 'ready' && (
                         <p className="mt-1 text-xs text-slate-500">Counted from {selectedCheckIn?.stop_name}, where this passenger was checked in.</p>
                       )}
@@ -991,13 +951,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                     {ticketingBlocked && <p data-testid="ticketing-reason" className="text-xs text-amber-700">{ticketingBlocked}</p>}
 
                     <div className="grid grid-cols-2 gap-2">
-                      <button
-                        type="button"
-                        className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
-                        onClick={loadOccupancy}
-                      >
-                        Refresh Load
-                      </button>
+                      <RefreshButton size="sm" label="Refresh Load" onRefresh={loadOccupancy} />
                       <button
                         type="button"
                         className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
@@ -1199,7 +1153,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
             <div className="staff-card staff-card-flush overflow-hidden">
               <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
                 <p className="text-sm font-bold text-slate-900">Trip Breakdown</p>
-                <button className="text-xs text-teal-600 hover:text-teal-700" onClick={loadEarnings}>Refresh</button>
+                <RefreshButton size="sm" onRefresh={loadEarnings} />
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full min-w-96 text-left text-sm">

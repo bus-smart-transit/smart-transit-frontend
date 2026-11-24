@@ -174,6 +174,26 @@
     background: rgb(248 250 252);
   }
 
+  /* 2026-11-24 (user): the shared RefreshButton as a crew header chip shows its state. */
+  .crew-chip-button[data-state="busy"] {
+    border-color: rgb(94 234 212);
+    background: rgb(240 253 250);
+    color: rgb(17 94 89);
+    cursor: wait;
+  }
+
+  .crew-chip-button[data-state="done"] {
+    border-color: rgb(110 231 183);
+    background: rgb(236 253 245);
+    color: rgb(4 120 87);
+  }
+
+  .crew-chip-button[data-state="failed"] {
+    border-color: rgb(253 164 175);
+    background: rgb(255 241 242);
+    color: rgb(190 18 60);
+  }
+
   .crew-load-strip {
     border-radius: 0.9rem;
     border: 1px solid rgb(226 232 240);

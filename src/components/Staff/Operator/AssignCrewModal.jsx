@@ -51,7 +51,7 @@ export default function AssignCrewModal({ trip, drivers, conductors, loadingDriv
         {needChauffeur && (
           <div>
             <label htmlFor="assign-crew-chauffeur" className="mb-1 block text-sm font-medium text-slate-700">Chauffeur</label>
-            <select id="assign-crew-chauffeur" value={conductorId} onChange={(event) => setConductorId(event.target.value)} required className={selectClass}>
+            <select id="assign-crew-chauffeur" value={conductorId} onChange={(event) => setConductorId(event.target.value)} required disabled={loadingDrivers || Boolean(driversError)} className={selectClass}>
               <option value="">Choose a Chauffeur...</option>
               {sortForPicker(conductors).map((person) => (
                 <option key={idOf(person)} value={idOf(person)} disabled={!isPickable(person)}>{crewOptionLabel(person)}</option>

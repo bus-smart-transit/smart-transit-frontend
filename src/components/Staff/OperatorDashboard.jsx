@@ -40,13 +40,14 @@ import useTextMessages from '../../api/hooks/useTextMessages'
 import { OPERATOR_ROLE, navForRole, viewsForRole } from '../../utils/operatorNav'
 import {
   LayoutDashboard, Bus, MapPin, PieChart, Users, Settings, Wallet, CalendarDays,
-  Eye, RefreshCw,
+  Eye,
   X, Loader2, AlertTriangle, Bell,
 } from 'lucide-react'
 import { SkeletonList, SkeletonPage } from '../ui/Skeleton'
 import { clock12 } from '../../utils/clock';
 import useBusAvailability from '../../api/hooks/Staff/useBusAvailability'
 import { availabilityTime, busOptionLabel, sortBusesForPicker } from '../../utils/busPicker'
+import RefreshButton from '../ui/RefreshButton';
 const fmt = (v) => {
   if (v == null) return '-'
   const n = Number(v)
@@ -216,7 +217,7 @@ function ScheduleServiceModal({ state, drivers, conductors }) {
   const rangeMode = isRangeSchedule(form)
   const rangeDays = rangeDayCount(form.trip_date, form.to_date)
   const [bookingWindow, setBookingWindow] = useState(null)
-  const { drivers: dateDrivers, loading: loadingDateDrivers, error: dateDriversError } = useDateDrivers(showModal && form.trip_date ? form.trip_date : '', drivers)
+  const { drivers: dateDrivers, conductors: dateConductors, loading: loadingDateDrivers, error: dateDriversError } = useDateDrivers(showModal && form.trip_date ? form.trip_date : '', drivers, conductors)
   useEffect(() => {
     if (!showModal) return undefined
     let cancelled = false
@@ -242,6 +243,11 @@ function ScheduleServiceModal({ state, drivers, conductors }) {
       setForm((previous) => ({ ...previous, driver_id: '' }))
     }
   }, [dateDrivers, form.driver_id, setForm])
+  useEffect(() => {
+    if (form.conductor_id && !dateConductors.some((person) => String(getStaffCompanyUserId(person)) === String(form.conductor_id) && !person.busy_reason)) {
+      setForm((previous) => ({ ...previous, conductor_id: '' }))
+    }
+  }, [dateConductors, form.conductor_id, setForm])
 
   const defaultLegTimesByBlock = {
     morning: ['06:00', '08:30', '11:00', '13:30'],
@@ -399,9 +405,9 @@ function ScheduleServiceModal({ state, drivers, conductors }) {
             {loadingDateDrivers && <p role="status" className="text-xs text-slate-500">Checking driver availability...</p>}
             {dateDriversError && <p role="alert" className="text-xs text-rose-700">{dateDriversError}</p>}
             <Field label="Chauffeur">
-              <select aria-label="Chauffeur" value={form.conductor_id} onChange={e => setForm(p => ({ ...p, conductor_id: e.target.value }))} className={fieldClass}>
+              <select aria-label="Chauffeur" value={form.conductor_id} onChange={e => setForm(p => ({ ...p, conductor_id: e.target.value }))} disabled={loadingDateDrivers || Boolean(dateDriversError)} className={`${fieldClass} disabled:opacity-60`}>
                 <option value="">Assign later</option>
-                {sortForPicker(conductors).map(c => (
+                {sortForPicker(dateConductors).map(c => (
                   <option key={getStaffCompanyUserId(c)} value={getStaffCompanyUserId(c)} disabled={!isPickable(c)}>
                     {crewOptionLabel(c)}
                   </option>
@@ -453,16 +459,18 @@ function TripsTab({ drivers, conductors, onRefresh, tripsState, focusTripId = nu
   } = tripsState
   const [cancelTarget, setCancelTarget] = useState(null)
   const [cancelNotice, setCancelNotice] = useState('')
-  const { drivers: dateDrivers, loading: loadingDateDrivers, error: dateDriversError } = useDateDrivers(
-    ['driver', 'crew'].includes(assignModal?.type) ? String(assignModal.trip?.trip_date || '').slice(0, 10) : '',
+  const { drivers: dateDrivers, conductors: dateConductors, loading: loadingDateDrivers, error: dateDriversError } = useDateDrivers(
+    ['driver', 'conductor', 'crew'].includes(assignModal?.type) ? String(assignModal.trip?.trip_date || '').slice(0, 10) : '',
     drivers,
+    conductors,
   )
 
   useEffect(() => {
-    if (assignModal?.type === 'driver' && assignId && !dateDrivers.some((driver) => String(getStaffCompanyUserId(driver)) === String(assignId) && !driver.busy_reason)) {
+    const list = assignModal?.type === 'driver' ? dateDrivers : assignModal?.type === 'conductor' ? dateConductors : null
+    if (list && assignId && !list.some((person) => String(getStaffCompanyUserId(person)) === String(assignId) && !person.busy_reason)) {
       setAssignId('')
     }
-  }, [assignId, assignModal?.type, dateDrivers, setAssignId])
+  }, [assignId, assignModal?.type, dateDrivers, dateConductors, setAssignId])
 
   const driverMap = new Map(drivers.map(d => [Number(getStaffCompanyUserId(d)), d]))
   const conductorMap = new Map(conductors.map(c => [Number(getStaffCompanyUserId(c)), c]))
@@ -522,9 +530,7 @@ function TripsTab({ drivers, conductors, onRefresh, tripsState, focusTripId = nu
             <option value="scheduled">Scheduled / Active</option>
             <option value="completed">Completed</option>
           </select>
-          <button type="button" onClick={onRefresh} className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50">
-            <RefreshCw className="h-4 w-4" /> Refresh
-          </button>
+          <RefreshButton onRefresh={onRefresh} />
         </div>
       </div>
       {[
@@ -634,7 +640,7 @@ function TripsTab({ drivers, conductors, onRefresh, tripsState, focusTripId = nu
         <AssignCrewModal
           trip={assignModal.trip}
           drivers={dateDrivers}
-          conductors={conductors}
+          conductors={dateConductors}
           loadingDrivers={loadingDateDrivers}
           driversError={dateDriversError}
           saving={saving}
@@ -648,19 +654,19 @@ function TripsTab({ drivers, conductors, onRefresh, tripsState, focusTripId = nu
         <Modal title={`Assign ${assignModal.type === 'conductor' ? 'Chauffeur' : 'Driver'} to Trip #${assignModal.trip.trip_id}`} onClose={() => setAssignModal(null)}>
           <form className="space-y-4" onSubmit={handleAssign}>
             <Field label={`Select ${assignModal.type === 'conductor' ? 'Chauffeur' : 'Driver'}`} required>
-              <select value={assignId} onChange={e => setAssignId(e.target.value)} required disabled={assignModal.type === 'driver' && (loadingDateDrivers || Boolean(dateDriversError))} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500 disabled:opacity-60">
+              <select value={assignId} onChange={e => setAssignId(e.target.value)} required disabled={loadingDateDrivers || Boolean(dateDriversError)} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500 disabled:opacity-60">
                 <option value="">Choose...</option>
-                {sortForPicker(assignModal.type === 'driver' ? dateDrivers : conductors).map(p => (
+                {sortForPicker(assignModal.type === 'driver' ? dateDrivers : dateConductors).map(p => (
                   <option key={getStaffCompanyUserId(p)} value={getStaffCompanyUserId(p)} disabled={!isPickable(p)}>{crewOptionLabel(p)}</option>
                 ))}
               </select>
             </Field>
-            {assignModal.type === 'driver' && loadingDateDrivers && <p role="status" className="text-xs text-slate-500">Checking driver availability...</p>}
-            {assignModal.type === 'driver' && dateDriversError && <p role="alert" className="text-xs text-rose-700">{dateDriversError}</p>}
+            {loadingDateDrivers && <p role="status" className="text-xs text-slate-500">Checking crew availability...</p>}
+            {dateDriversError && <p role="alert" className="text-xs text-rose-700">{dateDriversError}</p>}
             {msg && <p className="text-sm text-red-600">{msg}</p>}
             <div className="flex justify-end gap-2 pt-2">
               <button type="button" onClick={() => setAssignModal(null)} className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50">Cancel</button>
-              <button type="submit" disabled={saving || (assignModal.type === 'driver' && (loadingDateDrivers || Boolean(dateDriversError)))} className="flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-60">
+              <button type="submit" disabled={saving || loadingDateDrivers || Boolean(dateDriversError)} className="flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-60">
                 {saving && <Loader2 className="h-4 w-4 animate-spin" />}Assign
               </button>
             </div>

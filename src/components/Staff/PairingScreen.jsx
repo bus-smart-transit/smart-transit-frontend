@@ -4,7 +4,6 @@ import {
   CheckCircle2,
   Loader,
   QrCode,
-  RefreshCw,
   Shield,
   XCircle,
 } from 'lucide-react';
@@ -13,6 +12,7 @@ import StaffService from '../../api/StaffService/StaffBaseService';
 import { useNow } from '../../api/hooks/useNow';
 import { opensGate } from '../../utils/tripActionTiming';
 import QrImage from '../Passenger/Ticket/QrImage';
+import RefreshButton from '../ui/RefreshButton';
 
 const isLikelyPin = (value) => /^\d{6}$/.test(String(value || '').trim());
 
@@ -295,14 +295,7 @@ export default function PairingScreen({ role, onPaired, onLogout, paired = false
                 <p className="text-xs text-amber-600">PIN is not available yet. Tap refresh and try again.</p>
               )}
 
-              <button
-                type="button"
-                onClick={() => void loadMyToken()}
-                className="inline-flex items-center gap-1.5 text-xs text-slate-500 transition hover:text-slate-700"
-              >
-                <RefreshCw className="h-3 w-3" />
-                Refresh QR/PIN
-              </button>
+              <RefreshButton size="sm" label="Refresh QR/PIN" onRefresh={loadMyToken} />
             </div>
           ) : null}
         </article>

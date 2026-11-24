@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { nextStopToReach } from '../../../utils/simulatorStops';
-import { CornerUpRight, MapPinCheck, Pause, Play, RefreshCw, Route as RouteIcon, Square } from 'lucide-react';
+import { CornerUpRight, MapPinCheck, Pause, Play, Route as RouteIcon, Square } from 'lucide-react';
 import { OpPageHeader, OpCard, OpChip, OpEmpty } from '../Operator/OperatorUI';
 import { OP_SPACE } from '../Operator/operatorUiTokens';
 import Modal from '../../ui/Modal';
@@ -9,6 +9,7 @@ import { busLabelText } from '../../../utils/busLabel';
 
 import { SkeletonList } from '../../ui/Skeleton';
 import { clock12 } from '../../../utils/clock';
+import RefreshButton from '../../ui/RefreshButton';
 const STATUS = {
   running: { tone: 'success', label: 'Running' },
   paused: { tone: 'warning', label: 'Paused' },
@@ -109,7 +110,7 @@ export default function GpsSimulatorPage({ simulatorTab }) {
       <OpPageHeader
         title="GPS simulator"
         subtitle="Move a departed bus along its route to show how tracking works."
-        action={<button type="button" onClick={reload} className={BUTTON}><RefreshCw className="h-4 w-4" aria-hidden="true" /> Refresh</button>}
+        action={<RefreshButton onRefresh={reload} />}
       />
       {error && <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>}
       {loading && !data && <SkeletonList label="Loading..." rows={3} />}

@@ -1,9 +1,9 @@
-import { RefreshCw } from 'lucide-react';
 import { OpPageHeader, OpCard, OpChip } from '../Operator/OperatorUI';
 import { OP_SPACE } from '../Operator/operatorUiTokens';
 import { formatManilaDateTime } from '../../../utils/dates';
 
 import { SkeletonStats } from '../../ui/Skeleton';
+import RefreshButton from '../../ui/RefreshButton';
 const STATUS = {
   ok: { tone: 'success', label: 'Working' },
   problem: { tone: 'danger', label: 'Problem' },
@@ -42,7 +42,7 @@ export default function SystemHealthPage({ healthTab }) {
       <OpPageHeader
         title="System health"
         subtitle="Is everything running? Read only."
-        action={<button type="button" onClick={reload} className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-slate-200 px-3 text-sm text-slate-600 hover:bg-slate-50"><RefreshCw className="h-4 w-4" aria-hidden="true" /> Refresh</button>}
+        action={<RefreshButton onRefresh={reload} />}
       />
       {error && <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>}
       {loading && !health && <SkeletonStats label="Loading..." />}

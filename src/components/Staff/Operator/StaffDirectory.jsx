@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Loader2, Pencil, Plus, Power, RefreshCw } from 'lucide-react';
+import { Loader2, Pencil, Plus, Power } from 'lucide-react';
 import { OpCard, OpChip, OpEmpty, OpTable } from './OperatorUI';
 import StaffRoster from './StaffRoster';
 import StaffFormModal from './StaffFormModal';
@@ -13,6 +13,7 @@ import { formatPhone } from '../../../utils/phone';
 import { parseAppDate } from '../../../utils/dates';
 
 import { SkeletonTable } from '../../ui/Skeleton';
+import RefreshButton from '../../ui/RefreshButton';
 const joined = (value) => {
   const date = value ? parseAppDate(value) : null;
   return date && !Number.isNaN(date.getTime())
@@ -166,9 +167,7 @@ export default function StaffDirectory({ fleetCount, onChanged }) {
         subtitle={`${directory.company?.company_name ? `Drivers, Chauffeurs and Operators of ${directory.company.company_name}. Only your company's Operators can see them.` : 'Your company\'s Drivers, Chauffeurs and Operators.'} Drivers and Chauffeurs set Available or Not Available on their profile.`}
         badge={(
           <span className="flex flex-wrap gap-2">
-            <button type="button" onClick={directory.reload} className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-slate-200 px-3 text-sm text-slate-600 hover:bg-slate-50">
-              <RefreshCw className="h-4 w-4" aria-hidden="true" /> Refresh
-            </button>
+            <RefreshButton onRefresh={directory.reload} />
             {canManage && (
               <button type="button" onClick={() => { setNotice(''); setForm({ mode: 'add' }); }} className="inline-flex min-h-11 items-center gap-1.5 rounded-lg bg-teal-600 px-3 text-sm font-semibold text-white hover:bg-teal-700">
                 <Plus className="h-4 w-4" aria-hidden="true" /> Add Staff

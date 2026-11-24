@@ -95,7 +95,7 @@ export default function LandingHero() {
         <div className="container-page">
           <div className="rounded-2xl bg-white p-5 shadow-card sm:p-6">
             <h2 className="font-display text-lg font-semibold text-navy-950">Search Trips</h2>
-            <p className="mt-0.5 text-sm text-slate-500">Choose where you board, where you get off and the day. Sign in to complete a booking.</p>
+            <p className="mt-0.5 text-sm text-slate-500">Choose where you board, where you get off and the day.</p>
 
             <form onSubmit={handleSubmit} className="mt-4 space-y-3">
               {stops.error && <p className="text-sm text-red-600">{stops.error}</p>}

@@ -25,7 +25,7 @@ export default function ShiftBlocksView({ reloadToken = 0, drivers = [], conduct
   // 2026-11-23 (advisor): a schedule made without its crew gets it here, for every trip of the block at once.
   const [crewBlock, setCrewBlock] = useState(null);
   const crewDate = crewBlock ? String(crewBlock.scheduled_date || '').slice(0, 10) : '';
-  const { drivers: dateDrivers, loading: loadingDrivers, error: driversError } = useDateDrivers(crewDate, drivers);
+  const { drivers: dateDrivers, conductors: dateConductors, loading: loadingDrivers, error: driversError } = useDateDrivers(crewDate, drivers, conductors);
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [view, setView] = useState('current');
   const today = getBusinessToday();
@@ -79,7 +79,7 @@ export default function ShiftBlocksView({ reloadToken = 0, drivers = [], conduct
           title={`Assign crew to the schedule on ${crewDate}`}
           description={`${crewBlock.route_name || crewBlock.legs?.[0]?.fleet_route?.route?.route_name || 'Route not provided'}, ${Array.isArray(crewBlock.legs) ? crewBlock.legs.length : 0} trips. The crew goes on every trip of this schedule, and each person is notified.`}
           drivers={dateDrivers}
-          conductors={conductors}
+          conductors={dateConductors}
           loadingDrivers={loadingDrivers}
           driversError={driversError}
           saving={crewSaving}

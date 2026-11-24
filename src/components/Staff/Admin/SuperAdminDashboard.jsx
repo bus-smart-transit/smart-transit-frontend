@@ -1,8 +1,8 @@
-import { RefreshCw } from 'lucide-react';
 import { OpPageHeader, OpCard, OpStat, OpChip } from '../Operator/OperatorUI';
 import { OP_SPACE } from '../Operator/operatorUiTokens';
 
 import { SkeletonStats } from '../../ui/Skeleton';
+import RefreshButton from '../../ui/RefreshButton';
 const COUNTS = [
   ['companies', 'Companies'],
   ['operators', 'Operators', 'accounts that are on'],
@@ -22,7 +22,7 @@ export default function SuperAdminDashboard({ overview, loading, error, onReload
       <OpPageHeader
         title="Dashboard"
         subtitle="Every company on SmartTransit, today"
-        action={<button type="button" onClick={onReload} className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-slate-200 px-3 text-sm text-slate-600 hover:bg-slate-50"><RefreshCw className="h-4 w-4" aria-hidden="true" /> Refresh</button>}
+        action={<RefreshButton onRefresh={onReload} />}
       />
 
       {error && <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>}

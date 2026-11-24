@@ -160,8 +160,8 @@ class OperatorService extends StaffBaseService {
     return await this.request('/operator/drivers', 'GET', params);
   }
 
-  async getOperatorConductors() {
-    return await this.request('/operator/conductors', 'GET');
+  async getOperatorConductors(params = {}) {
+    return await this.request('/operator/conductors', 'GET', params);
   }
 
   async createEmployeeAccount(accountData) {

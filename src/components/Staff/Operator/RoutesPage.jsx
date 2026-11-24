@@ -1,5 +1,6 @@
+import RefreshButton from '../../ui/RefreshButton';
 import { useMemo, useState } from 'react';
-import { Plus, RefreshCw, Search, Route as RouteIcon, Bus, Ban, MapPin } from 'lucide-react';
+import { Plus, Search, Route as RouteIcon, Bus, Ban, MapPin } from 'lucide-react';
 import { OpPageHeader, OpCard, OpChip, OpStat, OpTable, OpPager } from './OperatorUI';
 import { OP_SPACE } from './operatorUiTokens';
 import Modal from '../../ui/Modal';
@@ -225,7 +226,7 @@ export default function RoutesPage({ routes, stops, trips, fleets, onRefresh, on
 
       <OpCard
         title="Route list"
-        badge={<button type="button" onClick={onRefresh} className={SECONDARY}><RefreshCw className="h-3.5 w-3.5" aria-hidden="true" /> Refresh</button>}
+        badge={<RefreshButton size="sm" onRefresh={onRefresh} />}
       >
         <div className="mb-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_14rem]">
           <label className="relative block">

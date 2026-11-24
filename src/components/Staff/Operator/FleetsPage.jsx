@@ -1,6 +1,7 @@
+import RefreshButton from '../../ui/RefreshButton';
 import { passengerCountLine } from '../../../utils/passengerCount';
 import { useEffect, useMemo, useState } from 'react';
-import { RefreshCw, Bus, ChevronRight, MapPinned, Pencil, Plus, Clock, Pause } from 'lucide-react';
+import { Bus, ChevronRight, MapPinned, Pencil, Plus, Clock, Pause } from 'lucide-react';
 import { OpPageHeader, OpCard, OpChip, OpStat, OpEmpty } from './OperatorUI';
 import { OP_SPACE } from './operatorUiTokens';
 import Modal from '../../ui/Modal';
@@ -299,7 +300,7 @@ export default function FleetsPage({ fleets, routes, trips, onRefresh, companyNa
         subtitle="Status is worked out from today's trips and the bus's last GPS report."
         badge={(
           <div className={OP_SPACE.inline}>
-            <button type="button" onClick={() => { onRefresh(); void refreshFleetLocations(); }} className={SECONDARY}><RefreshCw className="h-3.5 w-3.5" aria-hidden="true" /> Refresh</button>
+            <RefreshButton size="sm" onRefresh={() => Promise.all([onRefresh?.(), refreshFleetLocations()])} />
           </div>
         )}
       >

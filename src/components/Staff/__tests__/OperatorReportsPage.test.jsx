@@ -20,7 +20,8 @@ describe('OperatorReportsPage', () => {
     mocks.getDailySummary.mockResolvedValue({ data: { date: '2026-10-18', summary: {} } });
   });
 
-  it('separates GPS-measured stop coverage from completion proxies', async () => {
+  // 2026-11-24 (user): an unmeasured trip reads "Not measured"; no completion proxies, GPS points, Print or Download.
+  it('counts only measured trips and shows an unmeasured one as Not measured', async () => {
     mocks.getRouteAdherence.mockResolvedValue({ data: {
       period: { start_date: '2026-10-01', end_date: '2026-10-18' },
       summary: { total_trips: 2, trips_with_gps_data: 1, trips_with_proxy_data: 1, avg_stop_coverage_pct: 60, deviated_trips: 1, adherence_rate_pct: 0 },
@@ -36,10 +37,13 @@ describe('OperatorReportsPage', () => {
 
     expect(await screen.findByRole('table', { name: 'Trip stop coverage' })).toBeInTheDocument();
     const gpsMetric = screen.getByText('Measured trips').parentElement;
-    const proxyMetric = screen.getByText('Completion proxies').parentElement;
     expect(within(gpsMetric).getByText('1')).toBeInTheDocument();
-    expect(within(proxyMetric).getByText('1')).toBeInTheDocument();
-    expect(screen.getByText('Not measured')).toBeInTheDocument();
+    expect(screen.getAllByText('Not measured').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Completion proxies')).not.toBeInTheDocument();
+    expect(screen.queryByText('Completion proxy')).not.toBeInTheDocument();
+    expect(screen.queryByRole('columnheader', { name: 'GPS points' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Print/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Download/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Historical Forecast' })).not.toBeInTheDocument();
   });
 
