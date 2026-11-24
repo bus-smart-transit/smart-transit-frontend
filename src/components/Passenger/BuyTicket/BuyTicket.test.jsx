@@ -6,7 +6,7 @@ import BuyTicket from './BuyTicket';
 
 vi.mock('../../../api/hooks/Passenger/useBuyTicket', () => ({ default: vi.fn() }));
 vi.mock('../../Map/RouteMap', () => ({ default: () => null }));
-vi.mock('../Timeline/TripTimeline', () => ({ default: () => null }));
+vi.mock('../Timeline/TripTimeline', () => ({ default: ({ footer }) => footer ?? null }));
 vi.mock('../Ticket/SaveQrButton', () => ({ default: ({ onSaved }) => <button type="button" onClick={() => onSaved?.()}>Save QR (test)</button> }));
 
 const bookingState = () => ({
@@ -52,8 +52,8 @@ describe('single-journey booking', () => {
 
     const alerts = screen.getAllByRole('alert').map((el) => el.textContent);
     expect(alerts).toEqual(expect.arrayContaining([expect.stringContaining('The payment could not be started.'), 'Choose 1 to 20 tickets.']));
-    expect(screen.getByLabelText('Ticket Quantity')).toHaveAttribute('aria-invalid', 'true');
-    expect(screen.getByLabelText('Ticket Quantity')).toHaveAccessibleDescription(/Up to 20 tickets per booking.*Choose 1 to 20 tickets/);
+    expect(screen.getByLabelText('Number of tickets')).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getByLabelText('Number of tickets')).toHaveAccessibleDescription(/Up to 20 tickets per booking.*Choose 1 to 20 tickets/);
     expect(screen.getByLabelText('Points to use')).toHaveValue(5);
     expect(screen.getByText(/Oct 19, 2026 11:36 AM/)).toBeInTheDocument();
   });
@@ -66,7 +66,7 @@ describe('single-journey booking', () => {
     expect(screen.queryByRole('group', { name: 'Trip Type' })).not.toBeInTheDocument();
     expect(screen.queryByRole('radio', { name: /roundtrip|one-way/i })).not.toBeInTheDocument();
     expect(screen.queryByText('Return')).not.toBeInTheDocument();
-    expect(screen.getByLabelText('Ticket Quantity')).toHaveValue(2);
+    expect(screen.getByLabelText('Number of tickets')).toHaveValue(2);
     expect(screen.getByText('PHP 236.00')).toBeInTheDocument();
     expect(screen.getByText('Use reward points')).toBeInTheDocument();
     const paymentButton = screen.getByRole('button', { name: 'Continue to Payment' });
@@ -83,7 +83,7 @@ describe('single-journey booking', () => {
 
     expect(screen.getByText('Proceed to checkout to save the seat.')).toBeInTheDocument();
     expect(screen.getByText('Up to 8 tickets per booking.')).toBeInTheDocument();
-    expect(screen.getByLabelText('Ticket Quantity')).toHaveAttribute('max', '8');
+    expect(screen.getByLabelText('Number of tickets')).toHaveAttribute('max', '8');
   });
 
   it('blocks payment until the single-journey fare is ready or rewards are valid', () => {
@@ -223,13 +223,14 @@ describe('checkout layout and ticket options (Batch 76)', () => {
     form: { ...bookingState().form, ticket_extras: { 0: { baggage: true } } },
   });
 
-  it('puts Book for someone before the route and drops Booking Option and Seat Type', () => {
+  // 2026-11-24 (user): Book for someone moved next to the ticket email, after the payment method.
+  it('puts Book for someone with the ticket email after the payment method and drops Booking Option and Seat Type', () => {
     useBuyTicket.mockReturnValue(options());
     render(<MemoryRouter><BuyTicket /></MemoryRouter>);
 
     const someone = screen.getByTestId('for-someone-else');
-    const route = screen.getByText('Route');
-    expect(someone.compareDocumentPosition(route) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const payment = screen.getByRole('radiogroup', { name: 'Payment method' });
+    expect(payment.compareDocumentPosition(someone) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.queryByText('Booking Option')).not.toBeInTheDocument();
     expect(screen.queryByText('Seat Type')).not.toBeInTheDocument();
   });
@@ -255,5 +256,43 @@ describe('checkout layout and ticket options (Batch 76)', () => {
     expect(screen.queryByRole('dialog', { name: 'Route map' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByTestId('view-route-map'));
     expect(screen.getByText('Route map')).toBeInTheDocument();
+  });
+});
+
+// 2026-11-24 (user): the redesigned page: a ticket stepper, the account email in the ticket slot, and "Book for someone"
+// turning that slot into the traveller's details (a guest keeps their own email under them).
+describe('Trip Details and Payment redesign', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('steps the number of tickets within 1 and the per-booking limit', () => {
+    const state = bookingState();
+    useBuyTicket.mockReturnValue({ ...state, form: { ...state.form, ticket_quantity: '1' }, maxSeatsPerPurchase: 2 });
+    render(<MemoryRouter><BuyTicket /></MemoryRouter>);
+
+    expect(screen.getByRole('button', { name: 'One ticket less' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'One ticket more' }));
+    expect(state.handleChange).toHaveBeenCalledWith('ticket_quantity', '2');
+  });
+
+  it('shows where a signed-in passenger gets the ticket, and hides it when booking for someone', () => {
+    const state = bookingState();
+    useBuyTicket.mockReturnValue(state);
+    const { rerender } = render(<MemoryRouter><BuyTicket accountEmail="juan@example.com" /></MemoryRouter>);
+    expect(screen.getByTestId('account-email')).toHaveTextContent('Your ticket is sent to juan@example.com.');
+
+    useBuyTicket.mockReturnValue({ ...state, form: { ...state.form, for_someone_else: true, traveller_name: '', traveller_contact: '' } });
+    rerender(<MemoryRouter><BuyTicket accountEmail="juan@example.com" /></MemoryRouter>);
+    expect(screen.queryByTestId('account-email')).toBeNull();
+    expect(screen.getByLabelText('Their name')).toBeInTheDocument();
+  });
+
+  it('keeps a guest\'s own email under the traveller\'s details', () => {
+    const state = bookingState();
+    useBuyTicket.mockReturnValue({ ...state, isGuestCheckout: true, form: { ...state.form, for_someone_else: true, traveller_name: '', traveller_contact: '', guest_email: '' } });
+    render(<MemoryRouter><BuyTicket /></MemoryRouter>);
+
+    expect(screen.getByLabelText('Their email or mobile number')).toBeInTheDocument();
+    expect(screen.getByText('Your email (we send the ticket here)')).toBeInTheDocument();
+    expect(screen.queryByText('Rewards applied')).toBeNull();
   });
 });

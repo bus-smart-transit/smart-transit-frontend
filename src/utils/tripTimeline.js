@@ -65,6 +65,30 @@ export function groupTimelineRows(rows, collapseMin) {
   return items
 }
 
+/**
+ * 2026-11-24 (user): the booking page's short stop list: the boarding stop, the next `following` stops of the journey
+ * (pass-through points skipped) and the get-off stop; every other row opens with "Show all". Null when the journey is
+ * not chosen yet (the passenger needs the full list to pick where to get off) or when folding would hide under 2 rows.
+ */
+export function compactJourneyRows(rows, following = 2) {
+  const list = Array.isArray(rows) ? rows : []
+  const boarding = list.findIndex((row) => row.is_boarding)
+  const alighting = list.findIndex((row) => row.is_alighting)
+  if (boarding < 0 || alighting <= boarding) return null
+  const keep = new Set([boarding, alighting])
+  let added = 0
+  for (let i = boarding + 1; i < alighting && added < following; i += 1) {
+    if (!isPassThrough(list[i])) {
+      keep.add(i)
+      added += 1
+    }
+  }
+  const shown = list.filter((_, i) => keep.has(i))
+  const hidden = list.length - shown.length
+  if (hidden < 2) return null
+  return { before: shown.slice(0, -1), last: shown[shown.length - 1], hidden }
+}
+
 /** Row visual state for the node/legend: passed | current | upcoming, plus journey overlays. */
 export function nodeState(row) {
   if (row.custom) return 'custom'

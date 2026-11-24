@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Bus, Loader } from 'lucide-react'
-import { etaLabel, formatDuration, groupTimelineRows, journeyFacts, nodeState } from '../../../utils/tripTimeline'
+import { compactJourneyRows, etaLabel, formatDuration, groupTimelineRows, journeyFacts, nodeState } from '../../../utils/tripTimeline'
 import { busLabelText } from '../../../utils/busLabel'
 import RunInfoChips from '../../ui/RunInfoChips'
 import { clock12 } from '../../../utils/clock';
@@ -79,15 +79,24 @@ function TimelineRow({ row, canSelect, onSelect }) {
   return <li className={classes}>{body}</li>
 }
 
-/** The trip timeline and alighting-stop choices come from server-computed data. */
+/**
+ * The trip timeline and alighting-stop choices come from server-computed data.
+ *
+ * 2026-11-24 (user): `compact` is the booking page's version: "Route and stops" with the short stop list
+ * (compactJourneyRows) and no repeat of what the trip overview above already shows. `footer` (for example the route
+ * map button) closes the card.
+ */
 export default function TripTimeline({
   timeline,
   loading = false,
   error = null,
   canSelect = true,
   onSelectAlighting,
+  compact = false,
+  footer = null,
 }) {
   const [expanded, setExpanded] = useState({})
+  const [showAll, setShowAll] = useState(false)
 
   if (!timeline) {
     return (
@@ -101,6 +110,114 @@ export default function TripTimeline({
   const items = groupTimelineRows(stops, timeline.collapse_min_stops)
   const facts = journeyFacts(timeline)
   const hasAlighting = Boolean(journey?.alighting_stop_id || journey?.custom_dropoff)
+  const short = compact ? compactJourneyRows(stops) : null
+  const folded = short && !showAll ? short : null
+  // The legend explains passed and next-stop marks; before the bus leaves every stop is upcoming, so compact hides it.
+  const showLegend = !compact || (stops || []).some((row) => ['passed', 'current'].includes(nodeState(row)))
+
+  const renderItem = (item) => {
+    if (item.kind === 'row') {
+      return <TimelineRow key={item.row.stop_id ?? 'custom'} row={item.row} canSelect={canSelect} onSelect={onSelectAlighting} />
+    }
+    const open = Boolean(expanded[item.id])
+    const label = item.reason === 'outside'
+      ? `${item.rows.length} stops outside your journey`
+      : `${item.rows.length} stops`
+    return (
+      <li key={item.id}>
+        <button
+          type="button"
+          onClick={() => setExpanded((prev) => ({ ...prev, [item.id]: !open }))}
+          aria-expanded={open}
+          className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left text-xs font-medium text-slate-500 hover:bg-slate-50"
+        >
+          <span className="flex w-5 justify-center" aria-hidden="true"><span className="block h-4 w-px bg-slate-300" /></span>
+          <span>{open ? 'Hide' : 'Show'} {label}</span>
+        </button>
+        {open && (
+          <ul className="space-y-0.5">
+            {item.rows.map((row) => (
+              <TimelineRow key={row.stop_id} row={row} canSelect={canSelect} onSelect={onSelectAlighting} />
+            ))}
+          </ul>
+        )}
+      </li>
+    )
+  }
+
+  const foldToggle = (label, open) => (
+    <li>
+      <button
+        type="button"
+        onClick={() => setShowAll(open)}
+        aria-expanded={!open}
+        className="flex min-h-9 w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left text-sm font-semibold text-navy-800 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-navy-700/40"
+        data-testid="timeline-show-all"
+      >
+        <span className="flex w-5 justify-center" aria-hidden="true"><span className="block h-4 border-l-2 border-dotted border-slate-300" /></span>
+        <span>{label}</span>
+      </button>
+    </li>
+  )
+
+  if (compact) {
+    const runFacts = facts.filter((fact) => fact.label !== 'Duration')
+    return (
+      <section className="rounded-2xl border border-slate-200 bg-white shadow-card" aria-labelledby="route-stops-title">
+        <header className="px-5 pb-3 pt-5 sm:px-6">
+          <h2 id="route-stops-title" className="font-display text-lg font-semibold text-navy-950">Route and stops</h2>
+          <p className="mt-1 text-sm text-slate-600">
+            Bus bound for <strong className="font-semibold text-navy-950">{header.bound_for}</strong>
+            {header.via?.length > 0 && <span className="text-slate-500">, via {header.via.join(', ')}</span>}
+          </p>
+          <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
+            <RunInfoChips runPattern={timeline.trip?.run_pattern} service={timeline.trip?.service} serviceType={timeline.trip?.service_type} showStops />
+            <span data-testid="timeline-bus-class">
+              {bus?.class_label || 'Bus type not set'}
+              {' \u00b7 '}
+              {bus?.fleet_type ? `${bus.fleet_type.charAt(0).toUpperCase()}${bus.fleet_type.slice(1)}` : 'Service type not set'}
+            </span>
+            {runFacts.map((fact) => (
+              <span key={fact.label}><span className="text-slate-400">{fact.label}: </span><strong className="text-navy-950">{fact.value}</strong></span>
+            ))}
+          </div>
+          {!hasAlighting && <p className="mt-2 text-sm text-slate-600">Choose where you get off to see your journey time and fare.</p>}
+          {error && <p role="alert" className="mt-2 text-xs text-red-600">{error.message}</p>}
+        </header>
+
+        {showLegend && (
+          <ul className="flex flex-wrap gap-x-4 gap-y-1 border-t border-slate-100 px-5 py-2 text-xs text-slate-500 sm:px-6" aria-label="Legend">
+            {LEGEND.map((entry) => (
+              <li key={entry.state} className="inline-flex items-center gap-1.5">
+                <span className={`block h-2.5 w-2.5 rounded-full border-2 ${NODE_STYLE[entry.state]}`} aria-hidden="true" />
+                {entry.label}
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <ol className="space-y-0.5 border-t border-slate-100 px-3 py-3 sm:px-4" aria-label="Stops">
+          {folded ? (
+            <>
+              {folded.before.map((row) => <TimelineRow key={row.stop_id ?? 'custom'} row={row} canSelect={canSelect} onSelect={onSelectAlighting} />)}
+              {foldToggle(`Show all ${folded.hidden} more stops`, true)}
+              <TimelineRow key={folded.last.stop_id ?? 'custom-last'} row={folded.last} canSelect={canSelect} onSelect={onSelectAlighting} />
+            </>
+          ) : (
+            <>
+              {items.map(renderItem)}
+              {short && foldToggle('Show fewer stops', false)}
+            </>
+          )}
+        </ol>
+
+        {formatDuration(header.duration_minutes) == null && hasAlighting && (
+          <p className="border-t border-slate-100 px-5 py-3 text-xs text-slate-500 sm:px-6">Journey time unavailable</p>
+        )}
+        {footer && <div className="border-t border-slate-100 px-5 py-4 sm:px-6">{footer}</div>}
+      </section>
+    )
+  }
 
   return (
     <section className="rounded-xl border border-slate-200 bg-white" aria-label="Trip timeline">
@@ -136,35 +253,7 @@ export default function TripTimeline({
       </ul>
 
       <ol className="relative space-y-0.5 p-3">
-        {items.map((item) => {
-          if (item.kind === 'row') {
-            return <TimelineRow key={item.row.stop_id ?? 'custom'} row={item.row} canSelect={canSelect} onSelect={onSelectAlighting} />
-          }
-          const open = Boolean(expanded[item.id])
-          const label = item.reason === 'outside'
-            ? `${item.rows.length} stops outside your journey`
-            : `${item.rows.length} stops`
-          return (
-            <li key={item.id}>
-              <button
-                type="button"
-                onClick={() => setExpanded((prev) => ({ ...prev, [item.id]: !open }))}
-                aria-expanded={open}
-                className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left text-xs font-medium text-slate-500 hover:bg-slate-50"
-              >
-                <span className="flex w-5 justify-center" aria-hidden="true"><span className="block h-4 w-px bg-slate-300" /></span>
-                <span>{open ? 'Hide' : 'Show'} {label}</span>
-              </button>
-              {open && (
-                <ul className="space-y-0.5">
-                  {item.rows.map((row) => (
-                    <TimelineRow key={row.stop_id} row={row} canSelect={canSelect} onSelect={onSelectAlighting} />
-                  ))}
-                </ul>
-              )}
-            </li>
-          )
-        })}
+        {items.map(renderItem)}
       </ol>
 
       {formatDuration(header.duration_minutes) == null && hasAlighting && (

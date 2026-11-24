@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { etaLabel, formatDuration, groupTimelineRows, journeyFacts, nodeState, pollIntervalMs } from '../tripTimeline'
+import { compactJourneyRows, etaLabel, formatDuration, groupTimelineRows, journeyFacts, nodeState, pollIntervalMs } from '../tripTimeline'
 
 const row = (id, extra = {}) => ({
   stop_id: id, type: 'stop', custom: false, is_boarding: false, is_alighting: false, in_journey: true, progress: 'upcoming', ...extra,
@@ -74,5 +74,24 @@ describe('nodeState / pollIntervalMs / journeyFacts', () => {
   it('omits unknown journey facts', () => {
     expect(journeyFacts({ header: { duration_minutes: null, stops_between: 2, distance_km: 12.34 } }))
       .toEqual([{ label: 'Stops between', value: '2' }, { label: 'Distance', value: '12.3 km' }])
+  })
+})
+
+describe('compactJourneyRows', () => {
+  const stop = (id, extra = {}) => ({ stop_id: id, name: `Stop ${id}`, type: 'stop', ...extra })
+  const rows = [
+    stop(1, { is_boarding: true }), stop(2), stop(3, { type: 'pass_through' }), stop(4), stop(5), stop(6), stop(7, { is_alighting: true }), stop(8),
+  ]
+
+  it('keeps the boarding stop, the next two stops and the get-off stop', () => {
+    const view = compactJourneyRows(rows)
+    expect(view.before.map((row) => row.stop_id)).toEqual([1, 2, 4])
+    expect(view.last.stop_id).toBe(7)
+    expect(view.hidden).toBe(4)
+  })
+
+  it('shows the full list until the get-off stop is chosen, or when little would be hidden', () => {
+    expect(compactJourneyRows(rows.map((row) => ({ ...row, is_alighting: false })))).toBeNull()
+    expect(compactJourneyRows([stop(1, { is_boarding: true }), stop(2), stop(3), stop(4, { is_alighting: true })])).toBeNull()
   })
 })

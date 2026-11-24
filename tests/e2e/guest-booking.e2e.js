@@ -157,7 +157,8 @@ for (const width of [1280, 390]) {
     await page.setViewportSize({ width, height: 900 });
     await openBooking(page);
 
-    const fare = Number((await page.locator('dt', { hasText: /^Fare after rewards$/ }).locator('xpath=following-sibling::dd[1]').innerText()).replace(/[^0-9.]/g, ''));
+    // 2026-11-24: a guest has no rewards, so the summary shows the gross total (the same amount) and no rewards rows.
+    const fare = Number((await page.locator('dt', { hasText: /^Gross total$/ }).locator('xpath=following-sibling::dd[1]').innerText()).replace(/[^0-9.]/g, ''));
     const expectedFee = Math.round(Math.max(1, fare) * 2.4976 + 1e-7) / 100;
     const fee = page.locator('dt', { hasText: /^Transaction fee/ }).locator('xpath=following-sibling::dd[1]');
     await expect(fee).toHaveText(`PHP ${expectedFee.toFixed(2)}`);

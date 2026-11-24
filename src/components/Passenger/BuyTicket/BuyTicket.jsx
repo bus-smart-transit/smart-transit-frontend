@@ -1,7 +1,7 @@
 import { ratePercent } from '../../../utils/discountClaim';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { AlertCircle, Bus, CalendarDays, CheckCircle, Clock3, CreditCard, Loader, MapPin, Pencil } from 'lucide-react';
+import { AlertCircle, Armchair, ArrowRight, Bus, CalendarDays, CheckCircle, Clock3, CreditCard, Loader, Mail, Map as MapIcon, MapPin, Minus, Pencil, Plus } from 'lucide-react';
 import useBuyTicket from '../../../api/hooks/Passenger/useBuyTicket';
 import { busLabelText } from '../../../utils/busLabel';
 import { sameTripGroup } from '../../../utils/tripGroups';
@@ -34,6 +34,7 @@ const PAYMENT_CHANNELS = [
 
 const LABEL = 'text-sm font-semibold text-navy-950';
 const FIELD = 'mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-medium text-navy-950 focus:border-navy-700 focus:outline-none focus:ring-2 focus:ring-navy-700/20';
+const SELECT = 'mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-navy-950 focus:border-navy-700 focus:outline-none focus:ring-2 focus:ring-navy-700/20';
 
 function SummaryRow({ label, children }) {
   return (
@@ -44,7 +45,12 @@ function SummaryRow({ label, children }) {
   );
 }
 
-export default function BuyTicket({ onTicketPurchased, returnTo = '/' }) {
+/**
+ * 2026-11-24 (user): Trip Details & Payment, in the order a passenger decides: the trip overview (when, where, seats
+ * left), the route and stops (short list), then tickets and payment, with the booking summary beside it. `accountEmail`
+ * is the signed-in passenger's email, where their ticket is sent.
+ */
+export default function BuyTicket({ onTicketPurchased, returnTo = '/', accountEmail = '' }) {
   const [ticketPreview, setTicketPreview] = useState(null);
   const [qrModalDismissedFor, setQrModalDismissedFor] = useState(null);
   const {
@@ -157,6 +163,13 @@ export default function BuyTicket({ onTicketPurchased, returnTo = '/' }) {
   }, [mustSave]);
 
   const canSubmit = !isSubmitting && canProceedToOnlinePayment && !isRewardRequestInsufficient && Boolean(form.ticket_quantity);
+
+  // The ticket stepper: - and + move one ticket within 1 and the server's per-booking limit; typing still works.
+  const ticketCount = Math.max(1, parseInt(form.ticket_quantity, 10) || 1);
+  const stepQuantity = (delta) => {
+    const next = Math.min(Math.max(1, ticketCount + delta), Math.max(1, Number(maxSeatsPerPurchase) || 1));
+    handleChange('ticket_quantity', String(next));
+  };
 
   // Batch 65 (user, 2026-11-13): the times to choose from are the chosen trip's own kind (same journey, bus type and
   // service, so the same fare and stops); another bus type has its own card on Available trips.
@@ -302,76 +315,44 @@ export default function BuyTicket({ onTicketPurchased, returnTo = '/' }) {
       </Modal>
 
       <form onSubmit={handleSubmit}>
-        <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
           <div className="min-w-0 space-y-6">
-            {/* Batch 51 item 7 (user): booking for someone else. Batch 76 (user): "Book for someone", at the top so it is seen first. Their ticket still goes to the buyer's email until an
-                SMS service is chosen; their contact is an email or a mobile number (numbers only once a digit is typed). */}
-            <Card className="p-5 sm:p-6" data-testid="for-someone-else">
-              <label className="flex items-center gap-2 text-sm font-semibold text-navy-950">
-                <input type="checkbox" checked={Boolean(form.for_someone_else)} onChange={(e) => handleChange('for_someone_else', e.target.checked)} className="h-4 w-4 rounded border-slate-300 text-teal-600" />
-                Book for someone
-              </label>
-              {form.for_someone_else && (
-                <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                  <label className="block text-sm font-semibold text-navy-950">
-                    Their name
-                    <input type="text" value={form.traveller_name} onChange={(e) => handleChange('traveller_name', e.target.value)} aria-invalid={Boolean(formErrors.traveller_name)} maxLength={100} className={FIELD} />
-                    {formErrors.traveller_name && <span role="alert" className="mt-1 block text-xs font-medium text-red-600">{formErrors.traveller_name}</span>}
-                  </label>
-                  <label className="block text-sm font-semibold text-navy-950">
-                    Their email or mobile number
-                    <input
-                      type="text"
-                      inputMode={looksLikePhone(form.traveller_contact) ? 'tel' : 'email'}
-                      value={form.traveller_contact}
-                      onChange={(e) => handleChange('traveller_contact', cleanContactInput(e.target.value))}
-                      aria-invalid={Boolean(formErrors.traveller_contact)}
-                      placeholder="name@example.com or 09171234567"
-                      className={FIELD}
-                    />
-                    {formErrors.traveller_contact && <span role="alert" className="mt-1 block text-xs font-medium text-red-600">{formErrors.traveller_contact}</span>}
-                  </label>
-                  <p className="text-xs font-normal text-slate-500 sm:col-span-2">Their ticket is sent to your email. Send it to them, or give them the Ticket ID to show the Chauffeur.</p>
-                </div>
-              )}
-            </Card>
-            {/* Route: where, when, which bus. Everything here comes from the server. */}
-            <Card className="p-5 sm:p-6">
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Route</span>
-                <div className="flex items-center gap-2">
-                  {trip && tripProgressText(trip.progress) && (
-                    <span data-testid="trip-progress" className="rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700">
-                      {tripProgressText(trip.progress)}
-                    </span>
+            {/* 2026-11-24 (user): the trip overview leads: where, when, the departure and the seats left. Everything here
+                comes from the server. */}
+            <Card className="p-5 sm:p-6" aria-labelledby="trip-overview-title">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h2 id="trip-overview-title" className="text-balance font-display text-xl font-bold leading-snug text-navy-950 sm:text-2xl">
+                    {summaryFrom || 'Where are you going?'}
+                    {summaryTo ? (
+                      <>
+                        <ArrowRight size={20} className="mx-2 inline-block align-[-0.15em] text-teal-600" aria-hidden="true" />
+                        <span className="sr-only">to </span>
+                        {summaryTo}
+                      </>
+                    ) : null}
+                  </h2>
+                  {travelDate && (
+                    <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-slate-600">
+                      <CalendarDays size={15} aria-hidden="true" /> {formatManilaDate(travelDate)}
+                      {isToday ? <span className="rounded-full bg-teal-50 px-2 py-0.5 text-xs font-semibold text-teal-700">Today</span> : null}
+                      {trip && tripProgressText(trip.progress) && (
+                        <span data-testid="trip-progress" className="rounded-full bg-sky-50 px-2 py-0.5 text-xs font-semibold text-sky-700">
+                          {tripProgressText(trip.progress)}
+                        </span>
+                      )}
+                    </p>
                   )}
-                  {trip && (
-                    <span className="rounded-full bg-teal-50 px-3 py-1 text-xs font-semibold text-teal-700">
-                      {seatsLeftText(trip.seats_left)}
-                    </span>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => setEditingJourney((open) => !open)}
-                    aria-expanded={editingJourney}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-navy-900 transition hover:bg-slate-50"
-                  >
-                    <Pencil size={13} aria-hidden="true" /> {editingJourney ? 'Done' : 'Edit trip'}
-                  </button>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => setEditingJourney((open) => !open)}
+                  aria-expanded={editingJourney}
+                  className="inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-lg border border-slate-300 px-3 text-xs font-semibold text-navy-900 transition hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-navy-700/30"
+                >
+                  <Pencil size={13} aria-hidden="true" /> {editingJourney ? 'Done' : 'Edit trip'}
+                </button>
               </div>
-
-              <h2 className="mt-2 font-display text-lg font-bold text-navy-950">
-                {summaryFrom || 'Where are you going?'}
-                {summaryTo ? <span className="mx-2 text-slate-400" aria-hidden="true">&rarr;</span> : null}
-                {summaryTo}
-              </h2>
-              {travelDate && (
-                <p className="mt-1 flex items-center gap-1.5 text-sm text-slate-500">
-                  <CalendarDays size={14} aria-hidden="true" /> {formatManilaDate(travelDate)}
-                  {isToday ? <span className="rounded-full bg-teal-50 px-2 py-0.5 text-xs font-semibold text-teal-700">Today</span> : null}
-                </p>
-              )}
 
               {(editingJourney || !form.origin_stop_id || !form.destination_stop_id) && (
                 <div className="mt-4 border-t border-slate-100 pt-4">
@@ -397,135 +378,166 @@ export default function BuyTicket({ onTicketPurchased, returnTo = '/' }) {
               )}
 
               {form.origin_stop_id && form.destination_stop_id && (
-                <div className="mt-5 border-t border-slate-100 pt-5">
-                  <div aria-live="polite">
-                    {resolution.loading && (
-                      <div className="flex items-center gap-2 text-sm text-slate-500"><Loader size={16} className="animate-spin" /> Finding your bus...</div>
-                    )}
-                    {resolution.error && <p className="text-sm text-red-600">{resolution.error}</p>}
+                <div className="mt-5" aria-live="polite">
+                  {resolution.loading && (
+                    <div className="flex items-center gap-2 text-sm text-slate-500"><Loader size={16} className="animate-spin" /> Finding your bus...</div>
+                  )}
+                  {resolution.error && <p className="text-sm text-red-600">{resolution.error}</p>}
 
-                    {bookingMode === 'later' && !resolution.loading && sameKindDepartures.length > 0 && (
-                      <div>
-                        {/* Batch 76 (user): one list of the date's departures replaces Book Now / Book Later. */}
-                        <p className={LABEL}>Select departure time</p>
-                        <p className="mt-0.5 text-xs text-slate-500">Leaving from {boardingLabel}</p>
-                        <div role="radiogroup" aria-label="Departure time" className="mt-2 flex flex-wrap gap-2">
-                          {sameKindDepartures.map((departure) => {
-                            const selected = String(trip?.trip_id) === String(departure.trip_id);
-                            return (
-                              <button
-                                key={departure.trip_id}
-                                type="button"
-                                role="radio"
-                                aria-checked={selected}
-                                onClick={() => selectDeparture(departure.trip_id)}
-                                className={`rounded-xl border-2 px-3.5 py-2 text-left text-sm transition ${
-                                  selected ? 'border-teal-500 bg-teal-50 text-teal-800' : 'border-slate-200 bg-white text-navy-900 hover:border-slate-300'
-                                }`}
-                              >
-                                <span className="block font-bold">{clock12(departure.boarding_time) || departure.boarding_time}</span>
-                                <span className="block text-xs text-slate-500">{seatsLeftText(departure.seats_left)}</span>
-                              </button>
-                            );
-                          })}
-                        </div>
+                  {/* Batch 76 (user): one list of the date's departures. Shown when there is a choice to make. */}
+                  {bookingMode === 'later' && !resolution.loading && (sameKindDepartures.length > 1 || (!trip && sameKindDepartures.length > 0)) && (
+                    <div className="mb-4">
+                      <p className={LABEL}>Select departure time</p>
+                      <p className="mt-0.5 text-xs text-slate-500">Leaving from {boardingLabel}</p>
+                      <div role="radiogroup" aria-label="Departure time" className="mt-2 flex flex-wrap gap-2">
+                        {sameKindDepartures.map((departure) => {
+                          const selected = String(trip?.trip_id) === String(departure.trip_id);
+                          return (
+                            <button
+                              key={departure.trip_id}
+                              type="button"
+                              role="radio"
+                              aria-checked={selected}
+                              onClick={() => selectDeparture(departure.trip_id)}
+                              className={`rounded-xl border-2 px-3.5 py-2 text-left text-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-navy-700/30 ${
+                                selected ? 'border-teal-500 bg-teal-50 text-teal-800' : 'border-slate-200 bg-white text-navy-900 hover:border-slate-300'
+                              }`}
+                            >
+                              <span className="block font-bold tabular-nums">{clock12(departure.boarding_time) || departure.boarding_time}</span>
+                              <span className="block text-xs text-slate-500">{seatsLeftText(departure.seats_left)}</span>
+                            </button>
+                          );
+                        })}
                       </div>
-                    )}
+                    </div>
+                  )}
 
-                    {!resolution.loading && resolution.ready && !resolution.error && !trip && (
-                      <div className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800 ring-1 ring-inset ring-amber-200">
-                        <p>{resolution.message || 'No departures match your journey.'}</p>
-                        <button type="button" onClick={() => setEditingJourney(true)} className="mt-1 font-semibold text-navy-800 underline">
-                          Change the date
-                        </button>
+                  {!resolution.loading && resolution.ready && !resolution.error && !trip && (
+                    <div className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800 ring-1 ring-inset ring-amber-200">
+                      <p>{resolution.message || 'No departures match your journey.'}</p>
+                      <button type="button" onClick={() => setEditingJourney(true)} className="mt-1 font-semibold text-navy-800 underline underline-offset-2">
+                        Change the date
+                      </button>
+                    </div>
+                  )}
+
+                  {trip && (
+                    <>
+                      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-xl bg-teal-50 px-4 py-3.5 ring-1 ring-inset ring-teal-100" data-testid="departure-band">
+                        <p className="flex min-w-0 flex-wrap items-baseline gap-x-2.5 gap-y-0.5">
+                          <Clock3 size={20} className="shrink-0 self-center text-teal-700" aria-hidden="true" />
+                          <span className="font-display text-2xl font-bold tabular-nums text-navy-950">{clock12(trip.boarding_time) || trip.boarding_time}</span>
+                          <span className="text-sm text-teal-900">departs from {boardingLabel}</span>
+                        </p>
+                        <p className="flex items-center gap-1.5 text-sm font-semibold text-teal-800">
+                          <Armchair size={17} aria-hidden="true" /> {seatsLeftText(trip.seats_left)}
+                        </p>
                       </div>
-                    )}
-
-                    {trip && (
-                      <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
+                      <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
                         {[
-                          [Clock3, 'Departure', `${clock12(trip.boarding_time) || trip.boarding_time} at ${boardingLabel}`],
                           [Clock3, 'Arrival', arrivalClock],
                           [Bus, 'Bus', busLabelText(trip.bus_label)],
-                          [MapPin, 'Duration', formatDuration(timeline?.header?.duration_minutes) || '-'],
+                          [MapPin, 'Duration', formatDuration(timeline?.header?.duration_minutes) || 'Not provided'],
                         ].map(([Icon, label, value]) => (
-                          <div key={label}>
-                            <p className="flex items-center gap-1.5 text-xs text-slate-500"><Icon size={14} aria-hidden="true" /> {label}</p>
-                            <p className="mt-1 text-sm font-semibold text-navy-950">{value}</p>
+                          <div key={label} className="min-w-0">
+                            <dt className="flex items-center gap-1.5 text-xs text-slate-500"><Icon size={14} aria-hidden="true" /> {label}</dt>
+                            <dd className="mt-1 text-sm font-semibold text-navy-950">{value}</dd>
                           </div>
                         ))}
-                      </div>
-                    )}
-                    {trip && !trip.boarding_time_is_scheduled_offset && (
-                      <p className="mt-2 text-xs text-slate-500">This is the trip start time; stop-by-stop times are not set for this route.</p>
-                    )}
-                    {formErrors.trip && <p role="alert" className="mt-2 text-xs text-red-600">{formErrors.trip}</p>}
-                  </div>
-
+                      </dl>
+                    </>
+                  )}
+                  {trip && !trip.boarding_time_is_scheduled_offset && (
+                    <p className="mt-3 text-xs text-slate-500">This is the trip start time; stop-by-stop times are not set for this route.</p>
+                  )}
+                  {formErrors.trip && <p role="alert" className="mt-2 text-xs text-red-600">{formErrors.trip}</p>}
                 </div>
               )}
             </Card>
 
             {trip && (
               <>
-                {/* Travel Advice and the official-stop alighting choice. */}
+                {/* The stops and the official-stop alighting choice; the short list opens with "Show all". Batch 76 (user):
+                    the route map opens in a pop-up, so the page stays short; Track Bus has the live map. */}
                 <TripTimeline
+                  compact
                   timeline={timeline}
                   loading={timelineState.loading}
                   error={timelineState.error}
                   onSelectAlighting={selectAlightingStop}
+                  footer={timeline?.trip?.route_id ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setShowMap(true)}
+                        className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-navy-800 bg-white px-4 text-sm font-semibold text-navy-900 transition hover:bg-navy-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-navy-700/30"
+                        data-testid="view-route-map"
+                      >
+                        <MapIcon size={16} aria-hidden="true" /> View route map
+                      </button>
+                      <Modal open={showMap} onClose={() => setShowMap(false)} title="Route map" size="lg">
+                        <RouteMap
+                          routeId={timeline.trip.route_id}
+                          direction={timeline.trip.leg_direction}
+                          highlight={journeyHighlight}
+                          showStatus={false}
+                          className="relative h-[60vh] w-full"
+                        />
+                      </Modal>
+                    </>
+                  ) : null}
                 />
 
-                {/* Batch 76 (user): the route map opens in a pop-up, so the page stays short; Track Bus has the live map. */}
-                {timeline?.trip?.route_id && (
-                  <div>
-                    <button
-                      type="button"
-                      onClick={() => setShowMap(true)}
-                      className="inline-flex items-center gap-2 rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-navy-900 hover:bg-slate-50"
-                      data-testid="view-route-map"
-                    >
-                      <MapPin size={16} aria-hidden="true" /> View route map
-                    </button>
-                    <Modal open={showMap} onClose={() => setShowMap(false)} title="Route map" size="lg">
-                      <RouteMap
-                        routeId={timeline.trip.route_id}
-                        direction={timeline.trip.leg_direction}
-                        highlight={journeyHighlight}
-                        showStatus={false}
-                        className="relative h-[60vh] w-full"
-                      />
-                    </Modal>
-                  </div>
-                )}
+                {/* Tickets, the options per ticket, the payment method and who gets the ticket. */}
+                <Card className="p-5 sm:p-6" aria-labelledby="tickets-payment-title">
+                  <h2 id="tickets-payment-title" className="font-display text-lg font-semibold text-navy-950">Tickets and payment</h2>
 
-                {/* Seat and Payment */}
-                <Card className="space-y-6 p-5 sm:p-6">
-                  <h2 className="font-display text-lg font-semibold text-navy-950">Tickets and Payment</h2>
-
-                  <div>
-                    <label htmlFor="ticket_quantity" className={LABEL}>Ticket Quantity</label>
-                    <input
-                      id="ticket_quantity"
-                      type="number"
-                      min="1"
-                      max={maxSeatsPerPurchase}
-                      step="1"
-                      value={form.ticket_quantity}
-                      onChange={(e) => handleChange('ticket_quantity', e.target.value)}
-                      aria-invalid={Boolean(formErrors.ticket_quantity)}
-                      aria-describedby={formErrors.ticket_quantity ? 'ticket_quantity_hint ticket_quantity_error' : 'ticket_quantity_hint'}
-                      className={FIELD}
-                    />
-                    <p id="ticket_quantity_hint" className="mt-1.5 text-xs text-slate-500">Up to {maxSeatsPerPurchase} tickets per booking.</p>
+                  <div className="mt-5">
+                    <label htmlFor="ticket_quantity" className={LABEL}>Number of tickets</label>
+                    <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
+                      <div className="inline-flex items-stretch overflow-hidden rounded-xl border border-slate-300 bg-white focus-within:border-navy-700 focus-within:ring-2 focus-within:ring-navy-700/20">
+                        <button
+                          type="button"
+                          aria-label="One ticket less"
+                          onClick={() => stepQuantity(-1)}
+                          disabled={ticketCount <= 1}
+                          className="flex w-11 items-center justify-center text-navy-900 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300 disabled:hover:bg-transparent"
+                        >
+                          <Minus size={16} aria-hidden="true" />
+                        </button>
+                        <input
+                          id="ticket_quantity"
+                          type="number"
+                          inputMode="numeric"
+                          min="1"
+                          max={maxSeatsPerPurchase}
+                          step="1"
+                          value={form.ticket_quantity}
+                          onChange={(e) => handleChange('ticket_quantity', e.target.value)}
+                          aria-invalid={Boolean(formErrors.ticket_quantity)}
+                          aria-describedby={formErrors.ticket_quantity ? 'ticket_quantity_hint ticket_quantity_error' : 'ticket_quantity_hint'}
+                          className="w-14 appearance-none border-x border-slate-300 py-2.5 text-center text-base font-semibold tabular-nums text-navy-950 focus:outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                        />
+                        <button
+                          type="button"
+                          aria-label="One ticket more"
+                          onClick={() => stepQuantity(1)}
+                          disabled={ticketCount >= maxSeatsPerPurchase}
+                          className="flex w-11 items-center justify-center text-navy-900 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300 disabled:hover:bg-transparent"
+                        >
+                          <Plus size={16} aria-hidden="true" />
+                        </button>
+                      </div>
+                      <p id="ticket_quantity_hint" className="text-xs text-slate-500">Up to {maxSeatsPerPurchase} tickets per booking.</p>
+                    </div>
                     {formErrors.ticket_quantity && <span id="ticket_quantity_error" role="alert" className="mt-1.5 block text-xs text-red-600">{formErrors.ticket_quantity}</span>}
                   </div>
 
-                  {(parseInt(form.ticket_quantity, 10) || 1) > 1 && (
-                    <label className="flex items-start gap-2 text-sm text-slate-700">
+                  {ticketCount > 1 && (
+                    <label className="mt-4 flex items-start gap-2 text-sm text-slate-700">
                       <input
                         type="checkbox"
-                        className="mt-0.5 h-4 w-4"
+                        className="mt-0.5 h-4 w-4 accent-teal-600"
                         checked={form.email_group_qr !== false}
                         onChange={(e) => handleChange('email_group_qr', e.target.checked)}
                       />
@@ -536,12 +548,12 @@ export default function BuyTicket({ onTicketPurchased, returnTo = '/' }) {
                     </label>
                   )}
 
-
                   {/* Batch 75 (panel): claim a discount online; the Chauffeur checks the ID on the bus. Batch 76 (user): with a
-                      priority seat and baggage, per ticket. */}
+                      priority seat and baggage, per ticket. 2026-11-24 (user): a senior or PWD discount sets the priority seat. */}
                   {(discountTypes.length > 0 || priorityTypes.length > 0 || baggagePercent > 0) && (
-                    <fieldset data-testid="ticket-options">
-                      <legend className={LABEL}>Ticket options</legend>
+                    <fieldset className="mt-6 border-t border-slate-100 pt-5" data-testid="ticket-options">
+                      <legend className="sr-only">Ticket options</legend>
+                      <p aria-hidden="true" className={LABEL}>Ticket options</p>
                       <ul className="mt-1 space-y-1 text-xs text-slate-500">
                         {discountTypes.length > 0 && (
                           <li>Valid for discount: you pay the full fare now and show your valid ID to the Chauffeur. Once approved, the {ratePercent(discountTypes[0].rate)} discount goes back to your {form.payment_channel === 'maya' ? 'Maya' : 'GCash'}.</li>
@@ -549,19 +561,18 @@ export default function BuyTicket({ onTicketPurchased, returnTo = '/' }) {
                         {priorityTypes.length > 0 && <li>Priority seats are for senior citizens, persons with disability and pregnant passengers. The Chauffeur checks on the bus.</li>}
                         {baggagePercent > 0 && <li>Baggage in the compartment costs {baggagePercent}% of the fare.</li>}
                       </ul>
-                      <div className="mt-3 space-y-3">
-                        {Array.from({ length: Math.max(1, parseInt(form.ticket_quantity, 10) || 1) }, (_, index) => {
+                      <div className="mt-2 divide-y divide-slate-100">
+                        {Array.from({ length: ticketCount }, (_, index) => {
                           const extra = form.ticket_extras?.[index] || {};
-                          const many = (parseInt(form.ticket_quantity, 10) || 1) > 1;
                           return (
-                            <div key={index} className="rounded-xl border border-slate-200 px-4 py-3">
-                              {many && <p className="mb-2 text-sm font-semibold text-navy-950">Ticket {index + 1}</p>}
+                            <div key={index} className="py-3">
+                              {ticketCount > 1 && <p className="mb-2 text-sm font-semibold text-navy-950">Ticket {index + 1}</p>}
                               <div className="grid gap-3 sm:grid-cols-2">
                                 {discountTypes.length > 0 && (
                                   <label className="block text-sm font-medium text-slate-700">
                                     Valid for Discount?
                                     <select
-                                      className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-navy-950"
+                                      className={SELECT}
                                       value={form.discount_claims?.[index] || ''}
                                       onChange={(e) => setDiscountClaim(index, e.target.value)}
                                       data-testid={`discount-claim-${index}`}
@@ -575,7 +586,7 @@ export default function BuyTicket({ onTicketPurchased, returnTo = '/' }) {
                                   <label className="block text-sm font-medium text-slate-700">
                                     Priority seat
                                     <select
-                                      className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-navy-950"
+                                      className={SELECT}
                                       value={extra.priority_type || ''}
                                       onChange={(e) => setTicketExtra(index, 'priority_type', e.target.value)}
                                       data-testid={`priority-${index}`}
@@ -590,13 +601,15 @@ export default function BuyTicket({ onTicketPurchased, returnTo = '/' }) {
                                 <label className="mt-3 flex items-center gap-2 text-sm text-slate-700">
                                   <input
                                     type="checkbox"
-                                    className="h-4 w-4 rounded border-slate-300"
+                                    className="h-4 w-4 rounded border-slate-300 accent-teal-600"
                                     checked={Boolean(extra.baggage)}
                                     onChange={(e) => setTicketExtra(index, 'baggage', e.target.checked)}
                                     data-testid={`baggage-${index}`}
                                   />
-                                  Baggage in the compartment
-                                  {hasFareQuote && <span className="text-slate-500">(+PHP {baggageFeeFor(unitFare, baggagePercent).toFixed(2)})</span>}
+                                  <span>
+                                    Baggage in the compartment{' '}
+                                    {hasFareQuote && <span className="whitespace-nowrap text-slate-500">(+PHP {baggageFeeFor(unitFare, baggagePercent).toFixed(2)})</span>}
+                                  </span>
                                 </label>
                               )}
                             </div>
@@ -606,11 +619,12 @@ export default function BuyTicket({ onTicketPurchased, returnTo = '/' }) {
                     </fieldset>
                   )}
 
-                  <fieldset>
-                    <legend className={`flex items-center gap-2 ${LABEL}`}><CreditCard size={16} aria-hidden="true" /> Payment</legend>
+                  <fieldset className="mt-6 border-t border-slate-100 pt-5">
+                    <legend className="sr-only">Payment method</legend>
+                    <p aria-hidden="true" className={`flex items-center gap-2 ${LABEL}`}><CreditCard size={16} aria-hidden="true" /> Payment method</p>
                     <p className="mt-1 text-sm text-slate-500">Online booking is paid online. You finish paying on the provider&apos;s secure page.</p>
 
-                    <div role="radiogroup" aria-label="Payment method" className="mt-3 grid grid-cols-2 gap-3">
+                    <div role="radiogroup" aria-label="Payment method" className="mt-3 grid gap-3 sm:grid-cols-2">
                       {PAYMENT_CHANNELS.map((channel) => {
                         const isSelected = form.payment_channel === channel.value;
                         return (
@@ -620,25 +634,80 @@ export default function BuyTicket({ onTicketPurchased, returnTo = '/' }) {
                             role="radio"
                             aria-checked={isSelected}
                             onClick={() => handleChange('payment_channel', channel.value)}
-                            className={`flex flex-col items-center gap-1.5 rounded-xl border-2 px-3 py-4 text-sm font-semibold transition ${
-                              isSelected ? 'border-teal-500 bg-teal-50 text-teal-800' : 'border-slate-200 text-slate-600 hover:border-slate-300'
+                            className={`flex min-h-14 items-center gap-3 rounded-xl border-2 px-3 py-2.5 text-sm font-semibold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-navy-700/30 sm:px-4 ${
+                              isSelected ? 'border-teal-500 bg-teal-50 text-teal-900' : 'border-slate-200 text-slate-700 hover:border-slate-300'
                             }`}
                           >
+                            <span
+                              aria-hidden="true"
+                              className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 ${isSelected ? 'border-teal-600' : 'border-slate-300'}`}
+                            >
+                              {isSelected && <span className="block h-2 w-2 rounded-full bg-teal-600" />}
+                            </span>
                             <span className="flex h-8 items-center" aria-hidden="true">
                               <img src={channel.logo} alt="" className={`${channel.logoClass} w-auto`} />
                             </span>
-                            {channel.label}
+                            <span>{channel.label}</span>
                           </button>
                         );
                       })}
                     </div>
+                  </fieldset>
 
-                    {isGuestCheckout && (
+                  {/* 2026-11-24 (user): who gets the ticket. "Book for someone" turns this slot into the traveller's name and
+                      contact. The ticket still goes to the buyer: a guest keeps their own email below (the only way to find the
+                      ticket again); a signed-in passenger's goes to the account email. Batch 51 item 7: their contact is an email
+                      or a mobile number (numbers only once a digit is typed); no SMS is sent. */}
+                  <div className="mt-6 border-t border-slate-100 pt-5" role="group" aria-labelledby="ticket-contact-title" data-testid="for-someone-else">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <p id="ticket-contact-title" className={LABEL}>{form.for_someone_else ? 'Who is travelling' : 'Your ticket'}</p>
+                      <label
+                        className={`inline-flex min-h-9 cursor-pointer items-center gap-2 rounded-full border px-3 text-sm font-semibold transition has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-navy-700/30 ${
+                          form.for_someone_else ? 'border-teal-500 bg-teal-50 text-teal-900' : 'border-slate-300 text-navy-900 hover:bg-slate-50'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={Boolean(form.for_someone_else)}
+                          onChange={(e) => handleChange('for_someone_else', e.target.checked)}
+                          className="h-4 w-4 rounded border-slate-300 accent-teal-600 focus:outline-none"
+                        />
+                        Book for someone
+                      </label>
+                    </div>
+
+                    {form.for_someone_else && (
+                      <div className="mt-3 grid gap-4 sm:grid-cols-2">
+                        <label className="block text-sm font-semibold text-navy-950">
+                          Their name
+                          <input type="text" value={form.traveller_name} onChange={(e) => handleChange('traveller_name', e.target.value)} aria-invalid={Boolean(formErrors.traveller_name)} maxLength={100} autoComplete="off" className={FIELD} />
+                          {formErrors.traveller_name && <span role="alert" className="mt-1 block text-xs font-medium text-red-600">{formErrors.traveller_name}</span>}
+                        </label>
+                        <label className="block text-sm font-semibold text-navy-950">
+                          Their email or mobile number
+                          <input
+                            type="text"
+                            inputMode={looksLikePhone(form.traveller_contact) ? 'tel' : 'email'}
+                            value={form.traveller_contact}
+                            onChange={(e) => handleChange('traveller_contact', cleanContactInput(e.target.value))}
+                            aria-invalid={Boolean(formErrors.traveller_contact)}
+                            placeholder="name@example.com or 09171234567"
+                            autoComplete="off"
+                            className={FIELD}
+                          />
+                          {formErrors.traveller_contact && <span role="alert" className="mt-1 block text-xs font-medium text-red-600">{formErrors.traveller_contact}</span>}
+                        </label>
+                        <p className="text-xs font-normal text-slate-500 sm:col-span-2">Their ticket is sent to your email. Send it to them, or give them the Ticket ID to show the Chauffeur.</p>
+                      </div>
+                    )}
+
+                    {isGuestCheckout ? (
                       <label className="mt-4 block text-sm font-semibold text-navy-950">
                         {/* Batch 50 item 7 (user): required for a guest; the ticket and tracking code are sent here. */}
-                        Email for your ticket <span className="text-red-600" aria-hidden="true">*</span>
+                        {form.for_someone_else ? 'Your email (we send the ticket here)' : 'Email for your ticket'} <span className="text-red-600" aria-hidden="true">*</span>
                         <input
                           type="email"
+                          autoComplete="email"
                           aria-required="true"
                           aria-invalid={Boolean(formErrors.guest_email)}
                           value={form.guest_email}
@@ -649,82 +718,91 @@ export default function BuyTicket({ onTicketPurchased, returnTo = '/' }) {
                         <span className="mt-1 block text-xs font-normal text-slate-500">Your ticket and tracking code are sent here. You need it to find your ticket again.</span>
                         {formErrors.guest_email && <span role="alert" className="mt-1 block text-xs font-medium text-red-600">{formErrors.guest_email}</span>}
                       </label>
+                    ) : !form.for_someone_else && (
+                      <p className="mt-3 flex items-center gap-2.5 rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-700" data-testid="account-email">
+                        <Mail size={16} className="shrink-0 text-slate-500" aria-hidden="true" />
+                        <span className="min-w-0 break-words">
+                          Your ticket is sent to {accountEmail ? <strong className="font-semibold text-navy-950">{accountEmail}</strong> : 'your account email'}.
+                        </span>
+                      </p>
                     )}
+                  </div>
 
-
-                    {!isGuestCheckout && (
-                      <div className="mt-4 rounded-xl border border-slate-200 px-4 py-2">
-                        <p className="pt-1.5 text-sm text-slate-500">
-                          {loadingRewards ? 'Loading reward balance...' : <>Available Rewards: <strong className="text-navy-950">{Number(availableRewardPoints || 0).toFixed(0)} points</strong></>}
-                        </p>
-                        <Toggle
-                          checked={Boolean(form.use_rewards)}
-                          onChange={(checked) => handleChange('use_rewards', checked)}
-                          disabled={!hasRewardPoints}
-                          label="Use reward points"
-                          description={
-                            !hasRewardPoints && !loadingRewards
-                              ? "Disabled: you don't have any reward points to redeem yet. Earn points by completing paid trips."
-                              : undefined
-                          }
-                        />
-                        {form.use_rewards && (
-                          <div className="pb-2">
-                            <label htmlFor="reward_points_to_use" className={`${LABEL} mt-2 block`}>Points to use</label>
-                            <input
-                              id="reward_points_to_use"
-                              type="number"
-                              min="0"
-                              step="1"
-                              value={form.reward_points_to_use}
-                              onChange={(e) => handleChange('reward_points_to_use', e.target.value)}
-                              aria-invalid={Boolean(formErrors.reward_points_to_use) || isRewardRequestInsufficient}
-                              aria-describedby="reward_points_hint"
-                              className={FIELD}
-                            />
-                            <div id="reward_points_hint" role={isRewardRequestInsufficient ? 'alert' : undefined} className={`mt-1.5 text-xs ${isRewardRequestInsufficient ? 'text-red-600' : 'text-slate-500'}`}>
-                              You can use up to {Number(maxRedeemableRewardPoints || 0).toFixed(0)} points now
-                              {isRewardRequestInsufficient ? ' (insufficient for requested amount)' : ''}
-                            </div>
-                            {formErrors.reward_points_to_use && <div role="alert" className="mt-1 text-xs text-red-600">{formErrors.reward_points_to_use}</div>}
+                  {!isGuestCheckout && (
+                    <div className="mt-6 border-t border-slate-100 pt-4">
+                      <p className="text-sm text-slate-500">
+                        {loadingRewards ? 'Loading reward balance...' : <>Available Rewards: <strong className="text-navy-950">{Number(availableRewardPoints || 0).toFixed(0)} points</strong></>}
+                      </p>
+                      <Toggle
+                        checked={Boolean(form.use_rewards)}
+                        onChange={(checked) => handleChange('use_rewards', checked)}
+                        disabled={!hasRewardPoints}
+                        label="Use reward points"
+                        description={
+                          !hasRewardPoints && !loadingRewards
+                            ? "Disabled: you don't have any reward points to redeem yet. Earn points by completing paid trips."
+                            : undefined
+                        }
+                      />
+                      {form.use_rewards && (
+                        <div className="pb-1">
+                          <label htmlFor="reward_points_to_use" className={`${LABEL} mt-2 block`}>Points to use</label>
+                          <input
+                            id="reward_points_to_use"
+                            type="number"
+                            min="0"
+                            step="1"
+                            value={form.reward_points_to_use}
+                            onChange={(e) => handleChange('reward_points_to_use', e.target.value)}
+                            aria-invalid={Boolean(formErrors.reward_points_to_use) || isRewardRequestInsufficient}
+                            aria-describedby="reward_points_hint"
+                            className={FIELD}
+                          />
+                          <div id="reward_points_hint" role={isRewardRequestInsufficient ? 'alert' : undefined} className={`mt-1.5 text-xs ${isRewardRequestInsufficient ? 'text-red-600' : 'text-slate-500'}`}>
+                            You can use up to {Number(maxRedeemableRewardPoints || 0).toFixed(0)} points now
+                            {isRewardRequestInsufficient ? ' (insufficient for requested amount)' : ''}
                           </div>
-                        )}
-                      </div>
-                    )}
-                    {formErrors.payment && <p role="alert" className="mt-2 text-xs text-red-600">{formErrors.payment}</p>}
-                    {formErrors.destination_stop_id && <p role="alert" className="mt-2 text-xs text-red-600">{formErrors.destination_stop_id}</p>}
-                  </fieldset>
+                          {formErrors.reward_points_to_use && <div role="alert" className="mt-1 text-xs text-red-600">{formErrors.reward_points_to_use}</div>}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {formErrors.payment && <p role="alert" className="mt-3 text-xs text-red-600">{formErrors.payment}</p>}
+                  {formErrors.destination_stop_id && <p role="alert" className="mt-3 text-xs text-red-600">{formErrors.destination_stop_id}</p>}
                 </Card>
               </>
             )}
           </div>
 
-          {/* Booking Summary: always in view, filling in as the choices are made. */}
-          <Card className="h-fit p-5 sm:p-6 lg:sticky lg:top-6">
-            <h2 className="font-display text-lg font-semibold text-navy-950">Booking Summary</h2>
-            <dl className="mt-4 divide-y divide-slate-100 text-sm">
+          {/* Booking Summary: always in view on a wide screen, filling in as the choices are made. */}
+          <Card className="h-fit p-5 sm:p-6 lg:sticky lg:top-6" aria-labelledby="booking-summary-title">
+            <h2 id="booking-summary-title" className="font-display text-lg font-semibold text-navy-950">Booking summary</h2>
+            <dl className="mt-3 divide-y divide-slate-100 text-sm">
               <SummaryRow label="Board at">{boardingRow?.name || summaryFrom || '-'}</SummaryRow>
               <SummaryRow label="Get off at">{alightingRow?.name || summaryTo || '-'}</SummaryRow>
               <SummaryRow label="Departure">{trip ? `${formatManilaDate(trip.trip_date)} ${clock12(trip.boarding_time) || trip.boarding_time}` : '-'}</SummaryRow>
               <SummaryRow label="Payment">Online &middot; {form.payment_channel === 'maya' ? 'Maya' : 'GCash'}</SummaryRow>
-              <SummaryRow label="Unit Fare">
+              <SummaryRow label="Unit fare">
                 PHP {hasFareQuote ? Number(unitFare).toFixed(2) : '0.00'}
               </SummaryRow>
               <SummaryRow label="Quantity">{totalTickets}</SummaryRow>
-              <SummaryRow label="Gross Total">PHP {Number(grossTotal || 0).toFixed(2)}</SummaryRow>
+              <SummaryRow label="Gross total">PHP {Number(grossTotal || 0).toFixed(2)}</SummaryRow>
               {baggage.count > 0 && <SummaryRow label={`Baggage (${baggage.count})`}>PHP {Number(baggage.total).toFixed(2)}</SummaryRow>}
-              <SummaryRow label="Rewards Applied">{Number(rewardPointsToApply || 0).toFixed(0)} points</SummaryRow>
-              <SummaryRow label={baggage.count > 0 ? 'Fare and baggage after rewards' : 'Fare after rewards'}>PHP {Number(netTotal || 0).toFixed(2)}</SummaryRow>
+              {/* Rewards are for signed-in passengers only; a guest has none to apply. */}
+              {!isGuestCheckout && <SummaryRow label="Rewards applied">{Number(rewardPointsToApply || 0).toFixed(0)} points</SummaryRow>}
+              {!isGuestCheckout && (
+                <SummaryRow label={baggage.count > 0 ? 'Fare and baggage after rewards' : 'Fare after rewards'}>PHP {Number(netTotal || 0).toFixed(2)}</SummaryRow>
+              )}
               <SummaryRow label={bookingFeeRate ? `Transaction fee (${bookingFeeRate})` : 'Transaction fee'}>{bookingFee === null ? 'Not provided' : `PHP ${Number(bookingFee).toFixed(2)}`}</SummaryRow>
             </dl>
-            <div className="mt-2 flex items-center justify-between border-t border-slate-200 pt-4">
-              <span className="text-sm font-semibold text-navy-950">Total to pay</span>
-              <span className="font-display text-xl font-bold text-navy-950" data-testid="total-to-pay">
+            <div className="mt-3 flex items-center justify-between gap-3 rounded-xl bg-teal-50 px-4 py-3 ring-1 ring-inset ring-teal-100">
+              <span className="text-sm font-semibold text-teal-900">Total to pay</span>
+              <span className="font-display text-xl font-bold tabular-nums text-navy-950" data-testid="total-to-pay">
                 {totalDue === null ? 'Not provided' : `PHP ${Number(totalDue).toFixed(2)}`}
               </span>
             </div>
             {bookingFee > 0 && (
-              <p className="mt-1 text-xs text-slate-500">
+              <p className="mt-2 text-xs text-slate-500">
                 Online payments have a transaction fee of {bookingFeeRate} of the amount for {form.payment_channel === 'maya' ? 'Maya' : 'GCash'} (PHP {Number(bookingFee).toFixed(2)} here), once for each payment however many tickets you buy. Tickets bought with cash on the bus have no fee.
               </p>
             )}
@@ -732,12 +810,12 @@ export default function BuyTicket({ onTicketPurchased, returnTo = '/' }) {
             <button
               type="submit"
               disabled={!canSubmit}
-              className="mt-5 flex min-h-11 w-full items-center justify-center gap-2 rounded-full bg-navy-800 text-sm font-semibold text-white shadow-sm transition hover:bg-navy-900 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500 disabled:shadow-none"
+              className="mt-5 flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-navy-800 text-base font-semibold text-white shadow-sm transition hover:bg-navy-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-navy-700/40 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500 disabled:shadow-none"
             >
               {isSubmitting ? (
                 <><Loader size={16} className="animate-spin" /> Processing...</>
               ) : (
-                <><CreditCard size={16} /> Continue to Payment</>
+                <>Continue to Payment <ArrowRight size={17} aria-hidden="true" /></>
               )}
             </button>
             {/* Batch 49 item 1 (user's wording): seats are taken only when the payment is confirmed. */}
