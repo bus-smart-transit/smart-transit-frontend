@@ -3,6 +3,7 @@ import { isMobileDevice } from './inAppBrowser';
 import { busLabelText } from './busLabel';
 import { serviceLabel, servedStopsText } from './runInfo';
 import { clock12 } from './clock';
+import { baggageText } from './ticketExtras';
 
 // One-click "Save QR to device". The image is drawn with the same qrDataUrl() as the
 // on-screen QR, rendered ahead of the click (useTicketImage), and handed to the device
@@ -51,7 +52,7 @@ export function buildTicketImageModel(ticket, { group = false, groupSize = 1 } =
       { label: 'Ticket ID', value: shortId(ticket?.ticket_uuid) || '-' },
       ...journey,
       ...(ticket?.priority_label ? [{ label: 'Priority seat', value: ticket.priority_label }] : []),
-      ...(ticket?.has_baggage ? [{ label: 'Baggage', value: 'In the compartment (in the fare)' }] : []),
+      ...(baggageText(ticket) ? [{ label: 'Baggage', value: baggageText(ticket) }] : []),
       ...(Number(ticket?.discount_amount) > 0 ? [
         { label: 'Original fare', value: `PHP ${Number(ticket.original_amount).toFixed(2)}` },
         { label: `${ticket.discount_label || 'Onsite'} discount`, value: `-PHP ${Number(ticket.discount_amount).toFixed(2)}` },

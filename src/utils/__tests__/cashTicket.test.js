@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { boardingPointView, boardingStopsForLeg, cashTicketPhone, buildOnsiteItem, capacityFromServer, checkInLabel, capacitySummary, checkInsByStop, destinationsAhead, destinationsNotPassed, isMidTripBoardingAvailable, isOnsiteFormComplete, isStandingOpen, orderedStopsForLeg, placesLeft, stopLabel } from '../cashTicket';
+import { boardingPointView, boardingStopsForLeg, cashTicketPhone, buildOnsiteItem, capacityFromServer, checkInLabel, capacitySummary, checkInsByStop, destinationsAhead, destinationsNotPassed, isMidTripBoardingAvailable, isOnsiteFormComplete, isStandingOpen, orderedStopsForLeg, placesLeft, stopLabel, cashSaleTotal } from '../cashTicket';
 import { formatManilaDateTime } from '../dates';
 
 const rs = (id, order, type = 'stop', name = `Stop ${id}`) => ({ stop_id: id, stop_order: order, stop_type: type, stop: { stop_id: id, stop_name: name } });
@@ -247,5 +247,16 @@ describe('checkInsByStop', () => {
   test('is empty when nobody is waiting', () => {
     expect(checkInsByStop([])).toEqual([]);
     expect(checkInsByStop(null)).toEqual([]);
+  });
+});
+
+// 2026-11-25 (user): the Fare Amount box shows everything to collect: fare x tickets + baggage (SAMPLE amounts).
+describe('cashSaleTotal', () => {
+  test('adds the tickets and the baggage, with a short breakdown', () => {
+    expect(cashSaleTotal({ fare: 35, quantity: 1 })).toEqual({ total: 35, breakdown: '' });
+    expect(cashSaleTotal({ fare: 35, quantity: 3 })).toEqual({ total: 105, breakdown: '3 tickets x ₱35.00' });
+    expect(cashSaleTotal({ fare: 35, quantity: 1, baggageFee: 50 })).toEqual({ total: 85, breakdown: 'Fare ₱35.00 + baggage ₱50.00' });
+    expect(cashSaleTotal({ fare: 35, quantity: 2, baggageFee: 20 })).toEqual({ total: 90, breakdown: '2 tickets x ₱35.00 + baggage ₱20.00' });
+    expect(cashSaleTotal({ fare: null })).toEqual({ total: null, breakdown: '' });
   });
 });

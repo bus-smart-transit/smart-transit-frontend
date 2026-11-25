@@ -1,17 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { baggageFeeFor, baggageSummary, extrasFor, itemsWithExtras, priorityAfterClaim, priorityFromClaim } from '../ticketExtras';
+import { baggageCount, extrasFor, itemsWithExtras, priorityAfterClaim, priorityFromClaim } from '../ticketExtras';
 
 // SAMPLE values. Priority types as the server sends them (booking/window).
 const TYPES = [{ key: 'senior', label: 'Senior citizen' }, { key: 'pwd', label: 'Person with disability' }, { key: 'pregnant', label: 'Pregnant' }];
 
 describe('ticketExtras (Batch 76)', () => {
-  it('prices baggage at a share of the full fare, whole pesos', () => {
-    expect(baggageFeeFor(100, 50)).toBe(50);
-    expect(baggageFeeFor(47, 50)).toBe(24);
-    expect(baggageFeeFor(NaN, 50)).toBe(0);
-    expect(baggageFeeFor(100, 0)).toBe(0);
-  });
-
   it('turns a senior or PWD claim into a priority seat, never a student one', () => {
     expect(priorityFromClaim('senior', TYPES)).toBe('senior');
     expect(priorityFromClaim('pwd', TYPES)).toBe('pwd');
@@ -27,9 +20,11 @@ describe('ticketExtras (Batch 76)', () => {
     ]);
   });
 
-  it('counts the bags and their total fee', () => {
-    expect(baggageSummary(100, 2, { 0: { baggage: true }, 1: { baggage: true } }, 50)).toEqual({ count: 2, total: 100 });
-    expect(baggageSummary(100, 1, {}, 50)).toEqual({ count: 0, total: 0 });
+  // 2026-11-25 (user): baggage is declared online and paid on board, so only the count is needed.
+  it('counts the tickets that declare baggage', () => {
+    expect(baggageCount(2, { 0: { baggage: true }, 1: { baggage: true } })).toBe(2);
+    expect(baggageCount(1, { 1: { baggage: true } })).toBe(0);
+    expect(baggageCount(1, {})).toBe(0);
   });
 
   it('adds the choices to the checkout items and leaves the rest alone', () => {

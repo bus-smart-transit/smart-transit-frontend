@@ -1,3 +1,5 @@
+import { baggageText } from './ticketExtras';
+
 // Batch 80 (user, 2026-11-19): the printed ticket (Print PDF) in the designer's ticket design, shared by the booking page
 // and My Tickets (they had two copies of the old green layout). Every value is escaped; the QR image is drawn locally.
 
@@ -30,7 +32,7 @@ export function ticketExtraRows(ticket) {
     if (ticket.discount_id_checked_at) rows.push({ label: 'ID check', value: 'Verified by Chauffeur' });
   }
   if (ticket?.priority_label) rows.push({ label: 'Priority seat', value: ticket.priority_label });
-  if (ticket?.has_baggage) rows.push({ label: 'Baggage', value: 'In the compartment (in the fare)' });
+  if (baggageText(ticket)) rows.push({ label: 'Baggage', value: baggageText(ticket) });
   return rows;
 }
 

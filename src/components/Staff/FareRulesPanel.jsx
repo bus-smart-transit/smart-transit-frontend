@@ -9,6 +9,7 @@ import Pagination from '../ui/Pagination'
 import { serviceTypeLabel } from '../../utils/serviceType'
 import { isRecentlyAdded, newFirst } from '../../utils/recentlyAdded'
 import { OpNewBadge, OP_NEW_ROW } from './Operator/OperatorUI'
+import BaggagePricesCard from './BaggagePricesCard'
 
 // Batch 53 item 8 (user's design): rules as cards, five a page; the Add form opens in a pop-up; no filters.
 const RULES_PER_PAGE = 5
@@ -181,6 +182,17 @@ export default function FareRulesPanel({ service, fleets = [], routes = [], canC
     return 'Fare rule updated.'
   })
 
+  // 2026-11-25 (user): the company's baggage prices by size, saved with the same extra check as fares.
+  const loadBaggage = useCallback(async () => (await service.getBaggageFees())?.data ?? [], [service])
+  const saveBaggage = async (prices) => {
+    let fees = null
+    const result = await withStepUp(async (token) => {
+      fees = (await service.updateBaggageFees(prices, token))?.data ?? null
+      return 'Baggage prices saved.'
+    })
+    return { ...result, fees }
+  }
+
   const ruleScope = (rule) => (rule.fleet_id ? `Fleet ${rule.fleet?.plate_number ?? `#${rule.fleet_id}`}` : 'General')
 
   return (
@@ -244,6 +256,10 @@ export default function FareRulesPanel({ service, fleets = [], routes = [], canC
       )}
       {rules.length > RULES_PER_PAGE && (
         <Pagination page={page} perPage={RULES_PER_PAGE} total={rules.length} lastPage={Math.ceil(rules.length / RULES_PER_PAGE)} onPageChange={setPage} label="Fare rule pages" />
+      )}
+
+      {typeof service.getBaggageFees === 'function' && (
+        <BaggagePricesCard load={loadBaggage} save={saveBaggage} readOnly={readOnly} tone={t} />
       )}
 
       {readOnly ? (

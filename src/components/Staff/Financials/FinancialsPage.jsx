@@ -2,6 +2,7 @@ import { useState } from 'react';
 import {
   Download, Loader2, RotateCcw, Wallet, Undo2, Banknote, Ticket, Calculator, Percent, Receipt, ArrowLeftRight,
   Filter, TrendingUp, CreditCard, MapPin, ScrollText, Lightbulb, ArrowRight,
+  Luggage,
 } from 'lucide-react';
 import Card from '../../ui/Card';
 import FileTypeSelect from '../../ui/FileTypeSelect';
@@ -244,10 +245,12 @@ export default function FinancialsPage({ service, view = 'all', embedded = false
           </div>
 
           <Section icon={Lightbulb} title="Quick insights" hint="Key figures for the selected period.">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4" data-testid="quick-insights">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5" data-testid="quick-insights">
               <Insight icon={Calculator} label="Average fare" value={formatPeso(kpis.average_fare)} hint="Gross per paid ticket" />
               <Insight icon={Percent} label="Discounts given" value={formatPeso(summary.discounts?.total ?? 0)} hint={`${formatCount(summary.discounts?.tickets ?? 0)} discounted tickets`} />
               <Insight icon={Receipt} label="Transaction fees" value={kpis.booking_fees ? formatPeso(kpis.booking_fees.net) : 'Not provided'} hint="Online fee, not part of the fares" />
+              {/* 2026-11-25 (user): baggage paid in cash to the Chauffeur on board, apart from ticket sales. */}
+              <Insight icon={Luggage} label="Baggage (cash on board)" value={kpis.baggage ? formatPeso(kpis.baggage.collected) : 'Not provided'} hint={kpis.baggage ? `${formatCount(kpis.baggage.count)} paid on board, not in the fares` : 'Not in the fares'} />
               <Insight icon={ArrowLeftRight} label="Cash vs online" value={`${Math.round(Number(kpis.cash?.percent) || 0)}% / ${Math.round(Number(kpis.online?.percent) || 0)}%`} hint={`${formatPeso(kpis.cash?.gross)} cash · ${formatPeso(kpis.online?.gross)} online`} />
             </div>
           </Section>

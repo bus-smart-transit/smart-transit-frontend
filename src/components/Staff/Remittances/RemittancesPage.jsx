@@ -67,6 +67,8 @@ function RemittanceCard({ row, busy, error, onConfirm, onResolve }) {
         {/* 2026-10-28 (§4.5): shifts start at 0 now; opening cash shows only for an older shift that had one. */}
         {Number(row.opening_cash) > 0 && <Figure label="Opening cash" value={row.opening_cash} />}
         <Figure label="Cash sales" value={row.cash_sales} />
+        {/* 2026-11-25 (user): baggage paid in cash on board, part of the expected cash. */}
+        {Number(row.baggage_cash) > 0 && <Figure label="Baggage" value={row.baggage_cash} />}
         <Figure label="Cash refunds" value={row.cash_refunds} />
         <Figure label={pending ? 'Expected cash' : 'Expected when confirmed'} value={row.expected_cash} strong />
       </dl>

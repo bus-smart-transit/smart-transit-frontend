@@ -11,11 +11,11 @@ import { buildOnsiteItem } from '../../../utils/cashTicket';
  * `discount` ({ discount_type_key, discount_id_checked }, 2026-10-27): the quote includes an onsite discount once the
  * Chauffeur has ticked the ID check, so the fare shown is the fare the sale charges.
  */
-export default function useOnsiteQuote({ tripId, form, ready, refreshKey = 0, discount = null, baggage = false }) {
+export default function useOnsiteQuote({ tripId, form, ready, refreshKey = 0, discount = null, baggageSize = '' }) {
   const [answer, setAnswer] = useState({ key: '', amount: null, message: '' });
   const discountKey = discount?.discount_type_key && discount?.discount_id_checked ? discount.discount_type_key : '';
-  // Batch 76: with baggage the server also says the baggage fee (half the full fare), shown next to the fare.
-  const key = ready && tripId ? JSON.stringify([tripId, form.seat_type, form.boarding_mode, form.origin_stop_id, form.pending_boarding_id, form.destination_stop_id, discountKey, Boolean(baggage), refreshKey]) : '';
+  // 2026-11-25 (user): with a baggage size the server also says its price (paid in cash with the fare).
+  const key = ready && tripId ? JSON.stringify([tripId, form.seat_type, form.boarding_mode, form.origin_stop_id, form.pending_boarding_id, form.destination_stop_id, discountKey, baggageSize || '', refreshKey]) : '';
 
   useEffect(() => {
     if (!key) return undefined;
@@ -25,7 +25,7 @@ export default function useOnsiteQuote({ tripId, form, ready, refreshKey = 0, di
       item.discount_type_key = discountKey;
       item.discount_id_checked = true;
     }
-    if (baggage) item.baggage = true;
+    if (baggageSize) item.baggage_size = baggageSize;
     ConductorService.quoteOnsite(item)
       .then((response) => {
         const data = response?.data ?? response;

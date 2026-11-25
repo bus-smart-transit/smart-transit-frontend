@@ -215,8 +215,8 @@ describe('checkout layout and ticket options (Batch 76)', () => {
     ...bookingState(),
     discountTypes: [{ key: 'student', label: 'Student', rate: 0.2 }],
     priorityTypes: [{ key: 'senior', label: 'Senior citizen' }, { key: 'pregnant', label: 'Pregnant' }],
-    baggagePercent: 50,
-    baggage: { count: 1, total: 118 },
+    baggageOnBoard: true,
+    baggage: { count: 1 },
     setDiscountClaim: vi.fn(),
     setTicketExtra: vi.fn(),
     timelineState: { timeline: { trip: { route_id: 3, leg_direction: 'outbound' } } },
@@ -245,8 +245,12 @@ describe('checkout layout and ticket options (Batch 76)', () => {
     expect(state.setTicketExtra).toHaveBeenCalledWith(1, 'priority_type', 'pregnant');
     fireEvent.click(screen.getByTestId('baggage-1'));
     expect(state.setTicketExtra).toHaveBeenCalledWith(1, 'baggage', true);
-    expect(screen.getAllByText('(+PHP 118.00)')).toHaveLength(2);
+    // 2026-11-25 (user): baggage is declared only; the note says it is paid in cash on board, and the summary says so.
+    expect(screen.queryByText(/\+PHP/)).toBeNull();
+    expect(screen.getByTestId('baggage-note-0')).toHaveTextContent('Baggage is not part of this payment.');
+    expect(screen.queryByTestId('baggage-note-1')).toBeNull();
     expect(screen.getByText('Baggage (1)')).toBeInTheDocument();
+    expect(screen.getByText('Pay on board')).toBeInTheDocument();
   });
 
   it('opens the route map in a pop-up', () => {

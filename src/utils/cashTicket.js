@@ -195,3 +195,18 @@ export function checkInsByStop(checkIns) {
   });
   return [...groups.values()];
 }
+
+/**
+ * 2026-11-25 (user): what the Chauffeur collects for one cash sale: the fare times the tickets, plus the baggage (one
+ * payment for the sale, at the size's price). `breakdown` is shown under the total when there is more than the fare.
+ */
+export function cashSaleTotal({ fare, quantity = 1, baggageFee = 0 }) {
+  const unit = Number(fare);
+  if (fare === null || fare === undefined || fare === '' || !Number.isFinite(unit)) return { total: null, breakdown: '' };
+  const count = Math.max(1, Number(quantity) || 1);
+  const bag = Number(baggageFee) > 0 ? Number(baggageFee) : 0;
+  const total = Number((unit * count + bag).toFixed(2));
+  const parts = [count > 1 ? `${count} tickets x ₱${unit.toFixed(2)}` : `Fare ₱${unit.toFixed(2)}`];
+  if (bag > 0) parts.push(`baggage ₱${bag.toFixed(2)}`);
+  return { total, breakdown: count > 1 || bag > 0 ? parts.join(' + ') : '' };
+}

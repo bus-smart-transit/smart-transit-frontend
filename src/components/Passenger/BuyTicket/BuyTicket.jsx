@@ -22,7 +22,6 @@ import { formatDuration } from '../../../utils/tripTimeline';
 import { seatsLeftText, tripProgressText } from '../../../utils/passengerTripProgress';
 import { cleanContactInput, looksLikePhone } from '../../../utils/travellerContact';
 import { clock12 } from '../../../utils/clock';
-import { baggageFeeFor } from '../../../utils/ticketExtras';
 
 // Matches OnlineCheckoutRequest: the passenger picks GCash or Maya (C4). The payment
 // page itself collects whatever else the provider needs.
@@ -84,8 +83,8 @@ export default function BuyTicket({ onTicketPurchased, returnTo = '/', accountEm
     discountTypes = [],
     setDiscountClaim,
     priorityTypes = [],
-    baggagePercent = 0,
-    baggage = { count: 0, total: 0 },
+    baggageOnBoard = false,
+    baggage = { count: 0 },
     setTicketExtra = () => {},
     maxSeatsPerPurchase,
     totalDue,
@@ -551,18 +550,18 @@ export default function BuyTicket({ onTicketPurchased, returnTo = '/', accountEm
 
                   {/* Batch 75 (panel): claim a discount online; the Chauffeur checks the ID on the bus. Batch 76 (user): with a
                       priority seat and baggage, per ticket. 2026-11-24 (user): a senior or PWD discount sets the priority seat. */}
-                  {(discountTypes.length > 0 || priorityTypes.length > 0 || baggagePercent > 0) && (
+                  {(discountTypes.length > 0 || priorityTypes.length > 0 || baggageOnBoard) && (
                     <fieldset className="mt-6 border-t border-slate-100 pt-5" data-testid="ticket-options">
                       <legend className="sr-only">Ticket options</legend>
                       <p aria-hidden="true" className={`flex items-center gap-1 ${LABEL}`}>
                         Ticket options
                         {/* 2026-11-24 (user): explanations behind (i); what the passenger pays now stays on screen. */}
-                        {(priorityTypes.length > 0 || baggagePercent > 0) && (
+                        {(priorityTypes.length > 0 || baggageOnBoard) && (
                           <InfoTip
                             label="About ticket options"
                             text={[
                               priorityTypes.length > 0 ? 'Priority seats are for senior citizens, persons with disability and pregnant passengers. The Chauffeur checks on the bus.' : '',
-                              baggagePercent > 0 ? `Baggage in the compartment costs ${baggagePercent}% of the fare.` : '',
+                              baggageOnBoard ? 'Add baggage if you bring boxes, sacks, large suitcases or appliances for the compartment. The Chauffeur checks the size and you pay for it in cash when you board.' : '',
                             ].filter(Boolean).join(' ')}
                           />
                         )}
@@ -608,20 +607,25 @@ export default function BuyTicket({ onTicketPurchased, returnTo = '/', accountEm
                                   </label>
                                 )}
                               </div>
-                              {baggagePercent > 0 && (
-                                <label className="mt-3 flex items-center gap-2 text-sm text-slate-700">
-                                  <input
-                                    type="checkbox"
-                                    className="h-4 w-4 rounded border-slate-300 accent-teal-600"
-                                    checked={Boolean(extra.baggage)}
-                                    onChange={(e) => setTicketExtra(index, 'baggage', e.target.checked)}
-                                    data-testid={`baggage-${index}`}
-                                  />
-                                  <span>
-                                    Baggage in the compartment{' '}
-                                    {hasFareQuote && <span className="whitespace-nowrap text-slate-500">(+PHP {baggageFeeFor(unitFare, baggagePercent).toFixed(2)})</span>}
-                                  </span>
-                                </label>
+                              {/* 2026-11-25 (user): baggage is only declared here; its size is priced and paid in cash on board. */}
+                              {baggageOnBoard && (
+                                <div className="mt-3">
+                                  <label className="flex items-center gap-2 text-sm text-slate-700">
+                                    <input
+                                      type="checkbox"
+                                      className="h-4 w-4 rounded border-slate-300 accent-teal-600"
+                                      checked={Boolean(extra.baggage)}
+                                      onChange={(e) => setTicketExtra(index, 'baggage', e.target.checked)}
+                                      data-testid={`baggage-${index}`}
+                                    />
+                                    <span>Add baggage for the compartment</span>
+                                  </label>
+                                  {extra.baggage && (
+                                    <p className="mt-1 pl-6 text-xs text-slate-600" data-testid={`baggage-note-${index}`}>
+                                      Baggage is not part of this payment. The Chauffeur checks its size and you pay for it in cash when you board at your pick-up stop.
+                                    </p>
+                                  )}
+                                </div>
                               )}
                             </div>
                           );
@@ -800,11 +804,11 @@ export default function BuyTicket({ onTicketPurchased, returnTo = '/', accountEm
               </SummaryRow>
               <SummaryRow label="Quantity">{totalTickets}</SummaryRow>
               <SummaryRow label="Gross total">PHP {Number(grossTotal || 0).toFixed(2)}</SummaryRow>
-              {baggage.count > 0 && <SummaryRow label={`Baggage (${baggage.count})`}>PHP {Number(baggage.total).toFixed(2)}</SummaryRow>}
+              {baggage.count > 0 && <SummaryRow label={`Baggage (${baggage.count})`}>Pay on board</SummaryRow>}
               {/* Rewards are for signed-in passengers only; a guest has none to apply. */}
               {!isGuestCheckout && <SummaryRow label="Rewards applied">{Number(rewardPointsToApply || 0).toFixed(0)} points</SummaryRow>}
               {!isGuestCheckout && (
-                <SummaryRow label={baggage.count > 0 ? 'Fare and baggage after rewards' : 'Fare after rewards'}>PHP {Number(netTotal || 0).toFixed(2)}</SummaryRow>
+                <SummaryRow label="Fare after rewards">PHP {Number(netTotal || 0).toFixed(2)}</SummaryRow>
               )}
               <SummaryRow label={bookingFeeRate ? `Transaction fee (${bookingFeeRate})` : 'Transaction fee'}>{bookingFee === null ? 'Not provided' : `PHP ${Number(bookingFee).toFixed(2)}`}</SummaryRow>
             </dl>

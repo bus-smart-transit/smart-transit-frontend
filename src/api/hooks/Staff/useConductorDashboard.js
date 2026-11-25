@@ -1133,11 +1133,15 @@ export function useConductorDashboardData({ onLogout, pairing, refreshPairingSta
         onsiteItem.discount_type_key = discount.discount_type_key;
         onsiteItem.discount_id_checked = Boolean(discount.discount_id_checked);
       }
-      // Batch 76: a priority seat and baggage in the compartment (the server adds the baggage fee).
+      // Batch 76: a priority seat.
       if (discount?.priority_type) onsiteItem.priority_type = discount.priority_type;
-      if (discount?.baggage) onsiteItem.baggage = true;
       const count = onsiteQuantity(cashForm, { discount: Boolean(discount?.discount_type_key), priority: Boolean(discount?.priority_type) });
       const onsitePayload = { items: Array.from({ length: count }, () => ({ ...onsiteItem })) };
+      // 2026-11-25 (user): baggage is one cash payment for the sale, at its size's price, kept with the first ticket.
+      if (discount?.baggage_size) {
+        onsitePayload.items[0].baggage_size = discount.baggage_size;
+        if (discount.baggage_stub) onsitePayload.items[0].baggage_stub = discount.baggage_stub;
+      }
       const idempotencyKey = checkoutIdempotencyKey('conductor-cash', onsitePayload);
       const res = await ConductorService.checkoutOnsite(onsitePayload, idempotencyKey);
       clearCheckoutIdempotencyKey('conductor-cash');
@@ -1331,6 +1335,7 @@ export function useConductorDashboardData({ onLogout, pairing, refreshPairingSta
     loadData,
     loadOccupancy,
     loadEarnings,
+    loadPassengers,
     handleStartShift,
   refreshEndBlockedReason,
     handleToggleAvailability,

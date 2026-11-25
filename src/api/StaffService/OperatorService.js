@@ -381,6 +381,16 @@ class OperatorService extends StaffBaseService {
     return await this.request(`/operator/fare-rules/${fareRuleId}`, 'PATCH', changes, extraHeaders);
   }
 
+  // 2026-11-25 (user): the company's baggage prices by size (paid in cash on board); saving needs the extra check.
+  async getBaggageFees() {
+    return await this.request('/operator/baggage-fees', 'GET');
+  }
+
+  async updateBaggageFees(prices, stepUpToken = null) {
+    const extraHeaders = stepUpToken ? { 'X-Step-Up-Token': stepUpToken } : {};
+    return await this.request('/operator/baggage-fees', 'PUT', prices, extraHeaders);
+  }
+
   async copyFareRule(fareRuleId, values, stepUpToken = null) {
     const extraHeaders = stepUpToken ? { 'X-Step-Up-Token': stepUpToken } : {};
     return await this.request(`/operator/fare-rules/${fareRuleId}/copy`, 'POST', values, extraHeaders);

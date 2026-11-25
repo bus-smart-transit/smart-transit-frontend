@@ -903,6 +903,7 @@ export default function Dashboard() {
                 discountClaimMessage={selectedTicket.discount_claim?.message || ''}
                 priorityLabel={selectedTicket.priority_label || ''}
                 hasBaggage={Boolean(selectedTicket.has_baggage)}
+                baggagePaid={Number(selectedTicket.baggage_paid) || 0}
                 trackingToken={renewedTokens[selectedTicket.ticket_uuid] || selectedTicket.tracking_token || ''}
                 trackingCode={selectedTicket.ticket_uuid in renewedCodes ? renewedCodes[selectedTicket.ticket_uuid] : (selectedTicket.tracking_code || '')}
                 ticketId={ticketIdOf(selectedTicket.ticket_uuid)}

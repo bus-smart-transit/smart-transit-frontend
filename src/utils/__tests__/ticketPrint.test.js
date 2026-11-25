@@ -13,6 +13,9 @@ describe('ticketPrint', () => {
     const rows = ticketExtraRows({ discount_amount: 30, original_amount: 152, discount_label: 'Student', discount_id_checked_at: '2026-11-18', priority_label: 'Pregnant', has_baggage: true, seat_type: 'seated' });
     expect(rows.map((r) => r.label)).toEqual(['Original fare', 'Student discount', 'ID check', 'Priority seat', 'Baggage']);
     expect(ticketExtraRows({ seat_type: 'seated' })).toEqual([]);
+    // 2026-11-25 (user): baggage is declared online and paid in cash on board.
+    expect(ticketExtraRows({ has_baggage: true })).toEqual([{ label: 'Baggage', value: 'Declared. Pay the Chauffeur in cash on board' }]);
+    expect(ticketExtraRows({ has_baggage: true, baggage_paid: 50 })).toEqual([{ label: 'Baggage', value: 'Paid PHP 50.00 on board' }]);
   });
 
   it('prints the ticket with its status, date, time, fare, Ticket ID and QR, and escapes every value', () => {

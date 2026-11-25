@@ -1,14 +1,6 @@
 // Batch 76 (user, 2026-11-17): per-ticket choices at checkout besides the discount claim: a priority seat (senior,
-// person with disability, pregnant; checked by the Chauffeur on the bus) and baggage in the compartment, which costs
-// a share of the ticket's full fare (the server's BaggageFee owns the amount; this only mirrors it for the summary).
-
-/** The baggage fee for one ticket: `percent` of the full fare, whole pesos (fare 100 at 50 percent: 50). */
-export function baggageFeeFor(fare, percent) {
-  const amount = Number(fare);
-  const rate = Number(percent);
-  if (!Number.isFinite(amount) || !Number.isFinite(rate) || amount <= 0 || rate <= 0) return 0;
-  return Math.round((amount * rate) / 100);
-}
+// person with disability, pregnant; checked by the Chauffeur on the bus) and baggage in the compartment.
+// 2026-11-25 (user): baggage is only declared online; the Chauffeur prices it by size and it is paid in cash on board.
 
 /** The priority a senior or PWD discount claim implies (a claim key that is also a priority type), or ''. */
 export function priorityFromClaim(claimKey, priorityTypes = []) {
@@ -39,10 +31,9 @@ export function extrasFor(quantity, extras = {}, priorityTypes = []) {
   });
 }
 
-/** How many tickets carry baggage, and the total baggage fee for a fare. */
-export function baggageSummary(fare, quantity, extras, percent) {
-  const count = extrasFor(quantity, extras, []).filter((choice) => choice.baggage).length;
-  return { count, total: count * baggageFeeFor(fare, percent) };
+/** How many of the tickets declare baggage. */
+export function baggageCount(quantity, extras) {
+  return extrasFor(quantity, extras, []).filter((choice) => choice.baggage).length;
 }
 
 /** Adds each ticket's priority and baggage to the checkout items (built with their discount claims). */
@@ -54,4 +45,14 @@ export function itemsWithExtras(items, extras, priorityTypes) {
     if (choices[index].baggage) next.baggage = true;
     return next;
   });
+}
+
+/**
+ * 2026-11-25 (user): what the ticket says about baggage, or '' when none was declared or paid. Baggage is paid in cash
+ * on board: `baggage_paid` is what was paid so far (from the server).
+ */
+export function baggageText(ticket) {
+  const paid = Number(ticket?.baggage_paid);
+  if (Number.isFinite(paid) && paid > 0) return `Paid PHP ${paid.toFixed(2)} on board`;
+  return ticket?.has_baggage ? 'Declared. Pay the Chauffeur in cash on board' : '';
 }

@@ -43,7 +43,9 @@ import { BOARDING_NOT_STARTED, BOARDING_OPEN_STATUSES, ticketingReason } from '.
 import { claimReviewState } from '../../utils/discountClaim';
 import { passengerCountRows } from '../../utils/passengerCount';
 import DiscountReviewDialog from './Crew/DiscountReviewDialog';
-import { MAX_CASH_TICKETS, boardingStopsForLeg, checkInLabel, checkInsByStop, destinationsAhead, destinationsNotPassed, isOnsiteFormComplete, onsiteQuantity, orderedStopsForLeg, placesLeft, stopLabel } from '../../utils/cashTicket';
+import BaggageChargeDialog from './Crew/BaggageChargeDialog';
+import useBaggageCharges from '../../api/hooks/Staff/useBaggageCharges';
+import { MAX_CASH_TICKETS, boardingStopsForLeg, cashSaleTotal, checkInLabel, checkInsByStop, destinationsAhead, destinationsNotPassed, isOnsiteFormComplete, onsiteQuantity, orderedStopsForLeg, placesLeft, stopLabel } from '../../utils/cashTicket';
 import { isExpress } from '../../utils/serviceType';
 import ServiceTypeChip from '../ui/ServiceTypeChip';
 import { deriveTripStatus } from '../../utils/tripStatus';
@@ -158,9 +160,10 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   const [onsiteDiscountError, setOnsiteDiscountError] = useState('');
   const [onsiteDiscountTypeKey, setOnsiteDiscountTypeKey] = useState('');
   const [onsiteDiscountIdChecked, setOnsiteDiscountIdChecked] = useState(false);
-  // Batch 76: the cash sale's priority seat and baggage.
+  // Batch 76: the cash sale's priority seat. 2026-11-25 (user): its baggage size ('' for none) and paper stub number.
   const [onsitePriority, setOnsitePriority] = useState('');
-  const [onsiteBaggage, setOnsiteBaggage] = useState(false);
+  const [onsiteBaggageSize, setOnsiteBaggageSize] = useState('');
+  const [onsiteBaggageStub, setOnsiteBaggageStub] = useState('');
   const [confirmStart, setConfirmStart] = useState(false);
   // 2026-10-28 (§4.5): no opening cash at Start Shift. Chauffeurs are not given petty cash, so a shift starts at 0.
   // Batch 29: End Shift asks for the cash counted and handed over; the Operator confirms it on the web dashboard.
@@ -248,6 +251,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     loadData,
     loadOccupancy,
     loadEarnings,
+    loadPassengers,
     handleStartShift,
   refreshEndBlockedReason,
     handleEndShift,
@@ -286,13 +290,15 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
       discount_type_key: onsiteDiscountTypeKey,
       discount_id_checked: onsiteDiscountIdChecked,
       priority_type: onsitePriority,
-      baggage: onsiteBaggage,
+      baggage_size: onsiteBaggageSize,
+      baggage_stub: onsiteBaggageStub.trim(),
     }, onsiteQuote.status === 'ready' ? onsiteQuote.amount : null);
     if (completed) {
       setOnsiteDiscountTypeKey('');
       setOnsiteDiscountIdChecked(false);
       setOnsitePriority('');
-      setOnsiteBaggage(false);
+      setOnsiteBaggageSize('');
+      setOnsiteBaggageStub('');
     }
   };
   // Batch 27: the cash ticket offers real stopping stops in the order this leg travels
@@ -338,7 +344,16 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     ready: formReady,
     refreshKey: `${byBusPosition ? boardingView.distanceFromOriginKm : 0}-${quoteNonce}`,
     discount: { discount_type_key: onsiteDiscountTypeKey, discount_id_checked: onsiteDiscountIdChecked },
-    baggage: onsiteBaggage,
+    baggageSize: onsiteBaggageSize,
+  });
+  // 2026-11-25 (user): the Fare Amount box shows everything to collect: the fare times the tickets, plus the baggage.
+  const saleTotal = onsiteQuote.status === 'ready' ? cashSaleTotal({ fare: onsiteQuote.amount, quantity: saleQuantity, baggageFee: onsiteQuote.baggageFee }) : null;
+  // 2026-11-25 (user): baggage paid in cash on board, for a passenger in the list.
+  const baggageCharges = useBaggageCharges({
+    onChanged: () => {
+      void loadPassengers();
+      void loadEarnings();
+    },
   });
 
   const headerBadge = resolveConductorHeaderBadge({
@@ -885,7 +900,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                       )}
                     </div>
 
-                    {/* Batch 76: a priority seat and baggage in the compartment (the baggage fee is added to the fare). */}
+                    {/* Batch 76: a priority seat. 2026-11-25 (user): baggage by size, paid in cash on board. */}
                     <div className="grid gap-3 sm:grid-cols-2">
                       <div>
                         <label htmlFor="onsite-priority" className="mb-1 block text-sm font-semibold text-slate-700">Priority seat</label>
@@ -899,16 +914,35 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                           {ONSITE_PRIORITY_TYPES.map((type) => <option key={type.key} value={type.key}>{type.label}</option>)}
                         </select>
                       </div>
-                      <label className="flex items-center gap-2 self-end pb-2 text-sm font-semibold text-slate-700">
-                        <input
-                          type="checkbox"
-                          checked={onsiteBaggage}
-                          onChange={(event) => setOnsiteBaggage(event.target.checked)}
-                          className="h-4 w-4 rounded border-slate-300 accent-teal-700"
+                      {/* 2026-11-25 (user): baggage by size, paid in cash with the fare (its own payment). */}
+                      <div>
+                        <label htmlFor="onsite-baggage" className="mb-1 block text-sm font-semibold text-slate-700">Baggage in the compartment</label>
+                        <select
+                          id="onsite-baggage"
+                          value={onsiteBaggageSize}
+                          onChange={(event) => setOnsiteBaggageSize(event.target.value)}
+                          className="h-11 w-full rounded-lg border border-slate-300 bg-slate-800 px-3 text-sm text-white outline-none focus:border-teal-500"
                           data-testid="onsite-baggage"
-                        />
-                        Baggage in the compartment
-                      </label>
+                        >
+                          <option value="">No baggage</option>
+                          {baggageCharges.fees.map((fee) => <option key={fee.key} value={fee.key}>{fee.label} - &#8369;{Number(fee.amount).toFixed(2)} ({fee.hint})</option>)}
+                        </select>
+                      </div>
+                      {onsiteBaggageSize && (
+                        <div className="sm:col-span-2">
+                          <label htmlFor="onsite-baggage-stub" className="mb-1 block text-sm font-semibold text-slate-700">Baggage stub number (optional)</label>
+                          <input
+                            id="onsite-baggage-stub"
+                            type="text"
+                            maxLength={30}
+                            value={onsiteBaggageStub}
+                            onChange={(event) => setOnsiteBaggageStub(event.target.value)}
+                            placeholder="From the paper baggage stub"
+                            className="h-11 w-full rounded-lg border border-slate-300 px-3 text-sm outline-none focus:border-teal-500"
+                            data-testid="onsite-baggage-stub"
+                          />
+                        </div>
+                      )}
                     </div>
 
                     <div data-testid="onsite-fare">
@@ -918,15 +952,13 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                         aria-live="polite"
                         className={`flex min-h-14 w-full items-center rounded-lg border px-3 py-2 ${onsiteQuote.status === 'ready' ? 'border-emerald-300 bg-emerald-50' : onsiteQuote.status === 'error' ? 'border-red-200 bg-red-50' : 'border-slate-300 bg-slate-100'}`}
                       >
-                        {onsiteQuote.status === 'ready' && <span className="font-data text-3xl font-bold text-emerald-800">&#8369;{onsiteQuote.amount.toFixed(2)}</span>}
+                        {onsiteQuote.status === 'ready' && <span className="font-data text-3xl font-bold text-emerald-800" data-testid="onsite-fare-total">&#8369;{saleTotal.total.toFixed(2)}</span>}
                         {onsiteQuote.status === 'loading' && <span className="text-sm text-slate-600">Working out the fare...</span>}
                         {onsiteQuote.status === 'error' && <span role="alert" className="text-sm font-semibold text-red-700">{onsiteQuote.message}</span>}
                         {onsiteQuote.status === 'idle' && <span className="text-sm text-slate-600">Select boarding point and destination first</span>}
                       </output>
-                      {onsiteQuote.status === 'ready' && onsiteQuote.baggageFee > 0 && (
-                        <p className="mt-1 text-sm font-semibold text-slate-800" data-testid="onsite-baggage-fee">
-                          Plus baggage &#8369;{onsiteQuote.baggageFee.toFixed(2)}. Collect &#8369;{(onsiteQuote.amount + onsiteQuote.baggageFee).toFixed(2)}.
-                        </p>
+                      {saleTotal?.breakdown && (
+                        <p className="mt-1 text-sm font-semibold text-slate-800" data-testid="onsite-fare-breakdown">{saleTotal.breakdown}</p>
                       )}
                       {onsiteQuote.status === 'ready' && onsiteQuote.discountAmount > 0 && (
                         <p className="mt-1 text-xs text-slate-600" data-testid="onsite-fare-discount">
@@ -1044,11 +1076,21 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                                   {p.passenger_name ?? p.passenger?.name ?? 'Guest'}
                                   {/* Batch 76: priority seat and baggage, so the Chauffeur can seat and load them. */}
                                   {p.priority_label && <span className="ml-1.5 rounded-full bg-violet-100 px-2 py-0.5 text-xs font-semibold text-violet-800">Priority: {p.priority_label}</span>}
-                                  {p.baggage && <span className="ml-1.5 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700">Baggage</span>}
+                                  {/* 2026-11-25 (user): declared or paid baggage stands out, with what was paid on board. */}
+                                  {(p.baggage || Number(p.baggage_paid) > 0) && (
+                                    <span className={`ml-1.5 rounded-full px-2 py-0.5 text-xs font-semibold ${Number(p.baggage_paid) > 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-900'}`} data-testid={`baggage-chip-${p.ticket_id}`}>
+                                      {Number(p.baggage_paid) > 0 ? `Baggage paid \u20B1${Number(p.baggage_paid).toFixed(2)}` : 'Baggage: collect on board'}
+                                    </span>
+                                  )}
                                 </td>
                                 <td className="py-3"><span className="rounded-full border border-slate-200 px-2 py-1 text-xs capitalize text-slate-600">{p.seat_type}</span></td>
                                 <td className="py-3 text-slate-600">{p.destination_display}{p.discount_claim && <span className="block text-xs font-semibold text-amber-800">{claimReviewState(p.discount_claim).text}</span>}</td>
                                 <td className="py-3">
+                                  {p.ticket_id && !p.alighted_at && (
+                                    <button type="button" onClick={() => baggageCharges.open(p)} disabled={!boardingOpen} className={`mb-1 mr-1 inline-flex rounded-lg px-2.5 py-1.5 text-xs font-bold disabled:opacity-60 ${p.baggage && !(Number(p.baggage_paid) > 0) ? 'bg-amber-500 text-white hover:bg-amber-600' : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50'}`} data-testid={`baggage-open-${p.ticket_id}`}>
+                                      Baggage
+                                    </button>
+                                  )}
                                   {claimReviewState(p.discount_claim).reviewable && (
                                     <button type="button" onClick={() => openDiscountReview({ ticketId: p.ticket_id, passengerName: p.passenger_name, claim: p.discount_claim })} disabled={!boardingOpen} className="mb-1 mr-1 inline-flex rounded-lg bg-amber-600 px-2.5 py-1.5 text-xs font-bold text-white hover:bg-amber-700 disabled:opacity-60">Review discount</button>
                                   )}
@@ -1140,7 +1182,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
               <div className="staff-card mb-4" data-testid="shift-cash">
                 <p className="text-xs text-slate-400">Expected cash on hand (this shift)</p>
                 <p className="font-data mt-1 text-xl font-bold text-slate-900">₱{Number(earnings.shift.expected_cash).toFixed(2)}</p>
-                <p className="mt-1 text-xs text-slate-500">{Number(earnings.shift.opening_cash) > 0 ? `Opening ₱${Number(earnings.shift.opening_cash).toFixed(2)} + ` : ''}Cash sales ₱{Number(earnings.shift.cash_sales).toFixed(2)} - cash refunds ₱{Number(earnings.shift.cash_refunds).toFixed(2)}</p>
+                <p className="mt-1 text-xs text-slate-500">{Number(earnings.shift.opening_cash) > 0 ? `Opening ₱${Number(earnings.shift.opening_cash).toFixed(2)} + ` : ''}Cash sales ₱{Number(earnings.shift.cash_sales).toFixed(2)}{Number(earnings.shift.baggage_cash) > 0 ? ` + baggage ₱${Number(earnings.shift.baggage_cash).toFixed(2)}` : ''} - cash refunds ₱{Number(earnings.shift.cash_refunds).toFixed(2)}</p>
               </div>
             )}
             {Array.isArray(earnings?.unpaid_check_ins) && earnings.unpaid_check_ins.length > 0 && (
@@ -1271,6 +1313,8 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
 
       {/* Batch 75: the ID check for a discount claimed online. */}
       <DiscountReviewDialog target={discountReview} busy={discountReviewBusy} error={discountReviewError} onDecide={decideDiscount} onClose={closeDiscountReview} />
+      {/* 2026-11-25 (user): baggage paid in cash on board. */}
+      <BaggageChargeDialog target={baggageCharges.target} fees={baggageCharges.fees} busy={baggageCharges.busy} error={baggageCharges.error} onRecord={baggageCharges.record} onTakeBack={baggageCharges.takeBack} onClose={baggageCharges.close} />
 
       {/* End Shift confirmation: the Chauffeur declares the cash handed over (Batch 29). */}
       {confirmEnd && (
@@ -1282,6 +1326,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
               <dl className="mb-4 space-y-2 rounded-lg bg-slate-800 p-3 text-sm" data-testid="end-shift-cash">
                 {Number(endCash.opening_cash) > 0 && <div className="flex justify-between"><dt className="text-slate-500">Opening cash</dt><dd className="font-data text-slate-100">₱{Number(endCash.opening_cash).toFixed(2)}</dd></div>}
                 <div className="flex justify-between"><dt className="text-slate-500">Cash sales</dt><dd className="font-data text-slate-100">₱{Number(endCash.cash_sales).toFixed(2)}</dd></div>
+                {Number(endCash.baggage_cash) > 0 && <div className="flex justify-between"><dt className="text-slate-500">Baggage</dt><dd className="font-data text-slate-100">₱{Number(endCash.baggage_cash).toFixed(2)}</dd></div>}
                 <div className="flex justify-between"><dt className="text-slate-500">Cash refunds</dt><dd className="font-data text-slate-100">- ₱{Number(endCash.cash_refunds).toFixed(2)}</dd></div>
                 <div className="flex justify-between border-t border-slate-700 pt-2"><dt className="text-slate-400">Expected cash</dt><dd className="font-data font-semibold text-slate-100">₱{Number(endCash.expected_cash).toFixed(2)}</dd></div>
               </dl>
@@ -1327,8 +1372,8 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
               <div><dt className="text-xs text-slate-500">Trip ID</dt><dd className="font-semibold text-slate-100">#{trip?.trip_id}</dd></div>
               {onsiteQuote.status === 'ready' && (
                 <div className="col-span-2">
-                  <dt className="text-xs text-slate-500">{onsiteQuote.baggageFee > 0 ? 'Fare and baggage to collect' : 'Fare to collect'}{saleQuantity > 1 ? ` (${saleQuantity} × \u20B1${(onsiteQuote.amount + (onsiteQuote.baggageFee || 0)).toFixed(2)})` : ''}</dt>
-                  <dd className="font-data text-2xl font-bold text-emerald-300">&#8369;{((onsiteQuote.amount + (onsiteQuote.baggageFee || 0)) * saleQuantity).toFixed(2)}</dd>
+                  <dt className="text-xs text-slate-500">{onsiteQuote.baggageFee > 0 ? 'Fare and baggage to collect' : 'Fare to collect'}{saleTotal?.breakdown ? ` (${saleTotal.breakdown})` : ''}</dt>
+                  <dd className="font-data text-2xl font-bold text-emerald-300">&#8369;{saleTotal ? saleTotal.total.toFixed(2) : '0.00'}</dd>
                 </div>
               )}
             </dl>

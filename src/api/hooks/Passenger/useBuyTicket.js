@@ -4,7 +4,7 @@ import PassengerService from '../../PassengerService/PassengerService';
 import { checkoutIdempotencyKey, clearCheckoutIdempotencyKey, shouldDropCheckoutKey } from '../../../utils/checkoutIdempotency';
 import { getBookingWindow, getTripDiscountTypes, readApiError } from '../../../services/bookingService';
 import { itemsWithClaims } from '../../../utils/discountClaim';
-import { baggageSummary, itemsWithExtras, priorityAfterClaim } from '../../../utils/ticketExtras';
+import { baggageCount, itemsWithExtras, priorityAfterClaim } from '../../../utils/ticketExtras';
 import { useBookingStops, useDepartures, useTripResolution } from './useBookingSearch';
 import useBookingLink from './useBookingLink';
 import useTripTimeline from './useTripTimeline';
@@ -125,9 +125,10 @@ export default function useBuyTicket({ onTicketPurchased }) {
   const [feeRates, setFeeRates] = useState(null);
   // Batch 49 item 1: the most tickets in one purchase comes from the server (it checks it too); 20 until it answers.
   const [maxSeatsPerPurchase, setMaxSeatsPerPurchase] = useState(DEFAULT_MAX_SEATS);
-  // Batch 76: the priority seat types and the baggage fee percent from the server (none / 0 until it answers).
+  // Batch 76: the priority seat types from the server (none until it answers). 2026-11-25 (user): baggage is declared
+  // here and paid on board, offered once the server says so.
   const [priorityTypes, setPriorityTypes] = useState([]);
-  const [baggagePercent, setBaggagePercent] = useState(0);
+  const [baggageOnBoard, setBaggageOnBoard] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -139,7 +140,7 @@ export default function useBuyTicket({ onTicketPurchased }) {
         setFeeRates(rates && typeof rates === 'object' ? rates : null);
         if (Number.isInteger(maxSeats) && maxSeats > 0) setMaxSeatsPerPurchase(maxSeats);
         setPriorityTypes(Array.isArray(window?.priority_types) ? window.priority_types : []);
-        setBaggagePercent(Number(window?.baggage_percent) > 0 ? Number(window.baggage_percent) : 0);
+        setBaggageOnBoard(window?.baggage_paid_on_board === true);
       })
       .catch(() => { if (!cancelled) setFeeRates(null); });
     return () => { cancelled = true; };
@@ -306,9 +307,9 @@ export default function useBuyTicket({ onTicketPurchased }) {
 
   const quantity = Math.max(1, parseInt(form.ticket_quantity, 10) || 1);
   const grossTotal = Number.isFinite(unitFare) ? Number((unitFare * quantity).toFixed(2)) : 0;
-  // Batch 76: baggage is a share of each ticket's full fare, added to the payment (the server works out the same).
-  const baggage = baggageSummary(Number.isFinite(unitFare) ? unitFare : 0, quantity, form.ticket_extras, baggagePercent);
-  const payableBeforeRewards = Number((grossTotal + baggage.total).toFixed(2));
+  // 2026-11-25 (user): baggage is paid in cash on board, so the online payment is the fares only.
+  const baggage = { count: baggageCount(quantity, form.ticket_extras) };
+  const payableBeforeRewards = grossTotal;
   const requestedRewardPoints = Math.max(0, parseInt(form.reward_points_to_use, 10) || 0);
   const maxRedeemableByTotal = Math.max(0, Math.floor(payableBeforeRewards - 1));
   const maxRedeemableRewardPoints = Math.min(availableRewardPoints, maxRedeemableByTotal);
@@ -901,7 +902,7 @@ export default function useBuyTicket({ onTicketPurchased }) {
     discountTypes,
     setDiscountClaim,
     priorityTypes,
-    baggagePercent,
+    baggageOnBoard,
     baggage,
     setTicketExtra,
     maxSeatsPerPurchase,

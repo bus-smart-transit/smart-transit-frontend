@@ -132,6 +132,19 @@ class ConductorService extends StaffBaseService {
     return await this.request('/conductor/discount-types', 'GET');
   }
 
+  // 2026-11-25 (user): baggage paid in cash on board, by size; the prices come from the bus company.
+  async getBaggageFees() {
+    return await this.request('/conductor/baggage-fees', 'GET');
+  }
+
+  async recordBaggage(ticketId, size, stubNumber = '') {
+    return await this.request(`/conductor/tickets/${ticketId}/baggage`, 'POST', { size, stub_number: stubNumber || null });
+  }
+
+  async voidBaggage(chargeId) {
+    return await this.request(`/conductor/baggage/${chargeId}/void`, 'PATCH');
+  }
+
   // Batch 18: Shift Block Hand-off System.
   async getMyShiftBlocks() {
     return await this.request('/conductor/shift-blocks', 'GET');

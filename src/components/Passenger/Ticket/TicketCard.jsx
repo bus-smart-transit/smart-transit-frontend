@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { BusFront, Navigation } from 'lucide-react';
 import QrImage from './QrImage';
 import { splitDeparture } from '../../../utils/ticketPrint';
+import { baggageText } from '../../../utils/ticketExtras';
 
 // Batch 80 (user, 2026-11-19): the designer's ticket (home page sample) for the real ticket. Each status gives the pill
 // in the navy header and the line at the foot of the ticket.
@@ -52,9 +53,11 @@ export default function TicketCard({
   discountVerified = false,
   // Batch 75: what happened to a discount claimed online (the server's sentence), or '' when none was claimed.
   discountClaimMessage = '',
-  // Batch 76: a priority seat ("Senior citizen") and baggage in the compartment (its fee is part of the fare).
+  // Batch 76: a priority seat ("Senior citizen") and baggage in the compartment. 2026-11-25 (user): baggage is paid in
+  // cash on board; `baggagePaid` is what was paid so far.
   priorityLabel = '',
   hasBaggage = false,
+  baggagePaid = 0,
   trackingToken = '',
   trackingCode = '',
   ticketId = '',
@@ -155,9 +158,9 @@ export default function TicketCard({
           </div>
         )}
 
-        {(priorityLabel || hasBaggage) && (
+        {(priorityLabel || hasBaggage || Number(baggagePaid) > 0) && (
           <p data-testid="ticket-extras" className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700">
-            {[priorityLabel && `Priority seat: ${priorityLabel}`, hasBaggage && 'Baggage in the compartment (included in the fare)'].filter(Boolean).join(' · ')}
+            {[priorityLabel && `Priority seat: ${priorityLabel}`, baggageText({ has_baggage: hasBaggage, baggage_paid: baggagePaid }) && `Baggage: ${baggageText({ has_baggage: hasBaggage, baggage_paid: baggagePaid })}`].filter(Boolean).join(' · ')}
           </p>
         )}
         {discountClaimMessage && (

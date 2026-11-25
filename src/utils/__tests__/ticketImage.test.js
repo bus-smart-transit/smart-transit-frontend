@@ -36,7 +36,7 @@ describe('buildTicketImageModel', () => {
     expect(model.route).toBe('Alpha  →  Beta')
     expect(byLabel.Seat).toBeUndefined()
     expect(byLabel['Priority seat']).toBe('Senior citizen')
-    expect(byLabel.Baggage).toBe('In the compartment (in the fare)')
+    expect(byLabel.Baggage).toBe('Declared. Pay the Chauffeur in cash on board')
   })
 
   it('shows the onsite discount snapshot and ID verification on a discounted ticket image', () => {
