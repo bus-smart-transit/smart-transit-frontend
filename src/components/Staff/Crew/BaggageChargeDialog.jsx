@@ -72,7 +72,7 @@ export default function BaggageChargeDialog({ target, fees = [], busy = false, e
                       <span className="block text-xs text-slate-500">{fee.hint}</span>
                     </span>
                   </span>
-                  <span className="font-data font-semibold text-slate-900">{peso(fee.amount)}</span>
+                  <span className="shrink-0 whitespace-nowrap font-data font-semibold text-slate-900">{peso(fee.amount)}</span>
                 </label>
               ))}
             </div>
