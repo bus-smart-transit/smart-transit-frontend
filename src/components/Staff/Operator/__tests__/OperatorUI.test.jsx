@@ -62,6 +62,17 @@ describe('Operator UI primitives', () => {
     expect(within(table).getByRole('button', { name: 'Open' })).toBeInTheDocument();
   });
 
+  it('table highlights a newly added row with a New badge in its first cell', () => {
+    const columns = [{ key: 'name', header: 'Name' }, { key: 'n', header: 'Count' }];
+    const rows = [{ id: 1, name: 'New route', n: 1, fresh: true }, { id: 2, name: 'Old route', n: 2 }];
+    render(<OpTable caption="Routes" columns={columns} rows={rows} rowKey={(row) => row.id} isNew={(row) => row.fresh === true} />);
+    const [, newRow, oldRow] = within(screen.getByRole('table', { name: 'Routes' })).getAllByRole('row');
+    expect(newRow).toHaveAttribute('data-new', 'true');
+    expect(within(newRow).getByText('New')).toBeInTheDocument();
+    expect(oldRow).not.toHaveAttribute('data-new');
+    expect(within(oldRow).queryByText('New')).toBeNull();
+  });
+
   it('empty state is plain text', () => {
     render(<OpEmpty>Nothing here.</OpEmpty>);
     expect(screen.getByText('Nothing here.')).toBeInTheDocument();

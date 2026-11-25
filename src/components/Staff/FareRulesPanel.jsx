@@ -7,6 +7,8 @@ import { FareRuleCopyModal, FareRuleEditModal } from './FareRuleActions'
 import Modal from '../ui/Modal'
 import Pagination from '../ui/Pagination'
 import { serviceTypeLabel } from '../../utils/serviceType'
+import { isRecentlyAdded, newFirst } from '../../utils/recentlyAdded'
+import { OpNewBadge, OP_NEW_ROW } from './Operator/OperatorUI'
 
 // Batch 53 item 8 (user's design): rules as cards, five a page; the Add form opens in a pop-up; no filters.
 const RULES_PER_PAGE = 5
@@ -66,7 +68,8 @@ export default function FareRulesPanel({ service, fleets = [], routes = [], canC
     try {
       const params = Object.fromEntries(Object.entries(filters).filter(([, value]) => value !== ''))
       const response = await service.getFareRules(params)
-      setRules(Array.isArray(response?.data) ? response.data : [])
+      // 2026-11-25 (user): a fare rule added in the last 24 hours is shown first and highlighted.
+      setRules(newFirst(Array.isArray(response?.data) ? response.data : []))
       setLoadError('')
     } catch (err) {
       setRules([])
@@ -205,11 +208,12 @@ export default function FareRulesPanel({ service, fleets = [], routes = [], canC
           {rules.slice((page - 1) * RULES_PER_PAGE, page * RULES_PER_PAGE).map((rule) => {
             const cls = rule.vehicle_class_label || classLabel.get(rule.vehicle_class) || classLabel.get(rule.fleet?.vehicle_class) || 'Any class'
             const active = rule.status !== 'inactive'
+            const fresh = isRecentlyAdded(rule.created_at)
             return (
-              <li key={rule.fare_rule_id} className="py-4" data-testid="fare-rule-row">
+              <li key={rule.fare_rule_id} className={`py-4 ${fresh ? `${OP_NEW_ROW} -mx-3 rounded-xl px-3` : ''}`} data-testid="fare-rule-row" data-new={fresh ? 'true' : undefined}>
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className={`text-base font-bold ${t.title}`}>{rule.fleet_id ? (rule.fleet?.plate_number ?? `Fleet #${rule.fleet_id}`) : `General · ${cls}`} · {serviceTypeLabel(rule.service_type)}</p>
+                    <p className={`flex flex-wrap items-center gap-2 text-base font-bold ${t.title}`}><span>{rule.fleet_id ? (rule.fleet?.plate_number ?? `Fleet #${rule.fleet_id}`) : `General · ${cls}`} · {serviceTypeLabel(rule.service_type)}</span>{fresh && <OpNewBadge />}</p>
                     <p className={`text-xs ${t.muted}`}>{cap(rule.seat_type)} · {rule.route_id ? (routeName.get(Number(rule.route_id)) ?? `Route #${rule.route_id}`) : 'All routes'} · {cls}</p>
                   </div>
                   <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold ${active ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-700'}`}>{active ? 'Active' : 'Stopped'}</span>

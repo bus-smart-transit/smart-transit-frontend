@@ -44,6 +44,18 @@ export function OpCard({ title, subtitle, badge = null, icon: Icon = null, accen
   );
 }
 
+/** 2026-11-25 (user): marks a row added in the last 24 hours (utils/recentlyAdded.js decides). */
+export function OpNewBadge({ className = '' }) {
+  return (
+    <span className={`inline-flex items-center whitespace-nowrap rounded-full bg-sky-600 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white ${className}`}>
+      New
+    </span>
+  );
+}
+
+/** The background of a newly added row or card. */
+export const OP_NEW_ROW = 'bg-sky-50/70';
+
 export function OpChip({ tone = 'neutral', children, className = '' }) {
   return (
     <span className={`inline-flex items-center whitespace-nowrap rounded-full px-2 py-1 text-xs font-semibold ${toneOf(tone).chip} ${className}`}>
@@ -254,8 +266,11 @@ export function OpEmpty({ children, icon: Icon = null }) {
  * Below the `md` breakpoint (Batch 31 phase 5) each row becomes a small card: the header row is hidden visually
  * (it stays for screen readers) and every cell shows its column header before its value. The table roles are set
  * explicitly because a table whose display is changed loses them in some browsers.
+ *
+ * isNew(row), when given, highlights a newly added row and puts a New badge in its first cell. The caller orders the
+ * rows (newFirst in utils/recentlyAdded.js), so the table never reorders on its own.
  */
-export function OpTable({ columns, rows, rowKey, empty = 'Nothing to show.', emptyIcon = null, caption }) {
+export function OpTable({ columns, rows, rowKey, empty = 'Nothing to show.', emptyIcon = null, caption, isNew = null }) {
   if (!rows.length) return <OpEmpty icon={emptyIcon}>{empty}</OpEmpty>;
   return (
     <div className="overflow-x-auto">
@@ -269,20 +284,28 @@ export function OpTable({ columns, rows, rowKey, empty = 'Nothing to show.', emp
           </tr>
         </thead>
         <tbody role="rowgroup" className="max-md:block">
-          {rows.map((row) => (
-            <tr key={rowKey(row)} role="row" className="border-b border-slate-50 last:border-0 hover:bg-slate-50 max-md:mb-3 max-md:block max-md:rounded-xl max-md:border max-md:border-slate-200 max-md:p-3 max-md:last:mb-0">
-              {columns.map((column) => (
+          {rows.map((row) => {
+            const fresh = Boolean(isNew?.(row));
+            return (
+            <tr key={rowKey(row)} role="row" data-new={fresh ? 'true' : undefined} className={`border-b border-slate-50 last:border-0 max-md:mb-3 max-md:block max-md:rounded-xl max-md:border max-md:p-3 max-md:last:mb-0 ${fresh ? `${OP_NEW_ROW} hover:bg-sky-50 max-md:border-sky-200` : 'hover:bg-slate-50 max-md:border-slate-200'}`}>
+              {columns.map((column, index) => (
                 <td
                   key={column.key}
                   role="cell"
                   data-label={column.header}
                   className={`px-3 py-2 text-slate-700 max-md:flex max-md:items-baseline max-md:justify-between max-md:gap-4 max-md:px-0 max-md:py-1.5 max-md:text-right max-md:whitespace-normal max-md:[&_*]:whitespace-normal before:text-left before:text-xs before:font-semibold before:uppercase before:tracking-wide before:text-slate-500 before:content-[attr(data-label)] md:before:hidden ${column.header ? '' : 'max-md:justify-end'} ${column.className ?? ''}`}
                 >
-                  {column.render ? column.render(row) : row[column.key] ?? '-'}
+                  {fresh && index === 0 ? (
+                    <span className="inline-flex flex-wrap items-center justify-end gap-2 md:justify-start">
+                      <OpNewBadge />
+                      {column.render ? column.render(row) : row[column.key] ?? '-'}
+                    </span>
+                  ) : (column.render ? column.render(row) : row[column.key] ?? '-')}
                 </td>
               ))}
             </tr>
-          ))}
+            );
+          })}
         </tbody>
       </table>
     </div>

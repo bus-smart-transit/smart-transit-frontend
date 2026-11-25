@@ -379,6 +379,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
     tripStatus: trip?.status,
     endBlockedReason: shiftState?.endBlockedReason || '',
     inFlight: actionInFlight,
+    shiftCancelled: shiftState?.shiftCancelled === true,
   });
   const pressStep = (key) => {
     if (key === 'accept') setActiveTab('schedule');

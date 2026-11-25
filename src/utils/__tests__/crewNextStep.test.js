@@ -63,4 +63,10 @@ describe('chauffeurNextStep', () => {
     expect(chauffeurNextStep({ ...ready, hasActiveTrip: false })).toMatchObject({ key: 'endShift', label: 'End shift' });
     expect(chauffeurNextStep({ ...ready, hasActiveTrip: false, endBlockedReason: 'Remit the cash first.' })).toMatchObject({ disabled: true, reason: 'Remit the cash first.' });
   });
+
+  it('puts End shift first when the shift trip was cancelled while the Chauffeur holds cash', () => {
+    const step = chauffeurNextStep({ ...ready, hasActiveTrip: true, tripStatus: 'scheduled', shiftCancelled: true });
+    expect(step).toMatchObject({ key: 'endShift', label: 'End shift', title: 'Your trip was cancelled' });
+    expect(chauffeurNextStep({ hasWork: true, isPaired: false, hasOpenShift: false, shiftCancelled: true }).label).toBe('Pair with crew');
+  });
 });

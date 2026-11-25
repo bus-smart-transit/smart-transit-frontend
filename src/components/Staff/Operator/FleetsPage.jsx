@@ -2,7 +2,8 @@ import RefreshButton from '../../ui/RefreshButton';
 import { passengerCountLine } from '../../../utils/passengerCount';
 import { useEffect, useMemo, useState } from 'react';
 import { Bus, ChevronRight, MapPinned, Pencil, Plus, Clock, Pause } from 'lucide-react';
-import { OpPageHeader, OpCard, OpChip, OpStat, OpEmpty } from './OperatorUI';
+import { OpPageHeader, OpCard, OpChip, OpStat, OpEmpty, OpNewBadge, OP_NEW_ROW } from './OperatorUI';
+import { isRecentlyAdded, newFirst } from '../../../utils/recentlyAdded';
 import { OP_SPACE } from './operatorUiTokens';
 import Modal from '../../ui/Modal';
 import FilterTabs from '../../ui/FilterTabs';
@@ -241,7 +242,8 @@ export default function FleetsPage({ fleets, routes, trips, onRefresh, companyNa
   const canManage = useCanManageCompany();
   const [notice, setNotice] = useState('');
 
-  const rows = useMemo(() => buildFleetRows({ fleets, trips, locations: fleetLocations, nowMs }), [fleets, trips, fleetLocations, nowMs]);
+  // 2026-11-25 (user): a bus added in the last 24 hours is shown first and highlighted.
+  const rows = useMemo(() => newFirst(buildFleetRows({ fleets, trips, locations: fleetLocations, nowMs }), (row) => row.fleet.created_at), [fleets, trips, fleetLocations, nowMs]);
   const needle = query.trim().toLowerCase();
   const shown = filterFleetRows(rows, filter).filter((row) => !needle || [row.fleet.plate_number, row.fleet.body_no, row.fleet.bus_company_name].some((v) => String(v || '').toLowerCase().includes(needle)));
   const counts = (key) => rows.filter((row) => row.status.key === key).length;
@@ -315,11 +317,12 @@ export default function FleetsPage({ fleets, routes, trips, onRefresh, companyNa
           <ul className="divide-y divide-slate-200" aria-label="Fleets">
             {shown.map((row) => {
               const expanded = openDetails === row.fleetId;
+              const fresh = isRecentlyAdded(row.fleet.created_at);
               return (
-                <li key={row.fleetId} className="py-4" data-testid="fleet-card">
+                <li key={row.fleetId} className={`py-4 ${fresh ? `${OP_NEW_ROW} -mx-3 rounded-xl px-3` : ''}`} data-testid="fleet-card" data-new={fresh ? 'true' : undefined}>
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="text-lg font-bold text-slate-900">{row.fleet.plate_number}</p>
+                      <p className="flex flex-wrap items-center gap-2 text-lg font-bold text-slate-900">{row.fleet.plate_number}{fresh && <OpNewBadge />}</p>
                       <p className="text-xs text-slate-500">{[row.fleet.body_no, row.fleet.bus_company_name].filter(Boolean).join(' · ') || 'No body number'}</p>
                     </div>
                     <span className="flex shrink-0 flex-wrap justify-end gap-1.5">

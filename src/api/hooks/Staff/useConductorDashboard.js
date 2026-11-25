@@ -391,6 +391,7 @@ export function useConductorDashboardData({ onLogout, pairing, refreshPairingSta
           openShift: payload?.open_shift ?? null,
           latestShift: payload?.latest_shift ?? null,
           endBlockedReason: payload?.end_blocked_reason ?? null,
+          shiftCancelled: payload?.shift_cancelled === true,
           cash: payload?.shift_cash ?? null,
           loading: false,
         });

@@ -10,6 +10,7 @@ import Modal from '../../ui/Modal';
 import useStaffDirectory from '../../../api/hooks/Staff/useStaffDirectory';
 import { roleLabel } from '../../../utils/staffForm';
 import { formatPhone } from '../../../utils/phone';
+import { isRecentlyAdded, newFirst } from '../../../utils/recentlyAdded';
 import { parseAppDate } from '../../../utils/dates';
 
 import { SkeletonTable } from '../../ui/Skeleton';
@@ -200,8 +201,9 @@ export default function StaffDirectory({ fleetCount, onChanged }) {
             <OpTable
               caption="Staff Directory"
               columns={columns}
-              rows={directory.staff}
+              rows={newFirst(directory.staff)}
               rowKey={(row) => row.company_user_id}
+              isNew={(row) => isRecentlyAdded(row.joined_at)}
               empty="No staff match your search."
             />
           )}

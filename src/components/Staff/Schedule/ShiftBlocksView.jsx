@@ -11,6 +11,7 @@ import ShiftBlockFilterBar from './ShiftBlockFilterBar';
 import LegTimeEditor from './LegTimeEditor';
 import AssignCrewModal from '../Operator/AssignCrewModal';
 import useDateDrivers from '../../../api/hooks/Staff/useDateDrivers';
+import { isRecentlyAdded, newFirst } from '../../../utils/recentlyAdded';
 
 const ACTION = 'rounded-lg px-3 py-1 text-xs font-semibold';
 
@@ -107,7 +108,9 @@ export default function ShiftBlocksView({ reloadToken = 0, drivers = [], conduct
       )}
 
       {visible.map(({ key, title, empty }) => {
-        const list = groups[key];
+        // 2026-11-25 (user): a block added in the last 24 hours comes first in its section, highlighted.
+        const createdOfCard = (card) => blockById.get(Number(card.shift_block_id))?.created_at;
+        const list = newFirst(groups[key], createdOfCard);
         return (
           <section key={key} aria-label={title} data-testid={`section-${key}`} className="space-y-3">
             <div className="flex items-center justify-between">
@@ -131,6 +134,7 @@ export default function ShiftBlocksView({ reloadToken = 0, drivers = [], conduct
                       showState={showsAssignmentState(card, today)}
                       audit={block && block.audit_status !== 'not_applicable' ? block.audit_status : null}
                       actions={actionsFor(card)}
+                      isNew={isRecentlyAdded(createdOfCard(card))}
                       legEditor={block && block.status === 'scheduled' && Array.isArray(block.legs) && block.legs.some((leg) => ['scheduled', 'delayed'].includes(leg.status))
                         ? <LegTimeEditor legs={block.legs} onSave={(tripId, time) => handleRescheduleLeg(block.shift_block_id, tripId, time)} />
                         : null}

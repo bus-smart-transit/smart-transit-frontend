@@ -51,6 +51,21 @@ describe('JourneyFields (From, To, Date)', () => {
     fireEvent.change(screen.getByLabelText('Date'), { target: { value: '2026-10-05' } });
     expect(onChange).toHaveBeenCalledWith('booking_date', '2026-10-05');
   });
+
+  test('a chosen From or To can be cleared; an empty one has no clear button', () => {
+    const onChange = vi.fn();
+    render(<JourneyFields value={{ ...value, destination_stop_id: '2' }} originGroups={groups} destinationGroups={groups} today="2026-10-01" onChange={onChange} idPrefix="t" />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear From' }));
+    expect(onChange).toHaveBeenCalledWith('origin_stop_id', '');
+    fireEvent.click(screen.getByRole('button', { name: 'Clear To' }));
+    expect(onChange).toHaveBeenCalledWith('destination_stop_id', '');
+  });
+
+  test('shows no clear button when nothing is chosen', () => {
+    render(<JourneyFields value={{ ...value, origin_stop_id: '' }} originGroups={groups} destinationGroups={groups} today="2026-10-01" onChange={() => {}} idPrefix="t" />);
+    expect(screen.queryByRole('button', { name: /^Clear/ })).toBeNull();
+  });
 });
 
 describe('booking stops meta and departures hooks', () => {

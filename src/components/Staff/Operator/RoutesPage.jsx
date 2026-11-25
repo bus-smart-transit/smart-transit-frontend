@@ -11,6 +11,7 @@ import StopPinPicker from './StopPinPicker';
 import { isPinned, roundCoord } from '../../../utils/stopPin';
 import { useCanManageCompany } from './companyAdmin';
 import { routeColor } from '../../../utils/routeColors';
+import { isRecentlyAdded, newFirst } from '../../../utils/recentlyAdded';
 import { useRoutesTab } from '../../../api/hooks/Staff/useOperatorDashboard';
 import {
   buildRouteRows, filterRouteRows, municipalityOptions, formatDuration, filterStops, pageOf, routeNameFrom,
@@ -114,10 +115,11 @@ export default function RoutesPage({ routes, stops, trips, fleets, onRefresh, on
   const [selectedRouteId, setSelectedRouteId] = useState(null);
 
   // 2026-11-21 (user, Dynamic Route Scheduling): a route's active buses come from the trips scheduled on it.
-  const rows = useMemo(() => buildRouteRows({ routes, trips }), [routes, trips]);
+  // 2026-11-25 (user): a route or stop added in the last 24 hours is shown first and highlighted.
+  const rows = useMemo(() => newFirst(buildRouteRows({ routes, trips }), (row) => row.route.created_at), [routes, trips]);
   const shown = filterRouteRows(rows, { query, municipality });
   const municipalities = municipalityOptions(rows);
-  const matchingStops = useMemo(() => filterStops(stops, stopQuery), [stops, stopQuery]);
+  const matchingStops = useMemo(() => newFirst(filterStops(stops, stopQuery)), [stops, stopQuery]);
   const stopPaging = pageOf(matchingStops, stopPage, STOPS_PAGE_SIZE);
   const selected = rows.find((row) => row.routeId === selectedRouteId) || null;
 
@@ -239,7 +241,7 @@ export default function RoutesPage({ routes, stops, trips, fleets, onRefresh, on
             {municipalities.map((name) => <option key={name} value={name}>{name}</option>)}
           </select>
         </div>
-        <OpTable caption="Routes" columns={columns} rows={shown} rowKey={(row) => row.routeId} empty={rows.length === 0 ? 'No routes yet. Use Add route to create your first one.' : 'No route matches this search.'} />
+        <OpTable caption="Routes" columns={columns} rows={shown} rowKey={(row) => row.routeId} isNew={(row) => isRecentlyAdded(row.route.created_at)} empty={rows.length === 0 ? 'No routes yet. Use Add route to create your first one.' : 'No route matches this search.'} />
       </OpCard>
 
       </>)}
@@ -273,7 +275,7 @@ export default function RoutesPage({ routes, stops, trips, fleets, onRefresh, on
             />
           </label>
         </div>
-        <OpTable caption="Stops" columns={stopColumns} rows={stopPaging.rows} rowKey={(stop) => stop.stop_id} empty={stops.length === 0 ? 'No stops yet.' : 'No stop matches this search.'} />
+        <OpTable caption="Stops" columns={stopColumns} rows={stopPaging.rows} rowKey={(stop) => stop.stop_id} isNew={(stop) => isRecentlyAdded(stop.created_at)} empty={stops.length === 0 ? 'No stops yet.' : 'No stop matches this search.'} />
         <OpPager paging={stopPaging} onPage={setStopPage} label="Stops pages" noun="stops" />
       </OpCard>
       )}

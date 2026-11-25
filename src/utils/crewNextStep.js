@@ -71,8 +71,12 @@ export function driverNextStep({
 /** The Chauffeur's next step. Trip actions (boarding, depart, end trip) are the Driver's; the Chauffeur scans tickets. */
 export function chauffeurNextStep({
   hasWork, forApproval = false, needsAcceptance = false, isPaired, hasOpenShift, hasActiveTrip, tripStatus,
-  endBlockedReason = '', inFlight = false,
+  endBlockedReason = '', inFlight = false, shiftCancelled = false,
 }) {
+  // 2026-11-25: the open shift's trip (or whole block) was cancelled while the Chauffeur holds cash: hand it over first.
+  if (hasOpenShift && shiftCancelled) {
+    return { key: 'endShift', title: 'Your trip was cancelled', label: 'End shift', hint: 'End this shift and hand over the cash before your next trip.', disabled: inFlight || Boolean(endBlockedReason), reason: endBlockedReason || '' };
+  }
   const early = common({ hasWork, forApproval, needsAcceptance, isPaired, partner: 'Driver' });
   if (early) return early;
   if (!hasOpenShift) return { key: 'startShift', title: 'Start your shift', label: 'Start shift', hint: 'Start your shift when you are at the bus.', disabled: inFlight };

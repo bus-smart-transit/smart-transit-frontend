@@ -36,7 +36,8 @@ import ProfilePage from '../Account/ProfilePage'
 import SchedulePage from './Schedule/SchedulePage'
 import ShiftBlocksView from './Schedule/ShiftBlocksView'
 import FinancePage from './Finance/FinancePage'
-import { OpPageHeader } from './Operator/OperatorUI'
+import { OpPageHeader, OpNewBadge, OP_NEW_ROW } from './Operator/OperatorUI'
+import { isRecentlyAdded, newFirst } from '../../utils/recentlyAdded'
 import ViewTabs from '../ui/ViewTabs'
 import useTextMessages from '../../api/hooks/useTextMessages'
 import { OPERATOR_ROLE, navForRole, viewsForRole } from '../../utils/operatorNav'
@@ -501,15 +502,16 @@ function TripsTab({ drivers, conductors, onRefresh, tripsState, focusTripId = nu
   // needing attention — the existing "Overdue" badge below already flags
   // those) and "Upcoming Trips" (strictly future-dated), using the same
   // Manila-anchored business-day helper relied on elsewhere in the app.
-  const todaysTrips = sorted.filter((t) => {
+  // 2026-11-25 (user): a trip added in the last 24 hours comes first in its list, highlighted.
+  const todaysTrips = newFirst(sorted.filter((t) => {
     const tripDateStr = String(t?.trip_date || '').match(/^(\d{4}-\d{2}-\d{2})/)?.[1]
     if (!tripDateStr) return true
     return tripDateStr <= getBusinessToday()
-  })
-  const upcomingTrips = sorted.filter((t) => {
+  }))
+  const upcomingTrips = newFirst(sorted.filter((t) => {
     const tripDateStr = String(t?.trip_date || '').match(/^(\d{4}-\d{2}-\d{2})/)?.[1]
     return Boolean(tripDateStr) && tripDateStr > getBusinessToday()
-  })
+  }))
 
   // S3: purely computed, non-persisted indicator — a trip whose scheduled
   // date has passed without ever being closed out (completed or cancelled).
@@ -578,9 +580,11 @@ function TripsTab({ drivers, conductors, onRefresh, tripsState, focusTripId = nu
                     const conductorRow = t.conductor || conductorMap.get(Number(t.conductor_id))
                     const driverName = driverRow ? getStaffFullName(driverRow) || (driverRow?.user?.email || driverRow?.email) : null
                     const conductorName = conductorRow ? getStaffFullName(conductorRow) || (conductorRow?.user?.email || conductorRow?.email) : null
+                    const fresh = isRecentlyAdded(t.created_at)
+                    const focused = Number(t.trip_id) === Number(focusTripId)
                     return (
-                      <tr key={t.trip_id} id={`trip-row-${t.trip_id}`} data-focused={Number(t.trip_id) === Number(focusTripId) ? 'true' : undefined} className={`border-b border-slate-100 hover:bg-slate-50 ${Number(t.trip_id) === Number(focusTripId) ? 'bg-teal-50 ring-2 ring-inset ring-teal-500' : ''}`}>
-                        <td className="px-4 py-3 font-mono text-xs text-slate-600">#{t.trip_id}</td>
+                      <tr key={t.trip_id} id={`trip-row-${t.trip_id}`} data-focused={focused ? 'true' : undefined} data-new={fresh ? 'true' : undefined} className={`border-b border-slate-100 hover:bg-slate-50 ${focused ? 'bg-teal-50 ring-2 ring-inset ring-teal-500' : fresh ? OP_NEW_ROW : ''}`}>
+                        <td className="px-4 py-3 font-mono text-xs text-slate-600"><span className="inline-flex items-center gap-2 whitespace-nowrap">#{t.trip_id}{fresh && <OpNewBadge />}</span></td>
                         <td className="px-4 py-3 text-slate-700 whitespace-nowrap">{fmtDate(t.trip_date)}</td>
                         <td className="px-4 py-3 text-slate-700 whitespace-nowrap">{clock12(t.departure_time || t.fleet_route?.start_time) || '--:--'}</td>
                         <td className="px-4 py-3 text-slate-700 max-w-30 truncate">

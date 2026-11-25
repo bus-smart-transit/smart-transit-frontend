@@ -8,6 +8,7 @@ import { STATUS_CLASS, statusLabel, timeRange } from '../../../utils/assignmentC
 import { roleLabel } from '../../../utils/shiftBlockView';
 import { formatManilaDate } from '../../../utils/dates';
 import { shiftLabel } from '../../../utils/shiftLabel';
+import { OpNewBadge, OP_NEW_ROW } from '../Operator/OperatorUI';
 
 const OVERDUE_NOTE = 'Overdue - date has passed';
 
@@ -65,7 +66,7 @@ function crewSummary(card) {
  * be answered (`showState`); a finished, cancelled or past-dated block shows its status, or "Overdue - date has
  * passed", and nothing else about the answer.
  */
-export default function ShiftBlockCard({ card, showState, audit = null, actions = null, legEditor = null }) {
+export default function ShiftBlockCard({ card, showState, audit = null, actions = null, legEditor = null, isNew = false }) {
   const [open, setOpen] = useState(false);
   const overdue = card.is_overdue === true || card.section === 'overdue';
   const auditChip = audit && AUDIT_CHIP[audit];
@@ -86,8 +87,9 @@ export default function ShiftBlockCard({ card, showState, audit = null, actions 
     <Card
       as="article"
       padding="sm"
-      className="cursor-pointer space-y-3 hover:border-teal-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+      className={`cursor-pointer space-y-3 hover:border-teal-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 ${isNew ? `${OP_NEW_ROW} border-sky-200` : ''}`}
       data-testid="shift-block-card"
+      data-new={isNew ? 'true' : undefined}
       data-card-key={card.key}
       data-section={card.section}
       role="button"
@@ -103,6 +105,7 @@ export default function ShiftBlockCard({ card, showState, audit = null, actions 
           <p className="text-sm text-slate-600">{card.origin || '-'} → {card.destination || '-'}</p>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-1">
+          {isNew && <OpNewBadge />}
           {auditChip && <span data-testid="audit-chip" className={`rounded-full px-2 py-1 text-xs font-semibold ${auditChip[1]}`}>{auditChip[0]}</span>}
           <span data-testid="card-status" className={`rounded-full px-2 py-1 text-xs font-semibold ${STATUS_CLASS[card.status] || STATUS_CLASS.scheduled}`}>{statusLabel(card.status)}</span>
         </div>

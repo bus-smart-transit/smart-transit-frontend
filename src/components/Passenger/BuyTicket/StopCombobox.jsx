@@ -1,5 +1,5 @@
 import { useId, useMemo, useRef, useState } from 'react'
-import { MapPin } from 'lucide-react'
+import { MapPin, X } from 'lucide-react'
 
 const norm = (text) => String(text || '').toLowerCase()
 
@@ -7,6 +7,7 @@ const norm = (text) => String(text || '').toLowerCase()
  * A stop picker you can type into: the list narrows as you type (stop name or municipality) and is
  * grouped by municipality. Keyboard: arrows move, Enter picks, Escape closes. Options come from the
  * server; nothing here knows a place. `value` is the stop id (string) or ''.
+ * 2026-11-25 (user): a chosen stop can be cleared with the x button (onChange('')).
  */
 export default function StopCombobox({ id, label, value, groups, placeholder, disabled = false, onChange }) {
   const autoId = useId()
@@ -68,6 +69,13 @@ export default function StopCombobox({ id, label, value, groups, placeholder, di
     }
   }
 
+  const clear = () => {
+    onChange('')
+    setQuery('')
+    setActive(0)
+    inputRef.current?.focus()
+  }
+
   const activeId = open && options[active] ? `${listId}-${options[active].stop.stop_id}` : undefined
 
   return (
@@ -94,6 +102,17 @@ export default function StopCombobox({ id, label, value, groups, placeholder, di
           onKeyDown={handleKeyDown}
           className="w-full bg-transparent text-sm text-ink placeholder:text-slate-400 focus:outline-none disabled:cursor-not-allowed"
         />
+        {value && !disabled && (
+          <button
+            type="button"
+            aria-label={`Clear ${label}`}
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={clear}
+            className="-my-2 -mr-2 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-navy-700/40"
+          >
+            <X size={16} aria-hidden="true" />
+          </button>
+        )}
       </div>
 
       {open && !disabled && (
