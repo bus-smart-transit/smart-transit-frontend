@@ -27,7 +27,7 @@ function TicketRefundCard({ row }) {
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
           <h3 className="truncate text-base font-bold text-slate-900">{row.route_name || 'Route unavailable'}{row.trip_date ? `, ${row.trip_date}` : ''}{row.departure_time ? ` ${clock12(row.departure_time) || row.departure_time}` : ''}</h3>
-          <p className="text-xs text-slate-500">{row.passenger_name || (row.guest_email ? `Guest · ${row.guest_email}` : 'Passenger')}{row.transaction_reference ? ` · ${row.transaction_reference}` : ''} · {row.method === 'cash' ? 'Cash' : 'PayMongo'}</p>
+          <p className="text-xs text-slate-500">{row.passenger_name || (row.guest_email ? `Guest · ${row.guest_email}` : 'Passenger')}{row.transaction_reference ? ` · ${row.transaction_reference}` : ''} · {row.method === 'cash' ? 'Cash' : 'Xendit'}</p>
         </div>
         <span className="flex items-center gap-2">
           <span className="font-data text-base font-bold text-slate-900">{formatPeso(total)}</span>
@@ -101,7 +101,7 @@ function RefundCard({ row, busy, error, onRecord, onReconcile }) {
       {outcomeUnknown ? (
         <>
           <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900" data-testid="checkout-outcome-warning">
-            {row.reason} Check the PayMongo dashboard by transaction reference. Do not confirm if a session is active or payment may have succeeded; signed webhooks alone mark payments paid.
+            {row.reason} Check the Xendit dashboard by transaction reference. Do not confirm if a session is active or payment may have succeeded; signed webhooks alone mark payments paid.
           </p>
           <dl className="grid gap-x-4 gap-y-1 text-xs text-slate-600 sm:grid-cols-2">
             <div className="min-w-0"><dt className="inline text-slate-500">Transaction reference: </dt><dd className="inline font-data break-all">{row.transaction_reference}</dd></div>
@@ -112,7 +112,7 @@ function RefundCard({ row, busy, error, onRecord, onReconcile }) {
             onSubmit={(event) => { event.preventDefault(); if (!invalid && confirmedNotCharged) onReconcile(row.payment_id, { note: noteValue }); }}
           >
             <label className="block text-xs font-medium text-slate-600">Verification note (required)
-              <input type="text" minLength={12} maxLength={255} value={note} onChange={(event) => setNote(event.target.value)} placeholder="What did you verify in PayMongo?" className={`${FIELD} mt-1`} />
+              <input type="text" minLength={12} maxLength={255} value={note} onChange={(event) => setNote(event.target.value)} placeholder="What did you verify in Xendit?" className={`${FIELD} mt-1`} />
             </label>
             <label className="flex items-start gap-2 text-xs text-slate-700">
               <input type="checkbox" checked={confirmedNotCharged} onChange={(event) => setConfirmedNotCharged(event.target.checked)} className="mt-0.5" />
@@ -128,23 +128,23 @@ function RefundCard({ row, busy, error, onRecord, onReconcile }) {
         </>
       ) : automatic ? (
         <p className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-900" data-testid="refund-automatic">
-          {row.reason} The full amount was sent back through PayMongo automatically. Nothing to do here: this changes to Refunded when PayMongo confirms it.
+          {row.reason} The full amount was sent back through Xendit automatically. Nothing to do here: this changes to Refunded when Xendit confirms it.
         </p>
       ) : waiting ? (
         <>
           <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800" data-testid="refund-reason">
-            {row.reason} The passenger was charged. Refund it in your PayMongo dashboard, then record it here. This screen does not move money.
+            {row.reason} The passenger was charged. Refund it in your Xendit dashboard, then record it here. This screen does not move money.
             {row.refund_note ? <span className="mt-1 block font-semibold">{row.refund_note}</span> : null}
           </p>
           <dl className="grid gap-x-4 gap-y-1 text-xs text-slate-600 sm:grid-cols-2">
-            <div className="min-w-0"><dt className="inline text-slate-500">PayMongo payment: </dt><dd className="inline font-data break-all">{row.gateway_payment_id || 'not stored (find it by the checkout reference)'}</dd></div>
+            <div className="min-w-0"><dt className="inline text-slate-500">Xendit payment: </dt><dd className="inline font-data break-all">{row.gateway_payment_id || 'not stored (find it by the checkout reference)'}</dd></div>
             <div className="min-w-0"><dt className="inline text-slate-500">Checkout: </dt><dd className="inline font-data break-all">{row.gateway_reference || 'unavailable'}</dd></div>
           </dl>
           <form
             className="space-y-2 border-t border-slate-100 pt-3"
             onSubmit={(e) => { e.preventDefault(); if (!invalid) onRecord(row.payment_id, { note: noteValue }); }}
           >
-            <label className="block text-xs font-medium text-slate-600">PayMongo refund ID or reference (required)
+            <label className="block text-xs font-medium text-slate-600">Xendit refund ID or reference (required)
               <input type="text" maxLength={255} value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. rf_..." className={`${FIELD} mt-1`} />
             </label>
             {error && <p role="alert" className="text-xs text-red-600">{error}</p>}
@@ -158,7 +158,7 @@ function RefundCard({ row, busy, error, onRecord, onReconcile }) {
       ) : (
         <p className="border-t border-slate-100 pt-3 text-sm text-slate-700" data-testid="refund-recorded">
           {row.refunded_automatically
-            ? <>Refunded automatically through PayMongo on {formatPaidAt(row.refunded_at)}.</>
+            ? <>Refunded automatically through Xendit on {formatPaidAt(row.refunded_at)}.</>
             : <>Refund recorded by {row.refunded_by_name || 'an Operator'} on {formatPaidAt(row.refunded_at)}.</>}
           {row.refund_note ? <span className="mt-1 block text-xs text-slate-500">Reference: <span className="font-data">{row.refund_note}</span></span> : null}
         </p>
@@ -170,7 +170,7 @@ function RefundCard({ row, busy, error, onRecord, onReconcile }) {
 // 2026-11-08 (user): the Refunds tab is one table. One plain status per row; the server decides it (RefundListService).
 const ROW_STATUS = {
   needs_refund: ['Needs refund', 'bg-red-100 text-red-700'],
-  check_paymongo: ['Check PayMongo', 'bg-amber-100 text-amber-800'],
+  check_paymongo: ['Check Xendit', 'bg-amber-100 text-amber-800'],
   in_progress: ['Refund in progress', 'bg-sky-100 text-sky-700'],
   refunded: ['Refunded', 'bg-emerald-100 text-emerald-700'],
   failed: ['Refund failed', 'bg-red-100 text-red-700'],
@@ -206,7 +206,7 @@ export default function PaymentRefundsPage({ service, embedded = false }) {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           {!embedded && <h2 className="font-display text-xl font-bold text-slate-900">Refunds</h2>}
-          <p className="text-xs text-slate-500">Every refund in one list: payments that made no ticket, unclear checkouts and tickets of cancelled trips. Only signed PayMongo messages confirm a payment or a refund.</p>
+          <p className="text-xs text-slate-500">Every refund in one list: payments that made no ticket, unclear checkouts and tickets of cancelled trips. Only signed Xendit messages confirm a payment or a refund.</p>
         </div>
         <label className="text-xs font-semibold text-slate-600">
           Status

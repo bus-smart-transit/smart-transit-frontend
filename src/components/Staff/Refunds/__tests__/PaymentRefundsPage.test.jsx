@@ -90,7 +90,7 @@ describe('PaymentRefundsPage', () => {
     expect((await screen.findAllByTestId('refund-row-status'))[0]).toHaveTextContent('Refund in progress');
     const card = await openRow();
     expect(within(card).getByTestId('refund-status')).toHaveTextContent('Refund in progress');
-    expect(screen.getByTestId('refund-automatic')).toHaveTextContent('sent back through PayMongo automatically');
+    expect(screen.getByTestId('refund-automatic')).toHaveTextContent('sent back through Xendit automatically');
     expect(within(card).queryByRole('button', { name: 'Record refund' })).not.toBeInTheDocument();
   });
 
@@ -107,7 +107,7 @@ describe('PaymentRefundsPage', () => {
     render(<PaymentRefundsPage service={makeService([done])} embedded />);
     await openRow();
 
-    expect(screen.getByTestId('refund-recorded')).toHaveTextContent('Refunded automatically through PayMongo on');
+    expect(screen.getByTestId('refund-recorded')).toHaveTextContent('Refunded automatically through Xendit on');
   });
 
   it('shows a guest by the email they paid with', async () => {
@@ -175,13 +175,13 @@ describe('PaymentRefundsPage', () => {
     const service = makeService([unknown]);
     render(<PaymentRefundsPage service={service} embedded />);
 
-    expect((await screen.findAllByTestId('refund-row-status'))[0]).toHaveTextContent('Check PayMongo');
+    expect((await screen.findAllByTestId('refund-row-status'))[0]).toHaveTextContent('Check Xendit');
     const card = await openRow();
     expect(within(card).getByTestId('refund-status')).toHaveTextContent('Outcome unknown');
     expect(within(card).getByTestId('checkout-outcome-warning')).toHaveTextContent('signed webhooks alone mark payments paid');
 
     const submit = within(card).getByRole('button', { name: 'Confirm not charged and release hold' });
-    const note = within(card).getByPlaceholderText('What did you verify in PayMongo?');
+    const note = within(card).getByPlaceholderText('What did you verify in Xendit?');
     const confirmation = within(card).getByLabelText('I verified this checkout was not charged and has no active session.');
     expect(submit).toBeDisabled();
 

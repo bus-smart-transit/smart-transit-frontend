@@ -17,7 +17,7 @@ const DOCUMENTS = {
           'Your name, email address, phone number and date of birth when you sign up. Gender and address are optional.',
           'If you continue with Google: your name and email address from your Google account, and an account number that links it to SmartTransit. We never see your Google password.',
           'Your bookings, tickets and payment records (amount, status and reference).',
-          'Payment card and e-wallet details are entered on PayMongo\'s page. SmartTransit does not see or keep them.',
+          'Payment card and e-wallet details are entered on Xendit\'s page. SmartTransit does not see or keep them.',
           'Your location only when you choose "Pin My Location". It stays on your device to find buses near you; it is not sent to us.',
           'For Drivers: the bus position from the Driver\'s phone during a trip, so passengers can track the bus.',
         ],
@@ -69,7 +69,7 @@ const DOCUMENTS = {
         heading: 'Tickets and payment',
         items: [
           'A ticket is for the trip, seat type and stops shown on it.',
-          'During the test period, online payments use PayMongo\'s test mode: no real money is charged.',
+          'During the test period, online payments use Xendit\'s test mode: no real money is charged.',
           'The bus company decides the fares. The transaction fee is shown before you pay.',
         ],
       },

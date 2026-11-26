@@ -77,7 +77,7 @@ export default function PaymentsPage({ paymentsTab, today }) {
         </>
       )}
 
-      <OpCard title="Payments to refund by hand" subtitle="Money was taken but no ticket was made. The bus company's Operator refunds it in PayMongo and records it.">
+      <OpCard title="Payments to refund by hand" subtitle="Money was taken but no ticket was made. The bus company's Operator refunds it in Xendit and records it.">
         <OpTable caption="Payments to refund by hand" columns={refundColumns} rows={refunds.data} rowKey={(row) => row.payment_id} empty="None. Every payment became a ticket or was refunded." />
         {refunds.meta.total > refunds.meta.per_page && (
           <Pagination label="Refund pages" page={refunds.meta.page} perPage={refunds.meta.per_page} total={refunds.meta.total} lastPage={refunds.meta.last_page} onPageChange={setRefundPage} />
