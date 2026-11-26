@@ -1003,7 +1003,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                     </div>
 
                     <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600" data-testid="capacity-summary">
-                      <p className="font-semibold text-slate-800">On board {cashCapacity.onboard} / {cashCapacity.capacity || '-'} · Tickets sold {cashCapacity.sold} · Places left {cashCapacity.remaining ?? '-'}</p>
+                      <p className="font-semibold text-slate-800">On board {cashCapacity.onboard} / {cashCapacity.capacity || '-'} · Tickets sold {expectedBoarding?.passenger_count?.tickets_sold ?? cashCapacity.sold} · Places left {cashCapacity.remaining ?? '-'}</p>
                       {cashCapacity.isFull && (
                         <p role="alert" data-testid="bus-full-notice" className="mt-1 font-semibold text-red-700">The bus is full. No more tickets can be issued.</p>
                       )}

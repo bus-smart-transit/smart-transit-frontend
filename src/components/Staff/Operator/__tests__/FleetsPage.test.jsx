@@ -92,6 +92,16 @@ describe('FleetsPage', () => {
     expect(within(dialog).getByText(/10 of 30/)).toBeInTheDocument(); // tickets sold is still shown
   });
 
+  // 2026-11-26 (user): tickets sold is a count only (no "of 40"); the seats come back when passengers get off.
+  it('shows tickets sold as a count and the seats taken now with the load', async () => {
+    renderPage({ trips: [trip(1, 1, 'departed', { total_occupancy: 9, passenger_count: { tickets_sold: 12 } })] });
+    await waitFor(() => expect(within(rowFor('PLT-1')).getByText('Active')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: 'Track fleet PLT-1' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByTestId('tickets-sold')).toHaveTextContent(/^12$/);
+    expect(within(dialog).getByTestId('seats-taken')).toHaveTextContent('9 of 30 (30%)');
+  });
+
   it('says "Not provided" when the trip carries no on-board count', async () => {
     renderPage();
     await waitFor(() => expect(within(rowFor('PLT-1')).getByText('Active')).toBeInTheDocument());

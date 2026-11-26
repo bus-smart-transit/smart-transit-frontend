@@ -19,7 +19,7 @@ import { useFleetsTab } from '../../../api/hooks/Staff/useOperatorDashboard';
 import { useDispatchAdvice, useNow } from '../../../api/hooks/Staff/useOperatorDashboardExtras';
 import { buildFleetRows, filterFleetRows, FLEET_FILTERS } from '../../../utils/operatorFleetView';
 import {
-  buildDashboardView, decisionPayload, routeNameOf, departureLabel, ticketsSold, capacityOf, loadPct, LIVE_STATUSES, fleetIdOf,
+  buildDashboardView, decisionPayload, routeNameOf, departureLabel, ticketsSold, seatsTaken, capacityOf, loadPct, LIVE_STATUSES, fleetIdOf,
 } from '../../../utils/operatorDashboardView';
 
 const INPUT = 'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500';
@@ -191,7 +191,9 @@ function TrackFleetModal({ row, trip, advice, saving, error, onDecide, onClose, 
             <div><dt className="text-xs text-slate-500">Scheduled departure</dt><dd className="font-semibold text-slate-900">{departureLabel(trip)}</dd></div>
             <div><dt className="text-xs text-slate-500">Driver</dt><dd className="font-semibold text-slate-900">{personName(trip.driver) ?? 'Not assigned'}</dd></div>
             <div><dt className="text-xs text-slate-500">Chauffeur</dt><dd className="font-semibold text-slate-900">{personName(trip.conductor) ?? 'Not assigned'}</dd></div>
-            <div><dt className="text-xs text-slate-500">Tickets sold</dt><dd className="font-semibold text-slate-900">{ticketsSold(trip)} of {capacityOf(trip) || '-'}{pct === null ? '' : ` (${pct}%)`}</dd></div>
+            {/* 2026-11-26 (user): tickets sold is a count only; seats come back when passengers get off (Seats taken). */}
+            <div><dt className="text-xs text-slate-500">Tickets sold</dt><dd data-testid="tickets-sold" className="font-semibold text-slate-900">{ticketsSold(trip)}</dd></div>
+            <div><dt className="text-xs text-slate-500">Seats taken now</dt><dd data-testid="seats-taken" className="font-semibold text-slate-900">{seatsTaken(trip)} of {capacityOf(trip) || '-'}{pct === null ? '' : ` (${pct}%)`}</dd></div>
             {/* §4.7: passengers on board now (scanned on or sold on the bus, not yet off), from the server. */}
             <div><dt className="text-xs text-slate-500">On board now</dt><dd data-testid="onboard-now" className="font-semibold text-slate-900">{trip.onboard_count == null ? 'Not provided' : `${trip.onboard_count} of ${capacityOf(trip) || '-'}`}</dd></div>
             {/* Batch 76 (user): the leg's passenger count, the figures an inspector checks against the bus. */}

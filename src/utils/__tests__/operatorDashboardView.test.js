@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  buildDashboardView, ticketsSold, capacityOf, loadPct, gpsStatus, locationForTrip, tripsToday, HIGH_LOAD_PCT,
+  buildDashboardView, ticketsSold, seatsTaken, capacityOf, loadPct, gpsStatus, locationForTrip, tripsToday, HIGH_LOAD_PCT,
 } from '../operatorDashboardView';
 
 const TODAY = '2026-10-06';
@@ -26,6 +26,14 @@ describe('trip figures', () => {
     expect(ticketsSold({ current_seated_capacity: 3, current_standing_capacity: 2 })).toBe(5);
     expect(capacityOf(trip(1))).toBe(30);
     expect(loadPct(trip(1, { total_occupancy: 15 }))).toBe(50);
+  });
+
+  // 2026-11-26 (user): seats come back at drop-off, so tickets sold comes from the paid tickets and the load from the seats.
+  it('counts tickets sold from the paid tickets and the load from the seats taken now', () => {
+    const running = trip(1, { total_occupancy: 9, passenger_count: { tickets_sold: 12 } });
+    expect(ticketsSold(running)).toBe(12);
+    expect(seatsTaken(running)).toBe(9);
+    expect(loadPct(running)).toBe(30);
   });
 
   it('load is null when the fleet has no capacity', () => {

@@ -29,11 +29,20 @@ export const fleetIdOf = (trip) => {
 };
 export const plateOf = (trip) => trip?.fleet_route?.fleet?.plate_number || 'Fleet pending';
 
-/** Tickets sold for the trip: the trip's own counters (the same definition the sale block uses). */
-export function ticketsSold(trip) {
+/**
+ * Seats taken now: the trip's own counters (the same definition the sale block uses). 2026-11-26 (user): a passenger
+ * who gets off gives the seat back, so this goes down at drop-offs and is the live load.
+ */
+export function seatsTaken(trip) {
   const total = Number(trip?.total_occupancy);
   if (Number.isFinite(total)) return total;
   return Number(trip?.current_seated_capacity ?? 0) + Number(trip?.current_standing_capacity ?? 0);
+}
+
+/** Tickets sold for the trip: the server's paid-ticket count (passenger_count), else the seat counters. */
+export function ticketsSold(trip) {
+  const sold = Number(trip?.passenger_count?.tickets_sold);
+  return Number.isFinite(sold) ? sold : seatsTaken(trip);
 }
 
 /** 2026-11-23: standing is no longer sold (LTFRB), so a bus holds its seats; the old total is only a fallback. */
@@ -47,7 +56,7 @@ export function capacityOf(trip) {
 
 export function loadPct(trip) {
   const capacity = capacityOf(trip);
-  return capacity > 0 ? Math.round((ticketsSold(trip) / capacity) * 100) : null;
+  return capacity > 0 ? Math.round((seatsTaken(trip) / capacity) * 100) : null;
 }
 
 /** The 24-hour "HH:mm" a trip leaves at, for sorting and grouping only ('--:--' when unknown). */
