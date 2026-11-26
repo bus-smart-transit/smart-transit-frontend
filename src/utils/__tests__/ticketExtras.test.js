@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { baggageCount, extrasFor, itemsWithExtras, priorityAfterClaim, priorityFromClaim } from '../ticketExtras';
+import { baggageCount, baggagePieces, baggageText, extrasFor, itemsWithExtras, priorityAfterClaim, priorityFromClaim } from '../ticketExtras';
 
 // SAMPLE values. Priority types as the server sends them (booking/window).
 const TYPES = [{ key: 'senior', label: 'Senior citizen' }, { key: 'pwd', label: 'Person with disability' }, { key: 'pregnant', label: 'Pregnant' }];
@@ -14,13 +14,24 @@ describe('ticketExtras (Batch 76)', () => {
 
   it('keeps only known priority types, one entry per ticket', () => {
     expect(extrasFor(3, { 0: { priority_type: 'pregnant' }, 1: { priority_type: 'vip', baggage: true } }, TYPES)).toEqual([
-      { priority_type: 'pregnant', baggage: false },
-      { priority_type: null, baggage: true },
-      { priority_type: null, baggage: false },
+      { priority_type: 'pregnant', baggage: false, baggage_count: 0 },
+      { priority_type: null, baggage: true, baggage_count: 1 },
+      { priority_type: null, baggage: false, baggage_count: 0 },
     ]);
   });
 
   // 2026-11-25 (user): baggage is declared online and paid on board, so only the count is needed.
+  // 2026-11-26 (user): a ticket says how many pieces (1 to 10); the summary counts them all.
+  it('counts the pieces of baggage, 1 to 10 per ticket', () => {
+    expect(baggagePieces({ baggage: true, baggage_count: '3' })).toBe(3);
+    expect(baggagePieces({ baggage: true, baggage_count: 25 })).toBe(10);
+    expect(baggagePieces({ baggage: true, baggage_count: '' })).toBe(1);
+    expect(baggagePieces({ baggage: false, baggage_count: 4 })).toBe(0);
+    expect(baggageCount(2, { 0: { baggage: true, baggage_count: 3 }, 1: { baggage: true } })).toBe(4);
+    expect(baggageText({ has_baggage: true, baggage_count: 2 })).toBe('2x baggage. Pay the Chauffeur in cash on board');
+    expect(baggageText({ has_baggage: true, baggage_count: 2, baggage_paid: 50 })).toBe('2x baggage. Paid PHP 50.00 on board');
+  });
+
   it('counts the tickets that declare baggage', () => {
     expect(baggageCount(2, { 0: { baggage: true }, 1: { baggage: true } })).toBe(2);
     expect(baggageCount(1, { 1: { baggage: true } })).toBe(0);
@@ -30,7 +41,7 @@ describe('ticketExtras (Batch 76)', () => {
   it('adds the choices to the checkout items and leaves the rest alone', () => {
     const items = [{ trip_id: 1, discount_claim_key: 'senior' }, { trip_id: 1 }];
     expect(itemsWithExtras(items, { 0: { priority_type: 'senior', baggage: true } }, TYPES)).toEqual([
-      { trip_id: 1, discount_claim_key: 'senior', priority_type: 'senior', baggage: true },
+      { trip_id: 1, discount_claim_key: 'senior', priority_type: 'senior', baggage: true, baggage_count: 1 },
       { trip_id: 1 },
     ]);
   });

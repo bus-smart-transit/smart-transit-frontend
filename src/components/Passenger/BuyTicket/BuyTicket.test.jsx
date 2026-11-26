@@ -249,8 +249,12 @@ describe('checkout layout and ticket options (Batch 76)', () => {
     expect(screen.queryByText(/\+PHP/)).toBeNull();
     expect(screen.getByTestId('baggage-note-0')).toHaveTextContent('Baggage is not part of this payment.');
     expect(screen.queryByTestId('baggage-note-1')).toBeNull();
-    expect(screen.getByText('Baggage (1)')).toBeInTheDocument();
+    expect(screen.getByText('Baggage (1x)')).toBeInTheDocument();
     expect(screen.getByText('Pay on board')).toBeInTheDocument();
+    // 2026-11-26 (user): a ticket with baggage asks how many pieces.
+    fireEvent.change(screen.getByTestId('baggage-count-0'), { target: { value: '3' } });
+    expect(state.setTicketExtra).toHaveBeenCalledWith(0, 'baggage_count', '3');
+    expect(screen.queryByTestId('baggage-count-1')).toBeNull();
   });
 
   it('opens the route map in a pop-up', () => {

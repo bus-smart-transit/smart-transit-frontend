@@ -165,6 +165,9 @@ export function useConductorDashboardData({ onLogout, pairing, refreshPairingSta
   const [scanUuid, setScanUuid] = useState('');
   const [scanResult, setScanResult] = useState(null);
   const [groupScanResult, setGroupScanResult] = useState(null);
+  // 2026-11-26 (user): while the scan pop-up is open the camera reads nothing; "Scan next" closes it.
+  const scanResultOpenRef = useRef(false);
+  useEffect(() => { scanResultOpenRef.current = Boolean(scanResult || groupScanResult); }, [scanResult, groupScanResult]);
   const [scannerRunning, setScannerRunning] = useState(false);
   const [scannerBusy, setScannerBusy] = useState(false);
   const [scannerError, setScannerError] = useState('');
@@ -917,6 +920,7 @@ export function useConductorDashboardData({ onLogout, pairing, refreshPairingSta
       const handleDecodedResult = async (result) => {
         const rawValue = result?.data;
         if (!rawValue) return;
+        if (scanResultOpenRef.current) return; // the scan pop-up is still open
 
         if (scannerBusyRef.current) return;          // drop scan — one already in flight
         scannerBusyRef.current = true;

@@ -58,6 +58,7 @@ export default function TicketCard({
   priorityLabel = '',
   hasBaggage = false,
   baggagePaid = 0,
+  baggageCount = 0,
   trackingToken = '',
   trackingCode = '',
   ticketId = '',
@@ -160,7 +161,7 @@ export default function TicketCard({
 
         {(priorityLabel || hasBaggage || Number(baggagePaid) > 0) && (
           <p data-testid="ticket-extras" className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700">
-            {[priorityLabel && `Priority seat: ${priorityLabel}`, baggageText({ has_baggage: hasBaggage, baggage_paid: baggagePaid }) && `Baggage: ${baggageText({ has_baggage: hasBaggage, baggage_paid: baggagePaid })}`].filter(Boolean).join(' · ')}
+            {[priorityLabel && `Priority seat: ${priorityLabel}`, baggageText({ has_baggage: hasBaggage, baggage_paid: baggagePaid, baggage_count: baggageCount }) && `Baggage: ${baggageText({ has_baggage: hasBaggage, baggage_paid: baggagePaid, baggage_count: baggageCount })}`].filter(Boolean).join(' · ')}
           </p>
         )}
         {discountClaimMessage && (

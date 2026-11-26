@@ -44,6 +44,7 @@ import { claimReviewState } from '../../utils/discountClaim';
 import { passengerCountRows } from '../../utils/passengerCount';
 import DiscountReviewDialog from './Crew/DiscountReviewDialog';
 import BaggageChargeDialog from './Crew/BaggageChargeDialog';
+import ScanResultDialog from './Crew/ScanResultDialog';
 import useBaggageCharges from '../../api/hooks/Staff/useBaggageCharges';
 import { MAX_CASH_TICKETS, boardingStopsForLeg, cashSaleTotal, checkInLabel, checkInsByStop, destinationsAhead, destinationsNotPassed, isOnsiteFormComplete, onsiteQuantity, orderedStopsForLeg, placesLeft, stopLabel } from '../../utils/cashTicket';
 import { isExpress } from '../../utils/serviceType';
@@ -1079,7 +1080,7 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
                                   {/* 2026-11-25 (user): declared or paid baggage stands out, with what was paid on board. */}
                                   {(p.baggage || Number(p.baggage_paid) > 0) && (
                                     <span className={`ml-1.5 rounded-full px-2 py-0.5 text-xs font-semibold ${Number(p.baggage_paid) > 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-900'}`} data-testid={`baggage-chip-${p.ticket_id}`}>
-                                      {Number(p.baggage_paid) > 0 ? `Baggage paid \u20B1${Number(p.baggage_paid).toFixed(2)}` : 'Baggage: collect on board'}
+                                      {Number(p.baggage_count) > 1 ? `${p.baggage_count}x ` : ''}{Number(p.baggage_paid) > 0 ? `Baggage paid \u20B1${Number(p.baggage_paid).toFixed(2)}` : 'Baggage: collect on board'}
                                     </span>
                                   )}
                                 </td>
@@ -1314,6 +1315,13 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
       {/* Batch 75: the ID check for a discount claimed online. */}
       <DiscountReviewDialog target={discountReview} busy={discountReviewBusy} error={discountReviewError} onDecide={decideDiscount} onClose={closeDiscountReview} />
       {/* 2026-11-25 (user): baggage paid in cash on board. */}
+      {/* 2026-11-26 (user): the scan result pop-up (hidden while the discount check or the Baggage pop-up is open). */}
+      <ScanResultDialog
+        scanResult={!discountReview && !baggageCharges.target ? scanResult : null}
+        groupScanResult={!discountReview && !baggageCharges.target ? groupScanResult : null}
+        onClose={() => { setScanResult(null); setGroupScanResult(null); }}
+        onCollectBaggage={(target) => { setScanResult(null); setGroupScanResult(null); baggageCharges.open(target); }}
+      />
       <BaggageChargeDialog target={baggageCharges.target} fees={baggageCharges.fees} busy={baggageCharges.busy} error={baggageCharges.error} onRecord={baggageCharges.record} onTakeBack={baggageCharges.takeBack} onClose={baggageCharges.close} />
 
       {/* End Shift confirmation: the Chauffeur declares the cash handed over (Batch 29). */}

@@ -22,6 +22,7 @@ import { formatDuration } from '../../../utils/tripTimeline';
 import { seatsLeftText, tripProgressText } from '../../../utils/passengerTripProgress';
 import { cleanContactInput, looksLikePhone } from '../../../utils/travellerContact';
 import { clock12 } from '../../../utils/clock';
+import { MAX_BAGGAGE_PIECES, baggagePieces } from '../../../utils/ticketExtras';
 
 // Matches OnlineCheckoutRequest: the passenger picks GCash or Maya (C4). The payment
 // page itself collects whatever else the provider needs.
@@ -620,6 +621,23 @@ export default function BuyTicket({ onTicketPurchased, returnTo = '/', accountEm
                                     />
                                     <span>Add baggage for the compartment</span>
                                   </label>
+                                  {/* 2026-11-26 (user): how many pieces, shown as "2x baggage" to the Chauffeur. */}
+                                  {extra.baggage && (
+                                    <label className="mt-2 flex items-center gap-2 pl-6 text-sm text-slate-700">
+                                      How many?
+                                      <input
+                                        type="number"
+                                        min="1"
+                                        max={MAX_BAGGAGE_PIECES}
+                                        inputMode="numeric"
+                                        className="h-9 w-20 rounded-lg border border-slate-300 px-2 text-sm"
+                                        value={extra.baggage_count ?? 1}
+                                        onChange={(e) => setTicketExtra(index, 'baggage_count', e.target.value)}
+                                        onBlur={(e) => setTicketExtra(index, 'baggage_count', baggagePieces({ baggage: true, baggage_count: e.target.value }))}
+                                        data-testid={`baggage-count-${index}`}
+                                      />
+                                    </label>
+                                  )}
                                   {extra.baggage && (
                                     <p className="mt-1 pl-6 text-xs text-slate-600" data-testid={`baggage-note-${index}`}>
                                       Baggage is not part of this payment. The Chauffeur checks its size and you pay for it in cash when you board at your pick-up stop.
@@ -804,7 +822,7 @@ export default function BuyTicket({ onTicketPurchased, returnTo = '/', accountEm
               </SummaryRow>
               <SummaryRow label="Quantity">{totalTickets}</SummaryRow>
               <SummaryRow label="Gross total">PHP {Number(grossTotal || 0).toFixed(2)}</SummaryRow>
-              {baggage.count > 0 && <SummaryRow label={`Baggage (${baggage.count})`}>Pay on board</SummaryRow>}
+              {baggage.count > 0 && <SummaryRow label={`Baggage (${baggage.count}x)`}>Pay on board</SummaryRow>}
               {/* Rewards are for signed-in passengers only; a guest has none to apply. */}
               {!isGuestCheckout && <SummaryRow label="Rewards applied">{Number(rewardPointsToApply || 0).toFixed(0)} points</SummaryRow>}
               {!isGuestCheckout && (
