@@ -1,5 +1,4 @@
 import RefreshButton from '../../ui/RefreshButton';
-import { passengerCountLine } from '../../../utils/passengerCount';
 import { useEffect, useMemo, useState } from 'react';
 import { Bus, ChevronRight, MapPinned, Pencil, Plus, Clock, Pause } from 'lucide-react';
 import { OpPageHeader, OpCard, OpChip, OpStat, OpEmpty, OpNewBadge, OP_NEW_ROW } from './OperatorUI';
@@ -19,7 +18,7 @@ import { useFleetsTab } from '../../../api/hooks/Staff/useOperatorDashboard';
 import { useDispatchAdvice, useNow } from '../../../api/hooks/Staff/useOperatorDashboardExtras';
 import { buildFleetRows, filterFleetRows, FLEET_FILTERS } from '../../../utils/operatorFleetView';
 import {
-  buildDashboardView, decisionPayload, routeNameOf, departureLabel, ticketsSold, seatsTaken, capacityOf, loadPct, LIVE_STATUSES, fleetIdOf,
+  buildDashboardView, decisionPayload, routeNameOf, departureLabel, ticketsSold, capacityOf, LIVE_STATUSES, fleetIdOf,
 } from '../../../utils/operatorDashboardView';
 
 const INPUT = 'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500';
@@ -164,7 +163,6 @@ function EditFleetModal({ fleet, fareOptions, companyName, onClose, onSave }) {
 // Batch 60 (user, 2026-11-11): `trip` is the trip asked for (a dashboard or crew alert), else the bus's running or late
 // trip. The advice shown is this trip's own (it used to be matched by route name, so another bus's late trip showed here).
 function TrackFleetModal({ row, trip, advice, saving, error, onDecide, onClose, onOpenGoogleMaps }) {
-  const pct = trip ? loadPct(trip) : null;
   const tripAdvice = trip ? advice.find((item) => Number(item.tripId) === Number(trip.trip_id)) : null;
   const running = trip ? LIVE_STATUSES.includes(String(trip.status).toLowerCase()) : false;
   return (
@@ -191,13 +189,11 @@ function TrackFleetModal({ row, trip, advice, saving, error, onDecide, onClose, 
             <div><dt className="text-xs text-slate-500">Scheduled departure</dt><dd className="font-semibold text-slate-900">{departureLabel(trip)}</dd></div>
             <div><dt className="text-xs text-slate-500">Driver</dt><dd className="font-semibold text-slate-900">{personName(trip.driver) ?? 'Not assigned'}</dd></div>
             <div><dt className="text-xs text-slate-500">Chauffeur</dt><dd className="font-semibold text-slate-900">{personName(trip.conductor) ?? 'Not assigned'}</dd></div>
-            {/* 2026-11-26 (user): tickets sold is a count only; seats come back when passengers get off (Seats taken). */}
+            {/* 2026-11-26 (user): tickets sold is a count only. 2026-11-27 (user): the load is the passengers on board now
+                (scanned on or sold on the bus, not yet off, from the server); "Seats taken now" and the Passengers line
+                are gone (the same figures twice). */}
             <div><dt className="text-xs text-slate-500">Tickets sold</dt><dd data-testid="tickets-sold" className="font-semibold text-slate-900">{ticketsSold(trip)}</dd></div>
-            <div><dt className="text-xs text-slate-500">Seats taken now</dt><dd data-testid="seats-taken" className="font-semibold text-slate-900">{seatsTaken(trip)} of {capacityOf(trip) || '-'}{pct === null ? '' : ` (${pct}%)`}</dd></div>
-            {/* §4.7: passengers on board now (scanned on or sold on the bus, not yet off), from the server. */}
-            <div><dt className="text-xs text-slate-500">On board now</dt><dd data-testid="onboard-now" className="font-semibold text-slate-900">{trip.onboard_count == null ? 'Not provided' : `${trip.onboard_count} of ${capacityOf(trip) || '-'}`}</dd></div>
-            {/* Batch 76 (user): the leg's passenger count, the figures an inspector checks against the bus. */}
-            <div className="sm:col-span-2"><dt className="text-xs text-slate-500">Passengers</dt><dd data-testid="passenger-count-line" className="font-semibold text-slate-900">{passengerCountLine(trip.passenger_count)}</dd></div>
+            <div><dt className="text-xs text-slate-500">On board now</dt><dd data-testid="onboard-now" className="font-semibold text-slate-900">{onboardLine(trip)}</dd></div>
             <div><dt className="text-xs text-slate-500">Trip status</dt><dd className="font-semibold capitalize text-slate-900">{String(trip.status).replace('-', ' ')}</dd></div>
           </dl>
           <section aria-label="Reroute advice">
@@ -221,6 +217,14 @@ function TrackFleetModal({ row, trip, advice, saving, error, onDecide, onClose, 
  * Batch 31 Phase 3: the Operator's Fleets page. One row per bus; its status is derived from today's trips and its last
  * GPS report (utils/operatorFleetView.js). There is no maintenance state and no progress bar: neither exists in the data.
  */
+/** 2026-11-27 (user): passengers on board now out of the seats, with the load ("7 of 30 (23%)"). */
+function onboardLine(trip) {
+  if (trip?.onboard_count == null) return 'Not provided';
+  const onboard = Number(trip.onboard_count) || 0;
+  const capacity = capacityOf(trip);
+  return capacity > 0 ? `${onboard} of ${capacity} (${Math.round((onboard / capacity) * 100)}%)` : `${onboard} of -`;
+}
+
 export default function FleetsPage({ fleets, routes, trips, onRefresh, companyName = null, trackRequest = null, onTrackHandled = () => {}, view = 'fleets', onViewChange = () => {} }) {
   // Batch 61 (advisor, 2026-11-13): the fare rules were below the fleet list and went unnoticed; they are a tab now.
   const showFleets = view !== 'fareRules';

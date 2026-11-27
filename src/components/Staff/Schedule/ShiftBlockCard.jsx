@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Card from '../../ui/Card';
 import Modal from '../../ui/Modal';
 import RunInfoChips from '../../ui/RunInfoChips';
@@ -66,8 +66,16 @@ function crewSummary(card) {
  * be answered (`showState`); a finished, cancelled or past-dated block shows its status, or "Overdue - date has
  * passed", and nothing else about the answer.
  */
-export default function ShiftBlockCard({ card, showState, audit = null, actions = null, legEditor = null, isNew = false }) {
+export default function ShiftBlockCard({ card, showState, audit = null, actions = null, legEditor = null, isNew = false, legActions = null, autoOpen = false, onAutoOpened = () => {} }) {
   const [open, setOpen] = useState(false);
+  // 2026-11-27: a trip opened from the calendar or a dashboard alert opens the pop-up of its block.
+  useEffect(() => {
+    if (!autoOpen) return undefined;
+    const timer = setTimeout(() => { setOpen(true); onAutoOpened(); }, 0);
+    return () => clearTimeout(timer);
+  }, [autoOpen, onAutoOpened]);
+  // The modal closes after an action so the message on the page behind it can be read.
+  const closeOnButton = (event) => { if (event.target.closest('button')) setOpen(false); };
   const overdue = card.is_overdue === true || card.section === 'overdue';
   const auditChip = audit && AUDIT_CHIP[audit];
   const crew = crewSummary(card);
@@ -148,7 +156,9 @@ export default function ShiftBlockCard({ card, showState, audit = null, actions 
 
         <section aria-label="Trips in this block" className="space-y-2">
           <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">{card.legs_count === 1 ? 'Trip' : 'Trips in this block'}</h3>
-          <AssignmentLegList card={card} />
+          <div onClick={legActions ? closeOnButton : undefined}>
+            <AssignmentLegList card={card} renderActions={legActions} />
+          </div>
         </section>
 
         {legEditor}
@@ -157,8 +167,7 @@ export default function ShiftBlockCard({ card, showState, audit = null, actions 
 
         <div className="flex flex-wrap items-center justify-end gap-2 border-t border-slate-100 pt-3">
           {actions && (
-            // The modal closes after an action so the message on the page behind it can be read.
-            <div className="mr-auto flex flex-wrap items-center gap-2" onClick={(event) => { if (event.target.closest('button')) setOpen(false); }}>
+            <div className="mr-auto flex flex-wrap items-center gap-2" onClick={closeOnButton}>
               {actions}
             </div>
           )}

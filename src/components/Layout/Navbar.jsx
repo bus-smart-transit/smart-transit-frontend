@@ -21,7 +21,7 @@ const NAV_LINKS = [
 const ACCOUNT_LINKS = [
   { label: 'Dashboard', to: '/passenger/dashboard?tab=dashboard', icon: LayoutDashboard },
   { label: 'My Tickets', to: '/passenger/dashboard?tab=tickets', icon: TicketCheck },
-  { label: 'Trip History', to: '/passenger/dashboard?tab=transactions', icon: History },
+  { label: 'Transaction History', to: '/passenger/dashboard?tab=transactions', icon: History }, // 2026-11-27 (user): the page's own name
   { label: 'Rewards', to: '/passenger/dashboard?tab=rewards', icon: Gift },
   { label: 'Profile', to: '/passenger/dashboard?tab=profile', icon: CircleUser },
 ];

@@ -13,9 +13,9 @@ describe('Operator sidebar (Batch 30)', () => {
     for (const old of ['trips', 'calendar', 'shiftBlocks', 'financials', 'remittances']) expect(keys).not.toContain(old);
   });
 
-  test('Schedule has Calendar, Blocks, Trips, Approvals; Finance has Overview, Transactions, Remittances, Refunds', () => {
+  test('Schedule has Calendar, Blocks, Approvals (no Trips since 2026-11-27); Finance has Overview, Transactions, Remittances, Refunds', () => {
     // 2026-11-14 (user): Cancelled tickets moved to Finance > Refunds.
-    expect(viewsForRole('schedule', 'operator').map((v) => v.label)).toEqual(['Calendar', 'Blocks', 'Trips', 'Approvals']);
+    expect(viewsForRole('schedule', 'operator').map((v) => v.label)).toEqual(['Calendar', 'Blocks', 'Approvals']);
     expect(viewsForRole('finance', 'operator').map((v) => v.label)).toEqual(['Overview', 'Transactions', 'Remittances', 'Refunds', 'Discounts']);
     // Batch 61 (advisor): what used to sit under a page is its own tab.
     expect(viewsForRole('staffs', 'operator').map((v) => v.label)).toEqual(['Staff directory', 'Crew time in/out']);
@@ -25,7 +25,7 @@ describe('Operator sidebar (Batch 30)', () => {
 
   test('an old Cancelled tickets link opens Finance > Refunds (2026-11-14)', () => {
     expect(resolveOperatorLocation('?tab=schedule&view=cancelled')).toEqual({ tab: 'finance', view: 'refunds', redirected: true });
-    expect(resolveOperatorLocation('?tab=schedule&view=trips')).toEqual({ tab: 'schedule', view: 'trips', redirected: false });
+    expect(resolveOperatorLocation('?tab=schedule&view=trips')).toEqual({ tab: 'schedule', view: 'blocks', redirected: true });
   });
 
   test('Reports stays its own item: fleet reports and the forecast are not financial', () => {
@@ -63,7 +63,7 @@ describe('role visibility', () => {
 
 describe('old addresses redirect to the new places', () => {
   test.each([
-    ['?tab=trips', { tab: 'schedule', view: 'trips', redirected: true }],
+    ['?tab=trips', { tab: 'schedule', view: 'blocks', redirected: true }],
     ['?tab=calendar', { tab: 'schedule', view: 'calendar', redirected: true }],
     ['?tab=shiftBlocks', { tab: 'schedule', view: 'blocks', redirected: true }],
     ['?tab=financials', { tab: 'finance', view: 'overview', redirected: true }],
@@ -72,8 +72,8 @@ describe('old addresses redirect to the new places', () => {
     expect(resolveOperatorLocation(search, 'operator')).toEqual(expected);
   });
 
-  test('the old notification link (?tab=trips&trip=9) opens Schedule on Trips', () => {
-    expect(resolveOperatorLocation('?tab=trips&trip=9', 'operator')).toMatchObject({ tab: 'schedule', view: 'trips' });
+  test('the old notification link (?tab=trips&trip=9) opens Schedule on Blocks', () => {
+    expect(resolveOperatorLocation('?tab=trips&trip=9', 'operator')).toMatchObject({ tab: 'schedule', view: 'blocks' });
   });
 
   test('every old key has a target that exists for the Operator', () => {

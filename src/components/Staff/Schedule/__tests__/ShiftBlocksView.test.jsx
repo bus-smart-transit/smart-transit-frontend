@@ -314,3 +314,47 @@ describe('the card and its one modal', () => {
     expect(within(openCard((await screen.findAllByTestId('shift-block-card'))[1])).getByRole('button', { name: 'Mark Reviewed' })).toBeInTheDocument();
   });
 });
+
+// 2026-11-27 (user): the Trips view was removed; each trip of a block is run from the block's pop-up.
+describe('ShiftBlocksView trip buttons and focus', () => {
+  it("gives each leg the Operator's trip buttons, with the block's route, bus and crew", async () => {
+    load([card()], [index({ driver_id: 6, conductor_id: 7, legs: [{ trip_id: 1, status: 'boarding', trip_date: '2026-10-05', fleet_route: { route: { route_name: 'Alpha-Omega' }, fleet: { plate_number: 'AB-123' } } }] })]);
+    const renderLegActions = vi.fn((trip) => <button type="button">Run trip {trip.trip_id} ({trip.status}, {trip.fleet_route.fleet.plate_number}, crew {trip.driver_id}/{trip.conductor_id})</button>);
+    render(<ShiftBlocksView renderLegActions={renderLegActions} />);
+
+    const modal = openCard(await screen.findByTestId('shift-block-card'));
+    expect(within(modal).getByRole('button', { name: 'Run trip 1 (boarding, AB-123, crew 6/7)' })).toBeInTheDocument();
+    expect(within(modal).getByRole('button', { name: 'Run trip 2 (scheduled, AB-123, crew 6/7)' })).toBeInTheDocument();
+    fireEvent.click(within(modal).getByRole('button', { name: /Run trip 1/ }));
+    expect(screen.queryByTestId('shift-block-modal')).not.toBeInTheDocument(); // the pop-up closes so the result can be read
+  });
+
+  it('shows no trip buttons when none are given (the crew pages)', async () => {
+    load([card()]);
+    render(<ShiftBlocksView />);
+    const modal = openCard(await screen.findByTestId('shift-block-card'));
+    expect(within(modal).queryByTestId('trip-leg-actions')).not.toBeInTheDocument();
+    expect(within(modal).getAllByRole('button').map((b) => b.textContent)).not.toContain('Board');
+  });
+
+  it('opens the pop-up of the block holding the asked trip, widening the view for a past block', async () => {
+    const onFocusHandled = vi.fn();
+    load([card({ shift_block_id: 1 }), screenshotCard]);
+    render(<ShiftBlocksView focusTripId={51} onFocusHandled={onFocusHandled} />);
+
+    const modal = await screen.findByTestId('shift-block-modal');
+    expect(within(modal).getByTestId('modal-status')).toHaveTextContent(/complete/i); // the past block, not today's
+    expect(screen.getByTestId('section-past')).toBeInTheDocument();
+    await waitFor(() => expect(onFocusHandled).toHaveBeenCalled());
+  });
+
+  it('says when the asked trip is not in the loaded blocks', async () => {
+    const onFocusHandled = vi.fn();
+    load([card()]);
+    render(<ShiftBlocksView focusTripId={999} onFocusHandled={onFocusHandled} />);
+
+    expect(await screen.findByTestId('focus-trip-missing')).toHaveTextContent('Trip #999 is not in the loaded blocks');
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+    expect(onFocusHandled).toHaveBeenCalled();
+  });
+});

@@ -6,7 +6,6 @@ import {
   CalendarDays,
   Download,
   Gauge,
-  Play,
   Ticket,
   UserCheck,
 } from 'lucide-react';
@@ -165,7 +164,6 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   const [onsitePriority, setOnsitePriority] = useState('');
   const [onsiteBaggageSize, setOnsiteBaggageSize] = useState('');
   const [onsiteBaggageStub, setOnsiteBaggageStub] = useState('');
-  const [confirmStart, setConfirmStart] = useState(false);
   // 2026-10-28 (§4.5): no opening cash at Start Shift. Chauffeurs are not given petty cash, so a shift starts at 0.
   // Batch 29: End Shift asks for the cash counted and handed over; the Operator confirms it on the web dashboard.
   const [confirmEnd, setConfirmEnd] = useState(false);
@@ -400,7 +398,8 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
   const pressStep = (key) => {
     if (key === 'accept') setActiveTab('schedule');
     else if (key === 'pair') setPairingOpen(true);
-    else if (key === 'startShift') setConfirmStart(true);
+    // 2026-11-27 (user): Start shift starts at once (no confirmation pop-up).
+    else if (key === 'startShift') void handleStartShift();
     else if (key === 'endShift') { void refreshEndBlockedReason(); setConfirmEnd(true); }
     else if (key === 'tickets') setActiveTab('occupancy');
   };
@@ -1350,24 +1349,6 @@ function ConductorDashboardInner({ onLogout, pairing, refreshPairingStatus }) {
         </ModalShell>
       )}
 
-      {/* Start Shift confirmation (header toggle is the only entry point) */}
-      {confirmStart && (
-        <ModalShell label="Start shift" onClose={() => setConfirmStart(false)} closeOnOverlay={false} overlayClassName="bg-black/60">
-          <div className="w-full max-w-sm rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl">
-            <h3 className="mb-2 text-base font-bold text-slate-100">Start Shift?</h3>
-            <p className="mb-4 text-sm text-slate-400">Confirm your assignment. You will be taken to the Ticketing screen.</p>
-            <dl className="mb-4 space-y-2 rounded-lg bg-slate-800 p-3 text-sm">
-              <div className="flex justify-between"><dt className="text-slate-500">Fleet</dt><dd className="font-semibold text-slate-100">{todayAssignedTrip?.fleet_route?.fleet?.plate_number ?? '-'}</dd></div>
-              <div className="flex justify-between"><dt className="text-slate-500">Route</dt><dd className="font-semibold text-slate-100">{todayAssignedTrip?.fleet_route?.route?.route_name ?? '-'}</dd></div>
-              <div className="flex justify-between"><dt className="text-slate-500">Schedule</dt><dd className="font-data text-slate-100">{formatTripSchedule(todayAssignedTrip)}</dd></div>
-            </dl>
-            <div className="flex gap-2">
-              <button type="button" onClick={() => setConfirmStart(false)} className="flex-1 rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300 hover:bg-slate-800">Cancel</button>
-              <button type="button" onClick={() => { setConfirmStart(false); handleStartShift(); }} className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-teal-500 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-600 disabled:opacity-50">Start Shift <Play className="h-4 w-4" /></button>
-            </div>
-          </div>
-        </ModalShell>
-      )}
 
       {/* ── Onsite Checkout Confirmation Modal ─────────────────────── */}
       {confirmCheckout && (

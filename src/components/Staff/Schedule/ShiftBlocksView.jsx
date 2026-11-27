@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import Card from '../../ui/Card';
 import FilterTabs from '../../ui/FilterTabs';
 import { useShiftBlocksTab } from '../../../api/hooks/Staff/useOperatorDashboard';
@@ -21,7 +21,7 @@ const ACTION = 'rounded-lg px-3 py-1 text-xs font-semibold';
  * Upcoming, and overdue blocks are announced above it so they are never out of sight. The one "+ Schedule" button
  * lives on the Schedule page, not here.
  */
-export default function ShiftBlocksView({ reloadToken = 0, drivers = [], conductors = [], onChanged = () => {} }) {
+export default function ShiftBlocksView({ reloadToken = 0, drivers = [], conductors = [], onChanged = () => {}, renderLegActions = null, focusTripId = null, onFocusHandled = () => {} }) {
   const { blocks, blockCards, loading, msg, handleCancel, handleOverrideHandoff, handleMarkReviewed, handleRescheduleLeg, handleAssignCrew, crewSaving, crewMsg } = useShiftBlocksTab(reloadToken);
   // 2026-11-23 (advisor): a schedule made without its crew gets it here, for every trip of the block at once.
   const [crewBlock, setCrewBlock] = useState(null);
@@ -34,6 +34,32 @@ export default function ShiftBlocksView({ reloadToken = 0, drivers = [], conduct
   const options = useMemo(() => filterOptions(blockCards), [blockCards]);
   const groups = useMemo(() => groupBySection(applyFilters(blockCards, filters), today), [blockCards, filters, today]);
   const blockById = useMemo(() => new Map(blocks.map((b) => [Number(b.shift_block_id), b])), [blocks]);
+  // 2026-11-27 (user): the trip asked for (calendar pop-up, dashboard alert) opens the pop-up of the block holding it.
+  const focusCard = focusTripId ? blockCards.find((card) => (card.legs || []).some((leg) => Number(leg.trip_id) === Number(focusTripId))) : null;
+  const focusMissing = Boolean(focusTripId) && !loading && !focusCard;
+  // An overdue or past block is not in the default view, so the view widens to show it (and stays wide).
+  const shownView = focusCard && !VIEWS.find((v) => v.value === view).sections.includes(focusCard.section) ? 'all' : view;
+  const handleAutoOpened = useCallback(() => {
+    setView(shownView);
+    onFocusHandled();
+  }, [shownView, onFocusHandled]);
+
+  /** One trip of a block for the Operator's trip buttons: the block's trip, with the block's crew, bus and route. */
+  const legTrip = (card, block, leg) => {
+    const full = (block?.legs || []).find((t) => Number(t.trip_id) === Number(leg.trip_id)) || {};
+    return {
+      trip_date: card.scheduled_date,
+      shift_block_id: card.shift_block_id,
+      ...leg,
+      ...full,
+      status: full.status || leg.status,
+      fleet_route: full.fleet_route || { route: { route_name: card.route_name }, fleet: { plate_number: card.plate_number } },
+      driver_id: full.driver_id ?? block?.driver_id ?? null,
+      conductor_id: full.conductor_id ?? block?.conductor_id ?? null,
+      driver: full.driver || block?.driver || null,
+      conductor: full.conductor || block?.conductor || null,
+    };
+  };
 
   const changeFilters = (next) => {
     // A date range reaches into the past, so it looks at every section.
@@ -45,7 +71,7 @@ export default function ShiftBlocksView({ reloadToken = 0, drivers = [], conduct
     const count = v.value === 'overdue' ? groups.overdue.length : v.value === 'past' ? groups.past.length : 0;
     return { value: v.value, label: count > 0 ? `${v.label} (${count})` : v.label };
   });
-  const visible = SECTIONS.filter((s) => VIEWS.find((v) => v.value === view).sections.includes(s.key));
+  const visible = SECTIONS.filter((s) => VIEWS.find((v) => v.value === shownView).sections.includes(s.key));
   const total = blockCards.length;
 
   const actionsFor = (card) => {
@@ -74,6 +100,12 @@ export default function ShiftBlocksView({ reloadToken = 0, drivers = [], conduct
   return (
     <div className="space-y-4">
       {msg && <p role="status" className="rounded-lg border border-teal-200 bg-teal-50 px-4 py-2 text-sm text-teal-800">{msg}</p>}
+      {focusMissing && (
+        <div role="note" data-testid="focus-trip-missing" className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
+          <span>Trip #{focusTripId} is not in the loaded blocks. Try Refresh, or look under Show: All.</span>
+          <button type="button" onClick={onFocusHandled} className="font-semibold underline">Dismiss</button>
+        </div>
+      )}
       {crewBlock && (
         <AssignCrewModal
           trip={{ driver_id: crewBlock.driver_id, conductor_id: crewBlock.conductor_id }}
@@ -97,10 +129,10 @@ export default function ShiftBlocksView({ reloadToken = 0, drivers = [], conduct
 
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Show</span>
-        <FilterTabs options={viewOptions} value={view} onChange={setView} />
+        <FilterTabs options={viewOptions} value={shownView} onChange={setView} />
       </div>
 
-      {view === 'current' && groups.overdue.length > 0 && (
+      {shownView === 'current' && groups.overdue.length > 0 && (
         <div role="note" data-testid="overdue-strip" className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
           <span>{groups.overdue.length} overdue block{groups.overdue.length === 1 ? '' : 's'}: the date has passed and the block was never closed out.</span>
           <button type="button" onClick={() => setView('overdue')} className="font-semibold underline">Show overdue</button>
@@ -135,6 +167,9 @@ export default function ShiftBlocksView({ reloadToken = 0, drivers = [], conduct
                       audit={block && block.audit_status !== 'not_applicable' ? block.audit_status : null}
                       actions={actionsFor(card)}
                       isNew={isRecentlyAdded(createdOfCard(card))}
+                      legActions={renderLegActions ? (leg) => renderLegActions(legTrip(card, block, leg)) : null}
+                      autoOpen={focusCard?.key === card.key}
+                      onAutoOpened={handleAutoOpened}
                       legEditor={block && block.status === 'scheduled' && Array.isArray(block.legs) && block.legs.some((leg) => ['scheduled', 'delayed'].includes(leg.status))
                         ? <LegTimeEditor legs={block.legs} onSave={(tripId, time) => handleRescheduleLeg(block.shift_block_id, tripId, time)} />
                         : null}

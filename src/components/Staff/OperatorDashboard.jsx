@@ -13,13 +13,12 @@ import OperatorService from '../../api/StaffService/OperatorService'
 import useDateDrivers from '../../api/hooks/Staff/useDateDrivers'
 import { getBookingWindow } from '../../services/bookingService'
 import { bookingWindowWarning } from '../../utils/bookingQuery'
-import { parseAppDate, getBusinessToday, debugLogBusinessTime } from '../../utils/dates'
+import { getBusinessToday } from '../../utils/dates'
 import { useOperatorDashboardData, useNotificationBell, useTripRequests, useTripsTab } from '../../api/hooks/Staff/useOperatorDashboard'
 import useOperatorAlerts from '../../api/hooks/Staff/useOperatorAlerts'
 import { AlertSoundToggle, CrewAlertList, CrewAlertModal } from './Operator/OperatorAlerts'
 import { showToast } from '../../utils/toastStore'
 import { alertBusText } from '../../utils/crewAlerts'
-import RunInfoChips from '../ui/RunInfoChips'
 import { CancelTripModal } from './TripCancellationsPanel'
 import LegTimeSuggestion from './LegTimeSuggestion'
 import { addRoundTrip, evenLegs, legDirectionLabel, removeRoundTrip } from '../../utils/legPlanning'
@@ -27,17 +26,14 @@ import ScheduleRangePreview from './Schedule/ScheduleRangePreview'
 import CrewShiftTimes from './Operator/CrewShiftTimes'
 import { isRangeSchedule, rangeDayCount } from '../../utils/scheduleRange'
 import { crewOptionLabel, isPickable, needsCrew, sortForPicker } from '../../utils/crewPicker'
-import AssignCrewModal from './Operator/AssignCrewModal'
 import InfoTip from '../ui/InfoTip'
 import { CompanyAdminContext } from './Operator/companyAdmin'
-import TripFocusNotice from './TripFocusNotice'
 import { roleLabel } from '../../utils/staffForm'
 import ProfilePage from '../Account/ProfilePage'
 import SchedulePage from './Schedule/SchedulePage'
 import ShiftBlocksView from './Schedule/ShiftBlocksView'
 import FinancePage from './Finance/FinancePage'
-import { OpPageHeader, OpNewBadge, OP_NEW_ROW } from './Operator/OperatorUI'
-import { isRecentlyAdded, newFirst } from '../../utils/recentlyAdded'
+import { OpPageHeader } from './Operator/OperatorUI'
 import ViewTabs from '../ui/ViewTabs'
 import useTextMessages from '../../api/hooks/useTextMessages'
 import { OPERATOR_ROLE, navForRole, viewsForRole } from '../../utils/operatorNav'
@@ -47,10 +43,8 @@ import {
   X, Loader2, AlertTriangle, Bell,
 } from 'lucide-react'
 import { SkeletonList, SkeletonPage } from '../ui/Skeleton'
-import { clock12 } from '../../utils/clock';
 import useBusAvailability from '../../api/hooks/Staff/useBusAvailability'
 import { availabilityTime, busOptionLabel, sortBusesForPicker } from '../../utils/busPicker'
-import RefreshButton from '../ui/RefreshButton';
 const fmt = (v) => {
   if (v == null) return '-'
   const n = Number(v)
@@ -61,15 +55,6 @@ const fmtDate = (v) => {
   const d = new Date(String(v).includes('T') ? v : v + 'T00:00')
   if (Number.isNaN(d.getTime())) return v
   return d.toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' })
-}
-const STATUS_CHIP = {
-  scheduled:     'bg-slate-100 text-slate-700',
-  delayed:       'bg-rose-100 text-rose-700',
-  boarding:      'bg-blue-100 text-blue-700',
-  departed:      'bg-amber-100 text-amber-700',
-  'in-progress': 'bg-amber-100 text-amber-700',
-  completed:     'bg-emerald-100 text-emerald-700',
-  cancelled:     'bg-red-100 text-red-700',
 }
 
 const NAV_ICONS = {
@@ -451,250 +436,46 @@ function ScheduleServiceModal({ state, drivers, conductors }) {
     </Modal>
   )
 }
-function TripsTab({ drivers, conductors, onRefresh, tripsState, focusTripId = null, onDismissFocus = () => {} }) {
+// 2026-11-27 (user): the Trips view is gone; Schedule > Blocks is where the crew is assigned and each trip is run.
+// A trip whose date has passed without ever being closed out (completed or cancelled). Not a status; only a flag.
+function isOverdueUnclosed(trip) {
+  const tripDateStr = String(trip?.trip_date || '').match(/^(\d{4}-\d{2}-\d{2})/)?.[1]
+  if (!tripDateStr) return false
+  return tripDateStr < getBusinessToday() && !['completed', 'cancelled'].includes(trip?.status)
+}
+
+const LEG_BTN = 'rounded px-2 py-1 text-xs font-semibold disabled:opacity-50'
+
+/** The buttons of one trip of a block (Board, Depart, Complete, Cancel, Details), shown in the block's pop-up. */
+function TripLegActions({ trip, tripsState, onCancel }) {
+  const { actionInFlight, handleAction, setConfirmComplete, setSelectedTrip } = tripsState
+  const busy = actionInFlight === trip.trip_id
+  const spinner = <Loader2 className="h-3 w-3 animate-spin" />
+  return (
+    <div className="flex flex-wrap gap-1" data-testid="trip-leg-actions">
+      {['scheduled', 'delayed'].includes(trip.status) && !needsCrew(trip) && <button type="button" onClick={() => handleAction(trip.trip_id, 'boarding')} disabled={busy} className={`${LEG_BTN} bg-blue-100 text-blue-700 hover:bg-blue-200`}>{busy ? spinner : 'Board'}</button>}
+      {trip.status === 'boarding' && <button type="button" onClick={() => handleAction(trip.trip_id, 'depart')} disabled={busy} className={`${LEG_BTN} bg-amber-100 text-amber-700 hover:bg-amber-200`}>{busy ? spinner : 'Depart'}</button>}
+      {['departed', 'in-progress'].includes(trip.status) && <button type="button" onClick={() => setConfirmComplete(trip)} disabled={busy} className={`${LEG_BTN} bg-emerald-100 text-emerald-700 hover:bg-emerald-200`}>Complete</button>}
+      {['scheduled', 'delayed', 'boarding', 'departed', 'in-progress'].includes(trip.status) && <button type="button" onClick={() => onCancel(trip)} className={`${LEG_BTN} bg-red-50 text-red-700 hover:bg-red-100`}>Cancel</button>}
+      {isOverdueUnclosed(trip) && <button type="button" onClick={() => setSelectedTrip(trip)} className={`${LEG_BTN} bg-red-100 text-red-700 hover:bg-red-200`}>Update Status</button>}
+      <button type="button" onClick={() => setSelectedTrip(trip)} aria-label={`Trip #${trip.trip_id} details`} className={`${LEG_BTN} bg-slate-100 text-slate-600 hover:bg-slate-200`}><Eye className="h-3.5 w-3.5" /></button>
+    </div>
+  )
+}
+
+/** The trip dialogs (cancel, complete, details), rendered once on the Schedule page. */
+function TripDialogs({ tripsState, cancelTarget, onCloseCancel, onCancelled }) {
   const {
     selectedTrip, setSelectedTrip,
-    tripFilter, setTripFilter,
-    gpsHistory,
-    gpsLoading,
-    gpsMessage,
-    assignModal, setAssignModal,
+    gpsHistory, gpsLoading, gpsMessage,
     confirmComplete, setConfirmComplete,
-    statusOverrideSaving,
-    statusOverrideMsg,
-    assignId, setAssignId,
-    saving,
-    actionInFlight,
-    msg, setMsg,
-    visibleTrips,
-    visibleTripsMeta,
-    loadingMoreTrips,
-    loadMoreTrips,
-    handleAssign,
-    assignCrew,
-    handleAction,
-    handleConfirmedComplete,
-    handleStatusOverride,
-    loadTripGpsHistory,
+    statusOverrideSaving, statusOverrideMsg,
+    handleConfirmedComplete, handleStatusOverride, loadTripGpsHistory,
   } = tripsState
-  const [cancelTarget, setCancelTarget] = useState(null)
-  const [cancelNotice, setCancelNotice] = useState('')
-  const { drivers: dateDrivers, conductors: dateConductors, loading: loadingDateDrivers, error: dateDriversError } = useDateDrivers(
-    ['driver', 'conductor', 'crew'].includes(assignModal?.type) ? String(assignModal.trip?.trip_date || '').slice(0, 10) : '',
-    drivers,
-    conductors,
-  )
-
-  useEffect(() => {
-    const list = assignModal?.type === 'driver' ? dateDrivers : assignModal?.type === 'conductor' ? dateConductors : null
-    if (list && assignId && !list.some((person) => String(getStaffCompanyUserId(person)) === String(assignId) && !person.busy_reason)) {
-      setAssignId('')
-    }
-  }, [assignId, assignModal?.type, dateDrivers, dateConductors, setAssignId])
-
-  const driverMap = new Map(drivers.map(d => [Number(getStaffCompanyUserId(d)), d]))
-  const conductorMap = new Map(conductors.map(c => [Number(getStaffCompanyUserId(c)), c]))
-
-  const sorted = [...visibleTrips]
-    .sort((a,b) => (parseAppDate(b.trip_date)?.getTime() ?? 0) - (parseAppDate(a.trip_date)?.getTime() ?? 0))
-
-  // S3: split into "Today's Trips" (today + any past/overdue trips still
-  // needing attention — the existing "Overdue" badge below already flags
-  // those) and "Upcoming Trips" (strictly future-dated), using the same
-  // Manila-anchored business-day helper relied on elsewhere in the app.
-  // 2026-11-25 (user): a trip added in the last 24 hours comes first in its list, highlighted.
-  const todaysTrips = newFirst(sorted.filter((t) => {
-    const tripDateStr = String(t?.trip_date || '').match(/^(\d{4}-\d{2}-\d{2})/)?.[1]
-    if (!tripDateStr) return true
-    return tripDateStr <= getBusinessToday()
-  }))
-  const upcomingTrips = newFirst(sorted.filter((t) => {
-    const tripDateStr = String(t?.trip_date || '').match(/^(\d{4}-\d{2}-\d{2})/)?.[1]
-    return Boolean(tripDateStr) && tripDateStr > getBusinessToday()
-  }))
-
-  // S3: purely computed, non-persisted indicator — a trip whose scheduled
-  // date has passed without ever being closed out (completed or cancelled).
-  // Not a new status; just a visual flag layered on top of whatever status
-  // the trip is currently stuck in, so Operator/Admin can spot it without a
-  // manual search.
-  const todayStart = getBusinessToday()
-  debugLogBusinessTime('OperatorDashboard: overdue-trip flag check')
-  const isOverdueUnclosed = (trip) => {
-    const tripDateStr = String(trip?.trip_date || '').match(/^(\d{4}-\d{2}-\d{2})/)?.[1]
-    if (!tripDateStr) return false
-    return tripDateStr < todayStart && !['completed', 'cancelled'].includes(trip?.status)
-  }
-
-  // Batch 46: the trip opened from the calendar pop-up. TripFocusNotice scrolls to its row; the row is highlighted.
-  const focusedTrip = focusTripId ? visibleTrips.find((t) => Number(t.trip_id) === Number(focusTripId)) : null
-  const focusNotice = focusTripId
-    ? (focusedTrip
-      ? { state: 'shown', tone: 'info', title: `Trip #${focusTripId}`, message: `${focusedTrip.fleet_route?.route?.route_name || 'Route not provided'}, ${fmtDate(focusedTrip.trip_date)}. It is highlighted below.` }
-      : { state: 'missing', tone: 'warning', title: `Trip #${focusTripId}`, message: 'This trip is not in the loaded list yet. Choose "Load more trips" below, or Refresh.' })
-    : null
-
   return (
-    <div className="space-y-4">
-      <TripFocusNotice tripId={focusedTrip ? focusTripId : null} notice={focusNotice} onDismiss={onDismissFocus} />
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Trips</h3>
-        <div className="flex flex-wrap items-center gap-2">
-          <label htmlFor="operator-trip-filter" className="text-xs font-semibold uppercase tracking-wide text-slate-500">Filter</label>
-          <select
-            id="operator-trip-filter"
-            value={tripFilter}
-            onChange={(event) => setTripFilter(event.target.value)}
-            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
-          >
-            <option value="all">All</option>
-            <option value="scheduled">Scheduled / Active</option>
-            <option value="completed">Completed</option>
-          </select>
-          <RefreshButton onRefresh={onRefresh} />
-        </div>
-      </div>
-      {[
-        { key: 'today', title: "Today's Trips", list: todaysTrips },
-        { key: 'upcoming', title: 'Upcoming Trips', list: upcomingTrips },
-      ].map(({ key, title, list }) => (
-        <div key={key} className="staff-card staff-card-flush overflow-hidden">
-          <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
-            <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
-            <span className="text-xs font-medium text-slate-500">{list.length} trip{list.length === 1 ? '' : 's'}</span>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50">
-                <tr className="border-b border-slate-200">
-                  {['ID','Date','Departure','Route','Fleet','Driver','Chauffeur','Status','Actions'].map(h => (
-                    <th key={h} className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 whitespace-nowrap">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {list.length === 0
-                  ? <tr><td colSpan={9} className="px-5 py-8 text-center text-sm text-slate-400">No trips found.</td></tr>
-                  : list.map(t => {
-                    const driverRow = t.driver || driverMap.get(Number(t.driver_id))
-                    const conductorRow = t.conductor || conductorMap.get(Number(t.conductor_id))
-                    const driverName = driverRow ? getStaffFullName(driverRow) || (driverRow?.user?.email || driverRow?.email) : null
-                    const conductorName = conductorRow ? getStaffFullName(conductorRow) || (conductorRow?.user?.email || conductorRow?.email) : null
-                    const fresh = isRecentlyAdded(t.created_at)
-                    const focused = Number(t.trip_id) === Number(focusTripId)
-                    return (
-                      <tr key={t.trip_id} id={`trip-row-${t.trip_id}`} data-focused={focused ? 'true' : undefined} data-new={fresh ? 'true' : undefined} className={`border-b border-slate-100 hover:bg-slate-50 ${focused ? 'bg-teal-50 ring-2 ring-inset ring-teal-500' : fresh ? OP_NEW_ROW : ''}`}>
-                        <td className="px-4 py-3 font-mono text-xs text-slate-600"><span className="inline-flex items-center gap-2 whitespace-nowrap">#{t.trip_id}{fresh && <OpNewBadge />}</span></td>
-                        <td className="px-4 py-3 text-slate-700 whitespace-nowrap">{fmtDate(t.trip_date)}</td>
-                        <td className="px-4 py-3 text-slate-700 whitespace-nowrap">{clock12(t.departure_time || t.fleet_route?.start_time) || '--:--'}</td>
-                        <td className="px-4 py-3 text-slate-700 max-w-30 truncate">
-                          {t.fleet_route?.route?.route_name || '-'}
-                          {t.shift_block_id
-                            ? <span className="ml-1.5 rounded-full bg-indigo-100 px-1.5 py-0.5 text-xs font-semibold text-indigo-700" title="Auto-generated from a Shift Block">Block</span>
-                            : <span className="ml-1.5 rounded-full bg-slate-100 px-1.5 py-0.5 text-xs font-semibold text-slate-500" title="Manually created ad hoc/charter trip">Ad hoc</span>}
-                        </td>
-                        <td className="px-4 py-3 text-slate-700">{t.fleet_route?.fleet?.plate_number || '-'} <RunInfoChips runPattern={t.run_info?.run_pattern} service={t.run_info?.service} serviceType={t.service_type} showRunPattern /></td>
-                        <td className="px-4 py-3">
-                          {driverName ? <span className="text-slate-700">{driverName}</span>
-                            : <span className="text-xs text-slate-400">Not assigned</span>}
-                        </td>
-                        <td className="px-4 py-3">
-                          {conductorName ? <span className="text-slate-700">{conductorName}</span>
-                            : <span className="text-xs text-slate-400">Not assigned</span>}
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className={`rounded-full px-2 py-0.5 text-xs font-semibold whitespace-nowrap ${STATUS_CHIP[t.status] ?? 'bg-slate-100 text-slate-600'}`}>{t.status}</span>
-                          {/* Batch 46: a trip waiting for its crew cannot start boarding. */}
-                          {needsCrew(t) && ['scheduled', 'delayed'].includes(t.status) && (
-                            <span className="ml-1.5 inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800 whitespace-nowrap">Crew needed</span>
-                          )}
-                          {isOverdueUnclosed(t) && (
-                            <span
-                              className="ml-1.5 inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700 whitespace-nowrap"
-                              title="Scheduled date has passed and this trip was never marked completed or cancelled."
-                            >
-                              <AlertTriangle className="h-3 w-3" /> Overdue
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex gap-1">
-                            {needsCrew(t) && ['scheduled', 'delayed'].includes(t.status) && (
-                              <button type="button" onClick={() => { setAssignModal({ trip: t, type: 'crew' }); setMsg('') }} className="rounded px-2 py-1 text-xs font-semibold bg-teal-600 text-white hover:bg-teal-700 whitespace-nowrap">Assign crew</button>
-                            )}
-                            {['scheduled', 'delayed'].includes(t.status) && !needsCrew(t) && <button type="button" onClick={() => handleAction(t.trip_id,'boarding')} disabled={actionInFlight === t.trip_id} className="rounded px-2 py-1 text-xs bg-blue-100 text-blue-700 hover:bg-blue-200 disabled:opacity-50">{actionInFlight === t.trip_id ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Board'}</button>}
-                            {t.status === 'boarding'     && <button type="button" onClick={() => handleAction(t.trip_id,'depart')} disabled={actionInFlight === t.trip_id} className="rounded px-2 py-1 text-xs bg-amber-100 text-amber-700 hover:bg-amber-200 disabled:opacity-50">{actionInFlight === t.trip_id ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Depart'}</button>}
-                            {['departed','in-progress'].includes(t.status) && <button type="button" onClick={() => handleAction(t.trip_id,'complete')} disabled={actionInFlight === t.trip_id} className="rounded px-2 py-1 text-xs bg-emerald-100 text-emerald-700 hover:bg-emerald-200 disabled:opacity-50">Complete</button>}
-                            {['scheduled', 'delayed', 'boarding', 'departed', 'in-progress'].includes(t.status) && <button type="button" onClick={() => setCancelTarget(t)} className="rounded px-2 py-1 text-xs bg-red-50 text-red-700 hover:bg-red-100">Cancel</button>}
-                            {isOverdueUnclosed(t) && <button type="button" onClick={() => setSelectedTrip(t)} className="rounded px-2 py-1 text-xs bg-red-100 text-red-700 hover:bg-red-200">Update Status</button>}
-                            <button type="button" onClick={() => setSelectedTrip(t)} className="rounded px-2 py-1 text-xs bg-slate-100 text-slate-600 hover:bg-slate-200"><Eye className="h-3.5 w-3.5" /></button>
-                          </div>
-                        </td>
-                      </tr>
-                    )
-                  })
-                }
-              </tbody>
-            </table>
-          </div>
-        </div>
-      ))}
-
-      {visibleTripsMeta.current_page < visibleTripsMeta.last_page && (
-        <div className="flex justify-center">
-          <button
-            type="button"
-            onClick={() => void loadMoreTrips()}
-            disabled={loadingMoreTrips}
-            className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-          >
-            {loadingMoreTrips ? 'Loading...' : `Load more trips (${visibleTrips.length} of ${visibleTripsMeta.total})`}
-          </button>
-        </div>
-      )}
-
-
-      {cancelNotice && <p role="status" className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{cancelNotice}</p>}
+    <>
       {cancelTarget && (
-        <CancelTripModal trip={cancelTarget} service={OperatorService} onClose={() => setCancelTarget(null)} onDone={(text) => { setCancelNotice(text); onRefresh() }} />
-      )}
-
-      {assignModal?.type === 'crew' && (
-        <AssignCrewModal
-          trip={assignModal.trip}
-          drivers={dateDrivers}
-          conductors={dateConductors}
-          loadingDrivers={loadingDateDrivers}
-          driversError={dateDriversError}
-          saving={saving}
-          msg={msg}
-          onClose={() => setAssignModal(null)}
-          onAssign={(ids) => assignCrew(assignModal.trip, ids)}
-        />
-      )}
-
-      {assignModal && assignModal.type !== 'crew' && (
-        <Modal title={`Assign ${assignModal.type === 'conductor' ? 'Chauffeur' : 'Driver'} to Trip #${assignModal.trip.trip_id}`} onClose={() => setAssignModal(null)}>
-          <form className="space-y-4" onSubmit={handleAssign}>
-            <Field label={`Select ${assignModal.type === 'conductor' ? 'Chauffeur' : 'Driver'}`} required>
-              <select value={assignId} onChange={e => setAssignId(e.target.value)} required disabled={loadingDateDrivers || Boolean(dateDriversError)} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-teal-500 disabled:opacity-60">
-                <option value="">Choose...</option>
-                {sortForPicker(assignModal.type === 'driver' ? dateDrivers : dateConductors).map(p => (
-                  <option key={getStaffCompanyUserId(p)} value={getStaffCompanyUserId(p)} disabled={!isPickable(p)}>{crewOptionLabel(p)}</option>
-                ))}
-              </select>
-            </Field>
-            {loadingDateDrivers && <p role="status" className="text-xs text-slate-500">Checking crew availability...</p>}
-            {dateDriversError && <p role="alert" className="text-xs text-rose-700">{dateDriversError}</p>}
-            {msg && <p className="text-sm text-red-600">{msg}</p>}
-            <div className="flex justify-end gap-2 pt-2">
-              <button type="button" onClick={() => setAssignModal(null)} className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50">Cancel</button>
-              <button type="submit" disabled={saving || loadingDateDrivers || Boolean(dateDriversError)} className="flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-60">
-                {saving && <Loader2 className="h-4 w-4 animate-spin" />}Assign
-              </button>
-            </div>
-          </form>
-        </Modal>
+        <CancelTripModal trip={cancelTarget} service={OperatorService} onClose={onCloseCancel} onDone={onCancelled} />
       )}
 
       {confirmComplete && (
@@ -797,13 +578,14 @@ function TripsTab({ drivers, conductors, onRefresh, tripsState, focusTripId = nu
           </div>
         </Modal>
       )}
-    </div>
+    </>
   )
 }
 
-// Batch 30: the Schedule page. One page for what used to be three sidebar items (Trips, Calendar, Shift Blocks): the
-// views are Calendar, Blocks (Schedule/ShiftBlocksView.jsx) and Trips, and the one "+ Schedule" button opens the
-// existing create form from any of them. A schedule created from one view refreshes the others.
+// Batch 30: the Schedule page. One page for what used to be three sidebar items (Trips, Calendar, Shift Blocks).
+// 2026-11-27 (user): the views are Calendar, Blocks (Schedule/ShiftBlocksView.jsx) and Requests; the Trips view was
+// removed, and each trip of a block is run from the block's pop-up. The one "+ Schedule" button opens the create form
+// from any view. A schedule created from one view refreshes the others.
 function ScheduleTab({ trips, drivers, conductors, onRefresh, view, onViewChange, calendarFocus, createOnOpen = false, onCreateHandled = () => {}, openTripId = null, onOpenTripHandled = () => {} }) {
   const [reloadToken, setReloadToken] = useState(0)
   const refreshAll = useCallback(() => {
@@ -812,6 +594,8 @@ function ScheduleTab({ trips, drivers, conductors, onRefresh, view, onViewChange
   }, [onRefresh])
   const tripsState = useTripsTab({ trips, onRefresh: refreshAll })
   const views = viewsForRole('schedule', OPERATOR_ROLE)
+  const [cancelTarget, setCancelTarget] = useState(null)
+  const [cancelNotice, setCancelNotice] = useState('')
   // Batch 60 item 4: the dashboard's "Schedule a trip" quick action opens the Schedule Service form here.
   const { setShowModal, setMsg } = tripsState
   useEffect(() => {
@@ -820,21 +604,17 @@ function ScheduleTab({ trips, drivers, conductors, onRefresh, view, onViewChange
     setMsg('')
     onCreateHandled()
   }, [createOnOpen, onCreateHandled, setShowModal, setMsg])
-  // Batch 46: a trip chosen in the calendar pop-up opens the Trips view with that trip shown (filter set to All).
-  // Batch 60: a dashboard alert about missing crew opens Schedule on Trips (the portal sets the view) with its trip shown
-  // and highlighted. This page is always opened fresh from the dashboard, so the trip is the starting value.
+  // Batch 46 and 60: a trip chosen in the calendar pop-up, or in a dashboard alert, opens Blocks with the pop-up of
+  // the block that holds the trip. This page is always opened fresh from the dashboard, so the trip is the starting value.
   const [focusTripId, setFocusTripId] = useState(() => (openTripId ? Number(openTripId) : null))
-  const { setTripFilter } = tripsState
   useEffect(() => {
-    if (!openTripId) return
-    setTripFilter('all')
-    onOpenTripHandled()
-  }, [openTripId, onOpenTripHandled, setTripFilter])
+    if (openTripId) onOpenTripHandled()
+  }, [openTripId, onOpenTripHandled])
   const openTripFromCalendar = (item) => {
     setFocusTripId(Number(item.trip_id))
-    tripsState.setTripFilter('all')
-    onViewChange('trips')
+    onViewChange('blocks')
   }
+  const renderLegActions = (trip) => <TripLegActions trip={trip} tripsState={tripsState} onCancel={(t) => { setCancelNotice(''); setCancelTarget(t) }} />
 
   return (
     <>
@@ -847,15 +627,21 @@ function ScheduleTab({ trips, drivers, conductors, onRefresh, view, onViewChange
         {(active) => (
           <>
             {tripsState.msg && <p className="rounded-lg border border-teal-200 bg-teal-50 px-4 py-2 text-sm text-teal-800">{tripsState.msg}</p>}
+            {cancelNotice && <p role="status" className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{cancelNotice}</p>}
             {active === 'calendar' && <StaffCalendar key={calendarFocus || 'today'} service={OperatorService} initialDate={calendarFocus} refreshKey={reloadToken} onOpenTrip={openTripFromCalendar} />}
-            {active === 'blocks' && <ShiftBlocksView reloadToken={reloadToken} conductors={conductors} drivers={drivers} onChanged={refreshAll} />}
-            {active === 'trips' && <TripsTab drivers={drivers} conductors={conductors} onRefresh={refreshAll} tripsState={tripsState} focusTripId={focusTripId} onDismissFocus={() => setFocusTripId(null)} />}
+            {active === 'blocks' && <ShiftBlocksView reloadToken={reloadToken} conductors={conductors} drivers={drivers} onChanged={refreshAll} renderLegActions={renderLegActions} focusTripId={focusTripId} onFocusHandled={() => setFocusTripId(null)} />}
             {active === 'requests' && <TripRequestsPanel onDecided={refreshAll} showEmpty />}
             {/* 2026-11-14 (user): the cancelled-trip tickets needing a person moved to Finance > Refunds. */}
           </>
         )}
       </SchedulePage>
       <ScheduleServiceModal state={tripsState} drivers={drivers} conductors={conductors} />
+      <TripDialogs
+        tripsState={tripsState}
+        cancelTarget={cancelTarget}
+        onCloseCancel={() => setCancelTarget(null)}
+        onCancelled={(text) => { setCancelNotice(text); refreshAll() }}
+      />
     </>
   )
 }
@@ -870,7 +656,7 @@ export default function OperatorDashboard() {
   // Batch 60 item 4: set by the dashboard's "Schedule a trip"; the Schedule page opens its form and clears it.
   const [createOnOpen, setCreateOnOpen] = useState(false)
   const clearCreateOnOpen = useCallback(() => setCreateOnOpen(false), [])
-  // Batch 60: an alert opens a bus's Track popup on Fleets, or a trip on Schedule > Trips.
+  // Batch 60: an alert opens a bus's Track popup on Fleets, or a trip on Schedule > Blocks (2026-11-27).
   const [trackRequest, setTrackRequest] = useState(null)
   const clearTrackRequest = useCallback(() => setTrackRequest(null), [])
   const [openTripId, setOpenTripId] = useState(null)
@@ -949,7 +735,7 @@ export default function OperatorDashboard() {
             onOpenStaffs={() => setActiveTab('staffs')}
             onOpenFleets={() => setActiveTab('fleets')}
             onTrackTrip={(tripId) => { setTrackRequest({ tripId }); setActiveTab('fleets') }}
-            onOpenTrip={(tripId) => { setOpenTripId(tripId); setActiveTab('schedule', 'trips') }}
+            onOpenTrip={(tripId) => { setOpenTripId(tripId); setActiveTab('schedule', 'blocks') }}
           />
         )}
         {activeTab === 'schedule'   && (

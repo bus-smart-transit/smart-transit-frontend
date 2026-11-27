@@ -2,6 +2,30 @@ import { useEffect, useState } from 'react'
 import { getBookingStops, getDepartures, getTrips, readApiError, resolveTrip } from '../../../services/bookingService'
 import { findStopId } from '../../../utils/bookingQuery'
 
+/** 2026-11-27 (user): how often today's trip lists ask the server again, so a trip scheduled later shows up. */
+export const TRIPS_REFRESH_MS = 60000
+
+/**
+ * A number that goes up every `intervalMs` while the page is visible, and when the passenger comes back to the tab.
+ * A list that reads it asks the server again and keeps showing what it has meanwhile (no loading flash).
+ */
+export function useRefreshTick(enabled, intervalMs = TRIPS_REFRESH_MS) {
+  const [tick, setTick] = useState(0)
+  useEffect(() => {
+    if (!enabled || !intervalMs) return undefined
+    const bump = () => {
+      if (document.visibilityState === 'visible') setTick((n) => n + 1)
+    }
+    const timer = setInterval(bump, intervalMs)
+    document.addEventListener('visibilitychange', bump)
+    return () => {
+      clearInterval(timer)
+      document.removeEventListener('visibilitychange', bump)
+    }
+  }, [enabled, intervalMs])
+  return tick
+}
+
 /**
  * Where a passenger can board and get off, computed on the server from data (C3).
  * Origins are every stopping stop on a route with an active fleet; once an
@@ -127,6 +151,8 @@ export function useDepartures({ enabled, originStopId, destinationStopId, date, 
 export function useAvailableTrips({ enabled = true, from = '', to = '', date = '', page = 1, perPage = null, seatType = 'seated', town = '', province = '', prefer = '', busType = '' }) {
   const key = enabled ? [from, to, date, page, perPage ?? '', seatType, town, province, prefer, busType].join('|') : null
   const [result, setResult] = useState({ key: null, data: null, error: '' })
+  // 2026-11-27 (user): the list is asked for again every minute and on coming back to the tab (TRIPS_REFRESH_MS).
+  const tick = useRefreshTick(Boolean(key))
 
   useEffect(() => {
     if (!key) return undefined
@@ -144,9 +170,9 @@ export function useAvailableTrips({ enabled = true, from = '', to = '', date = '
       .then((data) => { if (!cancelled) setResult({ key, data, error: '' }) })
       .catch((err) => { if (!cancelled) setResult({ key, data: null, error: readApiError(err, 'We could not look up trips right now.').message }) })
     return () => { cancelled = true }
-    // key encodes every input used above.
+    // key encodes every input used above; tick asks again for the same inputs.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key])
+  }, [key, tick])
 
   const current = result.key === key
   const data = current ? result.data : null
@@ -174,6 +200,7 @@ export function useAvailableTrips({ enabled = true, from = '', to = '', date = '
 export function useAreaTrips({ enabled = true, area = null, date = '', perPage = null, seatType = 'seated' }) {
   const key = enabled && area ? [area.town, area.province, area.prefer, date, perPage ?? '', seatType].join('|') : null
   const [result, setResult] = useState({ key: null, data: null, shown: null, note: '', error: '' })
+  const tick = useRefreshTick(Boolean(key))
 
   useEffect(() => {
     if (!key) return undefined
@@ -206,9 +233,9 @@ export function useAreaTrips({ enabled = true, area = null, date = '', perPage =
       }
     })()
     return () => { cancelled = true }
-    // key encodes every input used above.
+    // key encodes every input used above; tick asks again for the same inputs.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key])
+  }, [key, tick])
 
   const current = result.key === key
   const data = current ? result.data : null

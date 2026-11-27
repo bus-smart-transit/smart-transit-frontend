@@ -23,7 +23,7 @@ export const FAQ_TOPICS = [
     items: [
       { q: 'Where can I find my digital ticket?', a: 'Once payment is confirmed, your digital ticket is available under "My Tickets" in your account.' },
       { q: 'Where can I find my QR code?', a: 'Your QR code is shown on your digital ticket. Open it from My Tickets and present it when boarding.' },
-      { q: 'Can I view my previous trips?', a: 'Yes. Your Trip History page lists all past bookings, including completed and cancelled trips.' },
+      { q: 'Can I view my previous trips?', a: 'Yes. Your Transaction History page lists all past bookings, including completed and cancelled trips.' },
     ],
   },
   {

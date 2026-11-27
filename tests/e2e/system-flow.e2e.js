@@ -324,11 +324,11 @@ test('Chauffeur: pairs, starts a shift with no opening cash, sells, drops off by
   await start.waitFor({ state: 'visible', timeout: 15000 }).catch(() => {});
   if (await start.isVisible().catch(() => false)) {
     await expect(start).toBeEnabled({ timeout: 15000 });
+    // 2026-11-27 (user): Start shift starts at once, with no confirmation pop-up and no opening cash.
     await start.click();
-    await expect(page.getByText('Start Shift?')).toBeVisible();
+    await expect(page.getByText('Start Shift?')).toHaveCount(0);
     await expect(page.locator('#opening-cash')).toHaveCount(0);
     await shot(page, 'c1-start-shift-no-opening-cash');
-    await page.getByRole('button', { name: /^Start Shift/ }).last().click();
   }
   const boarding = await api.patch(`operator/trips/${trip.trip_id}/boarding`, as(operatorToken));
   expect(boarding.status() < 500, await boarding.text()).toBeTruthy();
@@ -367,7 +367,7 @@ test('Operator: the remittances and the trip show up after the Chauffeur\'s work
   await staffSignIn(page, 'operator@smarttransit.com', /operator\/dashboard/);
   await page.goto('/employee/operator/dashboard?tab=finance&view=remittances');
   await settle(page);
-  await page.goto('/employee/operator/dashboard?tab=schedule&view=trips');
+  await page.goto('/employee/operator/dashboard?tab=schedule&view=blocks'); // 2026-11-27: no Trips view
   await settle(page);
   await shot(page, 'o3-after');
 

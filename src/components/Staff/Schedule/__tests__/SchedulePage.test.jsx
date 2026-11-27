@@ -10,7 +10,7 @@ describe('SchedulePage', () => {
     render(<SchedulePage views={views} view="calendar" onViewChange={vi.fn()} onCreate={vi.fn()}>{(v) => <p>content: {v}</p>}</SchedulePage>);
 
     expect(screen.getByRole('heading', { name: 'Schedule' })).toBeInTheDocument();
-    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Calendar', 'Blocks', 'Trips', 'Approvals']);
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Calendar', 'Blocks', 'Approvals']);
     expect(screen.getAllByRole('button', { name: '+ Schedule' })).toHaveLength(1);
     expect(screen.getByText('content: calendar')).toBeInTheDocument();
   });
@@ -21,8 +21,8 @@ describe('SchedulePage', () => {
 
     expect(screen.getByRole('tab', { name: 'Blocks' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('tab', { name: 'Calendar' })).toHaveAttribute('aria-selected', 'false');
-    fireEvent.click(screen.getByRole('tab', { name: 'Trips' }));
-    expect(onViewChange).toHaveBeenCalledWith('trips');
+    fireEvent.click(screen.getByRole('tab', { name: 'Approvals' }));
+    expect(onViewChange).toHaveBeenCalledWith('requests');
   });
 
   it('opens the create form from any view with the one button', () => {

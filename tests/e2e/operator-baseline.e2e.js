@@ -17,7 +17,6 @@ const PAGES = [
   ['routes', 'tab=routes'],
   ['schedule-calendar', 'tab=schedule&view=calendar'],
   ['schedule-blocks', 'tab=schedule&view=blocks'],
-  ['schedule-trips', 'tab=schedule&view=trips'],
   ['finance-overview', 'tab=finance&view=overview'],
   ['finance-transactions', 'tab=finance&view=transactions'],
   ['finance-remittances', 'tab=finance&view=remittances'],

@@ -6,7 +6,7 @@ import { useAuth } from '../../api/hooks/useAuth';
 const MENU_ITEMS = [
   { to: '/passenger/dashboard?tab=dashboard', label: 'Dashboard', icon: LayoutGrid },
   { to: '/passenger/dashboard?tab=tickets', label: 'My Tickets', icon: Ticket },
-  { to: '/passenger/dashboard?tab=transactions', label: 'Trip History', icon: History },
+  { to: '/passenger/dashboard?tab=transactions', label: 'Transaction History', icon: History }, // 2026-11-27 (user): the page's own name
   { to: '/passenger/dashboard?tab=map', label: 'Track Bus', icon: MapPin },
   { to: '/passenger/dashboard?tab=rewards', label: 'Rewards', icon: Gift },
   { to: '/passenger/dashboard?tab=profile', label: 'Profile', icon: User },

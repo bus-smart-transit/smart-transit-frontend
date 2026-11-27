@@ -2,8 +2,11 @@ import ServiceTypeChip from '../ui/ServiceTypeChip';
 import { STATUS_CLASS, statusLabel } from '../../utils/assignmentCardView';
 import { clock12 } from '../../utils/clock';
 
-/** Everything the "View legs" modal shows for one card's legs. Plain text only: React escapes it. */
-export default function AssignmentLegList({ card }) {
+/**
+ * Everything the "View legs" modal shows for one card's legs. Plain text only: React escapes it. `renderActions(leg)`
+ * (Operator only, 2026-11-27) adds a trip's buttons under its line; the crew pages pass nothing.
+ */
+export default function AssignmentLegList({ card, renderActions = null }) {
   return (
     <ol className="space-y-2" data-testid="assignment-legs">
       {card.legs.map((leg, index) => (
@@ -18,6 +21,7 @@ export default function AssignmentLegList({ card }) {
             <ServiceTypeChip serviceType={leg.service_type} />
             <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${STATUS_CLASS[leg.status] || STATUS_CLASS.scheduled}`}>{statusLabel(leg.status)}</span>
           </div>
+          {renderActions && <div className="w-full">{renderActions(leg)}</div>}
         </li>
       ))}
     </ol>

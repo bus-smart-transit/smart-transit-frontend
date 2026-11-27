@@ -43,7 +43,6 @@ export const OPERATOR_VIEWS = {
   schedule: [
     { key: 'calendar', label: 'Calendar', roles: OPERATOR_ONLY },
     { key: 'blocks', label: 'Blocks', roles: OPERATOR_ONLY },
-    { key: 'trips', label: 'Trips', roles: OPERATOR_ONLY },
     { key: 'requests', label: 'Approvals', roles: OPERATOR_ONLY },
     // 2026-11-14 (user): "Cancelled tickets" moved to Finance > Refunds (LEGACY_VIEW_REDIRECTS keeps old links working).
   ],
@@ -73,7 +72,8 @@ export const defaultView = (tab, role) => viewsForRole(tab, role)[0]?.key ?? nul
  * bookmark) keep working: they are read as the new location and the address is rewritten to it.
  */
 export const LEGACY_TAB_REDIRECTS = {
-  trips: { tab: 'schedule', view: 'trips' },
+  // 2026-11-27 (user): the Trips view was removed; its trips are run from Schedule > Blocks.
+  trips: { tab: 'schedule', view: 'blocks' },
   calendar: { tab: 'schedule', view: 'calendar' },
   shiftBlocks: { tab: 'schedule', view: 'blocks' },
   financials: { tab: 'finance', view: 'overview' },
@@ -83,6 +83,7 @@ export const LEGACY_TAB_REDIRECTS = {
 /** Old views that moved to another item: `?tab=schedule&view=cancelled` opens Finance > Refunds (2026-11-14). */
 export const LEGACY_VIEW_REDIRECTS = {
   'schedule/cancelled': { tab: 'finance', view: 'refunds' },
+  'schedule/trips': { tab: 'schedule', view: 'blocks' },
 };
 
 /**

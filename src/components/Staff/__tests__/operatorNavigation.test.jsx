@@ -35,7 +35,7 @@ function setup(search) {
 
 describe('Operator navigation state and address (Batch 30)', () => {
   it.each([
-    ['?tab=trips&trip=9', 'schedule', 'trips', '?tab=schedule&trip=9&view=trips'],
+    ['?tab=trips&trip=9', 'schedule', 'blocks', '?tab=schedule&trip=9&view=blocks'],
     ['?tab=calendar', 'schedule', 'calendar', '?tab=schedule&view=calendar'],
     ['?tab=shiftBlocks', 'schedule', 'blocks', '?tab=schedule&view=blocks'],
     ['?tab=financials', 'finance', 'overview', '?tab=finance&view=overview'],
